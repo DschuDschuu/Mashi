@@ -28,6 +28,21 @@ const END = /^(zu zahlen|summe|gesamt|kreditkarte|ec-karte|bar\b|mwst)/i;
 
 const num = (s: string) => Number(s.replace(',', '.'));
 
+/**
+ * Einkaufsdatum vom Bon („15.09.26 17:24“ oder „15.09.2026“) – damit ein später importierter
+ * Bon in der Preishistorie am richtigen Tag landet. Mittags, damit Zeitzonen den Tag nicht kippen.
+ */
+export function parseReceiptDate(text: string): string | undefined {
+  for (const m of text.matchAll(/\b(\d{2})\.(\d{2})\.(\d{4}|\d{2})\b/g)) {
+    const [, d, mo, y] = m;
+    const year = y.length === 2 ? 2000 + Number(y) : Number(y);
+    const date = new Date(Date.UTC(year, Number(mo) - 1, Number(d), 12));
+    const valid = date.getUTCMonth() === Number(mo) - 1 && date.getUTCDate() === Number(d) && year >= 2000 && year < 2100;
+    if (valid) return date.toISOString();
+  }
+  return undefined;
+}
+
 export function parseReceipt(text: string): ReceiptLine[] {
   const lines = text.split(/\r?\n/).map((l) => l.replace(/\s+/g, ' ').trim()).filter(Boolean);
   // Artikel beginnen nach der Kopfzeile „EUR“ – fehlt sie (z. B. eingefügter Ausschnitt), ab dem Anfang

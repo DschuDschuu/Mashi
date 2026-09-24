@@ -763,3 +763,40 @@ p { margin: 0; }
 /* ── Kosten ──────────────────────────────────────────────────── */
 .cost-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; margin: 0; color: var(--ink-2); }
 .cost-line strong { color: var(--ink); }
+
+/* Nur für Screenreader sichtbar */
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* ── Preisverlauf ────────────────────────────────────────────────
+   Linienfarbe mit dem Farb-Prüfskript geprüft: #008c84 besteht Helligkeit, Buntheit und
+   Kontrast auf Weiß (das App-Petrol #4f8482 wirkt als dünne Linie zu grau). */
+:root { --chart-line: #008c84; }
+.prices { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.price-card { display: flex; flex-direction: column; gap: 6px; padding: 14px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); }
+.price-card__head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.price-card__name { font-weight: 700; min-width: 0; overflow-wrap: anywhere; }
+.price-card__now { color: var(--ink); font-variant-numeric: tabular-nums; }
+.price-card__change { flex: none; padding: 2px 10px; border-radius: 999px; font-size: 0.82rem; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--ink); background: var(--surface-2); }
+.price-card__change.is-teurer { background: var(--rose); }
+.price-card__change.is-guenstiger { background: var(--mint); }
+.price-card__table summary { cursor: pointer; font-size: 0.85rem; color: var(--ink-2); }
+.price-card__table table { width: 100%; border-collapse: collapse; margin-top: 6px; font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+.price-card__table th { text-align: left; font-weight: 400; color: var(--ink-2); padding: 3px 0; }
+.price-card__table td { text-align: right; padding: 3px 0; }
+
+.price-chart { display: block; width: 100%; height: auto; touch-action: pan-y; outline-offset: 4px; }
+.price-chart__grid { stroke: var(--line); stroke-width: 1; }
+.price-chart__axis { fill: var(--ink-3); font-size: 9.5px; font-variant-numeric: tabular-nums; }
+.price-chart__area { fill: var(--chart-line); opacity: 0.1; }
+.price-chart__line { fill: none; stroke: var(--chart-line); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.price-chart__dot { fill: var(--chart-line); stroke: var(--surface); stroke-width: 2; }
+.price-chart__cross { stroke: var(--ink-3); stroke-width: 1; }
+.price-chart__tip rect { fill: var(--ink); }
+.price-chart__tip text { fill: #fff; font-size: 9.5px; font-weight: 600; }
+
+/* ── Ersparnis (Preise-Tab) ──────────────────────────────────── */
+.savings { display: flex; flex-direction: column; gap: 10px; }
+.savings__month { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 0.92rem; }
+.stat { display: flex; flex-direction: column; gap: 2px; padding: 14px 16px; border-radius: var(--r); }
+.stat__label { font-size: 0.82rem; font-weight: 600; color: var(--ink-2); }
+.stat__value { font-size: 1.5rem; line-height: 1.2; color: var(--ink); font-variant-numeric: tabular-nums; }

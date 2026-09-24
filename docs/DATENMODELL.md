@@ -40,14 +40,14 @@ Recipe  (Hülle – ändert sich selten)
 
 ## Einzel-Dokumente neben den Rezepten
 
-In der CouchDB liegt jedes Rezept als eigenes Dokument (`type: 'recipe'`). Dazu kommen zwei
+In der CouchDB liegt jedes Rezept als eigenes Dokument (`type: 'recipe'`). Dazu kommen drei
 Einzel-Dokumente, die ebenfalls auf alle Geräte abgeglichen werden:
 
 | `_id` | Inhalt | Konflikt (offline auf zwei Geräten geändert) |
 |---|---|---|
 | `meine-produkte` | `MyProduct[]` – Werte vom Etikett; `replaces` (Einträge der Tabelle) und/oder `names` (Zutatennamen, die die Tabelle nicht kennt) | neueste Fassung gewinnt |
 | `wochenplan` | `MealPlan` – `items: {recipeId, servings}[]`, abgehakte Einkäufe `checked`, diese Woche gekochte Gerichte `cooked` | neueste Fassung gewinnt |
-| `speisekammer` | `Pantry` – Vorräte `items` (Name, Menge nur wo bekannt), gelernte Bon-Artikel `rules` (Bon-Name → Name, Menge je Stück, oder „überspringen“) und zuletzt bezahlte Preise `prices` (€ je g oder je Stück) | neueste Fassung gewinnt |
+| `speisekammer` | `Pantry` – Vorräte `items` (Name, Menge nur wo bekannt), gelernte Bon-Artikel `rules` (Bon-Name → Name, Menge je Stück, oder „überspringen“), zuletzt bezahlte Preise `prices` (€ je g oder je Stück), alle Preise mit Einkaufsdatum `history` (Preisverlauf) und die Ersparnis je Bon `savings` (Lidl Plus, Angebote) | neueste Fassung gewinnt |
 
 `MyProduct` kann zusätzlich `packageAmount`/`packageUnit` (Packungsgröße – füllt beim Kassenbon die
 Menge aus) und `packagePrice` (Preis von Hand) tragen. Kosten eines Rezepts (`domain/cost.ts`)

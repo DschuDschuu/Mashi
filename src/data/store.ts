@@ -6,6 +6,7 @@ import {
   addItem, applyImport, deductRecipe, emptyPantry, type ImportRow, type Pantry, type PantryItem, type PantryUnit,
 } from '../domain/pantry';
 import { currentContent, currentVersion, newId, withNewVersion } from '../domain/recipe';
+import { recordSavings } from '../domain/savings';
 import { canTransition } from '../domain/status';
 import type { Rating, Recipe, RecipeContent, RecipeImage, RecipeSource, RecipeStatus } from '../domain/types';
 import { foodTable, imageProvider } from '../services';
@@ -406,8 +407,10 @@ function commitPantry(next: Omit<Pantry, 'updatedAt'>) {
 }
 
 /** Geprüfte Bon-Zeilen übernehmen – und merken, damit der nächste Bon schon ausgefüllt ist. */
-export function importReceipt(rows: ImportRow[]): number {
-  commitPantry(applyImport(pantry, rows, now(), () => newId('v')));
+export function importReceipt(rows: ImportRow[], paidAt?: string, savings?: { lidlPlus: number; offers: number; total?: number }): number {
+  const t = now();
+  const next = applyImport(pantry, rows, t, () => newId('v'), paidAt ?? t);
+  commitPantry(savings ? recordSavings(next, savings, paidAt ?? t) : next);
   return rows.filter((r) => !r.skip).length;
 }
 

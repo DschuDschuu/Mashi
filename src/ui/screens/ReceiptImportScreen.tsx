@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { proposeImport, type ImportRow, type PantryUnit } from '../../domain/pantry';
-import { parseReceipt } from '../../domain/receipt';
+import { parseReceipt, parseReceiptDate } from '../../domain/receipt';
+import { parseSavings } from '../../domain/savings';
 import { formatAmount } from '../../domain/scaling';
 import { importReceipt, usePantry } from '../../data/store';
 import { takeSharedReceipt } from '../../pwa';
@@ -49,6 +50,9 @@ export function ReceiptImportScreen({ shared }: { shared: boolean }) {
   const [progress, setProgress] = useState(0);
   const [text, setText] = useState('');
   const [rows, setRows] = useState<Row[]>([]);
+  /** Einkaufsdatum vom Bon – für den Preisverlauf */
+  const [paidAt, setPaidAt] = useState<string | undefined>();
+  const [savings, setSavings] = useState<ReturnType<typeof parseSavings> | undefined>();
   const [error, setError] = useState<string | null>(null);
   const file = useRef<HTMLInputElement>(null);
 
@@ -60,6 +64,8 @@ export function ReceiptImportScreen({ shared }: { shared: boolean }) {
       return;
     }
     setError(null);
+    setPaidAt(parseReceiptDate(t));
+    setSavings(parseSavings(t));
     setRows(proposeImport(lines, pantry.rules, packageFor).map(toRow));
     setStage('review');
   };
@@ -93,7 +99,7 @@ export function ReceiptImportScreen({ shared }: { shared: boolean }) {
   const taking = rows.filter((r) => !r.skip).length;
 
   const apply = () => {
-    const n = importReceipt(rows.map(fromRow));
+    const n = importReceipt(rows.map(fromRow), paidAt, savings);
     toast(n ? `${n} Artikel in der Speisekammer` : 'Gemerkt – nichts übernommen');
     navigate('/speisekammer', { replace: true });
   };
@@ -142,6 +148,12 @@ export function ReceiptImportScreen({ shared }: { shared: boolean }) {
       {stage === 'review' && (
         <div className="stack">
           <p className="muted">
+            {paidAt && <>Einkauf vom <strong>{new Date(paidAt).toLocaleDateString('de-DE')}</strong> · </>}
+            {savings && (savings.lidlPlus > 0 || savings.offers > 0) && (
+              <>Gespart: {savings.lidlPlus > 0 && <>Lidl Plus <strong>{euro(savings.lidlPlus)}</strong></>}
+                {savings.lidlPlus > 0 && savings.offers > 0 && ' · '}
+                {savings.offers > 0 && <>Angebote <strong>{euro(savings.offers)}</strong></>} · </>
+            )}
             {rows.length} Artikel gefunden. Prüfe Name und Menge – <strong>Name wie im Rezept</strong> (z. B. „Hähnchenbrust“), damit Mashi den Vorrat beim Kochen findet. Mengen leer lassen = „vorhanden“.
           </p>
           <ul className="bonrows">

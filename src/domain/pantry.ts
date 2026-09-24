@@ -2,6 +2,7 @@ import type { PriceEntry } from './cost';
 import { resolveIngredient, type Resolved } from './mealplan';
 import type { FoodTable } from './nutrition/types';
 import type { ReceiptLine } from './receipt';
+import type { ReceiptSavings } from './savings';
 import { currentContent } from './recipe';
 import type { Recipe, RecipeContent } from './types';
 
@@ -41,6 +42,10 @@ export interface Pantry {
   rules: ReceiptRule[];
   /** zuletzt bezahlte Preise, je Artikel einer – vom Kassenbon */
   prices: PriceEntry[];
+  /** alle Preise vom Kassenbon mit Einkaufsdatum – für den Preisverlauf */
+  history?: PriceEntry[];
+  /** Ersparnis je Bon (Lidl Plus, Angebote) */
+  savings?: ReceiptSavings[];
   updatedAt: string;
 }
 
@@ -97,11 +102,14 @@ export function proposeImport(lines: ReceiptLine[], rules: ReceiptRule[], packag
 
 /**
  * Geprüfte Zeilen übernehmen: Artikel in die Speisekammer, und jede Entscheidung merken –
- * damit der nächste Bon schon ausgefüllt ist.
+ * damit der nächste Bon schon ausgefüllt ist. Preise landen im Verlauf.
+ * @param paidAt Einkaufsdatum vom Bon – fehlt es, zählt der Import-Zeitpunkt
  */
-export function applyImport(pantry: Pantry, rows: ImportRow[], now = new Date().toISOString(), newId = defaultId): Pantry {
+export function applyImport(pantry: Pantry, rows: ImportRow[], now = new Date().toISOString(), newId = defaultId, paidAt = now): Pantry {
   const rules = new Map(pantry.rules.map((r) => [r.key, r]));
   const prices = new Map((pantry.prices ?? []).map((p) => [receiptKey(p.name), p]));
+  // Ältere Speisekammern haben nur die letzten Preise – die sind der Anfang des Verlaufs
+  const history = [...(pantry.history ?? pantry.prices ?? [])];
   let items = pantry.items;
   for (const row of rows) {
     if (row.skip) {
@@ -115,10 +123,15 @@ export function applyImport(pantry: Pantry, rows: ImportRow[], now = new Date().
       ...(row.unit ? { unit: row.unit } : {}),
     });
     items = addItem(items, { name: row.name.trim(), amount: row.amount, unit: row.unit }, now, newId);
-    const price = priceOf(row, now);
-    if (price) prices.set(receiptKey(price.name), price);
+    const price = priceOf(row, paidAt);
+    if (price) {
+      const key = receiptKey(price.name);
+      // Ein nachträglich importierter alter Bon überschreibt keinen neueren Preis
+      if ((prices.get(key)?.date ?? '') <= price.date) prices.set(key, price);
+      history.push(price);
+    }
   }
-  return { ...pantry, items, rules: [...rules.values()], prices: [...prices.values()] };
+  return { ...pantry, items, rules: [...rules.values()], prices: [...prices.values()], history };
 }
 
 /**

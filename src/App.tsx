@@ -13,6 +13,7 @@ import { ImportScreen } from './ui/screens/ImportScreen';
 import { MoreScreen } from './ui/screens/MoreScreens';
 import { PlanScreen } from './ui/screens/PlanScreen';
 import { PantryScreen } from './ui/screens/PantryScreen';
+import { PricesScreen } from './ui/screens/PricesScreen';
 import { ReceiptImportScreen } from './ui/screens/ReceiptImportScreen';
 import { RecipeDetailScreen } from './ui/screens/RecipeDetailScreen';
 import { RecipeFormScreen } from './ui/screens/RecipeFormScreen';
@@ -29,6 +30,7 @@ function resolve(route: Route): { screen: ReactElement; tab?: string } {
     // „Zum Testen“ ist kein eigener Tab mehr – erreichbar über Start und Kochbuch
     case 'testen': return { screen: <TestingScreen /> };
     case 'plan': return { screen: <PlanScreen />, tab: '/plan' };
+    case 'preise': return { screen: <PricesScreen />, tab: '/plan' };
     case 'speisekammer':
       if (b === 'bon') return { screen: <ReceiptImportScreen shared={route.query.has('geteilt')} /> };
       return { screen: <PantryScreen />, tab: '/plan' };
