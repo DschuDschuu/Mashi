@@ -1,14 +1,15 @@
 import { useState } from 'react';
 import { cloneContent, currentContent, newId } from '../../domain/recipe';
-import type { Rating, Recipe, RecipeContent } from '../../domain/types';
+import type { Rating, Recipe, RecipeContent, RecipeImage as RecipeImageData } from '../../domain/types';
 import { describeChange, diffContent } from '../../domain/versions';
-import { adoptToCookbook, archiveRecipe, submitTest, useRecipe } from '../../data/store';
+import { adoptToCookbook, archiveRecipe, setImage, submitTest, useRecipe } from '../../data/store';
 import { navigate } from '../../router';
 import { Stars } from '../components/Controls';
 import { Icon } from '../components/Icon';
 import { IngredientEditor, StepEditor } from '../components/ContentEditors';
 import { RecipeImage } from '../components/RecipeImage';
 import { TopBar } from '../components/TopBar';
+import { downscale } from '../photo';
 import { toast } from '../toast';
 
 export function TestFeedbackScreen({ id }: { id: string }) {
@@ -23,10 +24,12 @@ function Feedback({ recipe }: { recipe: Recipe }) {
   const [note, setNote] = useState('');
   const [draft, setDraft] = useState<RecipeContent>(() => cloneContent(original));
   const [editing, setEditing] = useState(false);
+  const [photo, setPhoto] = useState<RecipeImageData | null>(null);
   const changes = diffContent(original, draft);
 
   const save = (next: 'zum_testen' | 'bewaehrt' | 'kochbuch') => {
     if (!rating) return;
+    if (photo) setImage(recipe.id, photo);
     submitTest(recipe.id, { rating, note, content: draft, nextStatus: next === 'kochbuch' ? 'bewaehrt' : next });
     if (next === 'kochbuch') {
       adoptToCookbook(recipe.id);
@@ -56,6 +59,21 @@ function Feedback({ recipe }: { recipe: Recipe }) {
           <span>Test-Notiz</span>
           <textarea rows={3} value={note} onChange={(e) => setNote(e.target.value)} placeholder="z. B. Mehr Gochujang verwenden. Reis war zu viel." />
         </label>
+      </section>
+
+      <section className="panel">
+        <h2 className="h3">Foto vom Ergebnis</h2>
+        <div className="photo-pick">
+          {photo && <RecipeImage image={photo} size="md" />}
+          <label className="btn btn--soft">
+            <Icon name="camera" size={18} /> {photo ? 'Anderes Foto' : 'Foto aufnehmen oder wählen'}
+            <input type="file" accept="image/*" hidden onChange={async (e) => {
+              const file = e.target.files?.[0];
+              if (file) setPhoto({ kind: 'url', url: await downscale(file) });
+            }} />
+          </label>
+          {!photo && <p className="muted small">Optional. Wird zum Bild des Rezepts – so sieht es bei dir aus.</p>}
+        </div>
       </section>
 
       <section className="panel">

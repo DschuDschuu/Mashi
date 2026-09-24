@@ -1,5 +1,5 @@
 import type { FoodRef } from '../types';
-import type { FoodEntry, FoodTable, Nutrients } from './types';
+import type { FoodEntry, FoodKind, FoodTable, Nutrients } from './types';
 
 /**
  * Kleine lokale Lebensmitteltabelle für den Prototyp.
@@ -99,11 +99,31 @@ const ROWS: Row[] = [
 
 const PROVIDER = 'mashi-lokal';
 
+/** Art je Lebensmittel. Nicht aufgeführt = keine feste Art (Soßen, Pasten, Hülsenfrüchte, Nüsse …). */
+const KINDS: Record<FoodKind, string[]> = {
+  protein: ['haehnchenhack', 'haehnchenbrust', 'rinderhack', 'bacon'],
+  staple: ['reis', 'reis-gekocht', 'pasta', 'lasagneplatten', 'schupfnudeln', 'gnocchi', 'haferflocken'],
+  dairy: [
+    'parmesan', 'magerquark', 'milch', 'milch-fettarm', 'magermilch', 'hafermilch', 'griech-joghurt', 'mozzarella',
+    'huettenkaese', 'frischkaese', 'frischkaese-light', 'cheddar', 'sahne', 'creme-fraiche',
+  ],
+  egg: ['ei'],
+  bread: [],
+  vegetable: [
+    'paprika', 'avocado', 'knoblauch', 'fruehlingszwiebel', 'zwiebel', 'ingwer', 'spinat', 'karotte', 'hokkaido',
+    'erbsen', 'kirschtomaten', 'mais',
+  ],
+  fruit: ['banane', 'heidelbeeren', 'mango', 'zitronensaft'],
+};
+const kindOf = new Map<string, FoodKind>();
+for (const [kind, ids] of Object.entries(KINDS) as [FoodKind, string[]][]) ids.forEach((id) => kindOf.set(id, kind));
+
 const FOODS: FoodEntry[] = ROWS.map(([id, aliases, kcal, protein, carbs, fat, extra]) => ({
   ref: { provider: PROVIDER, foodId: id },
   // Anzeigename: jedes Wort groß, auch nach Bindestrich – „Griechischer Joghurt“, „Hühnerbrühe-Pulver“
   name: aliases[0].replace(/(^|[\s-])(\p{L})/gu, (_m, sep: string, ch: string) => sep + ch.toUpperCase()),
   per100g: { kcal, protein, carbs, fat } satisfies Nutrients,
+  ...(kindOf.has(id) ? { kind: kindOf.get(id) } : {}),
   ...extra,
 }));
 

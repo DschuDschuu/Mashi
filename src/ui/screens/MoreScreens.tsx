@@ -5,12 +5,10 @@ import { currentContent } from '../../domain/recipe';
 import { disconnect, leaveDemo, savedSyncConfig, useSyncState } from '../../data/backend';
 import { deleteRecipe, importProducts, importRecipes, isDemo, resetDemoData, restoreRecipe, useProducts, useRecipes } from '../../data/store';
 import type { Recipe } from '../../domain/types';
-import { navigate } from '../../router';
 import { Empty, Section, Switch } from '../components/Controls';
 import { Icon } from '../components/Icon';
 import { RecipeImage } from '../components/RecipeImage';
 import { MyProductsPanel } from '../components/MyProductsPanel';
-import { TopBar } from '../components/TopBar';
 import { updateSettings, useSettings } from '../settings';
 import { recipeCount } from '../format';
 import { toast } from '../toast';
@@ -72,24 +70,6 @@ export function MoreScreen() {
       <Section title="Sicherung">
         <BackupPanel recipes={all} />
       </Section>
-    </main>
-  );
-}
-
-export function ImportScreen() {
-  return (
-    <main className="screen">
-      <TopBar title="Rezept importieren" />
-      <div className="import-grid">
-        {([['camera', 'Foto', 'mint'], ['image', 'Screenshot', 'sky'], ['file', 'PDF', 'peach'], ['clipboard', 'Text einfügen', 'sage']] as const).map(([icon, label, tint]) => (
-          <div key={label} className={`quick tint-${tint} is-disabled`}><Icon name={icon} size={30} /><span>{label}</span></div>
-        ))}
-      </div>
-      <div className="tip tint-butter">
-        <Icon name="info" size={20} />
-        <p>Der Import kommt mit der KI-Anbindung (Phase 5). Erkannte Zutaten und Mengen werden dir dann <strong>immer erst zur Prüfung</strong> gezeigt, bevor etwas gespeichert wird.</p>
-      </div>
-      <button className="btn btn--soft btn--block" onClick={() => navigate('/neu/manuell', { replace: true })}>Stattdessen selbst eintragen</button>
     </main>
   );
 }

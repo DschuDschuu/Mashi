@@ -44,3 +44,28 @@ describe('Meine Produkte', () => {
     expect(withMyProducts(localFoodTable, [])).toBe(localFoodTable);
   });
 });
+
+describe('Produkte für unbekannte Zutaten', () => {
+  const kimchi: MyProduct = {
+    id: 'p-kimchi', name: 'Kimchi', replaces: [], names: ['kimchi'],
+    per100g: { kcal: 23, protein: 1.7, carbs: 2.4, fat: 0.5 }, updatedAt: '2026-09-24T00:00:00Z',
+  };
+  const table = withMyProducts(localFoodTable, [kimchi]);
+
+  it('vorher unbekannt, danach genau berechnet – auch mit Zusatz in Klammern', () => {
+    expect(computeNutrition(content('Kimchi', 100, 'g'), localFoodTable).items[0].status).toBe('unmatched');
+    const n = computeNutrition(content('Kimchi (vegan)', 200, 'g'), table);
+    expect(n.accuracy).toBe('berechnet');
+    expect(n.perServing!.kcal).toBeCloseTo(46);
+  });
+
+  it('Löffel rechnet es wie überall über 15 ml (Dichte 1)', () => {
+    const n = computeNutrition(content('Kimchi', 2, 'EL'), table);
+    expect(n.items[0]).toMatchObject({ status: 'exact', grams: 30 });
+  });
+
+  it('eigene Namen gewinnen vor der allgemeinen Tabelle', () => {
+    const own = { ...kimchi, id: 'p-reis', name: 'Mein Reis', names: ['reis'] };
+    expect(withMyProducts(localFoodTable, [own]).matchName('Reis')?.food.name).toBe('Mein Reis');
+  });
+});

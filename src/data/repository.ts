@@ -1,3 +1,4 @@
+import type { MealPlan } from '../domain/mealplan';
 import type { MyProduct } from '../domain/nutrition/myProducts';
 import type { Recipe } from '../domain/types';
 
@@ -15,6 +16,9 @@ export interface RecipeRepository {
   /** „Meine Produkte“ – eine Liste pro Kochbuch, wird wie die Rezepte abgeglichen. */
   loadProducts(): Promise<MyProduct[]>;
   saveProducts(products: MyProduct[]): Promise<void>;
+  /** Wochenplan „Diese Woche“ inkl. abgehakter Einkäufe – auf allen Geräten gleich. */
+  loadPlan(): Promise<MealPlan>;
+  savePlan(plan: MealPlan): Promise<void>;
   /**
    * Meldet Änderungen, die NICHT aus dieser App-Sitzung stammen –
    * z. B. Rezepte, die der Abgleich vom Handy auf den PC geholt hat.

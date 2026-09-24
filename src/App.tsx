@@ -3,12 +3,15 @@ import type { Mode } from './data/backend';
 import { useStoreReady } from './data/store';
 import { useRoute, type Route } from './router';
 import { BottomNav } from './ui/components/BottomNav';
+import { StatusBanner } from './ui/components/StatusBanner';
 import { useToast } from './ui/toast';
 import { AiCreateScreen } from './ui/screens/AiCreateScreen';
 import { ConnectScreen } from './ui/screens/ConnectScreen';
 import { CookbookScreen } from './ui/screens/CookbookScreen';
 import { CookModeScreen } from './ui/screens/CookModeScreen';
-import { ImportScreen, MoreScreen } from './ui/screens/MoreScreens';
+import { ImportScreen } from './ui/screens/ImportScreen';
+import { MoreScreen } from './ui/screens/MoreScreens';
+import { PlanScreen } from './ui/screens/PlanScreen';
 import { RecipeDetailScreen } from './ui/screens/RecipeDetailScreen';
 import { RecipeFormScreen } from './ui/screens/RecipeFormScreen';
 import { StartScreen } from './ui/screens/StartScreen';
@@ -21,7 +24,9 @@ function resolve(route: Route): { screen: ReactElement; tab?: string } {
   switch (a) {
     case undefined: return { screen: <StartScreen />, tab: '/' };
     case 'kochbuch': return { screen: <CookbookScreen key={route.query.toString()} route={route} />, tab: '/kochbuch' };
-    case 'testen': return { screen: <TestingScreen />, tab: '/testen' };
+    // „Zum Testen“ ist kein eigener Tab mehr – erreichbar über Start und Kochbuch
+    case 'testen': return { screen: <TestingScreen /> };
+    case 'plan': return { screen: <PlanScreen />, tab: '/plan' };
     case 'mehr': return { screen: <MoreScreen />, tab: '/mehr' };
     case 'neu':
       if (b === 'ki') return { screen: <AiCreateScreen /> };
@@ -56,6 +61,7 @@ export function App({ mode }: { mode: Mode | null }) {
   const cooking = route.segments[0] === 'rezept' && route.segments[2] === 'kochen';
   return (
     <div className={`app${cooking ? '' : ' app--nav'}`}>
+      <StatusBanner />
       {screen}
       {!cooking && <BottomNav active={tab} onlyTablet={!tab} />}
       {message && <div className="toast" role="status">{message}</div>}

@@ -72,23 +72,25 @@ aus den Zutaten berechnet (gecacht je Version).
 
 ```
  ┌──────── Bottom Navigation (Tabs) ─────────┐
- │  Start   Kochbuch   [ ＋ ]   Testen   Mehr │
+ │  Start   Kochbuch   [ ＋ ]    Plan    Mehr │
  └───────────────────────┬───────────────────┘
                          └─ Sheet: ✨ Mit KI · ✍️ Eigenes Rezept · 📷 Importieren
 
  #/                       Start
  #/kochbuch?device=…      Kochbuch (Filter als URL → Schnellfilter sind Links)
- #/testen                 KI-Ideen · Zum Testen · Bewährt
- #/mehr                   Archiv, Über Mashi
+ #/testen                 KI-Ideen · Zum Testen · Bewährt (über Start erreichbar)
+ #/plan                   Wochenplan „Diese Woche“, Vorschläge, Einkaufsliste
+ #/mehr                   Archiv, Einstellungen, Meine Produkte, Sync, Sicherung
  #/rezept/:id             Rezeptdetail
  #/rezept/:id/kochen?p=3  Kochmodus (ohne Navigation)
  #/rezept/:id/test        Testfeedback
  #/rezept/:id/bearbeiten  Formular → neue Version
- #/neu/ki | manuell | import
+ #/neu/ki | manuell | import   (import = Text einfügen → vorausgefülltes Formular)
 ```
 
-Abweichung vom Vorschlag: „Testen“ steht rechts vom Plus, damit Start + Kochbuch (die häufigsten)
-links unter dem Daumen liegen. Leicht umstellbar in `BottomNav.tsx`.
+Start + Kochbuch (die häufigsten) liegen links unter dem Daumen. „Zum Testen“ hat keinen eigenen
+Tab mehr: Es steht auf der Startseite und als Segment im Kochbuch; der Platz gehört dem Wochenplan.
+Leicht umstellbar in `BottomNav.tsx`.
 
 ## Status-Lebenszyklus
 

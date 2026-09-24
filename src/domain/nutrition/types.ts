@@ -15,6 +15,8 @@ export interface Nutrients {
 export const CORE_NUTRIENTS = ['kcal', 'protein', 'carbs', 'fat'] as const;
 export const OPTIONAL_NUTRIENTS = ['fiber', 'sugar', 'satFat', 'salt'] as const;
 
+export type FoodKind = 'protein' | 'staple' | 'dairy' | 'egg' | 'bread' | 'vegetable' | 'fruit';
+
 export interface FoodEntry {
   ref: FoodRef;
   name: string;
@@ -26,6 +28,8 @@ export interface FoodEntry {
   portions?: Partial<Record<Unit, number>>;
   /** Salz, Pfeffer & Co. – ohne Menge unbedenklich zu ignorieren */
   negligible?: boolean;
+  /** Art des Lebensmittels – z. B. für den Wochenplan: Hähnchen und Pasta zählen mehr als Paprika. */
+  kind?: FoodKind;
 }
 
 /**

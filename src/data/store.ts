@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react';
+import { emptyPlan, type MealPlan } from '../domain/mealplan';
 import { mergeRecipes } from '../domain/merge';
 import type { MyProduct } from '../domain/nutrition/myProducts';
 import { currentContent, currentVersion, newId, withNewVersion } from '../domain/recipe';
@@ -21,11 +22,34 @@ const pending = new Map<string, number>();
 
 let recipes: Recipe[] = [];
 let products: MyProduct[] = [];
+let plan: MealPlan = emptyPlan();
+/** Speichern des Plans läuft noch – beim Neuladen gewinnt dann der Stand im Speicher. */
+let planPending = 0;
+/** Letzter Speicherfehler (z. B. Speicher voll). Wird beim nächsten erfolgreichen Speichern gelöscht. */
+let saveError: string | null = null;
 let ready = false;
 const listeners = new Set<() => void>();
 
 function emit() {
   listeners.forEach((l) => l());
+}
+
+/** Jeder Speichervorgang meldet sich hier zurück – so bleibt ein Fehler nicht nur in der Konsole. */
+function tracked(p: Promise<void>): Promise<void> {
+  return p.then(
+    () => {
+      if (saveError) {
+        saveError = null;
+        emit();
+      }
+    },
+    (e) => {
+      console.error('Mashi: Speichern fehlgeschlagen', e);
+      const quota = (e as { name?: string }).name === 'QuotaExceededError';
+      saveError = quota ? 'Der Speicher des Geräts ist voll – die letzte Änderung ist nicht gesichert.' : 'Die letzte Änderung konnte nicht gespeichert werden.';
+      emit();
+    },
+  );
 }
 
 function commit(changed: Recipe) {
@@ -35,9 +59,7 @@ function commit(changed: Recipe) {
   recipes = recipes.some((r) => r.id === next.id) ? recipes.map((r) => (r.id === next.id ? next : r)) : [next, ...recipes];
   emit();
   pending.set(next.id, (pending.get(next.id) ?? 0) + 1);
-  repo
-    .save(next)
-    .catch((e) => console.error('Mashi: Speichern fehlgeschlagen', e))
+  tracked(repo.save(next))
     .finally(() => {
       const n = (pending.get(next.id) ?? 1) - 1;
       if (n > 0) pending.set(next.id, n);
@@ -58,7 +80,7 @@ const sameContent = (a: RecipeContent, b: RecipeContent) => JSON.stringify(a) ==
 
 export async function initStore(r: RecipeRepository) {
   repo = r;
-  [recipes, products] = await Promise.all([repo.list(), repo.loadProducts()]);
+  [recipes, products, plan] = await Promise.all([repo.list(), repo.loadProducts(), repo.loadPlan()]);
   ready = true;
   emit();
   repo.onExternalChange?.(scheduleReload);
@@ -69,8 +91,9 @@ let reloadTimer: ReturnType<typeof setTimeout> | undefined;
 function scheduleReload() {
   clearTimeout(reloadTimer);
   reloadTimer = setTimeout(async () => {
-    const [fresh, freshProducts] = await Promise.all([repo.list(), repo.loadProducts()]);
+    const [fresh, freshProducts, freshPlan] = await Promise.all([repo.list(), repo.loadProducts(), repo.loadPlan()]);
     products = freshProducts;
+    if (!planPending) plan = freshPlan;
     const inMemory = new Map(recipes.map((r) => [r.id, r]));
     recipes = fresh.map((r) => (pending.has(r.id) ? inMemory.get(r.id) ?? r : r));
     for (const id of pending.keys()) if (!fresh.some((r) => r.id === id) && inMemory.has(id)) recipes.unshift(inMemory.get(id)!);
@@ -100,6 +123,14 @@ export function useProducts(): MyProduct[] {
 /** Für Berechnungen außerhalb von React (z. B. Nährwerte auf den Rezeptkarten). */
 export function currentProducts(): MyProduct[] {
   return products;
+}
+
+export function usePlan(): MealPlan {
+  return useSyncExternalStore(subscribe, () => plan);
+}
+
+export function useSaveError(): string | null {
+  return useSyncExternalStore(subscribe, () => saveError);
 }
 
 export function useStoreReady(): boolean {
@@ -208,6 +239,11 @@ export async function regenerateImage(id: string) {
   commit({ ...get(id), image, updatedAt: now() });
 }
 
+/** Eigenes Foto (oder wieder ein Platzhalter). */
+export function setImage(id: string, image: RecipeImage) {
+  commit({ ...get(id), image });
+}
+
 export function archiveRecipe(id: string) {
   commit({ ...get(id), archivedAt: now() });
 }
@@ -219,8 +255,9 @@ export function restoreRecipe(id: string) {
 
 export function deleteRecipe(id: string) {
   recipes = recipes.filter((r) => r.id !== id);
+  if (plan.items.some((i) => i.recipeId === id)) removeFromPlan(id);
   emit();
-  void repo.remove(id);
+  void tracked(repo.remove(id));
 }
 
 /**
@@ -244,10 +281,6 @@ export function importRecipes(list: Recipe[]): { added: number; merged: number }
   return { added, merged };
 }
 
-/**
- * „Meine Produkte“ speichern. Danach bekommt die Rezeptliste bewusst eine NEUE Identität
- * (gleiche Rezepte): So rechnen auch alle Rezeptkarten ihre Nährwerte neu.
- */
 /** Produkte aus einer Sicherung übernehmen: gleiche ID = ersetzen, neue = anhängen. */
 export function importProducts(incoming: MyProduct[]): number {
   if (!incoming.length) return 0;
@@ -257,11 +290,49 @@ export function importProducts(incoming: MyProduct[]): number {
   return incoming.length;
 }
 
+/**
+ * „Meine Produkte“ speichern. Danach bekommt die Rezeptliste bewusst eine NEUE Identität
+ * (gleiche Rezepte): So rechnen auch alle Rezeptkarten ihre Nährwerte neu.
+ */
 export function saveProducts(next: MyProduct[]) {
   products = next;
   recipes = [...recipes];
   emit();
-  repo.saveProducts(next).catch((e) => console.error('Mashi: Produkte speichern fehlgeschlagen', e));
+  void tracked(repo.saveProducts(next));
+}
+
+// ── Wochenplan ─────────────────────────────────────────────────────
+
+function commitPlan(next: Omit<MealPlan, 'updatedAt'>) {
+  plan = { ...next, updatedAt: now() };
+  emit();
+  planPending++;
+  void tracked(repo.savePlan(plan)).finally(() => planPending--);
+}
+
+/** Gibt false zurück, wenn das Rezept schon im Plan steht. */
+export function addToPlan(recipeId: string, servings = currentContent(get(recipeId)).servings): boolean {
+  if (plan.items.some((i) => i.recipeId === recipeId)) return false;
+  commitPlan({ ...plan, items: [...plan.items, { recipeId, servings }] });
+  return true;
+}
+
+export function removeFromPlan(recipeId: string) {
+  commitPlan({ ...plan, items: plan.items.filter((i) => i.recipeId !== recipeId) });
+}
+
+export function setPlanServings(recipeId: string, servings: number) {
+  commitPlan({ ...plan, items: plan.items.map((i) => (i.recipeId === recipeId ? { ...i, servings } : i)) });
+}
+
+export function toggleShoppingItem(key: string) {
+  const checked = plan.checked.includes(key) ? plan.checked.filter((k) => k !== key) : [...plan.checked, key];
+  commitPlan({ ...plan, checked });
+}
+
+/** „Neue Woche“: Plan und Haken leeren. */
+export function clearPlan() {
+  commitPlan({ items: [], checked: [] });
 }
 
 export function isDemo(): boolean {
@@ -271,5 +342,6 @@ export function isDemo(): boolean {
 export async function resetDemoData() {
   if (!(repo instanceof LocalRecipeRepository)) return; // echte Daten nie per Knopfdruck ersetzen
   recipes = await repo.reset();
+  plan = emptyPlan();
   emit();
 }

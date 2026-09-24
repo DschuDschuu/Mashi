@@ -42,8 +42,16 @@ export function formatAmount(amount: number, unit?: Unit): string {
   return formatDecimal(Math.round(amount / 5) * 5, 0);
 }
 
+/** Einheiten mit eigener Mehrzahl – „2 Zehen“, nicht „2 Zehe“. Stück, EL, g … bleiben gleich. */
+const PLURAL: Partial<Record<Unit, string>> = { Zehe: 'Zehen', Dose: 'Dosen', Prise: 'Prisen' };
+
+/** „2 Zehen“, „1½ EL“, „340 g“ – Menge und Einheit, wie sie im Rezept stehen. */
+export function formatUnitAmount(amount: number, unit?: Unit): string {
+  const text = formatAmount(amount, unit);
+  if (!unit) return text;
+  return `${text} ${text !== '1' && PLURAL[unit] ? PLURAL[unit] : unit}`;
+}
+
 export function formatQuantity(ing: Ingredient): string {
-  if (ing.amount === undefined) return '';
-  const amount = formatAmount(ing.amount, ing.unit);
-  return ing.unit ? `${amount} ${ing.unit}` : amount;
+  return ing.amount === undefined ? '' : formatUnitAmount(ing.amount, ing.unit);
 }

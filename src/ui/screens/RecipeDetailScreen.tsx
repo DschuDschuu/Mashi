@@ -5,13 +5,14 @@ import { formatQuantity, scaleIngredients } from '../../domain/scaling';
 import type { Recipe } from '../../domain/types';
 import { describeChange, diffContent } from '../../domain/versions';
 import {
-  adoptToCookbook, archiveRecipe, deleteRecipe, regenerateImage, setStatus, toggleFavorite, updateNotes, useRecipe,
+  addToPlan, adoptToCookbook, archiveRecipe, deleteRecipe, regenerateImage, setStatus, toggleFavorite, updateNotes, usePlan, useRecipe,
 } from '../../data/store';
 import { goBack, navigate } from '../../router';
 import { Empty, Stars, Stepper } from '../components/Controls';
 import { Icon } from '../components/Icon';
 import { deviceIcon } from '../catalogIcons';
 import { NutritionDetails, NutritionTiles } from '../components/Nutrition';
+import { UnknownIngredients } from '../components/MyProductsPanel';
 import { RecipeImage } from '../components/RecipeImage';
 import { StepIngredients } from '../components/StepIngredients';
 import { StatusBadge } from '../components/StatusBadge';
@@ -110,6 +111,7 @@ const header = (
 
       <NutritionTiles n={n} />
 
+      {!recipe.archivedAt && recipe.status !== 'ki_entwurf' && <PlanButton recipe={recipe} servings={servings} />}
       <StatusAction recipe={recipe} />
     </>
   );
@@ -159,7 +161,7 @@ const header = (
       <div className="tabpanel" role="tabpanel">
         {activeTab === 'Zutaten' && ingredientsPanel}
         {activeTab === 'Zubereitung' && stepsPanel}
-        {activeTab === 'Nährwerte' && <NutritionDetails n={n} servings={servings} />}
+        {activeTab === 'Nährwerte' && <><NutritionDetails n={n} servings={servings} /><UnknownIngredients n={n} /></>}
         {activeTab === 'Notizen' && <Notes recipe={recipe} />}
         {activeTab === 'Infos' && <Infos recipe={recipe} />}
       </div>
@@ -202,6 +204,23 @@ const header = (
       </div>
       <div className="bottom-cta">{cookButton}</div>
     </main>
+  );
+}
+
+/** Für Meal Prep: mit der eingestellten Portionszahl in „Diese Woche“ aufnehmen. */
+function PlanButton({ recipe, servings }: { recipe: Recipe; servings: number }) {
+  const inPlan = usePlan().items.find((i) => i.recipeId === recipe.id);
+  if (inPlan) {
+    return (
+      <button className="plan-chip is-on" onClick={() => navigate('/plan')}>
+        <Icon name="check" size={16} /> Im Wochenplan · {inPlan.servings} Portionen <Icon name="chevron" size={14} />
+      </button>
+    );
+  }
+  return (
+    <button className="plan-chip" onClick={() => { addToPlan(recipe.id, servings); toast(`Eingeplant: ${servings} Portionen`); }}>
+      <Icon name="calendar" size={16} /> Zum Wochenplan ({servings} Portionen)
+    </button>
   );
 }
 

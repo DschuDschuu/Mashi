@@ -160,3 +160,30 @@ describe('Meine Produkte in PouchDB', () => {
     expect(raw._conflicts ?? []).toHaveLength(0);
   });
 });
+
+describe('Wochenplan in PouchDB', () => {
+  const plan = (recipeId: string, updatedAt: string) => ({ items: [{ recipeId, servings: 4 }], checked: ['food:reis'], updatedAt });
+
+  it('ohne Plan leer; gespeicherter Plan kommt unverändert zurück und ist kein Rezept', async () => {
+    const repo = new PouchRecipeRepository(newDb());
+    expect((await repo.loadPlan()).items).toEqual([]);
+    await repo.savePlan(plan('a', '2026-01-01T00:00:00.000Z'));
+    await repo.savePlan(plan('b', '2026-01-02T00:00:00.000Z'));
+    expect(await repo.loadPlan()).toEqual(plan('b', '2026-01-02T00:00:00.000Z'));
+    expect(await repo.list()).toEqual([]);
+  });
+
+  it('Offline auf zwei Geräten geändert: der zuletzt geänderte Plan gewinnt', async () => {
+    const phoneDb = newDb();
+    const pcDb = newDb();
+    const phone = new PouchRecipeRepository(phoneDb);
+    const pc = new PouchRecipeRepository(pcDb);
+    await phone.savePlan(plan('start', '2026-01-01T00:00:00.000Z'));
+    await syncOnce(phoneDb, pcDb);
+    await pc.savePlan(plan('pc-spaeter', '2026-01-03T00:00:00.000Z'));
+    await phone.savePlan(plan('handy-frueher', '2026-01-02T00:00:00.000Z'));
+    await syncOnce(phoneDb, pcDb);
+    expect((await phone.loadPlan()).items[0].recipeId).toBe('pc-spaeter');
+    expect((await pc.loadPlan()).items[0].recipeId).toBe('pc-spaeter');
+  });
+});

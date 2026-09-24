@@ -577,3 +577,71 @@ p { margin: 0; }
 .product__main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .product__main em { font-style: normal; color: var(--ink-3); }
 .product-form { background: var(--surface-2); border-radius: var(--r-sm); padding: 14px; }
+
+/* ── Hinweise: Speichern/Abgleich ────────────────────────────── */
+.status-banner {
+  display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+  padding: 10px var(--gutter); background: var(--rose); color: #8f3f31; font-size: 0.88rem; font-weight: 600;
+}
+.status-banner svg { flex: none; }
+.status-banner u { text-underline-offset: 2px; margin-left: 4px; }
+.status-pill {
+  position: fixed; top: calc(env(safe-area-inset-top, 0px) + 8px); right: 12px; z-index: 35;
+  display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px;
+  background: var(--butter); color: var(--ink-2); font-size: 0.78rem; font-weight: 600; box-shadow: var(--shadow-lift);
+}
+
+/* ── Import aus Text ─────────────────────────────────────────── */
+.import-text { font-family: inherit; font-size: 0.92rem; line-height: 1.45; min-height: 220px; }
+.stack--tight { gap: 6px; }
+.tip ul { margin: 6px 0 0; padding-left: 18px; }
+.unknown-ings { background: var(--butter); }
+.unknown-ings .row-between { gap: 10px; }
+
+/* ── Wochenplan ──────────────────────────────────────────────── */
+.plan-chip {
+  display: inline-flex; align-items: center; gap: 8px; align-self: flex-start; min-height: 40px; padding: 0 14px;
+  border-radius: 999px; border: 1.5px dashed var(--primary); color: var(--primary-press); font-weight: 700; font-size: 0.88rem;
+}
+.plan-chip.is-on { border-style: solid; background: var(--primary-soft); }
+.plan-layout { display: flex; flex-direction: column; gap: 18px; }
+.plan-layout__main, .plan-layout__side { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.plan-list__hit { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; text-align: left; }
+.plan-list .list__title, .suggestion .list__title { overflow-wrap: anywhere; }
+.plan-list .stepper { flex: none; }
+.suggestion__text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+
+.shopping { list-style: none; margin: 0 0 8px; padding: 0; }
+.shopping__item { border-top: 1px solid var(--line); }
+.shopping__item:first-child { border-top: 0; }
+.shopping__item label { display: flex; align-items: center; gap: 12px; min-height: 46px; cursor: pointer; }
+.shopping__item input { width: 22px; height: 22px; accent-color: var(--primary); flex: none; }
+.shopping__name { flex: 1; font-weight: 600; }
+.shopping__qty { color: var(--ink-2); font-variant-numeric: tabular-nums; text-align: right; }
+.shopping__from { display: block; margin: -10px 0 8px 34px; }
+.shopping__item.is-done .shopping__name, .shopping__item.is-done .shopping__qty { color: var(--ink-3); text-decoration: line-through; }
+
+.sheet--tall { max-height: 85vh; display: flex; flex-direction: column; gap: 12px; }
+.picker { overflow-y: auto; min-height: 0; flex: 1; padding-bottom: 4px; }
+.picker__item { width: 100%; text-align: left; }
+
+@media (min-width: 900px) {
+  .plan-layout { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 28px; align-items: start; }
+  .plan-layout__side { position: sticky; top: 24px; }
+}
+
+/* ── Gericht auswählen: Gruppen & Autocomplete ───────────────── */
+.picker { display: flex; flex-direction: column; gap: 16px; }
+.picker__group { display: flex; flex-direction: column; gap: 8px; }
+.picker__heading { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 0.8rem; font-weight: 700; color: var(--ink-2); text-transform: uppercase; letter-spacing: 0.04em; }
+.picker__heading svg { color: var(--art); }
+.picker__item.is-active { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-soft); }
+.picker__item mark { background: var(--butter); color: inherit; border-radius: 3px; padding: 0 1px; }
+.picker__empty { align-items: flex-start; }
+.picker__empty p { margin: 0; }
+.sheet--tall .search .iconbtn { margin-left: auto; }
+
+/* ── Status-Badge in Listenzeilen: immer einzeilig, rechtsbündig, kleiner ── */
+.badge { white-space: nowrap; }
+.list__item .suggestion__text { flex: 1; }
+.list__item .badge { flex: none; margin-left: auto; padding: 2px 8px; font-size: 0.66rem; }

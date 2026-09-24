@@ -3,6 +3,7 @@ import { navigate } from '../../router';
 import { Empty, Section } from '../components/Controls';
 import { Icon } from '../components/Icon';
 import { RecipeCard } from '../components/RecipeCard';
+import { TopBar } from '../components/TopBar';
 
 /**
  * Die „Werkbank“: alles, was noch nicht (endgültig) im Kochbuch ist.
@@ -15,10 +16,8 @@ export function TestingScreen() {
   const proven = recipes.filter((r) => r.status === 'bewaehrt');
 
   return (
-    <main className="screen screen--tabbed">
-      <header className="page-head">
-        <h1>Zum Testen</h1>
-      </header>
+    <main className="screen">
+      <TopBar title="Zum Testen" backTo="/" />
       <p className="muted lead">Eine Idee ist noch kein Rezept. Erst wenn du es gekocht hast und es dir schmeckt, kommt es ins Kochbuch.</p>
 
       <button className="cta-card tint-mint" onClick={() => navigate('/neu/ki')}>

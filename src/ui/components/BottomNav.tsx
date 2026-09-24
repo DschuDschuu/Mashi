@@ -5,7 +5,7 @@ import { Icon, type IconName } from './Icon';
 const TABS: { path: string; label: string; icon: IconName }[] = [
   { path: '/', label: 'Start', icon: 'home' },
   { path: '/kochbuch', label: 'Kochbuch', icon: 'book' },
-  { path: '/testen', label: 'Testen', icon: 'flask' },
+  { path: '/plan', label: 'Plan', icon: 'calendar' },
   { path: '/mehr', label: 'Mehr', icon: 'more' },
 ];
 
@@ -39,7 +39,7 @@ export function BottomNav({ active, onlyTablet = false }: { active?: string; onl
 const OPTIONS: { path: string; icon: IconName; title: string; text: string; tint: string }[] = [
   { path: '/neu/ki', icon: 'sparkles', title: 'Mit KI erstellen', text: 'Aus deinen Zutaten und Wünschen wird eine Idee zum Ausprobieren.', tint: 'mint' },
   { path: '/neu/manuell', icon: 'pencil', title: 'Eigenes Rezept', text: 'Ein Rezept, das du schon kennst, selbst eintragen.', tint: 'rose' },
-  { path: '/neu/import', icon: 'camera', title: 'Importieren', text: 'Aus Foto, Screenshot, PDF oder Text übernehmen.', tint: 'sky' },
+  { path: '/neu/import', icon: 'camera', title: 'Importieren', text: 'Ein kopiertes Rezept von Webseite, Chat oder Notiz übernehmen.', tint: 'sky' },
 ];
 
 export function CreateSheet({ onClose }: { onClose: () => void }) {

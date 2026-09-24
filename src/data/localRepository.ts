@@ -1,3 +1,4 @@
+import { emptyPlan, type MealPlan } from '../domain/mealplan';
 import type { MyProduct } from '../domain/nutrition/myProducts';
 import type { Recipe } from '../domain/types';
 import { createMockRecipes } from './mockRecipes';
@@ -10,6 +11,7 @@ import type { RecipeRepository } from './repository';
 // v2: Platzhalterbilder haben 'motif' statt 'emoji' – alte v1-Daten werden nicht mehr gelesen.
 const KEY = 'mashi-recipes-v2';
 const PRODUCTS_KEY = 'mashi-products-v1';
+const PLAN_KEY = 'mashi-plan-v1';
 
 export class LocalRecipeRepository implements RecipeRepository {
   private read(): Recipe[] {
@@ -20,16 +22,17 @@ export class LocalRecipeRepository implements RecipeRepository {
       /* kaputte oder gesperrte Daten → Beispieldaten */
     }
     const seed = createMockRecipes();
-    this.write(seed);
+    try {
+      this.write(seed);
+    } catch (e) {
+      console.warn('Mashi: Beispieldaten nicht gespeichert', e);
+    }
     return seed;
   }
 
+  /** Fehler (z. B. Speicher voll) gehen bewusst nach oben – der Store zeigt sie an. */
   private write(recipes: Recipe[]) {
-    try {
-      localStorage.setItem(KEY, JSON.stringify(recipes));
-    } catch (e) {
-      console.warn('Mashi: Speichern fehlgeschlagen', e);
-    }
+    localStorage.setItem(KEY, JSON.stringify(recipes));
   }
 
   async list() {
@@ -57,16 +60,25 @@ export class LocalRecipeRepository implements RecipeRepository {
   }
 
   async saveProducts(products: MyProduct[]) {
+    localStorage.setItem(PRODUCTS_KEY, JSON.stringify(products));
+  }
+
+  async loadPlan(): Promise<MealPlan> {
     try {
-      localStorage.setItem(PRODUCTS_KEY, JSON.stringify(products));
-    } catch (e) {
-      console.warn('Mashi: Speichern fehlgeschlagen', e);
+      return { ...emptyPlan(), ...(JSON.parse(localStorage.getItem(PLAN_KEY) ?? '{}') as Partial<MealPlan>) };
+    } catch {
+      return emptyPlan();
     }
+  }
+
+  async savePlan(plan: MealPlan) {
+    localStorage.setItem(PLAN_KEY, JSON.stringify(plan));
   }
 
   /** Nur für den Prototyp: Beispieldaten wiederherstellen. */
   async reset() {
     localStorage.removeItem(KEY);
+    localStorage.removeItem(PLAN_KEY);
     return this.read();
   }
 }

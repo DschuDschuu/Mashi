@@ -38,6 +38,19 @@ Recipe  (Hülle – ändert sich selten)
 | 3 | nutzer | Weniger Reis | Reis 150 → 100 g |
 | 4 | nutzer | Meine Kochbuch-Version | (Übernahme ins Kochbuch) |
 
+## Einzel-Dokumente neben den Rezepten
+
+In der CouchDB liegt jedes Rezept als eigenes Dokument (`type: 'recipe'`). Dazu kommen zwei
+Einzel-Dokumente, die ebenfalls auf alle Geräte abgeglichen werden:
+
+| `_id` | Inhalt | Konflikt (offline auf zwei Geräten geändert) |
+|---|---|---|
+| `meine-produkte` | `MyProduct[]` – Werte vom Etikett; `replaces` (Einträge der Tabelle) und/oder `names` (Zutatennamen, die die Tabelle nicht kennt) | neueste Fassung gewinnt |
+| `wochenplan` | `MealPlan` – `items: {recipeId, servings}[]`, abgehakte Einkäufe `checked` | neueste Fassung gewinnt |
+
+Vorschläge und Einkaufsliste werden nie gespeichert, sondern jedes Mal aus Plan + Rezepten
+berechnet (`domain/mealplan.ts`). Fotos liegen verkleinert (800 px, JPEG) direkt im Rezept.
+
 ## Geräte & Kategorien
 
 Offene Strings (`'airfryer'`, `'hauptgericht'`), Anzeige über `catalog.ts`. Ein neues Gerät

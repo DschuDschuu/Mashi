@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { FOOD_CHOICES } from '../../domain/nutrition/localFoods';
+import { FOOD_CHOICES, normalizeName } from '../../domain/nutrition/localFoods';
 import type { MyProduct } from '../../domain/nutrition/myProducts';
+import type { NutritionResult } from '../../domain/nutrition/types';
 import { newId } from '../../domain/recipe';
 import { saveProducts, useProducts } from '../../data/store';
 import { toast } from '../toast';
@@ -47,7 +48,11 @@ export function MyProductsPanel() {
               <span className="small muted">
                 {fmt(p.per100g.kcal)} kcal · {fmt(p.per100g.protein)} g Eiweiß · {fmt(p.per100g.carbs)} g KH · {fmt(p.per100g.fat)} g Fett <em>pro 100 g</em>
               </span>
-              <span className="small">ersetzt: {p.replaces.map(foodName).join(', ') || '–'}</span>
+              <span className="small">
+                {p.replaces.length > 0 && <>ersetzt: {p.replaces.map(foodName).join(', ')}</>}
+                {p.replaces.length > 0 && !!p.names?.length && ' · '}
+                {!!p.names?.length && <>gilt für: {p.names.join(', ')}</>}
+              </span>
             </div>
             <div className="row-gap">
               <button className="btn btn--ghost btn--sm" onClick={() => setEditing(p)}>Bearbeiten</button>
@@ -80,15 +85,52 @@ const toField = (n: number | undefined) => (n === undefined ? '' : String(n).rep
 
 type Values = { kcal: string; protein: string; carbs: string; fat: string };
 
-function ProductForm({ initial, onSave, onCancel }: { initial?: MyProduct; onSave: (p: MyProduct) => void; onCancel: () => void }) {
+/**
+ * Zutaten, die Mashi in diesem Rezept nicht kennt – mit der Möglichkeit, sie direkt
+ * als eigenes Produkt anzulegen (Werte vom Etikett). Danach rechnen alle Rezepte damit.
+ */
+export function UnknownIngredients({ n }: { n: NutritionResult }) {
+  const products = useProducts();
+  const [open, setOpen] = useState<string | null>(null);
+  const unknown = [...new Set(n.items.filter((i) => i.status === 'unmatched').map((i) => i.name))];
+  if (!unknown.length) return null;
+
+  const save = (p: MyProduct) => {
+    saveProducts([...products, p]);
+    setOpen(null);
+    toast(`„${p.name}“ angelegt – alle Rezepte rechnen neu`);
+  };
+
+  return (
+    <div className="panel stack unknown-ings">
+      <p className="small">
+        <strong>{unknown.length === 1 ? '1 Zutat kennt' : `${unknown.length} Zutaten kennt`} Mashi noch nicht.</strong>{' '}
+        Mit den Werten vom Etikett wird die Berechnung genauer – in jedem Rezept, das sie verwendet.
+      </p>
+      {unknown.map((name) =>
+        open === name ? (
+          <ProductForm key={name} initial={{ name, names: [normalizeName(name)], replaces: [] }} onSave={save} onCancel={() => setOpen(null)} />
+        ) : (
+          <div key={name} className="row-between">
+            <span>{name}</span>
+            <button className="btn btn--soft btn--sm" onClick={() => setOpen(name)}><Icon name="plus" size={16} /> Als Produkt anlegen</button>
+          </div>
+        ),
+      )}
+    </div>
+  );
+}
+
+function ProductForm({ initial, onSave, onCancel }: { initial?: Partial<MyProduct>; onSave: (p: MyProduct) => void; onCancel: () => void }) {
   const [name, setName] = useState(initial?.name ?? '');
   const [values, setValues] = useState<Values>({
-    kcal: toField(initial?.per100g.kcal),
-    protein: toField(initial?.per100g.protein),
-    carbs: toField(initial?.per100g.carbs),
-    fat: toField(initial?.per100g.fat),
+    kcal: toField(initial?.per100g?.kcal),
+    protein: toField(initial?.per100g?.protein),
+    carbs: toField(initial?.per100g?.carbs),
+    fat: toField(initial?.per100g?.fat),
   });
   const [replaces, setReplaces] = useState<string[]>(initial?.replaces ?? []);
+  const [names, setNames] = useState<string[]>(initial?.names ?? []);
   const [search, setSearch] = useState('');
   const [error, setError] = useState<string | null>(null);
 
@@ -106,11 +148,12 @@ function ProductForm({ initial, onSave, onCancel }: { initial?: MyProduct; onSav
     if (kcal === undefined || protein === undefined || carbs === undefined || fat === undefined) {
       return setError('Bitte alle vier Werte vom Etikett eintragen (pro 100 g).');
     }
-    if (!replaces.length) return setError('Bitte wählen, was das Produkt ersetzen soll (z. B. Milch).');
+    if (!replaces.length && !names.length) return setError('Bitte wählen, was das Produkt ersetzen soll (z. B. Milch).');
     onSave({
       id: initial?.id ?? newId('p'),
       name: name.trim(),
       replaces,
+      ...(names.length ? { names } : {}),
       per100g: { kcal, protein, carbs, fat },
       updatedAt: new Date().toISOString(),
     });
@@ -133,8 +176,21 @@ function ProductForm({ initial, onSave, onCancel }: { initial?: MyProduct; onSav
       <div className="row-2">{numField('kcal', 'kcal')}{numField('protein', 'Eiweiß (g)')}</div>
       <div className="row-2">{numField('carbs', 'Kohlenhydrate (g)')}{numField('fat', 'Fett (g)')}</div>
 
+      {names.length > 0 && (
+        <div className="stack">
+          <span className="small muted">Gilt für Zutaten namens:</span>
+          <div className="chips">
+            {names.map((x) => (
+              <button key={x} type="button" className="afilter" onClick={() => setNames(names.filter((y) => y !== x))} aria-label={`${x} entfernen`}>
+                {x} <Icon name="close" size={14} />
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="stack">
-        <span className="small muted">Ersetzt in allen Rezepten:</span>
+        <span className="small muted">{names.length ? 'Ersetzt außerdem (optional):' : 'Ersetzt in allen Rezepten:'}</span>
         {replaces.length > 0 && (
           <div className="chips">
             {replaces.map((id) => (

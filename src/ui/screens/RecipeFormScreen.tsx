@@ -2,12 +2,15 @@ import { useState, type FormEvent } from 'react';
 import { CATEGORIES } from '../../domain/catalog';
 import { cloneContent, currentContent, newId } from '../../domain/recipe';
 import type { Difficulty, RecipeContent, RecipeImage } from '../../domain/types';
-import { createRecipe, saveContent, useRecipe } from '../../data/store';
+import type { TextImport } from '../../domain/importText';
+import { createRecipe, regenerateImage, saveContent, setImage as storeImage, useRecipe } from '../../data/store';
 import { goBack, navigate } from '../../router';
 import { ChipSelect, DevicePicker, Stepper } from '../components/Controls';
 import { IngredientEditor, StepEditor } from '../components/ContentEditors';
 import { RecipeImage as RecipeImageView } from '../components/RecipeImage';
+import { Icon } from '../components/Icon';
 import { TopBar } from '../components/TopBar';
+import { downscale } from '../photo';
 import { toast } from '../toast';
 
 const EMPTY: RecipeContent = {
@@ -16,20 +19,25 @@ const EMPTY: RecipeContent = {
   categories: [], tags: [], devices: [],
 };
 
-/** Formular für „Eigenes Rezept“ und „Bearbeiten“ (dann entsteht eine neue Version). */
-export function RecipeFormScreen({ editId }: { editId?: string }) {
+/**
+ * Formular für „Eigenes Rezept“, „Bearbeiten“ (dann entsteht eine neue Version)
+ * und zum Prüfen eines Text-Imports (draft: vorausgefüllt, mit Hinweisen).
+ */
+export function RecipeFormScreen({ editId, draft }: { editId?: string; draft?: TextImport }) {
   const existing = useRecipe(editId);
-  const [c, setC] = useState<RecipeContent>(() => (existing ? cloneContent(currentContent(existing)) : cloneContent(EMPTY)));
+  const [c, setC] = useState<RecipeContent>(() =>
+    existing ? cloneContent(currentContent(existing)) : cloneContent(draft?.content ?? EMPTY));
   const [tagText, setTagText] = useState(c.tags.join(', '));
-  const [notes, setNotes] = useState('');
-  const [tested, setTested] = useState<'ja' | 'nein'>('ja');
+  const [notes, setNotes] = useState(draft?.notes ?? '');
+  // Importiertes ist fremd – erst testen. Eigenes, das man kennt, darf direkt ins Kochbuch.
+  const [tested, setTested] = useState<'ja' | 'nein'>(draft ? 'nein' : 'ja');
   const [image, setImage] = useState<RecipeImage | undefined>(existing?.image);
   const [error, setError] = useState<string | null>(null);
   const set = (patch: Partial<RecipeContent>) => setC((prev) => ({ ...prev, ...patch }));
 
   const onPhoto = async (file: File | undefined) => {
     if (!file) return;
-    setImage({ kind: 'url', url: await downscale(file, 800) });
+    setImage({ kind: 'url', url: await downscale(file) });
   };
 
   const submit = (e: FormEvent) => {
@@ -45,12 +53,17 @@ export function RecipeFormScreen({ editId }: { editId?: string }) {
     if (!content.ingredients.length) return setError('Mindestens eine Zutat, bitte.');
 
     if (existing) {
+      // Das Foto gehört zum Rezept, nicht zur Version – ein neues Foto erzeugt keine neue Version.
+      const photoChanged = image !== existing.image;
+      if (photoChanged) {
+        if (image) storeImage(existing.id, image);
+        else void regenerateImage(existing.id);
+      }
       const changed = saveContent(existing.id, content);
-      toast(changed ? `Gespeichert als Version ${existing.versions.length + 1}` : 'Keine Änderungen');
+      toast(changed ? `Gespeichert als Version ${existing.versions.length + 1}` : photoChanged ? 'Foto gespeichert' : 'Keine Änderungen');
       goBack(`/rezept/${existing.id}`);
     } else {
-      // Eigene Rezepte, die man schon kennt, dürfen direkt ins Kochbuch.
-      const id = createRecipe(content, { source: 'selbst', status: tested === 'ja' ? 'kochbuch' : 'zum_testen', image, notes });
+      const id = createRecipe(content, { source: draft ? 'import' : 'selbst', status: tested === 'ja' ? 'kochbuch' : 'zum_testen', image, notes });
       toast('Rezept gespeichert');
       navigate(`/rezept/${id}`, { replace: true });
     }
@@ -58,17 +71,27 @@ export function RecipeFormScreen({ editId }: { editId?: string }) {
 
   return (
     <main className="screen">
-      <TopBar title={existing ? 'Rezept bearbeiten' : 'Eigenes Rezept'} />
+      <TopBar title={existing ? 'Rezept bearbeiten' : draft ? 'Import prüfen' : 'Eigenes Rezept'} />
       <form className="stack" onSubmit={submit} noValidate>
-        {!existing && (
-          <div className="photo-pick">
-            {image ? <RecipeImageView image={image} size="md" /> : <div className="photo-pick__empty">Kein Foto – Mashi erzeugt nach dem Speichern ein Bild.</div>}
-            <label className="btn btn--soft">
-              Eigenes Foto wählen
-              <input type="file" accept="image/*" hidden onChange={(e) => onPhoto(e.target.files?.[0])} />
-            </label>
+        {draft && (
+          <div className="tip tint-butter">
+            <Icon name="info" size={20} />
+            <div>
+              <p><strong>Bitte kurz prüfen.</strong> Mashi hat den Text gelesen – gespeichert wird erst, wenn du unten auf „Rezept speichern“ tippst.</p>
+              {draft.warnings.length > 0 && <ul className="small">{draft.warnings.map((w) => <li key={w}>{w}</li>)}</ul>}
+            </div>
           </div>
         )}
+        <div className="photo-pick">
+          {image ? <RecipeImageView image={image} size="md" /> : <div className="photo-pick__empty">Kein Foto – Mashi erzeugt nach dem Speichern ein Bild.</div>}
+          <div className="stack stack--tight">
+            <label className="btn btn--soft">
+              {image?.kind === 'url' ? 'Anderes Foto' : 'Eigenes Foto wählen'}
+              <input type="file" accept="image/*" hidden onChange={(e) => onPhoto(e.target.files?.[0])} />
+            </label>
+            {image?.kind === 'url' && <button type="button" className="btn btn--ghost btn--sm" onClick={() => setImage(undefined)}>Foto entfernen</button>}
+          </div>
+        </div>
 
         <label className="field"><span>Titel</span>
           <input value={c.title} onChange={(e) => set({ title: e.target.value })} placeholder="z. B. Omas Kartoffelsalat" required />
@@ -127,22 +150,4 @@ export function RecipeFormScreen({ editId }: { editId?: string }) {
       </form>
     </main>
   );
-}
-
-/** Foto verkleinern, damit es im Prototyp in den localStorage passt (später: Supabase Storage). */
-function downscale(file: File, max: number): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => {
-      const scale = Math.min(1, max / Math.max(img.width, img.height));
-      const canvas = document.createElement('canvas');
-      canvas.width = Math.round(img.width * scale);
-      canvas.height = Math.round(img.height * scale);
-      canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
-      URL.revokeObjectURL(img.src);
-      resolve(canvas.toDataURL('image/jpeg', 0.75));
-    };
-    img.onerror = reject;
-    img.src = URL.createObjectURL(file);
-  });
 }

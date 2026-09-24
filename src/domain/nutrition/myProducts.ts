@@ -1,3 +1,4 @@
+import { normalizeName } from './localFoods';
 import type { FoodEntry, FoodTable, Nutrients } from './types';
 
 /**
@@ -16,6 +17,11 @@ export interface MyProduct {
   name: string;
   /** IDs aus der allgemeinen Tabelle, die dieses Produkt ersetzt, z. B. ['milch', 'magermilch'] */
   replaces: string[];
+  /**
+   * Zutatennamen, für die dieses Produkt gilt – für Lebensmittel, die die allgemeine Tabelle
+   * gar nicht kennt (z. B. „kimchi“). Normalisiert gespeichert (siehe normalizeName).
+   */
+  names?: string[];
   /** Werte vom Etikett, pro 100 g bzw. 100 ml */
   per100g: Nutrients;
   updatedAt: string;
@@ -31,6 +37,7 @@ function asEntry(p: MyProduct, replaced?: FoodEntry): FoodEntry {
     per100g: p.per100g,
     ...(replaced?.density !== undefined ? { density: replaced.density } : {}),
     ...(replaced?.portions ? { portions: replaced.portions } : {}),
+    ...(replaced?.kind ? { kind: replaced.kind } : {}),
   };
 }
 
@@ -43,6 +50,8 @@ export function withMyProducts(base: FoodTable, products: MyProduct[]): FoodTabl
   if (!products.length) return base;
   const byReplaced = new Map<string, MyProduct>();
   for (const p of products) for (const r of p.replaces) byReplaced.set(r, p);
+  const byName = new Map<string, MyProduct>();
+  for (const p of products) for (const n of p.names ?? []) byName.set(normalizeName(n), p);
   const swap = (food: FoodEntry): FoodEntry => {
     const p = byReplaced.get(food.ref.foodId);
     return p ? asEntry(p, food) : food;
@@ -57,6 +66,9 @@ export function withMyProducts(base: FoodTable, products: MyProduct[]): FoodTabl
       return food && swap(food);
     },
     matchName(name) {
+      // Eigene Namen zuerst: Du hast das Produkt ausdrücklich für diese Zutat angelegt.
+      const own = byName.get(normalizeName(name));
+      if (own) return { food: asEntry(own), quality: 'exact' };
       const m = base.matchName(name);
       return m && { food: swap(m.food), quality: m.quality };
     },
@@ -72,6 +84,7 @@ export function isValidProduct(v: unknown): v is MyProduct {
   const n = p.per100g as Record<string, unknown> | undefined;
   return typeof p.id === 'string' && !!p.id && typeof p.name === 'string' && !!p.name.trim()
     && Array.isArray(p.replaces) && p.replaces.every((r) => typeof r === 'string')
+    && (p.names === undefined || (Array.isArray(p.names) && p.names.every((r) => typeof r === 'string')))
     && typeof p.updatedAt === 'string'
     && !!n && isNum(n.kcal) && isNum(n.protein) && isNum(n.carbs) && isNum(n.fat);
 }

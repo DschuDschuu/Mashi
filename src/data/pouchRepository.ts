@@ -1,4 +1,5 @@
 /// <reference types="pouchdb-core" />
+import { emptyPlan, type MealPlan } from '../domain/mealplan';
 import { mergeRecipes } from '../domain/merge';
 import type { MyProduct } from '../domain/nutrition/myProducts';
 import type { Recipe } from '../domain/types';
@@ -8,9 +9,10 @@ import type { RecipeRepository } from './repository';
 export type RecipeDoc = Recipe & { _id: string; _rev?: string; type: 'recipe' };
 export type RecipeDb = PouchDB.Database<RecipeDoc>;
 
-/** „Meine Produkte“ liegen als EIN Dokument neben den Rezepten und werden mit abgeglichen. */
+/** „Meine Produkte“ und der Wochenplan liegen je als EIN Dokument neben den Rezepten und werden mit abgeglichen. */
 const PRODUCTS_ID = 'meine-produkte';
-type ProductsDoc = { _id: string; _rev?: string; type: 'products'; products: MyProduct[]; updatedAt: string };
+const PLAN_ID = 'wochenplan';
+type SingleDoc = { _id: string; _rev?: string; type: 'products' | 'plan'; products?: MyProduct[]; plan?: MealPlan; updatedAt: string };
 
 /**
  * Rezepte in PouchDB (im Browser: IndexedDB). Ein Rezept = ein Dokument,
@@ -63,32 +65,50 @@ export class PouchRecipeRepository implements RecipeRepository {
   }
 
   async loadProducts(): Promise<MyProduct[]> {
-    const db = this.db as unknown as PouchDB.Database<ProductsDoc>;
+    return (await this.loadSingle(PRODUCTS_ID))?.products ?? [];
+  }
+
+  saveProducts(products: MyProduct[]): Promise<void> {
+    return this.saveSingle({ _id: PRODUCTS_ID, type: 'products', products, updatedAt: new Date().toISOString() });
+  }
+
+  async loadPlan(): Promise<MealPlan> {
+    return (await this.loadSingle(PLAN_ID))?.plan ?? emptyPlan();
+  }
+
+  savePlan(plan: MealPlan): Promise<void> {
+    return this.saveSingle({ _id: PLAN_ID, type: 'plan', plan, updatedAt: plan.updatedAt });
+  }
+
+  /**
+   * Einzel-Dokumente (Produkte, Wochenplan): Auf zwei Geräten offline geändert →
+   * die zuletzt geänderte Fassung gewinnt. Zusammenführen lohnt sich hier nicht.
+   */
+  private async loadSingle(id: string): Promise<SingleDoc | undefined> {
+    const db = this.db as unknown as PouchDB.Database<SingleDoc>;
     try {
-      const doc = await db.get(PRODUCTS_ID, { conflicts: true });
-      if (!doc._conflicts?.length) return doc.products;
-      // Auf zwei Geräten offline geändert: die zuletzt geänderte Liste gewinnt.
+      const doc = await db.get(id, { conflicts: true });
+      if (!doc._conflicts?.length) return doc;
       return this.enqueue(async () => {
-        const all = [doc, ...(await Promise.all(doc._conflicts!.map((rev) => db.get(PRODUCTS_ID, { rev }))))];
+        const all = [doc, ...(await Promise.all(doc._conflicts!.map((rev) => db.get(id, { rev }))))];
         const newest = all.reduce((a, b) => (b.updatedAt > a.updatedAt ? b : a));
         // _conflicts ist nur eine Lese-Angabe – beim Speichern lehnt CouchDB es ab.
-        const { _conflicts: _c, ...clean } = newest as ProductsDoc & { _conflicts?: string[] };
+        const { _conflicts: _c, ...clean } = newest as SingleDoc & { _conflicts?: string[] };
         const res = await db.put({ ...clean, _rev: doc._rev });
         this.ownRevs.add(res.rev);
-        for (const rev of doc._conflicts!) this.ownRevs.add((await db.remove(PRODUCTS_ID, rev)).rev);
-        return newest.products;
+        for (const rev of doc._conflicts!) this.ownRevs.add((await db.remove(id, rev)).rev);
+        return newest;
       });
     } catch (e) {
-      if ((e as { status?: number }).status === 404) return [];
+      if ((e as { status?: number }).status === 404) return undefined;
       throw e;
     }
   }
 
-  saveProducts(products: MyProduct[]): Promise<void> {
-    const db = this.db as unknown as PouchDB.Database<ProductsDoc>;
+  private saveSingle(doc: SingleDoc): Promise<void> {
+    const db = this.db as unknown as PouchDB.Database<SingleDoc>;
     return this.enqueue(async () => {
-      const rev = await this.currentRev(PRODUCTS_ID);
-      const res = await db.put({ _id: PRODUCTS_ID, _rev: rev, type: 'products', products, updatedAt: new Date().toISOString() });
+      const res = await db.put({ ...doc, _rev: await this.currentRev(doc._id) });
       this.ownRevs.add(res.rev);
     });
   }
