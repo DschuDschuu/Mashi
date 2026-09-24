@@ -46,7 +46,8 @@ Einzel-Dokumente, die ebenfalls auf alle Geräte abgeglichen werden:
 | `_id` | Inhalt | Konflikt (offline auf zwei Geräten geändert) |
 |---|---|---|
 | `meine-produkte` | `MyProduct[]` – Werte vom Etikett; `replaces` (Einträge der Tabelle) und/oder `names` (Zutatennamen, die die Tabelle nicht kennt) | neueste Fassung gewinnt |
-| `wochenplan` | `MealPlan` – `items: {recipeId, servings}[]`, abgehakte Einkäufe `checked` | neueste Fassung gewinnt |
+| `wochenplan` | `MealPlan` – `items: {recipeId, servings}[]`, abgehakte Einkäufe `checked`, diese Woche gekochte Gerichte `cooked` | neueste Fassung gewinnt |
+| `speisekammer` | `Pantry` – Vorräte `items` (Name, Menge nur wo bekannt) und gelernte Bon-Artikel `rules` (Bon-Name → Name, Menge je Stück, oder „überspringen“) | neueste Fassung gewinnt |
 
 Vorschläge und Einkaufsliste werden nie gespeichert, sondern jedes Mal aus Plan + Rezepten
 berechnet (`domain/mealplan.ts`). Fotos liegen verkleinert (800 px, JPEG) direkt im Rezept.

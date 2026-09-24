@@ -5,15 +5,17 @@ import { withMyProducts } from '../../domain/nutrition/myProducts';
 import { currentContent } from '../../domain/recipe';
 import type { Recipe } from '../../domain/types';
 import {
-  addToPlan, clearPlan, removeFromPlan, setPlanServings, toggleShoppingItem, usePlan, useProducts, useRecipes,
+  addToPlan, clearPlan, removeFromPlan, setPlanServings, togglePlanCooked, toggleShoppingItem, usePlan, useProducts, useRecipes,
 } from '../../data/store';
 import { navigate } from '../../router';
 import { foodTable } from '../../services';
 import { Empty, Section, Stepper } from '../components/Controls';
+import { PlanTabs } from '../components/PlanTabs';
 import { Icon, type IconName } from '../components/Icon';
 import { RecipeImage } from '../components/RecipeImage';
 import { StatusBadge } from '../components/StatusBadge';
-import { recipeCount, relativeDay } from '../format';
+import { portionCount, recipeCount, relativeDay } from '../format';
+import { cookedToast } from '../cookedToast';
 import { toast } from '../toast';
 
 /** Was sich planen lässt: alles außer Archiv und reinen KI-Ideen (die sind noch kein Rezept). */
@@ -34,7 +36,10 @@ export function PlanScreen() {
   const table = useMemo(() => withMyProducts(foodTable, products), [products]);
   const items = plan.items
     .map((i) => ({ ...i, recipe: recipes.find((r) => r.id === i.recipeId) }))
-    .filter((i): i is typeof i & { recipe: Recipe } => !!i.recipe);
+    .filter((i): i is typeof i & { recipe: Recipe } => !!i.recipe)
+    .map((i) => ({ ...i, cooked: plan.cooked.includes(i.recipeId) }))
+    // Gekochtes rutscht nach unten – oben steht, was noch ansteht
+    .sort((a, b) => Number(a.cooked) - Number(b.cooked));
   const suggestions = useMemo(() => suggestRecipes(plan, recipes.filter(plannable), table), [plan, recipes, table]);
   const shopping = useMemo(() => buildShoppingList(plan, recipes, table), [plan, recipes, table]);
   const pantryCount = shopping.filter((i) => i.pantry).length;
@@ -50,13 +55,17 @@ export function PlanScreen() {
 
   const planList = (
     <>
-      <Section icon="calendar" title={items.length ? `Diese Woche · ${items.length} ${items.length === 1 ? 'Gericht' : 'Gerichte'}, ${portions} Portionen` : 'Diese Woche'}>
+      <Section icon="calendar" title={items.length ? `Diese Woche · ${items.length} ${items.length === 1 ? 'Gericht' : 'Gerichte'}, ${portionCount(portions)}` : 'Diese Woche'}>
         {items.length === 0 ? (
           <Empty icon="calendar">Wähle ein Gericht – Mashi schlägt dir dann Rezepte mit ähnlichen Zutaten vor. So kaufst du weniger ein und es bleibt nichts übrig.</Empty>
         ) : (
           <ul className="list plan-list">
-            {items.map(({ recipe, servings }) => (
-              <li key={recipe.id} className="list__item">
+            {items.map(({ recipe, servings, cooked }) => (
+              <li key={recipe.id} className={`list__item${cooked ? ' is-cooked' : ''}`}>
+                <button className={`plan-cooked${cooked ? ' is-on' : ''}`} onClick={() => cookedToast(togglePlanCooked(recipe.id))}
+                  aria-pressed={cooked} aria-label={cooked ? `${currentContent(recipe).title}: doch noch nicht gekocht` : `${currentContent(recipe).title} gekocht`}>
+                  <Icon name="check" size={16} />
+                </button>
                 <button className="plan-list__hit" onClick={() => navigate(`/rezept/${recipe.id}`)}>
                   <RecipeImage image={recipe.image} size="sm" />
                   <span className="list__title">{currentContent(recipe).title}</span>
@@ -120,6 +129,7 @@ export function PlanScreen() {
   return (
     <main className="screen screen--tabbed">
       <header className="page-head"><h1>Wochenplan</h1></header>
+      <PlanTabs active="plan" />
       <div className="plan-layout">
         <div className="plan-layout__main">{planList}</div>
         <div className="plan-layout__side">{shoppingList}</div>

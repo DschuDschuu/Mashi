@@ -1,4 +1,5 @@
 import { emptyPlan, type MealPlan } from '../domain/mealplan';
+import { emptyPantry, type Pantry } from '../domain/pantry';
 import type { MyProduct } from '../domain/nutrition/myProducts';
 import type { Recipe } from '../domain/types';
 import { createMockRecipes } from './mockRecipes';
@@ -12,6 +13,7 @@ import type { RecipeRepository } from './repository';
 const KEY = 'mashi-recipes-v2';
 const PRODUCTS_KEY = 'mashi-products-v1';
 const PLAN_KEY = 'mashi-plan-v1';
+const PANTRY_KEY = 'mashi-pantry-v1';
 
 export class LocalRecipeRepository implements RecipeRepository {
   private read(): Recipe[] {
@@ -75,10 +77,23 @@ export class LocalRecipeRepository implements RecipeRepository {
     localStorage.setItem(PLAN_KEY, JSON.stringify(plan));
   }
 
+  async loadPantry(): Promise<Pantry> {
+    try {
+      return { ...emptyPantry(), ...(JSON.parse(localStorage.getItem(PANTRY_KEY) ?? '{}') as Partial<Pantry>) };
+    } catch {
+      return emptyPantry();
+    }
+  }
+
+  async savePantry(pantry: Pantry) {
+    localStorage.setItem(PANTRY_KEY, JSON.stringify(pantry));
+  }
+
   /** Nur für den Prototyp: Beispieldaten wiederherstellen. */
   async reset() {
     localStorage.removeItem(KEY);
     localStorage.removeItem(PLAN_KEY);
+    localStorage.removeItem(PANTRY_KEY);
     return this.read();
   }
 }

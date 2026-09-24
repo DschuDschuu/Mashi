@@ -1,6 +1,7 @@
 /// <reference types="pouchdb-core" />
 import { emptyPlan, type MealPlan } from '../domain/mealplan';
 import { mergeRecipes } from '../domain/merge';
+import { emptyPantry, type Pantry } from '../domain/pantry';
 import type { MyProduct } from '../domain/nutrition/myProducts';
 import type { Recipe } from '../domain/types';
 import type { RecipeRepository } from './repository';
@@ -9,10 +10,14 @@ import type { RecipeRepository } from './repository';
 export type RecipeDoc = Recipe & { _id: string; _rev?: string; type: 'recipe' };
 export type RecipeDb = PouchDB.Database<RecipeDoc>;
 
-/** „Meine Produkte“ und der Wochenplan liegen je als EIN Dokument neben den Rezepten und werden mit abgeglichen. */
+/** „Meine Produkte“, Wochenplan und Speisekammer liegen je als EIN Dokument neben den Rezepten und werden mit abgeglichen. */
 const PRODUCTS_ID = 'meine-produkte';
 const PLAN_ID = 'wochenplan';
-type SingleDoc = { _id: string; _rev?: string; type: 'products' | 'plan'; products?: MyProduct[]; plan?: MealPlan; updatedAt: string };
+const PANTRY_ID = 'speisekammer';
+type SingleDoc = {
+  _id: string; _rev?: string; type: 'products' | 'plan' | 'pantry';
+  products?: MyProduct[]; plan?: MealPlan; pantry?: Pantry; updatedAt: string;
+};
 
 /**
  * Rezepte in PouchDB (im Browser: IndexedDB). Ein Rezept = ein Dokument,
@@ -80,8 +85,16 @@ export class PouchRecipeRepository implements RecipeRepository {
     return this.saveSingle({ _id: PLAN_ID, type: 'plan', plan, updatedAt: plan.updatedAt });
   }
 
+  async loadPantry(): Promise<Pantry> {
+    return { ...emptyPantry(), ...(await this.loadSingle(PANTRY_ID))?.pantry };
+  }
+
+  savePantry(pantry: Pantry): Promise<void> {
+    return this.saveSingle({ _id: PANTRY_ID, type: 'pantry', pantry, updatedAt: pantry.updatedAt });
+  }
+
   /**
-   * Einzel-Dokumente (Produkte, Wochenplan): Auf zwei Geräten offline geändert →
+   * Einzel-Dokumente (Produkte, Wochenplan, Speisekammer): Auf zwei Geräten offline geändert →
    * die zuletzt geänderte Fassung gewinnt. Zusammenführen lohnt sich hier nicht.
    */
   private async loadSingle(id: string): Promise<SingleDoc | undefined> {

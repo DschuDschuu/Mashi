@@ -17,7 +17,8 @@
     "events": "^3.3.0",
     "pouchdb-browser": "^9.0.0",
     "react": "^19.3.0",
-    "react-dom": "^19.3.0"
+    "react-dom": "^19.3.0",
+    "tesseract.js": "^7.0.0"
   },
   "devDependencies": {
     "@types/pouchdb-adapter-memory": "^6.1.6",

@@ -25,6 +25,11 @@ export function relativeDay(iso: string): string {
   return new Date(iso).toLocaleDateString('de-DE', { day: 'numeric', month: 'short' });
 }
 
+/** „1 Portion“, „2 Portionen“ */
+export function portionCount(n: number): string {
+  return `${n} ${n === 1 ? 'Portion' : 'Portionen'}`;
+}
+
 /** „1 Rezept“, „0 Rezepte“, „5 Rezepte“ */
 export function recipeCount(n: number): string {
   return `${n} ${n === 1 ? 'Rezept' : 'Rezepte'}`;

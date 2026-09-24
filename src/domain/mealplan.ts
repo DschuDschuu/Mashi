@@ -15,10 +15,22 @@ export interface MealPlan {
   items: PlanItem[];
   /** abgehakte Einträge der Einkaufsliste (ShoppingItem.key) */
   checked: string[];
+  /** diese Woche schon gekochte Gerichte (recipeId) – bleiben bis „Neue Woche“ im Plan */
+  cooked: string[];
   updatedAt: string;
 }
 
-export const emptyPlan = (): MealPlan => ({ items: [], checked: [], updatedAt: new Date(0).toISOString() });
+export const emptyPlan = (): MealPlan => ({ items: [], checked: [], cooked: [], updatedAt: new Date(0).toISOString() });
+
+/** Ältere Pläne (vor „Gekocht“) haben kein cooked-Feld – auffüllen statt abstürzen. */
+export const normalizePlan = (p: Partial<MealPlan>): MealPlan => ({ ...emptyPlan(), ...p, cooked: p.cooked ?? [] });
+
+/** „Gekocht“ umschalten – nur für Gerichte, die im Plan stehen. */
+export function toggleCooked(plan: MealPlan, recipeId: string, cooked = !plan.cooked.includes(recipeId)): MealPlan {
+  if (!plan.items.some((i) => i.recipeId === recipeId)) return plan;
+  const rest = plan.cooked.filter((id) => id !== recipeId);
+  return { ...plan, cooked: cooked ? [...rest, recipeId] : rest };
+}
 
 /**
  * Grundvorrat: hat man meist zu Hause. Zählt nicht für Vorschläge und steht nicht
@@ -59,19 +71,26 @@ function kindFor(food: FoodEntry | undefined, name: string): FoodKind | undefine
   return KIND_BY_NAME.find(([, re]) => re.test(n))?.[0];
 }
 
-interface Resolved {
+export interface Resolved {
   /** gleiche Lebensmittel → gleicher Schlüssel, auch bei verschiedenen Namen („Pasta“/„Nudeln“) */
   key: string;
   name: string;
   pantry: boolean;
   /** Wichtigkeit für Vorschläge (siehe KIND_WEIGHT), 1 = normal */
   weight: number;
+  /** das zugeordnete Lebensmittel (für Umrechnungen), fehlt bei unbekannten Zutaten */
+  food?: FoodEntry;
   grams?: number;
   amount?: number;
   unit?: Unit;
 }
 
-function resolve(ing: Ingredient, factor: number, table: FoodTable): Resolved | null {
+/**
+ * Eine Zutat einordnen: welches Lebensmittel (Schlüssel), Grundvorrat oder nicht, wie wichtig,
+ * wie viel Gramm. Gemeinsam genutzt von Vorschlägen, Einkaufsliste und Speisekammer –
+ * so gilt „Nudeln“ = „Pasta“ überall gleich.
+ */
+export function resolveIngredient(ing: Ingredient, factor: number, table: FoodTable): Resolved | null {
   if (ing.optional) return null;
   const match = ing.foodRef ? { food: table.byRef(ing.foodRef)! } : table.matchName(ing.name);
   const food = match?.food;
@@ -86,6 +105,7 @@ function resolve(ing: Ingredient, factor: number, table: FoodTable): Resolved | 
     name: food?.name ?? ing.name,
     pantry: !!food && (!!food.negligible || PANTRY.has(food.ref.foodId)),
     weight: kind ? KIND_WEIGHT[kind] : 1,
+    food,
     grams,
     amount,
     unit: ing.unit,
@@ -95,7 +115,7 @@ function resolve(ing: Ingredient, factor: number, table: FoodTable): Resolved | 
 function resolveRecipe(r: Recipe, servings: number, table: FoodTable): Resolved[] {
   const c = currentContent(r);
   const factor = servings / c.servings;
-  return c.ingredients.map((i) => resolve(i, factor, table)).filter((x): x is Resolved => x !== null);
+  return c.ingredients.map((i) => resolveIngredient(i, factor, table)).filter((x): x is Resolved => x !== null);
 }
 
 // ── Vorschläge ─────────────────────────────────────────────────────

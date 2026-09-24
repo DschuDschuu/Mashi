@@ -28,7 +28,7 @@ const ROWS: Row[] = [
   ['pasta', ['pasta', 'nudeln', 'spaghetti', 'penne', 'fusilli', 'linguine', 'hörnchennudeln', 'makkaroni', 'farfalle', 'rigatoni'], 355, 12.5, 71, 1.5],
   ['lasagneplatten', ['lasagneplatten', 'lasagneblätter'], 355, 12, 71, 1.5],
   ['parmesan', ['parmesan', 'parmigiano', 'parmigiano reggiano'], 392, 35, 3.2, 26, { portions: { EL: 6 } }],
-  ['zitronensaft', ['zitronensaft', 'zitrone'], 25, 0.4, 7, 0.2, { portions: { Stück: 45 } }],
+  ['zitronensaft', ['zitronensaft', 'zitrone', 'limettensaft', 'limette'], 25, 0.4, 7, 0.2, { portions: { Stück: 45 } }],
   ['basilikum', ['basilikum', 'basilikumblättchen', 'basilikumblätter'], 23, 3, 2.7, 0.6, { portions: { Handvoll: 10, Bund: 20 } }],
   ['haferflocken', ['haferflocken', 'zarte haferflocken'], 370, 13.5, 58.7, 7],
   ['ei', ['ei', 'eier'], 143, 12.6, 0.7, 9.5, { portions: { Stück: 55 } }],
@@ -80,7 +80,26 @@ const ROWS: Row[] = [
   ['huehnerbruehe-pulver', ['hühnerbrühe-pulver', 'brühpulver', 'hühnerbrühpulver'], 240, 10, 30, 9, { portions: { TL: 5, EL: 12 } }],
   // Monsieur-Cuisine-Rezepte (Kühlregal- und Vorratsprodukte, Richtwerte)
   ['tomatenmark', ['tomatenmark'], 90, 4.5, 15, 0.5, { portions: { EL: 17, TL: 6 } }],
-  ['sahne', ['sahne', 'schlagsahne', 'kochsahne'], 292, 2.4, 3.2, 30, { density: 1.0 }],
+  ['sahne', ['sahne', 'schlagsahne'], 292, 2.4, 3.2, 30, { density: 1.0 }],
+  // Kochsahne hat meist 15 % Fett – nicht wie Schlagsahne (30 %) rechnen
+  ['kochsahne', ['kochsahne', 'kochcreme', 'cremefine'], 160, 3, 4, 15, { density: 1.0 }],
+  ['gruyere', ['gruyère', 'gruyere', 'greyerzer'], 413, 29.8, 0.4, 32.3],
+  ['tteokbokki', ['tteokbokki-reiskuchen', 'tteokbokki', 'tteok', 'reiskuchen', 'koreanische reiskuchen'], 230, 4, 50, 0.5],
+  ['spaetzle', ['spätzle', 'eierspätzle', 'frische spätzle'], 190, 7, 36, 2.4], // frisch aus dem Kühlregal
+  ['rindersteak', ['rinder-minutensteak', 'minutensteak', 'rindersteak', 'steak', 'rumpsteak', 'hüftsteak', 'steakstreifen'], 121, 22, 0, 3.5],
+  ['fruehstuecksfleisch', ['frühstücksfleisch', 'spam', 'luncheon meat'], 300, 13, 3, 27],
+  ['doenerfleisch', ['dönerfleisch', 'döner', 'hähnchen-döner', 'kebabfleisch'], 220, 17, 3, 15],
+  ['brioche', ['brioche-toast-törtchen', 'brioche', 'brioche-brötchen', 'brioche-toast', 'burgerbrötchen', 'burger-brötchen'], 330, 8.5, 55, 8, { portions: { Stück: 45 } }],
+  ['pak-choi', ['pak choi', 'pak-choi', 'pakchoi', 'bok choy'], 13, 1.5, 2.2, 0.2, { portions: { Stück: 200 } }],
+  ['gurke', ['gurke', 'salatgurke', 'gurken'], 12, 0.6, 1.8, 0.2, { portions: { Stück: 400 } }],
+  ['rotkohl', ['rotkohl', 'blaukraut', 'rotkraut', 'eingelegter rotkohl'], 29, 1.5, 5, 0.2],
+  ['eisbergsalat', ['eisbergsalat', 'eisberg'], 14, 0.9, 2, 0.2],
+  ['salat', ['salat', 'blattsalat', 'römersalat', 'romanasalat', 'salatmix', 'kopfsalat', 'feldsalat', 'rucola'], 15, 1.3, 1.8, 0.2],
+  ['mayo', ['mayonnaise', 'mayo', 'salatmayonnaise'], 680, 1.1, 1.5, 75, { portions: { EL: 14, TL: 5 } }],
+  ['senf', ['senf', 'mittelscharfer senf', 'dijonsenf', 'dijon-senf'], 100, 6, 4, 5, { portions: { EL: 15, TL: 5 } }],
+  ['miso', ['miso', 'misopaste', 'miso-paste', 'helles miso'], 200, 12, 26, 6, { portions: { EL: 18, TL: 6 } }],
+  ['buldak', ['buldak-gewürz', 'buldak gewürz', 'buldak'], 0, 0, 0, 0, { negligible: true }],
+  ['kreuzkuemmel', ['kreuzkümmel', 'cumin', 'kreuzkümmel gemahlen'], 0, 0, 0, 0, { negligible: true }],
   ['creme-fraiche', ['crème fraîche', 'creme fraiche', 'crème fraiche'], 290, 2.3, 2.6, 30, { portions: { EL: 15 } }],
   ['schupfnudeln', ['schupfnudeln'], 160, 4, 33, 1.2],
   ['gnocchi', ['gnocchi'], 150, 3.5, 32, 0.4],
@@ -101,17 +120,17 @@ const PROVIDER = 'mashi-lokal';
 
 /** Art je Lebensmittel. Nicht aufgeführt = keine feste Art (Soßen, Pasten, Hülsenfrüchte, Nüsse …). */
 const KINDS: Record<FoodKind, string[]> = {
-  protein: ['haehnchenhack', 'haehnchenbrust', 'rinderhack', 'bacon'],
-  staple: ['reis', 'reis-gekocht', 'pasta', 'lasagneplatten', 'schupfnudeln', 'gnocchi', 'haferflocken'],
+  protein: ['haehnchenhack', 'haehnchenbrust', 'rinderhack', 'bacon', 'rindersteak', 'fruehstuecksfleisch', 'doenerfleisch'],
+  staple: ['reis', 'reis-gekocht', 'pasta', 'lasagneplatten', 'schupfnudeln', 'gnocchi', 'haferflocken', 'tteokbokki', 'spaetzle'],
   dairy: [
     'parmesan', 'magerquark', 'milch', 'milch-fettarm', 'magermilch', 'hafermilch', 'griech-joghurt', 'mozzarella',
-    'huettenkaese', 'frischkaese', 'frischkaese-light', 'cheddar', 'sahne', 'creme-fraiche',
+    'huettenkaese', 'frischkaese', 'frischkaese-light', 'cheddar', 'sahne', 'creme-fraiche', 'kochsahne', 'gruyere',
   ],
   egg: ['ei'],
-  bread: [],
+  bread: ['brioche'],
   vegetable: [
     'paprika', 'avocado', 'knoblauch', 'fruehlingszwiebel', 'zwiebel', 'ingwer', 'spinat', 'karotte', 'hokkaido',
-    'erbsen', 'kirschtomaten', 'mais',
+    'erbsen', 'kirschtomaten', 'mais', 'pak-choi', 'gurke', 'rotkohl', 'eisbergsalat', 'salat',
   ],
   fruit: ['banane', 'heidelbeeren', 'mango', 'zitronensaft'],
 };
@@ -155,6 +174,11 @@ export const localFoodTable: FoodTable = {
     const n = normalizeName(name);
     const exact = byAlias.get(n);
     if (exact) return { food: exact, quality: 'exact' };
+    // Mehrzahl, wie sie auf Kassenbons steht: „Bananen“ → „Banane“, „Avocados“ → „Avocado“
+    for (const singular of [n.replace(/n$/, ''), n.replace(/en$/, ''), n.replace(/s$/, ''), n.replace(/e$/, '')]) {
+      const hit = singular !== n && byAlias.get(singular);
+      if (hit) return { food: hit, quality: 'exact' };
+    }
     // Alias als ganzes Wort im Namen: „kleine rote Zwiebel“ → Zwiebel (nur ungefähr)
     for (const alias of aliasesByLength) {
       const re = new RegExp(`(^|\\s)${alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\s|$)`);

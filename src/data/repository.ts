@@ -1,4 +1,5 @@
 import type { MealPlan } from '../domain/mealplan';
+import type { Pantry } from '../domain/pantry';
 import type { MyProduct } from '../domain/nutrition/myProducts';
 import type { Recipe } from '../domain/types';
 
@@ -19,6 +20,9 @@ export interface RecipeRepository {
   /** Wochenplan „Diese Woche“ inkl. abgehakter Einkäufe – auf allen Geräten gleich. */
   loadPlan(): Promise<MealPlan>;
   savePlan(plan: MealPlan): Promise<void>;
+  /** Speisekammer inkl. gelernter Bon-Artikel – auf allen Geräten gleich. */
+  loadPantry(): Promise<Pantry>;
+  savePantry(pantry: Pantry): Promise<void>;
   /**
    * Meldet Änderungen, die NICHT aus dieser App-Sitzung stammen –
    * z. B. Rezepte, die der Abgleich vom Handy auf den PC geholt hat.

@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { createMockRecipes } from '../data/mockRecipes';
-import { buildShoppingList, suggestRecipes, type MealPlan } from './mealplan';
+import { buildShoppingList, normalizePlan, suggestRecipes, toggleCooked, type MealPlan } from './mealplan';
 import { localFoodTable } from './nutrition/localFoods';
 import { withMyProducts } from './nutrition/myProducts';
 import type { Recipe, RecipeContent } from './types';
 
 const recipes = createMockRecipes();
 const plan = (...items: [string, number][]): MealPlan => ({
-  items: items.map(([recipeId, servings]) => ({ recipeId, servings })), checked: [], updatedAt: '',
+  items: items.map(([recipeId, servings]) => ({ recipeId, servings })), checked: [], cooked: [], updatedAt: '',
 });
 const make = (id: string, title: string, ingredients: RecipeContent['ingredients'], servings = 2): Recipe => ({
   ...structuredClone(recipes[0]), id, status: 'kochbuch',
@@ -132,5 +132,25 @@ describe('Einkaufsliste', () => {
   it('optionale Zutaten stehen nicht drauf', () => {
     const a = make('a', 'A', [{ id: '1', name: 'Reisessig', amount: 1, unit: 'TL', optional: true }, { id: '2', name: 'Reis', amount: 100, unit: 'g' }]);
     expect(buildShoppingList(plan(['a', 2]), [a], localFoodTable).map((i) => i.name)).toEqual(['Reis']);
+  });
+});
+
+describe('Gekocht im Plan', () => {
+  it('schaltet um und bleibt im Plan', () => {
+    const p = plan(['a', 2], ['b', 4]);
+    const once = toggleCooked(p, 'a');
+    expect(once.cooked).toEqual(['a']);
+    expect(once.items).toHaveLength(2); // steht weiter im Plan – nur abgehakt
+    expect(toggleCooked(once, 'a').cooked).toEqual([]);
+  });
+
+  it('„Fertig“ im Kochmodus hakt nur ab, nie wieder auf – und nur, was geplant ist', () => {
+    const p = toggleCooked(plan(['a', 2]), 'a', true);
+    expect(toggleCooked(p, 'a', true).cooked).toEqual(['a']);
+    expect(toggleCooked(p, 'nicht-geplant', true)).toBe(p);
+  });
+
+  it('ältere Pläne ohne „cooked“ werden ergänzt', () => {
+    expect(normalizePlan({ items: [{ recipeId: 'a', servings: 2 }], checked: [], updatedAt: 'x' }).cooked).toEqual([]);
   });
 });

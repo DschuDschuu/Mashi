@@ -1,11 +1,14 @@
 import { useSyncExternalStore } from 'react';
-import { emptyPlan, type MealPlan } from '../domain/mealplan';
+import { emptyPlan, normalizePlan, toggleCooked, type MealPlan } from '../domain/mealplan';
 import { mergeRecipes } from '../domain/merge';
-import type { MyProduct } from '../domain/nutrition/myProducts';
+import { withMyProducts, type MyProduct } from '../domain/nutrition/myProducts';
+import {
+  addItem, applyImport, deductRecipe, emptyPantry, type ImportRow, type Pantry, type PantryItem, type PantryUnit,
+} from '../domain/pantry';
 import { currentContent, currentVersion, newId, withNewVersion } from '../domain/recipe';
 import { canTransition } from '../domain/status';
 import type { Rating, Recipe, RecipeContent, RecipeImage, RecipeSource, RecipeStatus } from '../domain/types';
-import { imageProvider } from '../services';
+import { foodTable, imageProvider } from '../services';
 import { LocalRecipeRepository } from './localRepository';
 import type { RecipeRepository } from './repository';
 
@@ -25,6 +28,8 @@ let products: MyProduct[] = [];
 let plan: MealPlan = emptyPlan();
 /** Speichern des Plans läuft noch – beim Neuladen gewinnt dann der Stand im Speicher. */
 let planPending = 0;
+let pantry: Pantry = emptyPantry();
+let pantryPending = 0;
 /** Letzter Speicherfehler (z. B. Speicher voll). Wird beim nächsten erfolgreichen Speichern gelöscht. */
 let saveError: string | null = null;
 let ready = false;
@@ -80,7 +85,9 @@ const sameContent = (a: RecipeContent, b: RecipeContent) => JSON.stringify(a) ==
 
 export async function initStore(r: RecipeRepository) {
   repo = r;
-  [recipes, products, plan] = await Promise.all([repo.list(), repo.loadProducts(), repo.loadPlan()]);
+  let loaded: MealPlan;
+  [recipes, products, loaded, pantry] = await Promise.all([repo.list(), repo.loadProducts(), repo.loadPlan(), repo.loadPantry()]);
+  plan = normalizePlan(loaded);
   ready = true;
   emit();
   repo.onExternalChange?.(scheduleReload);
@@ -91,9 +98,10 @@ let reloadTimer: ReturnType<typeof setTimeout> | undefined;
 function scheduleReload() {
   clearTimeout(reloadTimer);
   reloadTimer = setTimeout(async () => {
-    const [fresh, freshProducts, freshPlan] = await Promise.all([repo.list(), repo.loadProducts(), repo.loadPlan()]);
+    const [fresh, freshProducts, freshPlan, freshPantry] = await Promise.all([repo.list(), repo.loadProducts(), repo.loadPlan(), repo.loadPantry()]);
     products = freshProducts;
-    if (!planPending) plan = freshPlan;
+    if (!planPending) plan = normalizePlan(freshPlan);
+    if (!pantryPending) pantry = freshPantry;
     const inMemory = new Map(recipes.map((r) => [r.id, r]));
     recipes = fresh.map((r) => (pending.has(r.id) ? inMemory.get(r.id) ?? r : r));
     for (const id of pending.keys()) if (!fresh.some((r) => r.id === id) && inMemory.has(id)) recipes.unshift(inMemory.get(id)!);
@@ -129,6 +137,10 @@ export function usePlan(): MealPlan {
   return useSyncExternalStore(subscribe, () => plan);
 }
 
+export function usePantry(): Pantry {
+  return useSyncExternalStore(subscribe, () => pantry);
+}
+
 export function useSaveError(): string | null {
   return useSyncExternalStore(subscribe, () => saveError);
 }
@@ -155,9 +167,32 @@ export function updateNotes(id: string, notes: string) {
   if (r.notes !== notes) commit({ ...r, notes, updatedAt: now() });
 }
 
-export function markCooked(id: string) {
+/** Was nach „Gekocht“ passiert ist – für die Rückmeldung. */
+export interface CookedResult {
+  /** aus der Speisekammer genommen */
+  used: string[];
+  /** verwendet, aber ohne Menge – „Noch da?“ */
+  toCheck: string[];
+}
+
+/**
+ * „Fertig“ im Kochmodus: zuletzt gekocht merken, im Wochenplan abhaken und die Zutaten
+ * aus der Speisekammer nehmen. Schon im Plan abgehakt → nicht ein zweites Mal abziehen.
+ */
+export function markCooked(id: string, servings?: number): CookedResult {
   const r = get(id);
   commit({ ...r, lastCookedAt: now() });
+  const planned = plan.items.find((i) => i.recipeId === id);
+  if (planned && plan.cooked.includes(id)) return { used: [], toCheck: [] };
+  if (planned) commitPlan(toggleCooked(plan, id, true));
+  return consume(r, servings ?? planned?.servings ?? currentContent(r).servings);
+}
+
+function consume(r: Recipe, servings: number): CookedResult {
+  if (!pantry.items.length) return { used: [], toCheck: [] };
+  const d = deductRecipe(pantry, currentContent(r), servings, withMyProducts(foodTable, products));
+  if (d.used.length || d.toCheck.length) commitPantry(d.pantry);
+  return { used: d.used, toCheck: d.toCheck };
 }
 
 interface CreateOptions {
@@ -318,7 +353,7 @@ export function addToPlan(recipeId: string, servings = currentContent(get(recipe
 }
 
 export function removeFromPlan(recipeId: string) {
-  commitPlan({ ...plan, items: plan.items.filter((i) => i.recipeId !== recipeId) });
+  commitPlan({ ...plan, items: plan.items.filter((i) => i.recipeId !== recipeId), cooked: plan.cooked.filter((id) => id !== recipeId) });
 }
 
 export function setPlanServings(recipeId: string, servings: number) {
@@ -330,9 +365,23 @@ export function toggleShoppingItem(key: string) {
   commitPlan({ ...plan, checked });
 }
 
-/** „Neue Woche“: Plan und Haken leeren. */
+/**
+ * „Gekocht“ im Plan an- oder abhaken. Beim Abhaken zählt es als „zuletzt gekocht“ und die
+ * Zutaten gehen aus der Speisekammer. Zurücknehmen legt sie NICHT wieder hinein.
+ */
+export function togglePlanCooked(recipeId: string): CookedResult | null {
+  const next = toggleCooked(plan, recipeId);
+  if (next === plan) return null;
+  commitPlan(next);
+  if (!next.cooked.includes(recipeId)) return null;
+  const r = get(recipeId);
+  commit({ ...r, lastCookedAt: now() });
+  return consume(r, next.items.find((i) => i.recipeId === recipeId)!.servings);
+}
+
+/** „Neue Woche“: Plan, Haken und „Gekocht“ leeren. */
 export function clearPlan() {
-  commitPlan({ items: [], checked: [] });
+  commitPlan({ items: [], checked: [], cooked: [] });
 }
 
 export function isDemo(): boolean {
@@ -343,5 +392,45 @@ export async function resetDemoData() {
   if (!(repo instanceof LocalRecipeRepository)) return; // echte Daten nie per Knopfdruck ersetzen
   recipes = await repo.reset();
   plan = emptyPlan();
+  pantry = emptyPantry();
   emit();
+}
+
+// ── Speisekammer ───────────────────────────────────────────────────
+
+function commitPantry(next: Omit<Pantry, 'updatedAt'>) {
+  pantry = { ...next, updatedAt: now() };
+  emit();
+  pantryPending++;
+  void tracked(repo.savePantry(pantry)).finally(() => pantryPending--);
+}
+
+/** Geprüfte Bon-Zeilen übernehmen – und merken, damit der nächste Bon schon ausgefüllt ist. */
+export function importReceipt(rows: ImportRow[]): number {
+  commitPantry(applyImport(pantry, rows, now(), () => newId('v')));
+  return rows.filter((r) => !r.skip).length;
+}
+
+export function addPantryItem(name: string, amount?: number, unit?: PantryUnit) {
+  if (!name.trim()) return;
+  commitPantry({ ...pantry, items: addItem(pantry.items, { name: name.trim(), amount, unit }, now(), () => newId('v')) });
+}
+
+export function updatePantryItem(id: string, patch: Partial<Pick<PantryItem, 'name' | 'amount' | 'unit'>>) {
+  commitPantry({ ...pantry, items: pantry.items.map((i) => (i.id === id ? { ...i, ...patch, check: false } : i)) });
+}
+
+export function removePantryItem(id: string) {
+  commitPantry({ ...pantry, items: pantry.items.filter((i) => i.id !== id) });
+}
+
+/** Antwort auf „Noch da?“ nach dem Kochen. */
+export function answerPantryCheck(id: string, stillThere: boolean) {
+  if (stillThere) commitPantry({ ...pantry, items: pantry.items.map((i) => (i.id === id ? { ...i, check: false } : i)) });
+  else removePantryItem(id);
+}
+
+/** Gelernten Bon-Artikel vergessen (z. B. falsch zugeordnet). */
+export function forgetReceiptRule(key: string) {
+  commitPantry({ ...pantry, rules: pantry.rules.filter((r) => r.key !== key) });
 }

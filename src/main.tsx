@@ -6,7 +6,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import { boot } from './data/backend';
-import { registerServiceWorker } from './pwa';
+import { registerServiceWorker, startUpdateCheck } from './pwa';
 import './styles/app.css';
 
 const root = createRoot(document.getElementById('root')!);
@@ -21,3 +21,4 @@ boot().then((mode) => {
 });
 
 registerServiceWorker();
+startUpdateCheck();

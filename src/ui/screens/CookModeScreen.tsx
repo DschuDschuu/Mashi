@@ -5,6 +5,7 @@ import { markCooked, useRecipe } from '../../data/store';
 import { goBack, navigate } from '../../router';
 import { Icon } from '../components/Icon';
 import { StepIngredients } from '../components/StepIngredients';
+import { cookedToast } from '../cookedToast';
 import { useMediaQuery } from '../useMediaQuery';
 
 interface TimerState {
@@ -54,7 +55,7 @@ export function CookModeScreen({ id, servings }: { id: string; servings?: number
   const resume = () => timer && setTimer({ ...timer, endsAt: Date.now() + timer.remainingMs });
 
   const finish = () => {
-    markCooked(recipe.id);
+    cookedToast(markCooked(recipe.id, servings ?? c.servings));
     if (recipe.status === 'zum_testen' || recipe.status === 'bewaehrt') navigate(`/rezept/${recipe.id}/test`, { replace: true });
     else goBack(`/rezept/${recipe.id}`);
   };

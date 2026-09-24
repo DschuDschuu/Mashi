@@ -16,7 +16,7 @@ import { UnknownIngredients } from '../components/MyProductsPanel';
 import { RecipeImage } from '../components/RecipeImage';
 import { StepIngredients } from '../components/StepIngredients';
 import { StatusBadge } from '../components/StatusBadge';
-import { formatMinutes, relativeDay } from '../format';
+import { formatMinutes, portionCount, relativeDay } from '../format';
 import { toast } from '../toast';
 import { useIsTablet } from '../useMediaQuery';
 import { useNutrition } from '../useNutrition';
@@ -102,7 +102,7 @@ const header = (
 
       <div className="facts">
         <span><Icon name="clock" size={16} /> {formatMinutes(c.prepMinutes + c.cookMinutes)}</span>
-        <span><Icon name="users" size={16} /> {c.servings} Portionen</span>
+        <span><Icon name="users" size={16} /> {portionCount(c.servings)}</span>
         <span>{DIFFICULTY_LABEL[c.difficulty]}</span>
         {rating && (
           <span className="facts__star"><Icon name="star" size={16} filled /> {rating.avg.toLocaleString('de-DE', { maximumFractionDigits: 1 })} ({rating.count})</span>
@@ -213,13 +213,13 @@ function PlanButton({ recipe, servings }: { recipe: Recipe; servings: number }) 
   if (inPlan) {
     return (
       <button className="plan-chip is-on" onClick={() => navigate('/plan')}>
-        <Icon name="check" size={16} /> Im Wochenplan · {inPlan.servings} Portionen <Icon name="chevron" size={14} />
+        <Icon name="check" size={16} /> Im Wochenplan · {portionCount(inPlan.servings)} <Icon name="chevron" size={14} />
       </button>
     );
   }
   return (
-    <button className="plan-chip" onClick={() => { addToPlan(recipe.id, servings); toast(`Eingeplant: ${servings} Portionen`); }}>
-      <Icon name="calendar" size={16} /> Zum Wochenplan ({servings} Portionen)
+    <button className="plan-chip" onClick={() => { addToPlan(recipe.id, servings); toast(`Eingeplant: ${portionCount(servings)}`); }}>
+      <Icon name="calendar" size={16} /> Zum Wochenplan ({portionCount(servings)})
     </button>
   );
 }

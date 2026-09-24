@@ -645,3 +645,69 @@ p { margin: 0; }
 .badge { white-space: nowrap; }
 .list__item .suggestion__text { flex: 1; }
 .list__item .badge { flex: none; margin-left: auto; padding: 2px 8px; font-size: 0.66rem; }
+
+/* ── Neue Version verfügbar ──────────────────────────────────── */
+.status-banner--info { background: var(--primary-soft); color: var(--primary-press); }
+.status-banner__action { margin-left: auto; flex: none; }
+
+/* ── Startseite: Bereit zum Kochen / Rezept des Tages ────────── */
+.today { display: flex; flex-direction: column; gap: 10px; }
+.today__title { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 1.02rem; font-weight: 700; }
+.today__title svg { color: var(--art); }
+.today__cook {
+  flex: none; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%;
+  background: var(--primary); color: #fff;
+}
+.today__cook:active { background: var(--primary-press); }
+.daily { display: flex; flex-direction: column; gap: 10px; padding: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); }
+.daily__hit { display: flex; align-items: center; gap: 12px; text-align: left; min-width: 0; }
+
+/* ── Wochenplan: gekocht ─────────────────────────────────────── */
+.plan-cooked {
+  flex: none; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%;
+  border: 1.5px solid var(--line); color: transparent;
+}
+.plan-cooked.is-on { background: var(--green); border-color: var(--green); color: #fff; }
+.plan-list .is-cooked .list__title { text-decoration: line-through; color: var(--ink-3); }
+.plan-list .is-cooked .rimg { opacity: 0.55; }
+
+/* ── Speisekammer ────────────────────────────────────────────── */
+.pantry { list-style: none; margin: 0; padding: 0; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); }
+.pantry__item { display: flex; align-items: center; gap: 8px; padding: 4px 6px 4px 14px; border-top: 1px solid var(--line); }
+.pantry__item:first-child { border-top: 0; }
+.pantry__hit { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; min-height: 44px; text-align: left; }
+.pantry__name { flex: 1; min-width: 0; font-weight: 600; overflow-wrap: anywhere; }
+.pantry__qty { color: var(--ink-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pantry__item--edit { flex-wrap: wrap; padding: 10px 12px; background: var(--surface-2); }
+.pantry__item--edit > input { flex: 1 1 160px; }
+.pantry-amount { display: flex; gap: 6px; }
+.pantry-amount input { width: 96px; }
+.pantry-amount select { width: auto; }
+.pantry-check { flex-wrap: wrap; }
+.pantry-check .list__title { flex: 1 1 120px; padding-left: 6px; }
+.learned summary { cursor: pointer; font-weight: 700; }
+.learned__list { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.learned__list li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.learned__bon { font-family: ui-monospace, Consolas, monospace; font-size: 0.85rem; }
+.learned__list .link { margin-left: auto; font-size: 0.82rem; }
+
+/* ── Kassenbon prüfen ────────────────────────────────────────── */
+.bonrows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.bonrow { display: flex; flex-direction: column; gap: 8px; padding: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); }
+.bonrow.is-skip { background: var(--surface-2); }
+.bonrow.is-skip .bonrow__bon { color: var(--ink-3); text-decoration: line-through; }
+.bonrow__head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+.bonrow__bon { font-family: ui-monospace, Consolas, monospace; font-size: 0.9rem; font-weight: 600; }
+.bonrow__meta { margin-left: auto; white-space: nowrap; }
+.bonrow__edit { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.bonrow__edit > input { flex: 1 1 180px; min-width: 0; }
+.bonrow__skip { align-self: flex-start; font-size: 0.85rem; }
+.progress { width: min(260px, 80%); height: 8px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
+.progress > span { display: block; height: 100%; background: var(--primary); transition: width 0.2s; }
+/* Eingabefelder der Speisekammer und der Bon-Prüfung wie alle anderen Felder */
+.pantry-amount input, .pantry-amount select, .bonrow__edit > input, .pantry__item--edit > input, .panel > .import-text {
+  border: 1px solid var(--line); background: var(--surface); border-radius: var(--r-sm);
+  padding: 10px 12px; font-size: 1rem; color: var(--ink); outline: none;
+}
+.pantry-amount input:focus, .pantry-amount select:focus, .bonrow__edit > input:focus, .pantry__item--edit > input:focus { border-color: var(--primary); }
+.panel > .import-text { width: 100%; resize: vertical; }

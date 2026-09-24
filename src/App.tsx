@@ -12,6 +12,8 @@ import { CookModeScreen } from './ui/screens/CookModeScreen';
 import { ImportScreen } from './ui/screens/ImportScreen';
 import { MoreScreen } from './ui/screens/MoreScreens';
 import { PlanScreen } from './ui/screens/PlanScreen';
+import { PantryScreen } from './ui/screens/PantryScreen';
+import { ReceiptImportScreen } from './ui/screens/ReceiptImportScreen';
 import { RecipeDetailScreen } from './ui/screens/RecipeDetailScreen';
 import { RecipeFormScreen } from './ui/screens/RecipeFormScreen';
 import { StartScreen } from './ui/screens/StartScreen';
@@ -27,6 +29,9 @@ function resolve(route: Route): { screen: ReactElement; tab?: string } {
     // „Zum Testen“ ist kein eigener Tab mehr – erreichbar über Start und Kochbuch
     case 'testen': return { screen: <TestingScreen /> };
     case 'plan': return { screen: <PlanScreen />, tab: '/plan' };
+    case 'speisekammer':
+      if (b === 'bon') return { screen: <ReceiptImportScreen shared={route.query.has('geteilt')} /> };
+      return { screen: <PantryScreen />, tab: '/plan' };
     case 'mehr': return { screen: <MoreScreen />, tab: '/mehr' };
     case 'neu':
       if (b === 'ki') return { screen: <AiCreateScreen /> };

@@ -162,7 +162,7 @@ describe('Meine Produkte in PouchDB', () => {
 });
 
 describe('Wochenplan in PouchDB', () => {
-  const plan = (recipeId: string, updatedAt: string) => ({ items: [{ recipeId, servings: 4 }], checked: ['food:reis'], updatedAt });
+  const plan = (recipeId: string, updatedAt: string) => ({ items: [{ recipeId, servings: 4 }], checked: ['food:reis'], cooked: [], updatedAt });
 
   it('ohne Plan leer; gespeicherter Plan kommt unverändert zurück und ist kein Rezept', async () => {
     const repo = new PouchRecipeRepository(newDb());
@@ -185,5 +185,34 @@ describe('Wochenplan in PouchDB', () => {
     await syncOnce(phoneDb, pcDb);
     expect((await phone.loadPlan()).items[0].recipeId).toBe('pc-spaeter');
     expect((await pc.loadPlan()).items[0].recipeId).toBe('pc-spaeter');
+  });
+});
+
+describe('Speisekammer in PouchDB', () => {
+  const pantry = (name: string, updatedAt: string) => ({
+    items: [{ id: 'i1', name, amount: 500, unit: 'g' as const, addedAt: updatedAt }],
+    rules: [{ key: 'speisequark mager', name: 'Magerquark', amount: 250, unit: 'g' as const }],
+    updatedAt,
+  });
+
+  it('leer ohne Dokument; gespeichert kommt sie samt gelernter Artikel zurück und ist kein Rezept', async () => {
+    const repo = new PouchRecipeRepository(newDb());
+    expect(await repo.loadPantry()).toMatchObject({ items: [], rules: [] });
+    await repo.savePantry(pantry('Magerquark', '2026-01-01T00:00:00.000Z'));
+    expect(await repo.loadPantry()).toEqual(pantry('Magerquark', '2026-01-01T00:00:00.000Z'));
+    expect(await repo.list()).toEqual([]);
+  });
+
+  it('Offline auf zwei Geräten geändert: die zuletzt geänderte Speisekammer gewinnt', async () => {
+    const phoneDb = newDb();
+    const pcDb = newDb();
+    const phone = new PouchRecipeRepository(phoneDb);
+    const pc = new PouchRecipeRepository(pcDb);
+    await phone.savePantry(pantry('Start', '2026-01-01T00:00:00.000Z'));
+    await syncOnce(phoneDb, pcDb);
+    await pc.savePantry(pantry('PC später', '2026-01-03T00:00:00.000Z'));
+    await phone.savePantry(pantry('Handy früher', '2026-01-02T00:00:00.000Z'));
+    await syncOnce(phoneDb, pcDb);
+    expect((await phone.loadPantry()).items[0].name).toBe('PC später');
   });
 });
