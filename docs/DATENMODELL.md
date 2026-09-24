@@ -47,7 +47,12 @@ Einzel-Dokumente, die ebenfalls auf alle Geräte abgeglichen werden:
 |---|---|---|
 | `meine-produkte` | `MyProduct[]` – Werte vom Etikett; `replaces` (Einträge der Tabelle) und/oder `names` (Zutatennamen, die die Tabelle nicht kennt) | neueste Fassung gewinnt |
 | `wochenplan` | `MealPlan` – `items: {recipeId, servings}[]`, abgehakte Einkäufe `checked`, diese Woche gekochte Gerichte `cooked` | neueste Fassung gewinnt |
-| `speisekammer` | `Pantry` – Vorräte `items` (Name, Menge nur wo bekannt) und gelernte Bon-Artikel `rules` (Bon-Name → Name, Menge je Stück, oder „überspringen“) | neueste Fassung gewinnt |
+| `speisekammer` | `Pantry` – Vorräte `items` (Name, Menge nur wo bekannt), gelernte Bon-Artikel `rules` (Bon-Name → Name, Menge je Stück, oder „überspringen“) und zuletzt bezahlte Preise `prices` (€ je g oder je Stück) | neueste Fassung gewinnt |
+
+`MyProduct` kann zusätzlich `packageAmount`/`packageUnit` (Packungsgröße – füllt beim Kassenbon die
+Menge aus) und `packagePrice` (Preis von Hand) tragen. Kosten eines Rezepts (`domain/cost.ts`)
+werden nie gespeichert, sondern aus Zutaten × bekannten Preisen berechnet; Zutaten ohne Preis werden
+genannt, nicht geschätzt.
 
 Vorschläge und Einkaufsliste werden nie gespeichert, sondern jedes Mal aus Plan + Rezepten
 berechnet (`domain/mealplan.ts`). Fotos liegen verkleinert (800 px, JPEG) direkt im Rezept.

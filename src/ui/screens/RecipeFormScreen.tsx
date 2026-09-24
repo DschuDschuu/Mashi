@@ -123,8 +123,8 @@ export function RecipeFormScreen({ editId, draft }: { editId?: string; draft?: T
         </div>
 
         <div className="panel">
-          <h3 className="small muted">Kategorien</h3>
-          <ChipSelect options={CATEGORIES.map((x) => ({ value: x.id, label: x.label }))} selected={c.categories} onChange={(categories) => set({ categories })} />
+          <h3 className="small muted">Mahlzeittyp</h3>
+          <ChipSelect single options={CATEGORIES.map((x) => ({ value: x.id, label: x.label }))} selected={c.categories} onChange={(categories) => set({ categories })} />
           <h3 className="small muted">Geräte</h3>
           <DevicePicker selected={c.devices} onChange={(devices) => set({ devices })} />
           <label className="field"><span>Tags (mit Komma getrennt)</span>

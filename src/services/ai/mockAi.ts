@@ -19,7 +19,7 @@ const TEMPLATES: Tpl[] = [
     title: 'Würzige Gochujang-Hähnchen-Bowl',
     description: 'Schnelle koreanisch inspirierte Bowl mit krümeligem Hähnchenhack, knackiger Paprika und cremiger Avocado.',
     servings: 2, prepMinutes: 10, cookMinutes: 20, difficulty: 1,
-    categories: ['salat-bowl', 'hauptgericht'], tags: ['Koreanisch', 'Proteinreich', 'Schnell'], devices: ['herd'],
+    categories: ['salat-bowl'], tags: ['Koreanisch', 'Proteinreich', 'Schnell'], devices: ['herd'],
     imagePrompt: 'Korean gochujang chicken rice bowl with crumbled chicken mince, diced red bell pepper, sliced avocado, spring onions and sesame seeds',
     ingredients: [
       [300, 'g', 'Hähnchenhack'], [150, 'g', 'Reis'], [1, 'Stück', 'Paprika'], [1, 'Stück', 'Avocado'],
@@ -39,7 +39,7 @@ const TEMPLATES: Tpl[] = [
     title: 'Knusprige Airfryer-Hähnchenstreifen',
     description: 'Außen crunchy, innen saftig – mit Panko und geräuchertem Paprika, ganz ohne Frittieröl.',
     servings: 2, prepMinutes: 10, cookMinutes: 14, difficulty: 1,
-    categories: ['hauptgericht', 'snack'], tags: ['Airfryer', 'Proteinreich', 'Schnell'], devices: ['airfryer'],
+    categories: ['hauptgericht'], tags: ['Airfryer', 'Proteinreich', 'Schnell'], devices: ['airfryer'],
     imagePrompt: 'Crispy panko-crusted chicken strips from the air fryer with a small bowl of yogurt dip',
     ingredients: [
       [400, 'g', 'Hähnchenbrust'], [60, 'g', 'Panko'], [1, 'Stück', 'Ei'], [1, 'TL', 'Paprikapulver'],
@@ -74,7 +74,7 @@ const TEMPLATES: Tpl[] = [
     title: 'Cremiges Rote-Linsen-Curry',
     description: 'Wärmendes Curry mit roten Linsen, Kokosmilch und Spinat – perfekt zum Vorkochen.',
     servings: 2, prepMinutes: 10, cookMinutes: 20, difficulty: 1,
-    categories: ['hauptgericht', 'suppe'], tags: ['Vegetarisch', 'Meal Prep', 'Comfort Food'], devices: ['herd'],
+    categories: ['hauptgericht'], tags: ['Vegetarisch', 'Meal Prep', 'Comfort Food'], devices: ['herd'],
     imagePrompt: 'Creamy red lentil curry with coconut milk and wilted spinach in a ceramic bowl',
     ingredients: [
       [150, 'g', 'Rote Linsen'], [1, 'Dose', 'Gehackte Tomaten'], [200, 'ml', 'Kokosmilch'], [1, 'Stück', 'Zwiebel'],

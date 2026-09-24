@@ -654,13 +654,6 @@ p { margin: 0; }
 .today { display: flex; flex-direction: column; gap: 10px; }
 .today__title { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 1.02rem; font-weight: 700; }
 .today__title svg { color: var(--art); }
-.today__cook {
-  flex: none; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%;
-  background: var(--primary); color: #fff;
-}
-.today__cook:active { background: var(--primary-press); }
-.daily { display: flex; flex-direction: column; gap: 10px; padding: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); }
-.daily__hit { display: flex; align-items: center; gap: 12px; text-align: left; min-width: 0; }
 
 /* ── Wochenplan: gekocht ─────────────────────────────────────── */
 .plan-cooked {
@@ -711,3 +704,62 @@ p { margin: 0; }
 }
 .pantry-amount input:focus, .pantry-amount select:focus, .bonrow__edit > input:focus, .pantry__item--edit > input:focus { border-color: var(--primary); }
 .panel > .import-text { width: 100%; resize: vertical; }
+
+/* ── Wochenplan-Zeile: auf schmalen Listen zweizeilig ──────────
+   Oben Haken · Bild + Titel · ×, darunter die Portionen – sonst bleibt dem Titel kein Platz. */
+.plan-list { container-type: inline-size; }
+.plan-list__servings { display: flex; align-items: center; gap: 8px; flex: none; }
+.plan-list__servings > span { display: none; }
+@container (max-width: 480px) {
+  .plan-list .list__item {
+    display: grid; grid-template-columns: 30px minmax(0, 1fr) auto;
+    grid-template-areas: "check hit remove" ". servings servings";
+    column-gap: 10px; row-gap: 4px;
+  }
+  .plan-list .plan-cooked { grid-area: check; }
+  .plan-list .plan-list__hit { grid-area: hit; }
+  .plan-list .iconbtn { grid-area: remove; }
+  .plan-list__servings { grid-area: servings; }
+  .plan-list__servings > span { display: inline; }
+  .plan-list .list__title { overflow-wrap: normal; }
+}
+
+/* ── Rezeptkarte: Zeit, Nährwerte und Mahlzeittyp immer auf gleicher Höhe ──
+   Titel oben (1 oder 2 Zeilen), die drei Zeilen darunter unten verankert. Karten in einer
+   Reihe sind gleich hoch (Grid), also stehen die Zeilen nebeneinander auf einer Linie. */
+.card__body { flex: 1; }
+.card__bottom { margin-top: auto; display: flex; flex-direction: column; gap: 3px; padding-top: 4px; }
+.card__chips { min-height: 24px; }
+
+/* ── Startseite: große Karten zum Wischen ────────────────────── */
+.swiper {
+  list-style: none; display: grid; grid-auto-flow: column; grid-auto-columns: 86%; gap: 14px;
+  overflow-x: auto; scroll-snap-type: x mandatory; scroll-padding-inline: var(--gutter);
+  margin: 0 calc(-1 * var(--gutter)); padding: 4px var(--gutter) 6px; scrollbar-width: none;
+}
+.swiper::-webkit-scrollbar { display: none; }
+.swiper--single { grid-auto-columns: 100%; }
+.swiper__slide { scroll-snap-align: start; display: flex; }
+.bigcard {
+  flex: 1; display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--r-lg); box-shadow: var(--shadow); overflow: hidden;
+}
+.bigcard__media { display: block; width: 100%; }
+.bigcard__media .rimg { aspect-ratio: 4 / 3; }
+.bigcard__body { flex: 1; display: flex; flex-direction: column; gap: 6px; padding: 14px 16px 16px; }
+.bigcard__title { margin: 0; font-size: 1.12rem; line-height: 1.25; }
+.bigcard__body .row-gap { margin-top: auto; padding-top: 6px; }
+.swiper__dots { display: flex; justify-content: center; gap: 8px; }
+.swiper__dot { width: 8px; height: 8px; border-radius: 50%; background: var(--line); padding: 0; }
+.swiper__dot.is-on { background: var(--primary); width: 20px; border-radius: 999px; }
+@media (min-width: 768px) {
+  .swiper { grid-auto-columns: minmax(0, 420px); margin: 0; padding-inline: 0; }
+  .swiper--single { grid-auto-columns: minmax(0, 520px); }
+}
+@media (prefers-reduced-motion: reduce) { .swiper__dot { transition: none; } }
+/* Nie umbrechen – sonst verrutschen die Zeilen gegenüber der Nachbarkarte */
+.card__bottom .card__meta { flex-wrap: nowrap; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ── Kosten ──────────────────────────────────────────────────── */
+.cost-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; margin: 0; color: var(--ink-2); }
+.cost-line strong { color: var(--ink); }

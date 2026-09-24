@@ -2,7 +2,6 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { CATEGORIES, DEVICES } from '../../domain/catalog';
 import { activeFilterCount, activeFilters, filterRecipes, HIGH_PROTEIN_G, removeFilter, type RecipeFilter } from '../../domain/filter';
 import { currentContent } from '../../domain/recipe';
-import type { RecipeStatus } from '../../domain/types';
 import { useRecipes } from '../../data/store';
 import type { Route } from '../../router';
 import { ChipSelect, Empty } from '../components/Controls';
@@ -12,12 +11,20 @@ import { RecipeCard } from '../components/RecipeCard';
 import { recipeCount } from '../format';
 import { recipeNutrition } from '../useNutrition';
 
-const SEGMENTS: { value: 'alle' | RecipeStatus; label: string }[] = [
+/** Oben im Kochbuch: die drei Ansichten, die man am häufigsten braucht. */
+type Segment = 'alle' | 'favoriten' | 'zum_testen';
+const SEGMENTS: { value: Segment; label: string }[] = [
   { value: 'alle', label: 'Alle' },
-  { value: 'kochbuch', label: 'Kochbuch' },
-  { value: 'bewaehrt', label: 'Bewährt' },
+  { value: 'favoriten', label: 'Favoriten' },
   { value: 'zum_testen', label: 'Zum Testen' },
 ];
+
+/** Was ein Segment zusätzlich zu den Filtern verlangt. */
+const SEGMENT_FILTER: Record<Segment, Partial<RecipeFilter>> = {
+  alle: {},
+  favoriten: { favoritesOnly: true },
+  zum_testen: { statuses: ['zum_testen'] },
+};
 
 /** Filter aus der URL lesen – so funktionieren die Schnellfilter der Startseite als Links. */
 function filterFromQuery(q: URLSearchParams): RecipeFilter {
@@ -28,13 +35,13 @@ function filterFromQuery(q: URLSearchParams): RecipeFilter {
     categories: q.getAll('cat'),
     maxMinutes: num('maxMin'),
     minProtein: q.get('protein') ? HIGH_PROTEIN_G : undefined,
-    favoritesOnly: q.get('fav') === '1',
   };
 }
 
 export function CookbookScreen({ route }: { route: Route }) {
   const recipes = useRecipes();
-  const [segment, setSegment] = useState<'alle' | RecipeStatus>('alle');
+  // „Favoriten“ auf der Startseite verlinkt ?fav=1 → gleich im passenden Segment öffnen
+  const [segment, setSegment] = useState<Segment>(route.query.get('fav') === '1' ? 'favoriten' : 'alle');
   const [f, setF] = useState<RecipeFilter>(() => filterFromQuery(route.query));
   // Bewusst zu: Wer vom Schnellfilter kommt, will Ergebnisse sehen, nicht das Panel.
   const [open, setOpen] = useState(false);
@@ -44,7 +51,7 @@ export function CookbookScreen({ route }: { route: Route }) {
     () => [...new Set(recipes.flatMap((r) => currentContent(r).tags))].sort((a, b) => a.localeCompare(b, 'de')),
     [recipes],
   );
-  const result = filterRecipes(recipes, { ...f, statuses: segment === 'alle' ? undefined : [segment] }, recipeNutrition);
+  const result = filterRecipes(recipes, { ...f, ...SEGMENT_FILTER[segment] }, recipeNutrition);
   const count = activeFilterCount(f);
   const badges = activeFilters(f);
 
@@ -112,10 +119,7 @@ export function CookbookScreen({ route }: { route: Route }) {
           <FilterGroup title="Tags">
             <ChipSelect options={allTags.map((t) => ({ value: t, label: t }))} selected={f.tags ?? []} onChange={(tags) => set({ tags })} />
           </FilterGroup>
-          <div className="row-between">
-            <ChipSelect options={[{ value: 'fav', label: <><Icon name="heart" size={16} />Nur Favoriten</> }]} selected={f.favoritesOnly ? ['fav'] : []} onChange={(v) => set({ favoritesOnly: v.length > 0 })} />
-            {count > 0 && <button className="link" onClick={() => setF({ query: f.query })}>Zurücksetzen</button>}
-          </div>
+          {count > 0 && <button className="link" onClick={() => setF({ query: f.query })}>Zurücksetzen</button>}
         </div>
       )}
 

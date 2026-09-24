@@ -1,3 +1,4 @@
+import type { PriceEntry } from './cost';
 import { resolveIngredient, type Resolved } from './mealplan';
 import type { FoodTable } from './nutrition/types';
 import type { ReceiptLine } from './receipt';
@@ -38,10 +39,15 @@ export interface ReceiptRule {
 export interface Pantry {
   items: PantryItem[];
   rules: ReceiptRule[];
+  /** zuletzt bezahlte Preise, je Artikel einer – vom Kassenbon */
+  prices: PriceEntry[];
   updatedAt: string;
 }
 
-export const emptyPantry = (): Pantry => ({ items: [], rules: [], updatedAt: new Date(0).toISOString() });
+export const emptyPantry = (): Pantry => ({ items: [], rules: [], prices: [], updatedAt: new Date(0).toISOString() });
+
+/** Packungsgröße aus „Meine Produkte“ für einen Bon-Namen (z. B. Mozzarella light → 125 g). */
+export type PackageLookup = (receiptName: string) => { amount: number; unit: PantryUnit } | undefined;
 
 export const receiptKey = (name: string) => name.toLocaleLowerCase('de-DE').replace(/\s+/g, ' ').trim();
 
@@ -61,7 +67,7 @@ export interface ImportRow {
   unit?: PantryUnit;
 }
 
-export function proposeImport(lines: ReceiptLine[], rules: ReceiptRule[]): ImportRow[] {
+export function proposeImport(lines: ReceiptLine[], rules: ReceiptRule[], packageFor?: PackageLookup): ImportRow[] {
   return lines.map((line) => {
     const key = receiptKey(line.name);
     const rule = rules.find((r) => r.key === key);
@@ -77,6 +83,13 @@ export function proposeImport(lines: ReceiptLine[], rules: ReceiptRule[]): Impor
     } else if (rule?.unit === 'Stück') {
       row.amount = line.count;
       row.unit = 'Stück';
+    } else if (!rule) {
+      // Noch nie auf einem Bon gesehen – aber vielleicht ein eigenes Produkt mit Packungsgröße
+      const pack = packageFor?.(line.name);
+      if (pack) {
+        row.amount = pack.amount * line.count; // 2 × 125 g = 250 g · 3 × 1 Stück = 3 Stück
+        row.unit = pack.unit;
+      }
     }
     return row;
   });
@@ -88,6 +101,7 @@ export function proposeImport(lines: ReceiptLine[], rules: ReceiptRule[]): Impor
  */
 export function applyImport(pantry: Pantry, rows: ImportRow[], now = new Date().toISOString(), newId = defaultId): Pantry {
   const rules = new Map(pantry.rules.map((r) => [r.key, r]));
+  const prices = new Map((pantry.prices ?? []).map((p) => [receiptKey(p.name), p]));
   let items = pantry.items;
   for (const row of rows) {
     if (row.skip) {
@@ -101,8 +115,23 @@ export function applyImport(pantry: Pantry, rows: ImportRow[], now = new Date().
       ...(row.unit ? { unit: row.unit } : {}),
     });
     items = addItem(items, { name: row.name.trim(), amount: row.amount, unit: row.unit }, now, newId);
+    const price = priceOf(row, now);
+    if (price) prices.set(receiptKey(price.name), price);
   }
-  return { ...pantry, items, rules: [...rules.values()] };
+  return { ...pantry, items, rules: [...rules.values()], prices: [...prices.values()] };
+}
+
+/**
+ * Preis je Gramm oder je Stück aus einer Bon-Zeile: 2 × Mozzarella à 125 g für 1,70 €
+ * → 0,0068 €/g. Ohne Menge nur je Stück (Preis ÷ Anzahl).
+ */
+function priceOf(row: ImportRow, date: string): PriceEntry | undefined {
+  const paid = row.line.price;
+  if (!paid) return undefined;
+  const name = row.name.trim();
+  if (row.amount && row.unit !== 'Stück') return { name, perUnit: paid / row.amount, unit: 'g', date };
+  const pieces = row.unit === 'Stück' && row.amount ? row.amount : row.line.count;
+  return { name, perUnit: paid / pieces, unit: 'Stück', date };
 }
 
 /** Gleicher Name + gleiche Einheit → Mengen zusammenzählen statt doppelt führen. */

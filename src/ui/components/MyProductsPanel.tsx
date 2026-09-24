@@ -4,6 +4,7 @@ import type { MyProduct } from '../../domain/nutrition/myProducts';
 import type { NutritionResult } from '../../domain/nutrition/types';
 import { newId } from '../../domain/recipe';
 import { saveProducts, useProducts } from '../../data/store';
+import { euro } from '../format';
 import { toast } from '../toast';
 import { Icon } from './Icon';
 
@@ -48,6 +49,11 @@ export function MyProductsPanel() {
               <span className="small muted">
                 {fmt(p.per100g.kcal)} kcal · {fmt(p.per100g.protein)} g Eiweiß · {fmt(p.per100g.carbs)} g KH · {fmt(p.per100g.fat)} g Fett <em>pro 100 g</em>
               </span>
+              {p.packageAmount && (
+                <span className="small muted">
+                  Packung: {fmt(p.packageAmount)} {p.packageUnit ?? 'g'}{p.packagePrice !== undefined && <> · {euro(p.packagePrice)}</>}
+                </span>
+              )}
               <span className="small">
                 {p.replaces.length > 0 && <>ersetzt: {p.replaces.map(foodName).join(', ')}</>}
                 {p.replaces.length > 0 && !!p.names?.length && ' · '}
@@ -131,6 +137,9 @@ function ProductForm({ initial, onSave, onCancel }: { initial?: Partial<MyProduc
   });
   const [replaces, setReplaces] = useState<string[]>(initial?.replaces ?? []);
   const [names, setNames] = useState<string[]>(initial?.names ?? []);
+  const [packAmount, setPackAmount] = useState(toField(initial?.packageAmount));
+  const [packUnit, setPackUnit] = useState<'g' | 'ml' | 'Stück'>(initial?.packageUnit ?? 'g');
+  const [packPrice, setPackPrice] = useState(toField(initial?.packagePrice));
   const [search, setSearch] = useState('');
   const [error, setError] = useState<string | null>(null);
 
@@ -149,12 +158,18 @@ function ProductForm({ initial, onSave, onCancel }: { initial?: Partial<MyProduc
       return setError('Bitte alle vier Werte vom Etikett eintragen (pro 100 g).');
     }
     if (!replaces.length && !names.length) return setError('Bitte wählen, was das Produkt ersetzen soll (z. B. Milch).');
+    const amount = parseNum(packAmount);
+    const price = parseNum(packPrice);
+    if (price !== undefined && !amount) return setError('Für den Preis braucht Mashi die Packungsgröße.');
     onSave({
       id: initial?.id ?? newId('p'),
       name: name.trim(),
       replaces,
       ...(names.length ? { names } : {}),
-      per100g: { kcal, protein, carbs, fat },
+      // Zusatzwerte vom Etikett (Zucker, Salz …) behalten – das Formular zeigt nur die vier Hauptwerte
+      per100g: { ...initial?.per100g, kcal, protein, carbs, fat },
+      ...(amount ? { packageAmount: amount, packageUnit: packUnit } : {}),
+      ...(amount && price !== undefined ? { packagePrice: price } : {}),
       updatedAt: new Date().toISOString(),
     });
   };
@@ -175,6 +190,21 @@ function ProductForm({ initial, onSave, onCancel }: { initial?: Partial<MyProduc
       <p className="small muted">Werte vom Etikett, pro 100 g bzw. 100 ml:</p>
       <div className="row-2">{numField('kcal', 'kcal')}{numField('protein', 'Eiweiß (g)')}</div>
       <div className="row-2">{numField('carbs', 'Kohlenhydrate (g)')}{numField('fat', 'Fett (g)')}</div>
+
+      <p className="small muted">Packung (optional) – füllt beim Kassenbon die Menge aus und rechnet Kosten:</p>
+      <div className="row-2">
+        <label className="field"><span>Packungsgröße</span>
+          <span className="pantry-amount">
+            <input inputMode="decimal" value={packAmount} onChange={(e) => setPackAmount(e.target.value)} placeholder="z. B. 125" />
+            <select value={packUnit} onChange={(e) => setPackUnit(e.target.value as 'g' | 'ml' | 'Stück')} aria-label="Einheit">
+              <option value="g">g</option><option value="ml">ml</option><option value="Stück">Stück</option>
+            </select>
+          </span>
+        </label>
+        <label className="field"><span>Preis je Packung (€)</span>
+          <input inputMode="decimal" value={packPrice} onChange={(e) => setPackPrice(e.target.value)} placeholder="kommt sonst vom Bon" />
+        </label>
+      </div>
 
       {names.length > 0 && (
         <div className="stack">

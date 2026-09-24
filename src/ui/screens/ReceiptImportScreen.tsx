@@ -9,7 +9,9 @@ import { Icon } from '../components/Icon';
 import { IngredientNames } from '../components/IngredientNames';
 import { TopBar } from '../components/TopBar';
 import { recognizeText } from '../ocr';
+import { euro } from '../format';
 import { toast } from '../toast';
+import { usePricing } from '../useCosts';
 import { parseAmount } from './PantryScreen';
 
 type Stage = 'pick' | 'reading' | 'review';
@@ -17,7 +19,6 @@ type Stage = 'pick' | 'reading' | 'review';
 type Row = ImportRow & { amountText: string };
 
 const UNITS: PantryUnit[] = ['g', 'ml', 'Stück'];
-const euro = (n?: number) => (n === undefined ? '' : `${n.toLocaleString('de-DE', { minimumFractionDigits: 2 })} €`);
 
 /** Gewicht loser Ware steht auf dem Bon (Gesamtmenge) – sonst fragt Mashi „je Stück/Packung“. */
 const perPiece = (r: ImportRow) => r.line.weightKg === undefined && r.line.count > 1;
@@ -43,6 +44,7 @@ function fromRow(r: Row): ImportRow {
  */
 export function ReceiptImportScreen({ shared }: { shared: boolean }) {
   const pantry = usePantry();
+  const { packageFor } = usePricing();
   const [stage, setStage] = useState<Stage>('pick');
   const [progress, setProgress] = useState(0);
   const [text, setText] = useState('');
@@ -58,7 +60,7 @@ export function ReceiptImportScreen({ shared }: { shared: boolean }) {
       return;
     }
     setError(null);
-    setRows(proposeImport(lines, pantry.rules).map(toRow));
+    setRows(proposeImport(lines, pantry.rules, packageFor).map(toRow));
     setStage('review');
   };
 
@@ -149,7 +151,7 @@ export function ReceiptImportScreen({ shared }: { shared: boolean }) {
                   <span className="bonrow__bon">{r.line.name}</span>
                   {r.known && <span className="badge tint-mint">bekannt</span>}
                   <span className="small muted bonrow__meta">
-                    {r.line.weightKg !== undefined ? `${formatAmount(r.line.weightKg * 1000, 'g')} g · ` :r.line.count > 1 ? `${r.line.count} × · ` : ''}{euro(r.line.price)}
+                    {r.line.weightKg !== undefined ? `${formatAmount(r.line.weightKg * 1000, 'g')} g · ` :r.line.count > 1 ? `${r.line.count} × · ` : ''}{r.line.price !== undefined ? euro(r.line.price) : ''}
                   </span>
                 </div>
                 {!r.skip && (

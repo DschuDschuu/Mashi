@@ -7,6 +7,13 @@ export function formatMinutes(min: number): string {
   return m ? `${h} Std. ${m} Min.` : `${h} Std.`;
 }
 
+/** Kurzform für enge Stellen wie Rezeptkarten: „25 Min.“, „1:15 Std.“, „2 Std.“ */
+export function formatMinutesShort(min: number): string {
+  if (min < 60) return `${min} Min.`;
+  const m = min % 60;
+  return m ? `${Math.floor(min / 60)}:${String(m).padStart(2, '0')} Std.` : `${min / 60} Std.`;
+}
+
 /** „520 kcal“, „ca. 520 kcal“ oder null (dann zeigen wir nichts). */
 export function kcalLabel(n: NutritionResult): string | null {
   if (!n.perServing) return null;
@@ -34,3 +41,6 @@ export function portionCount(n: number): string {
 export function recipeCount(n: number): string {
   return `${n} ${n === 1 ? 'Rezept' : 'Rezepte'}`;
 }
+
+/** „1,70 €“ */
+export const euro = (n: number) => n.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });

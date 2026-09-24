@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { recipeCost, sumCosts } from '../../domain/cost';
 import { buildShoppingList, suggestRecipes, type ShoppingItem, type Suggestion } from '../../domain/mealplan';
 import { ingredientCompletions, longNotCooked, searchRecipes } from '../../domain/recipeSearch';
 import { withMyProducts } from '../../domain/nutrition/myProducts';
@@ -14,7 +15,8 @@ import { PlanTabs } from '../components/PlanTabs';
 import { Icon, type IconName } from '../components/Icon';
 import { RecipeImage } from '../components/RecipeImage';
 import { StatusBadge } from '../components/StatusBadge';
-import { portionCount, recipeCount, relativeDay } from '../format';
+import { euro, portionCount, recipeCount, relativeDay } from '../format';
+import { usePricing } from '../useCosts';
 import { cookedToast } from '../cookedToast';
 import { toast } from '../toast';
 
@@ -47,6 +49,9 @@ export function PlanScreen() {
   const open = visible.filter((i) => !plan.checked.includes(i.key));
   const done = visible.filter((i) => plan.checked.includes(i.key));
   const portions = items.reduce((s, i) => s + i.servings, 0);
+  const { prices } = usePricing();
+  const costs = useMemo(() => new Map(items.map((i) => [i.recipeId, recipeCost(currentContent(i.recipe), i.servings, table, prices)])), [items, table, prices]);
+  const week = sumCosts([...costs.values()]);
 
   const add = (r: Recipe) => {
     if (addToPlan(r.id)) toast(`„${currentContent(r).title}“ eingeplant`);
@@ -68,15 +73,33 @@ export function PlanScreen() {
                 </button>
                 <button className="plan-list__hit" onClick={() => navigate(`/rezept/${recipe.id}`)}>
                   <RecipeImage image={recipe.image} size="sm" />
-                  <span className="list__title">{currentContent(recipe).title}</span>
+                  <span className="suggestion__text">
+                    <span className="list__title">{currentContent(recipe).title}</span>
+                    {costs.get(recipe.id) && <span className="small muted">ca. {euro(costs.get(recipe.id)!.total)}</span>}
+                  </span>
                 </button>
-                <Stepper value={servings} onChange={(v) => setPlanServings(recipe.id, v)} label="Portionen" />
+                <div className="plan-list__servings">
+                  <span className="small muted" aria-hidden="true">Portionen</span>
+                  <Stepper value={servings} onChange={(v) => setPlanServings(recipe.id, v)} label="Portionen" />
+                </div>
                 <button className="iconbtn iconbtn--sm" aria-label={`${currentContent(recipe).title} aus dem Plan nehmen`} onClick={() => removeFromPlan(recipe.id)}>
                   <Icon name="close" size={18} />
                 </button>
               </li>
             ))}
           </ul>
+        )}
+        {week.total > 0 && (
+          <p className="cost-line">
+            <span>Diese Woche ca. <strong>{euro(week.total)}</strong></span>
+            {(week.unknown > 0 || week.missing.length > 0) && (
+              <span className="small muted">
+                {week.unknown > 0 ? `${week.unknown} ${week.unknown === 1 ? 'Gericht' : 'Gerichte'} ohne Preise` : ''}
+                {week.unknown > 0 && week.missing.length > 0 ? ' · ' : ''}
+                {week.missing.length > 0 ? `ohne ${week.missing.slice(0, 3).join(', ')}${week.missing.length > 3 ? ' …' : ''}` : ''}
+              </span>
+            )}
+          </p>
         )}
         <button className="btn btn--soft btn--block" onClick={() => setPicking(true)}>
           <Icon name="plus" size={18} /> Gericht hinzufügen

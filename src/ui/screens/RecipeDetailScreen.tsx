@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { categoryInfo, deviceInfo, DIFFICULTY_LABEL, SOURCE_INFO, STATUS_INFO } from '../../domain/catalog';
 import { currentContent, currentVersion, originalVersion } from '../../domain/recipe';
 import { formatQuantity, scaleIngredients } from '../../domain/scaling';
-import type { Recipe } from '../../domain/types';
+import type { Recipe, RecipeContent } from '../../domain/types';
 import { describeChange, diffContent } from '../../domain/versions';
 import {
   addToPlan, adoptToCookbook, archiveRecipe, deleteRecipe, regenerateImage, setStatus, toggleFavorite, updateNotes, usePlan, useRecipe,
@@ -16,7 +16,8 @@ import { UnknownIngredients } from '../components/MyProductsPanel';
 import { RecipeImage } from '../components/RecipeImage';
 import { StepIngredients } from '../components/StepIngredients';
 import { StatusBadge } from '../components/StatusBadge';
-import { formatMinutes, portionCount, relativeDay } from '../format';
+import { euro, formatMinutes, portionCount, relativeDay } from '../format';
+import { useRecipeCost } from '../useCosts';
 import { toast } from '../toast';
 import { useIsTablet } from '../useMediaQuery';
 import { useNutrition } from '../useNutrition';
@@ -110,6 +111,7 @@ const header = (
       </div>
 
       <NutritionTiles n={n} />
+      <CostLine content={c} servings={servings} />
 
       {!recipe.archivedAt && recipe.status !== 'ki_entwurf' && <PlanButton recipe={recipe} servings={servings} />}
       <StatusAction recipe={recipe} />
@@ -204,6 +206,18 @@ const header = (
       </div>
       <div className="bottom-cta">{cookButton}</div>
     </main>
+  );
+}
+
+/** Was das Gericht kostet – aus Kassenbon-Preisen und „Meine Produkte“. Nichts bekannt → nichts anzeigen. */
+function CostLine({ content, servings }: { content: RecipeContent; servings: number }) {
+  const cost = useRecipeCost(content, servings);
+  if (!cost) return null;
+  return (
+    <p className="cost-line">
+      <span>ca. <strong>{euro(cost.total)}</strong> · {euro(cost.perServing)} pro Portion</span>
+      {cost.missing.length > 0 && <span className="small muted">ohne {cost.missing.slice(0, 3).join(', ')}{cost.missing.length > 3 ? ' …' : ''} (Preis unbekannt)</span>}
+    </p>
   );
 }
 

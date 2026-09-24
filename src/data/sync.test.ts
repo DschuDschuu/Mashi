@@ -192,6 +192,7 @@ describe('Speisekammer in PouchDB', () => {
   const pantry = (name: string, updatedAt: string) => ({
     items: [{ id: 'i1', name, amount: 500, unit: 'g' as const, addedAt: updatedAt }],
     rules: [{ key: 'speisequark mager', name: 'Magerquark', amount: 250, unit: 'g' as const }],
+    prices: [{ name: 'Magerquark', perUnit: 0.0032, unit: 'g' as const, date: updatedAt }],
     updatedAt,
   });
 

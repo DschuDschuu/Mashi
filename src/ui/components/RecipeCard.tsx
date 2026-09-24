@@ -1,9 +1,9 @@
-import { deviceInfo } from '../../domain/catalog';
+import { categoryInfo } from '../../domain/catalog';
 import { currentContent, totalMinutes } from '../../domain/recipe';
 import type { Recipe } from '../../domain/types';
 import { toggleFavorite } from '../../data/store';
 import { navigate } from '../../router';
-import { formatMinutes, kcalLabel } from '../format';
+import { formatMinutesShort, kcalLabel } from '../format';
 import { recipeNutrition } from '../useNutrition';
 import { Icon } from './Icon';
 import { RecipeImage } from './RecipeImage';
@@ -14,8 +14,8 @@ export function RecipeCard({ recipe, wide = false }: { recipe: Recipe; wide?: bo
   const c = currentContent(recipe);
   const n = recipeNutrition(recipe);
   const kcal = kcalLabel(n);
-  // Set: Tag „Airfryer“ und Gerät „Airfryer“ sollen nicht doppelt erscheinen
-  const chips = [...new Set([...c.devices.map((d) => deviceInfo(d).label), ...c.tags])].slice(0, 2);
+  // Auf der Karte zählt, was für eine Mahlzeit es ist – genau eine. Geräte und Tags stehen im Rezept.
+  const category = c.categories[0] ? categoryInfo(c.categories[0]) : undefined;
 
   return (
     <article className={`card${wide ? ' card--wide' : ''}`}>
@@ -36,21 +36,20 @@ export function RecipeCard({ recipe, wide = false }: { recipe: Recipe; wide?: bo
       </div>
       <div className="card__body">
         <h3 className="card__title">{c.title}</h3>
-        <p className="card__meta">
-          <Icon name="clock" size={13} /> {formatMinutes(totalMinutes(c))}
-          <span className="card__meta-sep" />
-          <Icon name="users" size={13} /> {c.servings} Port.
-        </p>
-        {n.perServing && (
+        {/* Unten verankert – auch leere Zeilen behalten ihre Höhe, damit nebeneinander nichts springt */}
+        <div className="card__bottom">
           <p className="card__meta">
-            {kcal} · {Math.round(n.perServing.protein)} g Protein
+            <Icon name="clock" size={13} /> {formatMinutesShort(totalMinutes(c))}
+            <span className="card__meta-sep" />
+            <Icon name="users" size={13} /> {c.servings} Port.
           </p>
-        )}
-        {chips.length > 0 && (
+          <p className="card__meta">
+            {n.perServing ? <>{kcal} · {Math.round(n.perServing.protein)} g Protein</> : ' '}
+          </p>
           <div className="card__chips">
-            {chips.map((t) => <span key={t} className="chip chip--xs">{t}</span>)}
+            {category && <span className="chip chip--xs">{category.label}</span>}
           </div>
-        )}
+        </div>
       </div>
     </article>
   );

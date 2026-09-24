@@ -24,6 +24,11 @@ export interface MyProduct {
   names?: string[];
   /** Werte vom Etikett, pro 100 g bzw. 100 ml */
   per100g: Nutrients;
+  /** Packungsgröße, z. B. 125 g – füllt beim Kassenbon die Menge je Stück aus */
+  packageAmount?: number;
+  packageUnit?: 'g' | 'ml' | 'Stück';
+  /** Preis je Packung in Euro (von Hand; Preise vom Kassenbon kommen automatisch) */
+  packagePrice?: number;
   updatedAt: string;
 }
 
@@ -86,5 +91,8 @@ export function isValidProduct(v: unknown): v is MyProduct {
     && Array.isArray(p.replaces) && p.replaces.every((r) => typeof r === 'string')
     && (p.names === undefined || (Array.isArray(p.names) && p.names.every((r) => typeof r === 'string')))
     && typeof p.updatedAt === 'string'
+    && (p.packageAmount === undefined || isNum(p.packageAmount))
+    && (p.packagePrice === undefined || isNum(p.packagePrice))
+    && (p.packageUnit === undefined || ['g', 'ml', 'Stück'].includes(p.packageUnit as string))
     && !!n && isNum(n.kcal) && isNum(n.protein) && isNum(n.carbs) && isNum(n.fat);
 }

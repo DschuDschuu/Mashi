@@ -77,7 +77,7 @@ const SPECS: Spec[] = [
       title: 'Gochujang Chicken Bowl',
       description: 'Koreanisch inspirierte Bowl mit krümeligem Hähnchenhack, Paprika und cremiger Avocado.',
       servings: 2, prepMinutes: 10, cookMinutes: 20, difficulty: 1,
-      categories: ['salat-bowl', 'hauptgericht'], tags: ['Koreanisch', 'Proteinreich', 'Schnell'], devices: ['herd'],
+      categories: ['salat-bowl'], tags: ['Koreanisch', 'Proteinreich', 'Schnell'], devices: ['herd'],
       ingredients: [
         [300, 'g', 'Hähnchenhack'], [1, 'Stück', 'Paprika (rot oder bunt)'], [150, 'g', 'Reis (z. B. Basmatireis)'],
         [1, 'Stück', 'Avocado'], [1, 'EL', 'Gochujang'], [1, 'EL', 'Sojasauce'], [1, 'TL', 'Sesamöl'],
@@ -146,7 +146,7 @@ const SPECS: Spec[] = [
       title: 'Tomaten-Linsen-Curry',
       description: 'Mein Wohlfühl-Curry mit roten Linsen, Kokosmilch und Spinat.',
       servings: 3, prepMinutes: 10, cookMinutes: 25, difficulty: 1,
-      categories: ['hauptgericht', 'suppe'], tags: ['Vegetarisch', 'Meal Prep', 'Comfort Food'], devices: ['herd'],
+      categories: ['hauptgericht'], tags: ['Vegetarisch', 'Meal Prep', 'Comfort Food'], devices: ['herd'],
       ingredients: [
         [200, 'g', 'Rote Linsen'], [1, 'Dose', 'Gehackte Tomaten'], [1, 'Dose', 'Kokosmilch'], [1, 'Stück', 'Zwiebel'],
         [2, 'Zehe', 'Knoblauch'], [2, 'cm', 'Ingwer'], [2, 'TL', 'Currypulver'], [2, 'Handvoll', 'Spinat'], [1, 'EL', 'Rapsöl'],
@@ -165,7 +165,7 @@ const SPECS: Spec[] = [
       title: 'Crispy Airfryer Chicken',
       description: 'Knusprige Hähnchenstreifen in Panko mit Joghurt-Dip.',
       servings: 2, prepMinutes: 10, cookMinutes: 14, difficulty: 1,
-      categories: ['hauptgericht', 'snack'], tags: ['Airfryer', 'Proteinreich', 'Schnell'], devices: ['airfryer'],
+      categories: ['hauptgericht'], tags: ['Airfryer', 'Proteinreich', 'Schnell'], devices: ['airfryer'],
       ingredients: [
         [400, 'g', 'Hähnchenbrust'], [60, 'g', 'Panko'], [1, 'Stück', 'Ei'], [1, 'TL', 'Paprikapulver'],
         [1, 'EL', 'Olivenöl'], [150, 'g', 'Griechischer Joghurt'], [undefined, undefined, 'Salz & Pfeffer'],
@@ -186,7 +186,7 @@ const SPECS: Spec[] = [
       title: 'Omas Lasagne',
       description: 'Klassische Lasagne mit Rinderhack und viel Käse.',
       servings: 4, prepMinutes: 30, cookMinutes: 45, difficulty: 2,
-      categories: ['hauptgericht', 'backen'], tags: ['Comfort Food'], devices: ['herd', 'backofen'],
+      categories: ['hauptgericht'], tags: ['Comfort Food'], devices: ['herd', 'backofen'],
       ingredients: [
         [500, 'g', 'Rinderhack'], [250, 'g', 'Lasagneplatten'], [700, 'g', 'Passierte Tomaten'], [1, 'Stück', 'Zwiebel'],
         [2, 'Stück', 'Karotten'], [200, 'g', 'Mozzarella'], [50, 'g', 'Parmesan'], [1, 'EL', 'Olivenöl'],
