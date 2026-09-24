@@ -1,0 +1,37 @@
+{
+  "name": "mashi",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Mashi – dein persönliches Kochbuch",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@fontsource/dancing-script": "^5.3.0",
+    "@fontsource/nunito-sans": "^5.3.0",
+    "events": "^3.3.0",
+    "pouchdb-browser": "^9.0.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  },
+  "devDependencies": {
+    "@types/pouchdb-adapter-memory": "^6.1.6",
+    "@types/pouchdb-browser": "^6.1.5",
+    "@types/pouchdb-core": "^7.0.15",
+    "@types/pouchdb-replication": "^6.4.7",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "pouchdb-adapter-memory": "^9.0.0",
+    "pouchdb-core": "^9.0.0",
+    "pouchdb-replication": "^9.0.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.0",
+    "vitest": "^5.0.1"
+  }
+}

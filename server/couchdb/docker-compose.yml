@@ -1,0 +1,63 @@
+# Mashi – eigene CouchDB (getrennt von der Obsidian-LiveSync-CouchDB)
+#
+# Läuft hinter dem bestehenden Traefik (Coolify-Proxy) und bekommt dort automatisch
+# ein Let's-Encrypt-Zertifikat. Der Port 5984 wird NICHT auf dem Host veröffentlicht –
+# erreichbar ist die Datenbank nur über https://${MASHI_DB_HOST}.
+#
+# Start:   cp .env.example .env   → Werte eintragen   → docker compose up -d
+# Danach:  ./setup.sh   (legt Datenbank "mashi" + Benutzer an, einmalig)
+#
+# Annahmen über den Traefik von Coolify (bitte gegen die eigene Konfiguration prüfen,
+# z. B. mit `docker inspect coolify-proxy` oder an den Labels der Obsidian-CouchDB):
+#   - Docker-Netzwerk:        coolify
+#   - Entrypoints:            http (:80) und https (:443)
+#   - Zertifikats-Resolver:   letsencrypt
+# Heißen sie anders, nur die markierten Labels anpassen.
+
+services:
+  couchdb:
+    image: couchdb:3.5            # Patch-Updates innerhalb 3.5, kein Versionssprung
+    container_name: mashi-couchdb
+    restart: unless-stopped
+    environment:
+      COUCHDB_USER: ${COUCHDB_ADMIN_USER:?COUCHDB_ADMIN_USER fehlt in .env}
+      COUCHDB_PASSWORD: ${COUCHDB_ADMIN_PASSWORD:?COUCHDB_ADMIN_PASSWORD fehlt in .env}
+    volumes:
+      - mashi-couchdb-data:/opt/couchdb/data
+      # Mashi-Einstellungen (CORS, Pflicht-Anmeldung, Single-Node).
+      # Bewusst OHNE :ro – das Startskript des Images setzt Besitzer/Rechte aller Dateien
+      # unter /opt/couchdb und bricht bei schreibgeschützter Datei still ab (Exit 1, kein Log).
+      # Folge: Die Datei gehört auf dem Host danach UID 5984 (couchdb) – das ist normal.
+      - ./mashi.ini:/opt/couchdb/etc/local.d/mashi.ini
+    networks:
+      - coolify
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=coolify                                              # ← Netzwerkname
+      # HTTPS
+      - traefik.http.routers.mashi-db.rule=Host(`${MASHI_DB_HOST:?MASHI_DB_HOST fehlt in .env}`)
+      - traefik.http.routers.mashi-db.entrypoints=https                             # ← Entrypoint
+      - traefik.http.routers.mashi-db.tls=true
+      - traefik.http.routers.mashi-db.tls.certresolver=letsencrypt                  # ← Resolver
+      - traefik.http.routers.mashi-db.service=mashi-db
+      - traefik.http.services.mashi-db.loadbalancer.server.port=5984
+      # HTTP → HTTPS umleiten
+      - traefik.http.routers.mashi-db-http.rule=Host(`${MASHI_DB_HOST}`)
+      - traefik.http.routers.mashi-db-http.entrypoints=http                         # ← Entrypoint
+      - traefik.http.routers.mashi-db-http.middlewares=mashi-db-to-https
+      - traefik.http.middlewares.mashi-db-to-https.redirectscheme.scheme=https
+      - traefik.http.middlewares.mashi-db-to-https.redirectscheme.permanent=true
+      # Optional: Schutz gegen Passwort-Raten. Großzügig gewählt, weil der Abgleich
+      # kurzzeitig viele Anfragen schickt. Zum Aktivieren die zwei Zeilen einkommentieren
+      # und die Middleware-Liste oben um ",mashi-db-ratelimit" ergänzen.
+      # - traefik.http.middlewares.mashi-db-ratelimit.ratelimit.average=50
+      # - traefik.http.middlewares.mashi-db-ratelimit.ratelimit.burst=200
+    # Bewusst kein healthcheck: Mit Pflicht-Anmeldung antwortet /_up mit 401, und Traefik
+    # nimmt "unhealthy" markierte Container aus dem Routing.
+
+volumes:
+  mashi-couchdb-data:
+
+networks:
+  coolify:
+    external: true

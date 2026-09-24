@@ -1,0 +1,110 @@
+import type { FoodRef } from '../types';
+import type { FoodEntry, FoodTable, Nutrients } from './types';
+
+/**
+ * Kleine lokale Lebensmitteltabelle für den Prototyp.
+ * Werte je 100 g, gerundete Richtwerte (roh, sofern nicht anders angegeben).
+ * Wird in Phase 7 durch Open Food Facts / USDA ergänzt – das Format bleibt gleich.
+ */
+type Row = [id: string, aliases: string[], kcal: number, protein: number, carbs: number, fat: number, extra?: Partial<Omit<FoodEntry, 'ref' | 'name' | 'per100g'>>];
+
+const ROWS: Row[] = [
+  ['haehnchenhack', ['hähnchenhack', 'hühnerhack', 'hähnchen-hackfleisch'], 143, 17.4, 0, 8.1],
+  ['haehnchenbrust', ['hähnchenbrust', 'hähnchenbrustfilet', 'hähnchen'], 110, 23, 0, 1.5],
+  ['rinderhack', ['rinderhack', 'hackfleisch', 'gemischtes hackfleisch'], 250, 18, 0, 20],
+  ['reis', ['reis', 'basmatireis', 'jasminreis', 'sushireis', 'langkornreis'], 350, 7.5, 78, 0.6],
+  ['reis-gekocht', ['gekochter reis', 'reis gekocht', 'reis vom vortag'], 130, 2.7, 28, 0.3],
+  ['paprika', ['paprika', 'paprikaschote', 'rote paprika', 'gelbe paprika'], 30, 1, 6, 0.3, { portions: { Stück: 150 } }],
+  ['avocado', ['avocado'], 160, 2, 8.5, 14.7, { portions: { Stück: 150 } }],
+  ['gochujang', ['gochujang'], 220, 5, 45, 1.5, { portions: { EL: 18, TL: 6 } }],
+  ['sojasauce', ['sojasauce', 'sojasoße', 'sojasoße hell'], 53, 8, 5, 0.6, { density: 1.1 }],
+  ['sesamoel', ['sesamöl', 'geröstetes sesamöl'], 884, 0, 0, 100, { density: 0.92 }],
+  ['knoblauch', ['knoblauch', 'knoblauchzehe', 'knoblauchzehen'], 149, 6.4, 33, 0.5, { portions: { Zehe: 4, Stück: 4 } }],
+  ['reisessig', ['reisessig'], 18, 0, 4, 0],
+  ['fruehlingszwiebel', ['frühlingszwiebel', 'frühlingszwiebeln', 'lauchzwiebel'], 32, 1.8, 7, 0.2, { portions: { Stück: 15 } }],
+  ['sesam', ['sesam', 'sesamsaat', 'sesamkörner'], 573, 17.7, 23, 49.7, { portions: { EL: 9, TL: 3 } }],
+  ['olivenoel', ['olivenöl'], 884, 0, 0, 100, { density: 0.92 }],
+  ['rapsoel', ['rapsöl', 'öl', 'pflanzenöl', 'neutrales öl'], 884, 0, 0, 100, { density: 0.92 }],
+  ['pasta', ['pasta', 'nudeln', 'spaghetti', 'penne', 'fusilli', 'linguine'], 355, 12.5, 71, 1.5],
+  ['lasagneplatten', ['lasagneplatten', 'lasagneblätter'], 355, 12, 71, 1.5],
+  ['parmesan', ['parmesan', 'parmigiano'], 392, 35, 3.2, 26, { portions: { EL: 6 } }],
+  ['zitronensaft', ['zitronensaft', 'zitrone'], 25, 0.4, 7, 0.2, { portions: { Stück: 45 } }],
+  ['basilikum', ['basilikum'], 23, 3, 2.7, 0.6, { portions: { Handvoll: 10, Bund: 20 } }],
+  ['haferflocken', ['haferflocken', 'zarte haferflocken'], 370, 13.5, 58.7, 7],
+  ['ei', ['ei', 'eier'], 143, 12.6, 0.7, 9.5, { portions: { Stück: 55 } }],
+  ['banane', ['banane'], 89, 1.1, 23, 0.3, { portions: { Stück: 120 } }],
+  ['magerquark', ['magerquark', 'quark'], 67, 12, 4, 0.2],
+  ['proteinpulver', ['proteinpulver', 'whey', 'eiweißpulver'], 380, 75, 8, 5, { portions: { Messlöffel: 30, EL: 10 } }],
+  ['milch', ['milch', 'vollmilch'], 64, 3.4, 4.8, 3.5, { density: 1.03 }],
+  ['hafermilch', ['hafermilch', 'haferdrink'], 45, 1, 6.5, 1.5, { density: 1.03 }],
+  ['heidelbeeren', ['heidelbeeren', 'blaubeeren', 'beeren'], 57, 0.7, 14, 0.3, { portions: { Handvoll: 60 } }],
+  ['ahornsirup', ['ahornsirup'], 260, 0, 67, 0, { portions: { EL: 20, TL: 7 } }],
+  ['honig', ['honig'], 304, 0.3, 82, 0, { portions: { EL: 21, TL: 7 } }],
+  ['rote-linsen', ['rote linsen', 'linsen'], 340, 24, 48, 1.5],
+  ['gehackte-tomaten', ['gehackte tomaten', 'stückige tomaten', 'tomaten aus der dose'], 21, 1.1, 3.5, 0.2, { portions: { Dose: 400 } }],
+  ['passierte-tomaten', ['passierte tomaten', 'passata'], 30, 1.5, 5, 0.2],
+  ['kokosmilch', ['kokosmilch'], 180, 1.8, 3, 18, { portions: { Dose: 400 } }],
+  ['zwiebel', ['zwiebel', 'zwiebeln', 'rote zwiebel'], 40, 1.1, 9, 0.1, { portions: { Stück: 80 } }],
+  ['currypaste', ['currypaste', 'rote currypaste'], 120, 2.5, 12, 7, { portions: { EL: 16, TL: 5 } }],
+  ['currypulver', ['currypulver', 'curry'], 325, 14, 55, 14, { portions: { TL: 2.5, EL: 7 } }],
+  ['ingwer', ['ingwer', 'frischer ingwer'], 80, 1.8, 18, 0.8, { portions: { cm: 5, Stück: 10 } }],
+  ['spinat', ['spinat', 'babyspinat', 'blattspinat'], 23, 2.9, 3.6, 0.4, { portions: { Handvoll: 30 } }],
+  ['panko', ['panko', 'paniermehl', 'semmelbrösel'], 380, 12, 72, 4],
+  ['mehl', ['mehl', 'weizenmehl'], 350, 10, 72, 1],
+  ['paprikapulver', ['paprikapulver', 'geräuchertes paprikapulver'], 282, 14, 54, 13, { portions: { TL: 2.3, EL: 7 } }],
+  ['griech-joghurt', ['griechischer joghurt', 'joghurt'], 125, 4.5, 4, 10],
+  ['mozzarella', ['mozzarella', 'geriebener mozzarella'], 254, 18, 1.5, 19],
+  ['butter', ['butter'], 741, 0.7, 0.6, 83, { portions: { EL: 12, TL: 4 } }],
+  ['karotte', ['karotte', 'karotten', 'möhre', 'möhren'], 36, 0.9, 7.5, 0.2, { portions: { Stück: 80 } }],
+  ['hokkaido', ['hokkaido', 'hokkaidokürbis', 'kürbis'], 40, 1.7, 8, 0.2],
+  ['gemuesebruehe', ['gemüsebrühe', 'brühe'], 5, 0.2, 0.5, 0.2],
+  ['mango', ['mango'], 60, 0.8, 15, 0.4, { portions: { Stück: 300 } }],
+  ['chiasamen', ['chiasamen', 'chia'], 486, 17, 42, 31, { portions: { EL: 12, TL: 4 } }],
+  ['erbsen', ['erbsen', 'tk-erbsen'], 81, 5.4, 14, 0.4],
+  ['salz', ['salz', 'meersalz'], 0, 0, 0, 0, { negligible: true, portions: { TL: 6, Prise: 0.4 } }],
+  ['pfeffer', ['pfeffer', 'schwarzer pfeffer', 'salz und pfeffer', 'salz & pfeffer'], 0, 0, 0, 0, { negligible: true }],
+  ['chiliflocken', ['chiliflocken', 'chili', 'gochugaru'], 280, 12, 50, 14, { negligible: true, portions: { TL: 2, Prise: 0.3 } }],
+];
+
+const PROVIDER = 'mashi-lokal';
+
+const FOODS: FoodEntry[] = ROWS.map(([id, aliases, kcal, protein, carbs, fat, extra]) => ({
+  ref: { provider: PROVIDER, foodId: id },
+  name: aliases[0][0].toUpperCase() + aliases[0].slice(1),
+  per100g: { kcal, protein, carbs, fat } satisfies Nutrients,
+  ...extra,
+}));
+
+/** Klammern und Zusätze entfernen: „Paprika (rot oder bunt)“ → „paprika“ */
+export function normalizeName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/\(.*?\)/g, ' ')
+    .replace(/,.*$/, ' ')
+    .replace(/\b(frisch|frische|frischer|tk|bio|optional)\b/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+const byAlias = new Map<string, FoodEntry>();
+FOODS.forEach((f, i) => ROWS[i][1].forEach((a) => byAlias.set(a, f)));
+
+/** Längere Aliase zuerst prüfen, damit „paprikapulver“ vor „paprika“ gewinnt. */
+const aliasesByLength = [...byAlias.keys()].sort((a, b) => b.length - a.length);
+
+export const localFoodTable: FoodTable = {
+  byRef(ref: FoodRef) {
+    return FOODS.find((f) => f.ref.provider === ref.provider && f.ref.foodId === ref.foodId);
+  },
+  matchName(name: string) {
+    const n = normalizeName(name);
+    const exact = byAlias.get(n);
+    if (exact) return { food: exact, quality: 'exact' };
+    // Alias als ganzes Wort im Namen: „kleine rote Zwiebel“ → Zwiebel (nur ungefähr)
+    for (const alias of aliasesByLength) {
+      const re = new RegExp(`(^|\\s)${alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\s|$)`);
+      if (re.test(n)) return { food: byAlias.get(alias)!, quality: 'approx' };
+    }
+    return undefined;
+  },
+};

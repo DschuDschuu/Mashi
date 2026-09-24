@@ -1,0 +1,102 @@
+# Mashi – Datenmodell
+
+Die maßgebliche Definition steht in [`src/domain/types.ts`](../src/domain/types.ts).
+Hier die Idee dahinter und die geplante Abbildung in Supabase.
+
+## Kernidee: Rezept = Hülle + Versionen
+
+```
+Recipe  (Hülle – ändert sich selten)
+├─ status        ki_entwurf | zum_testen | bewaehrt | kochbuch
+├─ archivedAt?   gesetzt = archiviert (Status bleibt erhalten)
+├─ source        ki | selbst | import        ← ändert sich nie
+├─ favorite, image, notes, lastCookedAt
+├─ currentVersionId ─────────────┐
+├─ versions[] ◀──────────────────┘
+│   └─ RecipeVersion { number, author: ki|nutzer|import, label, content }
+│         └─ RecipeContent  ← ALLES Inhaltliche, unveränderlich je Version
+│              title, description, servings, prepMinutes, cookMinutes, difficulty,
+│              ingredients[] { id, name, amount?, unit?, optional?, foodRef? },
+│              steps[] { id, text, timerMinutes? },
+│              categories[], tags[], devices[], imagePrompt?
+└─ feedback[]  TestFeedback { versionId, rating 1–5, note }  ← hängt an der GEKOCHTEN Version
+```
+
+**Warum so?**
+- Die KI-Version geht nie verloren (Version 1), egal wie oft der Nutzer anpasst.
+- Änderungen sind nachvollziehbar: Zutaten behalten ihre `id` über Versionen → `diffContent()`
+  erkennt „300 g → 350 g Hähnchenhack“ als *Änderung* statt als *gelöscht + neu*.
+- Feedback bezieht sich auf die Version, die wirklich gekocht wurde.
+- **Nährwerte werden nicht gespeichert**, sondern berechnet. Kein Weg, erfundene Werte einzuschleusen.
+
+**Beispiel (Gochujang Chicken Bowl in den Mock-Daten):**
+
+| Version | Autor | Label | Änderung |
+|---|---|---|---|
+| 1 | ki | KI-Vorschlag | – |
+| 2 | nutzer | Nach Test: mehr Schärfe | Hack 300 → 350 g, Gochujang 1 → 2 EL |
+| 3 | nutzer | Weniger Reis | Reis 150 → 100 g |
+| 4 | nutzer | Meine Kochbuch-Version | (Übernahme ins Kochbuch) |
+
+## Geräte & Kategorien
+
+Offene Strings (`'airfryer'`, `'hauptgericht'`), Anzeige über `catalog.ts`. Ein neues Gerät
+(Reiskocher, Dampfgarer …) = ein Katalogeintrag, keine Migration. Geräte ≠ Kategorien ≠ Tags.
+
+## Geplante Supabase-Tabellen (Phase 2)
+
+```sql
+-- Hülle
+create table recipes (
+  id               uuid primary key default gen_random_uuid(),
+  user_id          uuid not null references auth.users on delete cascade,
+  status           text not null check (status in ('ki_entwurf','zum_testen','bewaehrt','kochbuch')),
+  source           text not null check (source in ('ki','selbst','import')),
+  favorite         boolean not null default false,
+  notes            text not null default '',
+  image_path       text,                 -- Pfad in Supabase Storage
+  current_version  uuid,
+  last_cooked_at   timestamptz,
+  archived_at      timestamptz,
+  created_at       timestamptz not null default now(),
+  updated_at       timestamptz not null default now()
+);
+
+-- Versionen: Inhalt als jsonb (= RecipeContent). Unveränderlich, nur INSERT.
+create table recipe_versions (
+  id          uuid primary key default gen_random_uuid(),
+  recipe_id   uuid not null references recipes on delete cascade,
+  user_id     uuid not null references auth.users on delete cascade,
+  number      int  not null,
+  author      text not null check (author in ('ki','nutzer','import')),
+  label       text,
+  content     jsonb not null,
+  created_at  timestamptz not null default now(),
+  unique (recipe_id, number)
+);
+
+create table test_feedback (
+  id          uuid primary key default gen_random_uuid(),
+  recipe_id   uuid not null references recipes on delete cascade,
+  version_id  uuid not null references recipe_versions on delete cascade,
+  user_id     uuid not null references auth.users on delete cascade,
+  rating      smallint not null check (rating between 1 and 5),
+  note        text not null default '',
+  created_at  timestamptz not null default now()
+);
+
+-- Jede Zeile gehört genau einem Nutzer
+alter table recipes         enable row level security;
+alter table recipe_versions enable row level security;
+alter table test_feedback   enable row level security;
+create policy own on recipes         for all using (user_id = auth.uid()) with check (user_id = auth.uid());
+create policy own on recipe_versions for all using (user_id = auth.uid()) with check (user_id = auth.uid());
+create policy own on test_feedback   for all using (user_id = auth.uid()) with check (user_id = auth.uid());
+```
+
+**Warum `content` als jsonb statt eigener Zutaten-Tabelle?** Versionen werden als Ganzes gelesen
+und nie teilweise geändert. jsonb hält das einfach, und `RecipeContent` bleibt 1:1 das TypeScript-Objekt.
+Für Einkaufslisten/Vorrat (später) lässt sich per Postgres-Funktion über `content->'ingredients'` suchen.
+
+Später dazu: `food_cache` (übernommene Einträge aus Open Food Facts/USDA), `ingredient_matches`
+(vom Nutzer bestätigte Zuordnung Name → Lebensmittel).
