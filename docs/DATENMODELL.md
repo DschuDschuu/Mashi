@@ -50,7 +50,9 @@ Einzel-Dokumente, die ebenfalls auf alle Geräte abgeglichen werden:
 | `speisekammer` | `Pantry` – Vorräte `items` (Name, Menge nur wo bekannt), gelernte Bon-Artikel `rules` (Bon-Name → Name, Menge je Stück, oder „überspringen“), zuletzt bezahlte Preise `prices` (€ je g oder je Stück), alle Preise mit Einkaufsdatum `history` (Preisverlauf) und die Ersparnis je Bon `savings` (Lidl Plus, Angebote) | neueste Fassung gewinnt |
 
 `MyProduct` kann zusätzlich `packageAmount`/`packageUnit` (Packungsgröße – füllt beim Kassenbon die
-Menge aus) und `packagePrice` (Preis von Hand) tragen. Kosten eines Rezepts (`domain/cost.ts`)
+Menge aus), `packagePrice` (Preis von Hand) und `ean` (Barcode, per Scan über Open Food Facts) tragen.
+Ein Produkt passt immer auch auf seinen eigenen Namen. Gelernte Bon-Artikel können über `productId`
+einem Produkt zugeordnet sein – dann gilt beim nächsten Bon dessen aktuelle Packungsgröße. Kosten eines Rezepts (`domain/cost.ts`)
 werden nie gespeichert, sondern aus Zutaten × bekannten Preisen berechnet; Zutaten ohne Preis werden
 genannt, nicht geschätzt.
 

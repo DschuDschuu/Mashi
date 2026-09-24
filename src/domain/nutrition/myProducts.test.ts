@@ -69,3 +69,12 @@ describe('Produkte für unbekannte Zutaten', () => {
     expect(withMyProducts(localFoodTable, [own]).matchName('Reis')?.food.name).toBe('Mein Reis');
   });
 });
+
+describe('Produkt an seinem eigenen Namen', () => {
+  it('„Milch 0,1 % (Test)“ findet dein Produkt – samt Dichte der ersetzten Milch (ml → g)', () => {
+    const table = withMyProducts(localFoodTable, [milk]);
+    const n = computeNutrition(content('Milch 0,1 % (Test)', 100, 'ml'), table);
+    expect(n.items[0].food?.name).toBe('Milch 0,1 % (Test)');
+    expect(n.perServing!.kcal).toBeCloseTo(36.05); // 100 ml × 1,03 g/ml
+  });
+});

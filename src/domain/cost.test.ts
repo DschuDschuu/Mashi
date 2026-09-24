@@ -94,3 +94,28 @@ describe('Preise und Packungsgrößen vom Kassenbon und aus „Meine Produkte“
     expect(productPrices([mozzarella])).toEqual([]); // ohne Preis nichts
   });
 });
+
+describe('Bon-Artikel einem eigenen Produkt zuordnen', () => {
+  const balance: MyProduct = {
+    id: 'p-fk', name: 'Frischkäse Balance', replaces: ['frischkaese-light'], per100g: { kcal: 150, protein: 7.5, carbs: 4.6, fat: 11 },
+    packageAmount: 200, packageUnit: 'g', updatedAt: '2026-09-01T00:00:00Z',
+  };
+  const table = withMyProducts(localFoodTable, [balance]);
+
+  it('ein Produkt wird an seinem eigenen Namen erkannt', () => {
+    expect(table.matchName('Frischkäse Balance')?.food.ref.foodId).toBe('p-fk');
+  });
+
+  it('merkt sich die Zuordnung – und nimmt beim nächsten Bon die aktuelle Packungsgröße des Produkts', () => {
+    const bon = parseReceipt('EUR\nFrischkäse Balance 1,59 A\nZu zahlen');
+    const rows = proposeImport(bon, []);
+    rows[0] = { ...rows[0], name: balance.name, productId: balance.id, amount: 200, unit: 'g' };
+    const pantry = applyImport(emptyPantry(), rows, '2026-09-24T12:00:00Z');
+    expect(pantry.rules[0]).toMatchObject({ productId: 'p-fk', name: 'Frischkäse Balance' });
+
+    // Packung inzwischen auf 175 g geändert → der nächste Bon nimmt 175 g, nicht die alten 200 g
+    const lookup = (name: string) => (table.matchName(name)?.food.ref.foodId === 'p-fk' ? { amount: 175, unit: 'g' as const } : undefined);
+    const next = proposeImport(parseReceipt('EUR\nFrischkäse Balance 0,79 x 2 1,58 A\nZu zahlen'), pantry.rules, lookup);
+    expect(next[0]).toMatchObject({ known: true, productId: 'p-fk', amount: 350, unit: 'g' });
+  });
+});

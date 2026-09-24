@@ -29,6 +29,8 @@ export interface MyProduct {
   packageUnit?: 'g' | 'ml' | 'Stück';
   /** Preis je Packung in Euro (von Hand; Preise vom Kassenbon kommen automatisch) */
   packagePrice?: number;
+  /** Barcode (EAN), falls per Scan angelegt – erkennt das Produkt beim nächsten Scan wieder */
+  ean?: string;
   updatedAt: string;
 }
 
@@ -57,6 +59,8 @@ export function withMyProducts(base: FoodTable, products: MyProduct[]): FoodTabl
   for (const p of products) for (const r of p.replaces) byReplaced.set(r, p);
   const byName = new Map<string, MyProduct>();
   for (const p of products) for (const n of p.names ?? []) byName.set(normalizeName(n), p);
+  // Ein Produkt passt immer auch auf seinen eigenen Namen („Frischkäse Balance“)
+  const byOwnName = new Map(products.map((p) => [normalizeName(p.name), p]));
   const swap = (food: FoodEntry): FoodEntry => {
     const p = byReplaced.get(food.ref.foodId);
     return p ? asEntry(p, food) : food;
@@ -72,9 +76,16 @@ export function withMyProducts(base: FoodTable, products: MyProduct[]): FoodTabl
     },
     matchName(name) {
       // Eigene Namen zuerst: Du hast das Produkt ausdrücklich für diese Zutat angelegt.
-      const own = byName.get(normalizeName(name));
+      const n = normalizeName(name);
+      const own = byName.get(n);
       if (own) return { food: asEntry(own), quality: 'exact' };
       const m = base.matchName(name);
+      const self = byOwnName.get(n);
+      if (self) {
+        // Umrechnungen (Dichte, Stückgewicht) vom ersetzten Eintrag behalten, wenn der Name dorthin führt
+        const replaced = m && self.replaces.includes(m.food.ref.foodId) ? m.food : undefined;
+        return { food: asEntry(self, replaced), quality: 'exact' };
+      }
       return m && { food: swap(m.food), quality: m.quality };
     },
   };
@@ -94,5 +105,6 @@ export function isValidProduct(v: unknown): v is MyProduct {
     && (p.packageAmount === undefined || isNum(p.packageAmount))
     && (p.packagePrice === undefined || isNum(p.packagePrice))
     && (p.packageUnit === undefined || ['g', 'ml', 'Stück'].includes(p.packageUnit as string))
+    && (p.ean === undefined || typeof p.ean === 'string')
     && !!n && isNum(n.kcal) && isNum(n.protein) && isNum(n.carbs) && isNum(n.fat);
 }

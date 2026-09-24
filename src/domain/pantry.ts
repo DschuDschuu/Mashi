@@ -35,6 +35,8 @@ export interface ReceiptRule {
   /** Menge je Stück/Packung – bei loser Ware (kg auf dem Bon) nicht nötig */
   amount?: number;
   unit?: PantryUnit;
+  /** gehört zu diesem Produkt aus „Meine Produkte“ – dessen Packungsgröße gilt dann immer aktuell */
+  productId?: string;
 }
 
 export interface Pantry {
@@ -70,6 +72,8 @@ export interface ImportRow {
   /** Gesamtmenge dieser Zeile (bei 3 Stück à 250 g: 750) */
   amount?: number;
   unit?: PantryUnit;
+  /** diesem Produkt aus „Meine Produkte“ zugeordnet */
+  productId?: string;
 }
 
 export function proposeImport(lines: ReceiptLine[], rules: ReceiptRule[], packageFor?: PackageLookup): ImportRow[] {
@@ -77,8 +81,13 @@ export function proposeImport(lines: ReceiptLine[], rules: ReceiptRule[], packag
     const key = receiptKey(line.name);
     const rule = rules.find((r) => r.key === key);
     if (rule?.skip) return { line, key, known: true, skip: true, name: rule.name ?? line.name };
-    const row: ImportRow = { line, key, known: !!rule, skip: false, name: rule?.name ?? line.name };
-    if (line.weightKg !== undefined) {
+    const row: ImportRow = { line, key, known: !!rule, skip: false, name: rule?.name ?? line.name, ...(rule?.productId ? { productId: rule.productId } : {}) };
+    // Zugeordnetes Produkt: dessen Packungsgröße gilt – auch wenn du sie inzwischen geändert hast
+    const productPack = rule?.productId && line.weightKg === undefined ? packageFor?.(rule.name ?? line.name) : undefined;
+    if (productPack) {
+      row.amount = productPack.amount * line.count;
+      row.unit = productPack.unit;
+    } else if (line.weightKg !== undefined) {
       // Lose Ware: das Gewicht steht auf dem Bon – genauer als jede gelernte Menge
       row.amount = Math.round(line.weightKg * 1000);
       row.unit = 'g';
@@ -121,6 +130,7 @@ export function applyImport(pantry: Pantry, rows: ImportRow[], now = new Date().
       key: row.key, name: row.name.trim(),
       ...(perPiece !== undefined && row.unit !== 'Stück' ? { amount: perPiece } : {}),
       ...(row.unit ? { unit: row.unit } : {}),
+      ...(row.productId ? { productId: row.productId } : {}),
     });
     items = addItem(items, { name: row.name.trim(), amount: row.amount, unit: row.unit }, now, newId);
     const price = priceOf(row, paidAt);

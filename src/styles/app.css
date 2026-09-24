@@ -800,3 +800,17 @@ p { margin: 0; }
 .stat { display: flex; flex-direction: column; gap: 2px; padding: 14px 16px; border-radius: var(--r); }
 .stat__label { font-size: 0.82rem; font-weight: 600; color: var(--ink-2); }
 .stat__value { font-size: 1.5rem; line-height: 1.2; color: var(--ink); font-variant-numeric: tabular-nums; }
+
+/* ── Barcode-Scanner ─────────────────────────────────────────── */
+.scanner { display: flex; flex-direction: column; gap: 12px; }
+.scanner__video { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: var(--r); background: #000; }
+.scanner__manual { display: flex; gap: 8px; }
+.scanner__manual input { flex: 1; min-width: 0; border: 1px solid var(--line); background: var(--surface); border-radius: var(--r-sm); padding: 10px 12px; font-size: 1rem; letter-spacing: 0.04em; }
+.scan-note { background: var(--sky); border-radius: var(--r-sm); padding: 10px 12px; font-size: 0.85rem; }
+.bonrow__product { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.bonrow__product select { border: 1px solid var(--line); background: var(--surface); border-radius: var(--r-sm); padding: 8px 10px; font-size: 0.92rem; max-width: 100%; }
+.bonrow__product .link { font-size: 0.85rem; }
+.bonrow__productlabel { display: flex; align-items: center; gap: 8px; min-width: 0; max-width: 100%; }
+.bonrow__productlabel select { min-width: 0; flex: 1; }
+.ean { font-family: ui-monospace, Consolas, monospace; letter-spacing: 0.03em; }
+.scan-note .btn { margin-top: 6px; }

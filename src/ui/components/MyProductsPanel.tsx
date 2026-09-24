@@ -4,7 +4,10 @@ import type { MyProduct } from '../../domain/nutrition/myProducts';
 import type { NutritionResult } from '../../domain/nutrition/types';
 import { newId } from '../../domain/recipe';
 import { saveProducts, useProducts } from '../../data/store';
+import type { ScannedProduct } from '../../domain/nutrition/openFoodFacts';
+import { barcodeLookup } from '../../services';
 import { euro } from '../format';
+import { BarcodeScanner } from './BarcodeScanner';
 import { toast } from '../toast';
 import { Icon } from './Icon';
 
@@ -54,6 +57,7 @@ export function MyProductsPanel() {
                   Packung: {fmt(p.packageAmount)} {p.packageUnit ?? 'g'}{p.packagePrice !== undefined && <> · {euro(p.packagePrice)}</>}
                 </span>
               )}
+              {p.ean && <span className="small muted">Barcode: <span className="ean">{p.ean}</span></span>}
               <span className="small">
                 {p.replaces.length > 0 && <>ersetzt: {p.replaces.map(foodName).join(', ')}</>}
                 {p.replaces.length > 0 && !!p.names?.length && ' · '}
@@ -127,8 +131,17 @@ export function UnknownIngredients({ n }: { n: NutritionResult }) {
   );
 }
 
-function ProductForm({ initial, onSave, onCancel }: { initial?: Partial<MyProduct>; onSave: (p: MyProduct) => void; onCancel: () => void }) {
+/** Formular für ein eigenes Produkt – auch aus der Bon-Prüfung heraus nutzbar. Mit Barcode-Scan (Open Food Facts). */
+export function ProductForm({ initial, onSave, onCancel }: { initial?: Partial<MyProduct>; onSave: (p: MyProduct) => void; onCancel: () => void }) {
+  const products = useProducts();
   const [name, setName] = useState(initial?.name ?? '');
+  const [ean, setEan] = useState(initial?.ean);
+  const [scanning, setScanning] = useState(false);
+  const [scanNote, setScanNote] = useState<string | null>(null);
+  /** Zusatzwerte vom Scan (Zucker, Salz …) – das Formular zeigt nur die vier Hauptwerte */
+  const [extra, setExtra] = useState<Partial<MyProduct['per100g']>>({});
+  /** Bei bestehenden Produkten: gefundene Werte als Angebot, nicht automatisch */
+  const [offer, setOffer] = useState<ScannedProduct | null>(null);
   const [values, setValues] = useState<Values>({
     kcal: toField(initial?.per100g?.kcal),
     protein: toField(initial?.per100g?.protein),
@@ -157,7 +170,6 @@ function ProductForm({ initial, onSave, onCancel }: { initial?: Partial<MyProduc
     if (kcal === undefined || protein === undefined || carbs === undefined || fat === undefined) {
       return setError('Bitte alle vier Werte vom Etikett eintragen (pro 100 g).');
     }
-    if (!replaces.length && !names.length) return setError('Bitte wählen, was das Produkt ersetzen soll (z. B. Milch).');
     const amount = parseNum(packAmount);
     const price = parseNum(packPrice);
     if (price !== undefined && !amount) return setError('Für den Preis braucht Mashi die Packungsgröße.');
@@ -167,7 +179,8 @@ function ProductForm({ initial, onSave, onCancel }: { initial?: Partial<MyProduc
       replaces,
       ...(names.length ? { names } : {}),
       // Zusatzwerte vom Etikett (Zucker, Salz …) behalten – das Formular zeigt nur die vier Hauptwerte
-      per100g: { ...initial?.per100g, kcal, protein, carbs, fat },
+      per100g: { ...initial?.per100g, ...extra, kcal, protein, carbs, fat },
+      ...(ean ? { ean } : {}),
       ...(amount ? { packageAmount: amount, packageUnit: packUnit } : {}),
       ...(amount && price !== undefined ? { packagePrice: price } : {}),
       updatedAt: new Date().toISOString(),
@@ -181,8 +194,71 @@ function ProductForm({ initial, onSave, onCancel }: { initial?: Partial<MyProduc
     </label>
   );
 
+  /** Barcode gelesen → bei Open Food Facts nachschlagen und das Formular vorausfüllen */
+  /** Werte von Open Food Facts ins Formular übernehmen (nur auf Wunsch bei bestehenden Produkten) */
+  const applyScan = (found: ScannedProduct) => {
+    const { kcal, protein, carbs, fat, ...rest } = found.per100g;
+    setName(found.name);
+    setValues({ kcal: toField(kcal), protein: toField(protein), carbs: toField(carbs), fat: toField(fat) });
+    setExtra(rest);
+    if (found.packageAmount) {
+      setPackAmount(toField(found.packageAmount));
+      setPackUnit(found.packageUnit ?? 'g');
+    }
+    setOffer(null);
+    setScanNote('Werte von Open Food Facts (von der Community gepflegt) – bitte kurz mit dem Etikett vergleichen.');
+  };
+
+  /**
+   * Barcode gelesen. Neues Produkt: bei Open Food Facts nachschlagen und vorausfüllen.
+   * Bestehendes Produkt: NUR den Barcode merken – deine Werte vom Etikett bleiben, übernehmen nur auf Wunsch.
+   */
+  const onCode = async (code: string) => {
+    setScanning(false);
+    const known = products.find((p) => p.ean === code && p.id !== initial?.id);
+    if (known) {
+      setScanNote(`Diesen Barcode hast du schon: „${known.name}“.`);
+      return;
+    }
+    setEan(code);
+    const existing = !!initial?.per100g;
+    setScanNote(existing ? 'Barcode hinterlegt – deine Werte bleiben, wie sie sind.' : 'Suche bei Open Food Facts …');
+    try {
+      const found = await barcodeLookup.find(code);
+      if (!found) {
+        if (!existing) setScanNote('Bei Open Food Facts nicht gefunden – bitte die Werte vom Etikett abtippen. Der Barcode wird gemerkt.');
+        return;
+      }
+      if (existing) setOffer(found);
+      else applyScan(found);
+    } catch {
+      if (!existing) setScanNote('Open Food Facts ist gerade nicht erreichbar (offline?). Du kannst die Werte auch abtippen.');
+    }
+  };
+
   return (
     <div className="product-form stack">
+      {ean ? (
+        <div className="row-between small">
+          <span>Barcode: <strong className="ean">{ean}</strong></span>
+          <span className="row-gap">
+            <button type="button" className="link" onClick={() => setScanning(true)}>Neu scannen</button>
+            <button type="button" className="link link--muted" onClick={() => { setEan(undefined); setOffer(null); setScanNote(null); }}>Entfernen</button>
+          </span>
+        </div>
+      ) : (
+        <button type="button" className="btn btn--soft" onClick={() => setScanning(true)}>
+          <Icon name="camera" size={18} /> {initial?.per100g ? 'Barcode hinterlegen' : 'Barcode scannen'}
+        </button>
+      )}
+      {scanNote && <p className="scan-note" role="status">{scanNote}</p>}
+      {offer && (
+        <div className="scan-note">
+          <p>Open Food Facts kennt das Produkt: <strong>{offer.name}</strong> · {fmt(offer.per100g.kcal)} kcal · {fmt(offer.per100g.protein)} g Eiweiß je 100 g.</p>
+          <button type="button" className="btn btn--ghost btn--sm" onClick={() => applyScan(offer)}>Werte von Open Food Facts übernehmen</button>
+        </div>
+      )}
+      {scanning && <BarcodeScanner onCode={onCode} onClose={() => setScanning(false)} />}
       <label className="field">
         <span>Name (wie auf der Packung)</span>
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="z. B. Milch 0,1 % (Hausmarke)" />
@@ -220,7 +296,7 @@ function ProductForm({ initial, onSave, onCancel }: { initial?: Partial<MyProduc
       )}
 
       <div className="stack">
-        <span className="small muted">{names.length ? 'Ersetzt außerdem (optional):' : 'Ersetzt in allen Rezepten:'}</span>
+        <span className="small muted">{names.length ? 'Ersetzt außerdem (optional):' : 'Ersetzt in allen Rezepten (optional, z. B. „Milch“ für deine 0,1-%-Milch):'}</span>
         {replaces.length > 0 && (
           <div className="chips">
             {replaces.map((id) => (

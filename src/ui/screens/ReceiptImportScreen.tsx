@@ -3,7 +3,10 @@ import { proposeImport, type ImportRow, type PantryUnit } from '../../domain/pan
 import { parseReceipt, parseReceiptDate } from '../../domain/receipt';
 import { parseSavings } from '../../domain/savings';
 import { formatAmount } from '../../domain/scaling';
-import { importReceipt, usePantry } from '../../data/store';
+import { normalizeName } from '../../domain/nutrition/localFoods';
+import type { MyProduct } from '../../domain/nutrition/myProducts';
+import { importReceipt, saveProducts, usePantry, useProducts } from '../../data/store';
+import { ProductForm } from '../components/MyProductsPanel';
 import { takeSharedReceipt } from '../../pwa';
 import { navigate } from '../../router';
 import { Icon } from '../components/Icon';
@@ -27,6 +30,14 @@ const perPiece = (r: ImportRow) => r.line.weightKg === undefined && r.line.count
 function toRow(r: ImportRow): Row {
   const shown = r.amount === undefined ? undefined : perPiece(r) && r.unit !== 'Stück' ? r.amount / r.line.count : r.amount;
   return { ...r, amountText: shown === undefined ? '' : String(shown).replace('.', ',') };
+}
+
+/** Packungsgröße, die ein neues Produkt aus dieser Zeile vorausgefüllt bekommt (je Stück). */
+function packOf(r: Row): Partial<MyProduct> {
+  const n = parseAmount(r.amountText);
+  if (n === undefined || r.line.weightKg !== undefined) return {};
+  const unit = r.unit ?? 'g';
+  return { packageAmount: n, packageUnit: unit };
 }
 
 /** Zurück in eine ImportRow: Menge je Stück × Anzahl, leer = nur „vorhanden“. */
@@ -95,7 +106,19 @@ export function ReceiptImportScreen({ shared }: { shared: boolean }) {
     // nur beim Öffnen – „read“ hängt nicht von späteren Änderungen ab
   }, [shared]);
 
-  const update = (i: number, patch: Partial<Row>) => setRows(rows.map((r, n) => (n === i ? { ...r, ...patch } : r)));
+  const update = (i: number, patch: Partial<Row>) => setRows((all) => all.map((r, n) => (n === i ? { ...r, ...patch } : r)));
+  const products = useProducts();
+  /** Zeile, für die gerade ein neues Produkt angelegt wird */
+  const [creating, setCreating] = useState<number | null>(null);
+
+  /** Zeile einem eigenen Produkt zuordnen: Name und Packungsgröße kommen dann vom Produkt */
+  const assign = (i: number, p?: MyProduct) => {
+    if (!p) return update(i, { productId: undefined });
+    const pack = p.packageAmount && rows[i].line.weightKg === undefined
+      ? { amountText: String(p.packageAmount).replace('.', ','), unit: p.packageUnit ?? 'g' }
+      : {};
+    update(i, { productId: p.id, name: p.name, ...pack });
+  };
   const taking = rows.filter((r) => !r.skip).length;
 
   const apply = () => {
@@ -178,6 +201,29 @@ export function ReceiptImportScreen({ shared }: { shared: boolean }) {
                     </div>
                     {perPiece(r) && <span className="small muted">× {r.line.count} gekauft</span>}
                   </div>
+                )}
+                {!r.skip && (products.length > 0 || creating !== i) && (
+                  <div className="bonrow__product">
+                    {products.length > 0 && (
+                      <label className="bonrow__productlabel">
+                        <span className="small muted">Mein Produkt:</span>
+                        <select value={r.productId ?? ''} onChange={(e) => assign(i, products.find((p) => p.id === e.target.value))}>
+                          <option value="">keins</option>
+                          {[...products].sort((a, b) => a.name.localeCompare(b.name, 'de')).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                        </select>
+                      </label>
+                    )}
+                    {!r.productId && creating !== i && (
+                      <button className="link" onClick={() => setCreating(i)}><Icon name="plus" size={14} /> Als neues Produkt anlegen</button>
+                    )}
+                  </div>
+                )}
+                {creating === i && (
+                  <ProductForm
+                    initial={{ name: r.line.name, names: [normalizeName(r.line.name)], replaces: [], ...packOf(r) }}
+                    onSave={(p) => { saveProducts([...products, p]); assign(i, p); setCreating(null); toast(`„${p.name}“ angelegt`); }}
+                    onCancel={() => setCreating(null)}
+                  />
                 )}
                 <button className="link bonrow__skip" onClick={() => update(i, { skip: !r.skip })}>
                   {r.skip ? 'Doch übernehmen' : 'Überspringen'}
