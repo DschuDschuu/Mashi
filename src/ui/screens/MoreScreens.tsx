@@ -1,13 +1,18 @@
+import { useRef, useState } from 'react';
+import { createBackup, parseBackup, type ParsedBackup } from '../../domain/backup';
+import type { MyProduct } from '../../domain/nutrition/myProducts';
 import { currentContent } from '../../domain/recipe';
 import { disconnect, leaveDemo, savedSyncConfig, useSyncState } from '../../data/backend';
-import { deleteRecipe, isDemo, resetDemoData, restoreRecipe, useRecipes } from '../../data/store';
+import { deleteRecipe, importProducts, importRecipes, isDemo, resetDemoData, restoreRecipe, useProducts, useRecipes } from '../../data/store';
 import type { Recipe } from '../../domain/types';
 import { navigate } from '../../router';
 import { Empty, Section, Switch } from '../components/Controls';
 import { Icon } from '../components/Icon';
 import { RecipeImage } from '../components/RecipeImage';
+import { MyProductsPanel } from '../components/MyProductsPanel';
 import { TopBar } from '../components/TopBar';
 import { updateSettings, useSettings } from '../settings';
+import { recipeCount } from '../format';
 import { toast } from '../toast';
 
 export function MoreScreen() {
@@ -49,6 +54,10 @@ export function MoreScreen() {
         </div>
       </Section>
 
+      <Section title="Meine Produkte">
+        <MyProductsPanel />
+      </Section>
+
       <Section title="Über Mashi">
         <div className="panel">
           <p><span lang="ko">맛있다</span> <em>(mashitda)</em> heißt auf Koreanisch „es schmeckt“. Mashi ist dein persönliches Kochbuch – es wächst mit jedem Rezept, das du wirklich ausprobiert hast.</p>
@@ -58,7 +67,10 @@ export function MoreScreen() {
 
       <Section title="Synchronisation">
         {isDemo() ? <DemoPanel /> : <SyncPanel />}
-        <button className="btn btn--ghost btn--block" onClick={() => downloadBackup(all)}>Sicherung herunterladen</button>
+      </Section>
+
+      <Section title="Sicherung">
+        <BackupPanel recipes={all} />
       </Section>
     </main>
   );
@@ -118,11 +130,77 @@ function DemoPanel() {
 }
 
 /** Alle Rezepte als JSON-Datei – eine Sicherung, die unabhängig vom Server ist. */
-function downloadBackup(recipes: Recipe[]) {
-  const blob = new Blob([JSON.stringify({ app: "mashi", exportedAt: new Date().toISOString(), recipes }, null, 2)], { type: "application/json" });
+function downloadBackup(recipes: Recipe[], products: MyProduct[]) {
+  const blob = new Blob([JSON.stringify(createBackup(recipes, products), null, 2)], { type: "application/json" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
   a.download = `mashi-sicherung-${new Date().toISOString().slice(0, 10)}.json`;
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+/**
+ * Sicherung herunterladen und wieder einspielen. Beim Einspielen erst eine Vorschau –
+ * übernommen wird nur nach Bestätigung. Vorhandene Rezepte werden zusammengeführt.
+ */
+function BackupPanel({ recipes }: { recipes: Recipe[] }) {
+  const products = useProducts();
+  const input = useRef<HTMLInputElement>(null);
+  const [preview, setPreview] = useState<(ParsedBackup & { fileName: string }) | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const onFile = async (file: File | undefined) => {
+    if (input.current) input.current.value = ''; // dieselbe Datei später erneut wählbar
+    if (!file) return;
+    setError(null);
+    try {
+      setPreview({ ...parseBackup(JSON.parse(await file.text())), fileName: file.name });
+    } catch (e) {
+      setPreview(null);
+      setError(e instanceof SyntaxError ? 'Die Datei ist kein gültiges JSON.' : (e as Error).message);
+    }
+  };
+
+  const existingIds = new Set(recipes.map((r) => r.id));
+  const known = preview ? preview.recipes.filter((r) => existingIds.has(r.id)).length : 0;
+
+  const apply = () => {
+    if (!preview) return;
+    const { added, merged } = importRecipes(preview.recipes);
+    const prods = importProducts(preview.products);
+    toast(`${recipeCount(added)} neu${merged ? `, ${merged} zusammengeführt` : ''}${prods ? ` · ${prods} Produkt${prods === 1 ? '' : 'e'}` : ''}`);
+    setPreview(null);
+  };
+
+  return (
+    <div className="panel stack">
+      <p className="muted small">Alle Rezepte als Datei auf diesem Gerät speichern – oder eine solche Datei wieder einspielen.</p>
+      <div className="row-2">
+        <button className="btn btn--ghost" onClick={() => downloadBackup(recipes, products)}>Herunterladen</button>
+        <button className="btn btn--ghost" onClick={() => input.current?.click()}>Einspielen …</button>
+      </div>
+      <input ref={input} type="file" accept="application/json,.json" hidden onChange={(e) => onFile(e.target.files?.[0])} />
+      {error && <p className="error" role="alert">{error}</p>}
+
+      {preview && (
+        <div className="backup-preview">
+          <p><strong>{preview.fileName}</strong></p>
+          <p className="small">
+            {recipeCount(preview.recipes.length)} gefunden
+            {known > 0 && <> · davon {known} schon vorhanden (werden zusammengeführt, nichts geht verloren)</>}
+            {preview.products.length > 0 && <> · dazu {preview.products.length} von „Meine Produkte“</>}
+            {preview.rejected > 0 && <> · {preview.rejected} unvollständig, werden übersprungen</>}
+          </p>
+          <ul className="backup-preview__list">
+            {preview.recipes.slice(0, 8).map((r) => <li key={r.id}>{currentContent(r).title}</li>)}
+            {preview.recipes.length > 8 && <li className="muted">… und {preview.recipes.length - 8} weitere</li>}
+          </ul>
+          <div className="row-gap">
+            <button className="btn btn--primary" disabled={!preview.recipes.length && !preview.products.length} onClick={apply}>Einspielen</button>
+            <button className="btn btn--ghost" onClick={() => setPreview(null)}>Abbrechen</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }

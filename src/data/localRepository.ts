@@ -1,3 +1,4 @@
+import type { MyProduct } from '../domain/nutrition/myProducts';
 import type { Recipe } from '../domain/types';
 import { createMockRecipes } from './mockRecipes';
 import type { RecipeRepository } from './repository';
@@ -8,6 +9,7 @@ import type { RecipeRepository } from './repository';
  */
 // v2: Platzhalterbilder haben 'motif' statt 'emoji' – alte v1-Daten werden nicht mehr gelesen.
 const KEY = 'mashi-recipes-v2';
+const PRODUCTS_KEY = 'mashi-products-v1';
 
 export class LocalRecipeRepository implements RecipeRepository {
   private read(): Recipe[] {
@@ -44,6 +46,22 @@ export class LocalRecipeRepository implements RecipeRepository {
 
   async remove(id: string) {
     this.write(this.read().filter((r) => r.id !== id));
+  }
+
+  async loadProducts(): Promise<MyProduct[]> {
+    try {
+      return JSON.parse(localStorage.getItem(PRODUCTS_KEY) ?? '[]') as MyProduct[];
+    } catch {
+      return [];
+    }
+  }
+
+  async saveProducts(products: MyProduct[]) {
+    try {
+      localStorage.setItem(PRODUCTS_KEY, JSON.stringify(products));
+    } catch (e) {
+      console.warn('Mashi: Speichern fehlgeschlagen', e);
+    }
   }
 
   /** Nur für den Prototyp: Beispieldaten wiederherstellen. */

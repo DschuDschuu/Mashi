@@ -25,11 +25,11 @@ const ROWS: Row[] = [
   ['sesam', ['sesam', 'sesamsaat', 'sesamkörner'], 573, 17.7, 23, 49.7, { portions: { EL: 9, TL: 3 } }],
   ['olivenoel', ['olivenöl'], 884, 0, 0, 100, { density: 0.92 }],
   ['rapsoel', ['rapsöl', 'öl', 'pflanzenöl', 'neutrales öl'], 884, 0, 0, 100, { density: 0.92 }],
-  ['pasta', ['pasta', 'nudeln', 'spaghetti', 'penne', 'fusilli', 'linguine'], 355, 12.5, 71, 1.5],
+  ['pasta', ['pasta', 'nudeln', 'spaghetti', 'penne', 'fusilli', 'linguine', 'hörnchennudeln', 'makkaroni', 'farfalle', 'rigatoni'], 355, 12.5, 71, 1.5],
   ['lasagneplatten', ['lasagneplatten', 'lasagneblätter'], 355, 12, 71, 1.5],
-  ['parmesan', ['parmesan', 'parmigiano'], 392, 35, 3.2, 26, { portions: { EL: 6 } }],
+  ['parmesan', ['parmesan', 'parmigiano', 'parmigiano reggiano'], 392, 35, 3.2, 26, { portions: { EL: 6 } }],
   ['zitronensaft', ['zitronensaft', 'zitrone'], 25, 0.4, 7, 0.2, { portions: { Stück: 45 } }],
-  ['basilikum', ['basilikum'], 23, 3, 2.7, 0.6, { portions: { Handvoll: 10, Bund: 20 } }],
+  ['basilikum', ['basilikum', 'basilikumblättchen', 'basilikumblätter'], 23, 3, 2.7, 0.6, { portions: { Handvoll: 10, Bund: 20 } }],
   ['haferflocken', ['haferflocken', 'zarte haferflocken'], 370, 13.5, 58.7, 7],
   ['ei', ['ei', 'eier'], 143, 12.6, 0.7, 9.5, { portions: { Stück: 55 } }],
   ['banane', ['banane'], 89, 1.1, 23, 0.3, { portions: { Stück: 120 } }],
@@ -53,16 +53,47 @@ const ROWS: Row[] = [
   ['mehl', ['mehl', 'weizenmehl'], 350, 10, 72, 1],
   ['paprikapulver', ['paprikapulver', 'geräuchertes paprikapulver'], 282, 14, 54, 13, { portions: { TL: 2.3, EL: 7 } }],
   ['griech-joghurt', ['griechischer joghurt', 'joghurt'], 125, 4.5, 4, 10],
-  ['mozzarella', ['mozzarella', 'geriebener mozzarella'], 254, 18, 1.5, 19],
+  ['mozzarella', ['mozzarella', 'geriebener mozzarella', 'mini-mozzarella', 'mozzarella-kugeln'], 254, 18, 1.5, 19],
   ['butter', ['butter'], 741, 0.7, 0.6, 83, { portions: { EL: 12, TL: 4 } }],
   ['karotte', ['karotte', 'karotten', 'möhre', 'möhren'], 36, 0.9, 7.5, 0.2, { portions: { Stück: 80 } }],
   ['hokkaido', ['hokkaido', 'hokkaidokürbis', 'kürbis'], 40, 1.7, 8, 0.2],
-  ['gemuesebruehe', ['gemüsebrühe', 'brühe'], 5, 0.2, 0.5, 0.2],
+  ['gemuesebruehe', ['gemüsebrühe', 'brühe', 'hühnerbrühe', 'geflügelbrühe'], 5, 0.2, 0.5, 0.2],
   ['mango', ['mango'], 60, 0.8, 15, 0.4, { portions: { Stück: 300 } }],
   ['chiasamen', ['chiasamen', 'chia'], 486, 17, 42, 31, { portions: { EL: 12, TL: 4 } }],
   ['erbsen', ['erbsen', 'tk-erbsen'], 81, 5.4, 14, 0.4],
+  // Milchprodukte (Hüttenkäse: Variante mit 2 % Fett)
+  ['huettenkaese', ['hüttenkäse', 'körniger frischkäse', 'cottage cheese'], 82, 11, 3.5, 2.3],
+  ['frischkaese-light', ['light-frischkäse', 'frischkäse light', 'light frischkäse'], 150, 7.5, 4.6, 11, { portions: { EL: 20, TL: 7 } }],
+  ['frischkaese', ['frischkäse', 'doppelrahmfrischkäse'], 240, 5.5, 3.5, 23, { portions: { EL: 20, TL: 7 } }],
+  ['cheddar', ['cheddar'], 403, 25, 1.3, 33],
+  ['magermilch', ['magermilch', 'entrahmte milch'], 35, 3.4, 4.9, 0.1, { density: 1.03 }],
+  ['milch-fettarm', ['fettarme milch', 'milch fettarm', 'teilentrahmte milch'], 47, 3.4, 4.9, 1.5, { density: 1.03 }],
+  // Frisches Gemüse
+  ['kirschtomaten', ['kirschtomaten', 'cherrytomaten', 'cocktailtomaten', 'tomaten', 'tomate'], 18, 0.9, 2.6, 0.2, { portions: { Stück: 15 } }],
+  // Fleisch – roh gewogen; knusprig gebacken tropft ein Teil des Fetts ab
+  ['bacon', ['bacon', 'frühstücksspeck', 'speck', 'speckwürfel', 'bauchspeck'], 400, 13, 1, 38, { portions: { Stück: 17 } }],
+  // Saucen & Würzen
+  ['chilisauce', ['chilisauce', 'chili-sauce'], 100, 1, 22, 0.3],
+  ['apfelessig', ['apfelessig', 'essig', 'weißweinessig'], 21, 0, 0.9, 0],
+  ['worcestershire', ['worcestershiresauce', 'worcestersauce', 'worcestershire-sauce'], 78, 0, 19.5, 0],
+  // Pulver ≠ fertige Brühe: 240 statt ~5 kcal. Deshalb nur mit „Pulver“ im Namen.
+  ['huehnerbruehe-pulver', ['hühnerbrühe-pulver', 'brühpulver', 'hühnerbrühpulver'], 240, 10, 30, 9, { portions: { TL: 5, EL: 12 } }],
+  // Monsieur-Cuisine-Rezepte (Kühlregal- und Vorratsprodukte, Richtwerte)
+  ['tomatenmark', ['tomatenmark'], 90, 4.5, 15, 0.5, { portions: { EL: 17, TL: 6 } }],
+  ['sahne', ['sahne', 'schlagsahne', 'kochsahne'], 292, 2.4, 3.2, 30, { density: 1.0 }],
+  ['creme-fraiche', ['crème fraîche', 'creme fraiche', 'crème fraiche'], 290, 2.3, 2.6, 30, { portions: { EL: 15 } }],
+  ['schupfnudeln', ['schupfnudeln'], 160, 4, 33, 1.2],
+  ['gnocchi', ['gnocchi'], 150, 3.5, 32, 0.4],
+  ['getrocknete-tomaten', ['getrocknete tomaten', 'getrocknete tomaten in öl'], 210, 5, 23, 13, { portions: { Stück: 8 } }],
+  ['speisestaerke', ['stärke', 'speisestärke', 'maisstärke'], 350, 0.3, 86, 0.1, { portions: { TL: 3, EL: 9 } }],
+  ['mais', ['mais', 'mais aus der dose'], 80, 2.5, 14, 1.2],
+  ['gemuese-gewuerzpaste', ['gemüse-gewürzpaste', 'gewürzpaste'], 70, 1.5, 8, 3, { portions: { TL: 6, EL: 18 } }],
+  ['ital-kraeuter', ['italienische kräuter', 'getrocknete italienische kräuter', 'kräuter der provence', 'oregano'], 0, 0, 0, 0, { negligible: true }],
+  ['thymian', ['thymian', 'thymianblättchen'], 0, 0, 0, 0, { negligible: true }],
+  ['wasser', ['wasser', 'kochendes wasser'], 0, 0, 0, 0, { negligible: true }],
   ['salz', ['salz', 'meersalz'], 0, 0, 0, 0, { negligible: true, portions: { TL: 6, Prise: 0.4 } }],
   ['pfeffer', ['pfeffer', 'schwarzer pfeffer', 'salz und pfeffer', 'salz & pfeffer'], 0, 0, 0, 0, { negligible: true }],
+  ['muskat', ['muskat', 'muskatnuss', 'muskatnuss gerieben'], 0, 0, 0, 0, { negligible: true, portions: { Prise: 0.2 } }],
   ['chiliflocken', ['chiliflocken', 'chili', 'gochugaru'], 280, 12, 50, 14, { negligible: true, portions: { TL: 2, Prise: 0.3 } }],
 ];
 
@@ -70,10 +101,14 @@ const PROVIDER = 'mashi-lokal';
 
 const FOODS: FoodEntry[] = ROWS.map(([id, aliases, kcal, protein, carbs, fat, extra]) => ({
   ref: { provider: PROVIDER, foodId: id },
-  name: aliases[0][0].toUpperCase() + aliases[0].slice(1),
+  // Anzeigename: jedes Wort groß, auch nach Bindestrich – „Griechischer Joghurt“, „Hühnerbrühe-Pulver“
+  name: aliases[0].replace(/(^|[\s-])(\p{L})/gu, (_m, sep: string, ch: string) => sep + ch.toUpperCase()),
   per100g: { kcal, protein, carbs, fat } satisfies Nutrients,
   ...extra,
 }));
+
+/** Alle allgemeinen Lebensmittel (für „Meine Produkte“: was soll ein Produkt ersetzen?). */
+export const FOOD_CHOICES: { id: string; name: string }[] = FOODS.filter((f) => !f.negligible).map((f) => ({ id: f.ref.foodId, name: f.name }));
 
 /** Klammern und Zusätze entfernen: „Paprika (rot oder bunt)“ → „paprika“ */
 export function normalizeName(name: string): string {

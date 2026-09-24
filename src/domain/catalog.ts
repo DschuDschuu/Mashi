@@ -19,6 +19,7 @@ export const DEVICES: CatalogEntry[] = [
   { id: 'airfryer', label: 'Airfryer', tint: 'mint' },
   { id: 'monsieur-cuisine', label: 'Monsieur Cuisine', tint: 'peach' },
   { id: 'mikrowelle', label: 'Mikrowelle', tint: 'sand' },
+  { id: 'slow-cooker', label: 'Slow Cooker', tint: 'butter' },
 ];
 
 export const CATEGORIES: CatalogEntry[] = [

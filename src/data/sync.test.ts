@@ -127,3 +127,36 @@ describe('normalizeDbUrl', () => {
     expect(normalizeDbUrl('http://127.0.0.1:5984/mashi')).toBe('http://127.0.0.1:5984/mashi');
   });
 });
+
+describe('Meine Produkte in PouchDB', () => {
+  const product = (name: string, updatedAt: string) => ({
+    id: 'p-milch', name, replaces: ['milch'], per100g: { kcal: 35, protein: 3.4, carbs: 5, fat: 0.1 }, updatedAt,
+  });
+
+  it('speichert und lädt die Liste; ohne Liste ist sie leer', async () => {
+    const repo = new PouchRecipeRepository(newDb());
+    expect(await repo.loadProducts()).toEqual([]);
+    await repo.saveProducts([product('Milch A', '2026-01-01')]);
+    await repo.saveProducts([product('Milch B', '2026-01-02')]); // zweites Speichern braucht die Revision
+    expect((await repo.loadProducts()).map((p) => p.name)).toEqual(['Milch B']);
+    expect(await repo.list()).toEqual([]); // die Produktliste ist kein Rezept
+  });
+
+  it('löst einen Offline-Konflikt: die zuletzt geänderte Liste gewinnt, kein Konflikt bleibt', async () => {
+    const phoneDb = newDb();
+    const pcDb = newDb();
+    const phone = new PouchRecipeRepository(phoneDb);
+    const pc = new PouchRecipeRepository(pcDb);
+    await phone.saveProducts([product('Start', '2026-01-01')]);
+    await syncOnce(phoneDb, pcDb);
+
+    await phone.saveProducts([product('Vom Handy', '2026-01-02')]);
+    await new Promise((r) => setTimeout(r, 5));
+    await pc.saveProducts([product('Vom PC (später)', '2026-01-03')]);
+    await syncOnce(phoneDb, pcDb);
+
+    expect((await pc.loadProducts()).map((p) => p.name)).toEqual(['Vom PC (später)']);
+    const raw = await (pcDb as unknown as PouchDB.Database).get('meine-produkte', { conflicts: true });
+    expect(raw._conflicts ?? []).toHaveLength(0);
+  });
+});

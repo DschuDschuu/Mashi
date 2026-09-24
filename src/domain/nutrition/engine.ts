@@ -23,7 +23,10 @@ export function computeNutrition(content: RecipeContent, table: FoodTable): Nutr
 
     if (ing.optional) return { ...base, status: 'ignored', food: match?.food };
     if (!match) return { ...base, status: ing.amount === undefined ? 'no-amount' : 'unmatched', grams: gramsIfObvious(ing.amount, ing.unit) };
-    if (ing.amount === undefined) return { ...base, status: match.food.negligible ? 'ignored' : 'no-amount', food: match.food };
+    // Salz, Pfeffer, Kräuter, Wasser: praktisch keine Kalorien – egal in welcher Menge oder Einheit
+    // („3 Prisen“) dürfen sie die Genauigkeit des ganzen Rezepts nicht herabstufen.
+    if (match.food.negligible) return { ...base, status: 'ignored', food: match.food };
+    if (ing.amount === undefined) return { ...base, status: 'no-amount', food: match.food };
 
     const conv = toGrams(ing.amount, ing.unit, match.food);
     if (!conv) return { ...base, status: 'no-weight', food: match.food };

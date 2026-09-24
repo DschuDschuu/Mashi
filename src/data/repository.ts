@@ -1,3 +1,4 @@
+import type { MyProduct } from '../domain/nutrition/myProducts';
 import type { Recipe } from '../domain/types';
 
 /**
@@ -11,6 +12,9 @@ export interface RecipeRepository {
   list(): Promise<Recipe[]>;
   save(recipe: Recipe): Promise<void>;
   remove(id: string): Promise<void>;
+  /** „Meine Produkte“ – eine Liste pro Kochbuch, wird wie die Rezepte abgeglichen. */
+  loadProducts(): Promise<MyProduct[]>;
+  saveProducts(products: MyProduct[]): Promise<void>;
   /**
    * Meldet Änderungen, die NICHT aus dieser App-Sitzung stammen –
    * z. B. Rezepte, die der Abgleich vom Handy auf den PC geholt hat.

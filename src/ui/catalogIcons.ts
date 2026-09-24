@@ -12,6 +12,7 @@ const DEVICE_ICONS: Record<string, IconName> = {
   airfryer: 'airfryer',
   'monsieur-cuisine': 'mixer',
   mikrowelle: 'microwave',
+  'slow-cooker': 'slowcooker',
 };
 
 const CATEGORY_ICONS: Record<string, IconName> = {

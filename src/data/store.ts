@@ -1,4 +1,6 @@
 import { useSyncExternalStore } from 'react';
+import { mergeRecipes } from '../domain/merge';
+import type { MyProduct } from '../domain/nutrition/myProducts';
 import { currentContent, currentVersion, newId, withNewVersion } from '../domain/recipe';
 import { canTransition } from '../domain/status';
 import type { Rating, Recipe, RecipeContent, RecipeImage, RecipeSource, RecipeStatus } from '../domain/types';
@@ -18,6 +20,7 @@ let repo: RecipeRepository;
 const pending = new Map<string, number>();
 
 let recipes: Recipe[] = [];
+let products: MyProduct[] = [];
 let ready = false;
 const listeners = new Set<() => void>();
 
@@ -55,7 +58,7 @@ const sameContent = (a: RecipeContent, b: RecipeContent) => JSON.stringify(a) ==
 
 export async function initStore(r: RecipeRepository) {
   repo = r;
-  recipes = await repo.list();
+  [recipes, products] = await Promise.all([repo.list(), repo.loadProducts()]);
   ready = true;
   emit();
   repo.onExternalChange?.(scheduleReload);
@@ -66,7 +69,8 @@ let reloadTimer: ReturnType<typeof setTimeout> | undefined;
 function scheduleReload() {
   clearTimeout(reloadTimer);
   reloadTimer = setTimeout(async () => {
-    const fresh = await repo.list();
+    const [fresh, freshProducts] = await Promise.all([repo.list(), repo.loadProducts()]);
+    products = freshProducts;
     const inMemory = new Map(recipes.map((r) => [r.id, r]));
     recipes = fresh.map((r) => (pending.has(r.id) ? inMemory.get(r.id) ?? r : r));
     for (const id of pending.keys()) if (!fresh.some((r) => r.id === id) && inMemory.has(id)) recipes.unshift(inMemory.get(id)!);
@@ -87,6 +91,15 @@ export function useRecipes(): Recipe[] {
 
 export function useRecipe(id: string | undefined): Recipe | undefined {
   return useSyncExternalStore(subscribe, () => recipes.find((r) => r.id === id));
+}
+
+export function useProducts(): MyProduct[] {
+  return useSyncExternalStore(subscribe, () => products);
+}
+
+/** Für Berechnungen außerhalb von React (z. B. Nährwerte auf den Rezeptkarten). */
+export function currentProducts(): MyProduct[] {
+  return products;
 }
 
 export function useStoreReady(): boolean {
@@ -208,6 +221,47 @@ export function deleteRecipe(id: string) {
   recipes = recipes.filter((r) => r.id !== id);
   emit();
   void repo.remove(id);
+}
+
+/**
+ * Rezepte aus einer Sicherungsdatei übernehmen. Gibt es ein Rezept schon (gleiche ID),
+ * wird zusammengeführt statt überschrieben – wie beim Abgleich zwischen Geräten,
+ * damit keine Version und keine Bewertung verloren geht.
+ */
+export function importRecipes(list: Recipe[]): { added: number; merged: number } {
+  let added = 0;
+  let merged = 0;
+  for (const r of list) {
+    const existing = recipes.find((x) => x.id === r.id);
+    if (existing) {
+      commit(mergeRecipes(existing, r));
+      merged++;
+    } else {
+      commit(r);
+      added++;
+    }
+  }
+  return { added, merged };
+}
+
+/**
+ * „Meine Produkte“ speichern. Danach bekommt die Rezeptliste bewusst eine NEUE Identität
+ * (gleiche Rezepte): So rechnen auch alle Rezeptkarten ihre Nährwerte neu.
+ */
+/** Produkte aus einer Sicherung übernehmen: gleiche ID = ersetzen, neue = anhängen. */
+export function importProducts(incoming: MyProduct[]): number {
+  if (!incoming.length) return 0;
+  const byId = new Map(products.map((p) => [p.id, p]));
+  for (const p of incoming) byId.set(p.id, p);
+  saveProducts([...byId.values()]);
+  return incoming.length;
+}
+
+export function saveProducts(next: MyProduct[]) {
+  products = next;
+  recipes = [...recipes];
+  emit();
+  repo.saveProducts(next).catch((e) => console.error('Mashi: Produkte speichern fehlgeschlagen', e));
 }
 
 export function isDemo(): boolean {

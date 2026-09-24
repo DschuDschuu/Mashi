@@ -164,3 +164,16 @@ describe('Versionen – Schritte verschieben', () => {
     expect(diffContent(content(['a', 'b', 'c']), content(['a', 'c']))).toEqual([{ kind: 'step-removed', index: 1 }]);
   });
 });
+
+describe('Nährwerte – vernachlässigbare Zutaten', () => {
+  it('„3 Prisen Pfeffer“ und Wasser stufen ein Rezept nicht auf „geschätzt“ herab', () => {
+    const n = computeNutrition(base([
+      { id: 'a', name: 'Reis', amount: 100, unit: 'g' },
+      { id: 'b', name: 'Pfeffer', amount: 3, unit: 'Prise' },
+      { id: 'c', name: 'kochendes Wasser', amount: 800, unit: 'g' },
+      { id: 'd', name: 'getrocknete italienische Kräuter', amount: 2, unit: 'TL' },
+    ], 1), localFoodTable);
+    expect(n.accuracy).toBe('berechnet');
+    expect(n.perServing!.kcal).toBeCloseTo(350);
+  });
+});
