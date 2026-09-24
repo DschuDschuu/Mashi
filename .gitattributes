@@ -1,0 +1,14 @@
+# Git soll Textdateien selbst erkennen und im Repo mit LF speichern.
+* text=auto
+
+# Diese Dateien laufen auf dem Linux-Server bzw. in GitHub Actions und brauchen
+# IMMER LF – auch in der Arbeitskopie unter Windows. Mit CRLF bricht z. B. setup.sh
+# mit „$'\r': command not found“ ab.
+*.sh   text eol=lf
+*.ini  text eol=lf
+*.yml  text eol=lf
+*.yaml text eol=lf
+.env.example text eol=lf
+
+# Binärdateien nie anfassen
+*.png binary
