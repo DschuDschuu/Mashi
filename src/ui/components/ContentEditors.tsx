@@ -36,6 +36,12 @@ export function IngredientEditor({ items, onChange, newItem }: { items: Ingredie
 /** `ingredients`: die aktuelle Zutatenliste des Formulars – daraus wählt man pro Schritt aus. */
 export function StepEditor({ steps, ingredients, onChange }: { steps: Step[]; ingredients: Ingredient[]; onChange: (s: Step[]) => void }) {
   const update = (idx: number, patch: Partial<Step>) => onChange(steps.map((s, i) => (i === idx ? { ...s, ...patch } : s)));
+  /** Schritt um eine Position verschieben (-1 = nach oben). Der Schritt behält ID, Timer und Zutaten. */
+  const move = (idx: number, by: -1 | 1) => {
+    const next = [...steps];
+    [next[idx], next[idx + by]] = [next[idx + by], next[idx]];
+    onChange(next);
+  };
   return (
     <div className="editor">
       <h3 className="small muted">Zubereitung</h3>
@@ -52,9 +58,17 @@ export function StepEditor({ steps, ingredients, onChange }: { steps: Step[]; in
             </label>
             <StepIngredientPicker step={s} ingredients={ingredients} onChange={(ingredientIds) => update(idx, { ingredientIds })} />
           </div>
-          <button type="button" className="iconbtn iconbtn--sm" aria-label={`Schritt ${idx + 1} entfernen`} onClick={() => onChange(steps.filter((_, i) => i !== idx))}>
-            <Icon name="close" size={16} />
-          </button>
+          <div className="editor__stepactions">
+            <button type="button" className="iconbtn iconbtn--sm" aria-label={`Schritt ${idx + 1} nach oben`} disabled={idx === 0} onClick={() => move(idx, -1)}>
+              <Icon name="up" size={18} />
+            </button>
+            <button type="button" className="iconbtn iconbtn--sm" aria-label={`Schritt ${idx + 1} nach unten`} disabled={idx === steps.length - 1} onClick={() => move(idx, 1)}>
+              <Icon name="down" size={18} />
+            </button>
+            <button type="button" className="iconbtn iconbtn--sm" aria-label={`Schritt ${idx + 1} entfernen`} onClick={() => onChange(steps.filter((_, i) => i !== idx))}>
+              <Icon name="close" size={16} />
+            </button>
+          </div>
         </div>
       ))}
       <button type="button" className="link" onClick={() => onChange([...steps, { id: newId('s'), text: '' }])}><Icon name="plus" size={16} /> Schritt hinzufügen</button>

@@ -1,6 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { CATEGORIES, DEVICES } from '../../domain/catalog';
-import { activeFilterCount, filterRecipes, HIGH_PROTEIN_G, type RecipeFilter } from '../../domain/filter';
+import { activeFilterCount, activeFilters, filterRecipes, HIGH_PROTEIN_G, removeFilter, type RecipeFilter } from '../../domain/filter';
 import { currentContent } from '../../domain/recipe';
 import type { RecipeStatus } from '../../domain/types';
 import { useRecipes } from '../../data/store';
@@ -9,6 +9,7 @@ import { ChipSelect, Empty } from '../components/Controls';
 import { Icon } from '../components/Icon';
 import { deviceIcon } from '../catalogIcons';
 import { RecipeCard } from '../components/RecipeCard';
+import { recipeCount } from '../format';
 import { recipeNutrition } from '../useNutrition';
 
 const SEGMENTS: { value: 'alle' | RecipeStatus; label: string }[] = [
@@ -45,12 +46,13 @@ export function CookbookScreen({ route }: { route: Route }) {
   );
   const result = filterRecipes(recipes, { ...f, statuses: segment === 'alle' ? undefined : [segment] }, recipeNutrition);
   const count = activeFilterCount(f);
+  const badges = activeFilters(f);
 
   return (
     <main className="screen screen--tabbed">
       <header className="page-head">
         <h1>Mein Kochbuch</h1>
-        <span className="muted small">{result.length} Rezepte</span>
+        <span className="muted small">{recipeCount(result.length)}</span>
       </header>
 
       <div className="search-row">
@@ -63,6 +65,26 @@ export function CookbookScreen({ route }: { route: Route }) {
           {count > 0 && <span className="iconbtn__count">{count}</span>}
         </button>
       </div>
+
+      {/* Aktive Filter als Badges – einzeln abwählbar, ohne das Filtermenü zu öffnen.
+          Bei offenem Menü ausgeblendet: dort sind dieselben Filter schon markiert. */}
+      {!open && badges.length > 0 && (
+        <div className="active-filters" aria-label="Aktive Filter">
+          {badges.map((a) => (
+            <button
+              key={a.kind + ('value' in a ? a.value : '')}
+              className="afilter"
+              onClick={() => setF(removeFilter(f, a))}
+              aria-label={`Filter „${a.label}“ entfernen`}
+            >
+              {a.kind === 'device' && <Icon name={deviceIcon(a.value)} size={15} />}
+              {a.label}
+              <Icon name="close" size={14} />
+            </button>
+          ))}
+          {badges.length > 1 && <button className="link link--muted" onClick={() => setF({ query: f.query })}>Alle entfernen</button>}
+        </div>
+      )}
 
       <div className="segments" role="tablist">
         {SEGMENTS.map((s) => (

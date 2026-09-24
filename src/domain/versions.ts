@@ -8,6 +8,7 @@ export type ContentChange =
   | { kind: 'step-changed'; index: number }
   | { kind: 'step-added'; index: number }
   | { kind: 'step-removed'; index: number }
+  | { kind: 'steps-reordered' }
   | { kind: 'field-changed'; field: 'Titel' | 'Portionen' | 'Zubereitungszeit' | 'Kochzeit'; before: string; after: string };
 
 const label = (i: Ingredient) => [formatQuantity(i), i.name].filter(Boolean).join(' ');
@@ -48,16 +49,24 @@ export function diffContent(before: RecipeContent, after: RecipeContent): Conten
     if (!afterIds.has(ing.id)) changes.push({ kind: 'ingredient-removed', name: ing.name, before: label(ing) });
   }
 
-  const n = Math.max(before.steps.length, after.steps.length);
-  for (let i = 0; i < n; i++) {
-    const a = before.steps[i];
-    const b = after.steps[i];
-    if (!a) changes.push({ kind: 'step-added', index: i });
-    else if (!b) changes.push({ kind: 'step-removed', index: i });
-    else if (a.text.trim() !== b.text.trim() || a.timerMinutes !== b.timerMinutes || !sameIds(a.ingredientIds, b.ingredientIds)) {
+  // Schritte wie Zutaten über ihre ID zuordnen, nicht über die Position –
+  // sonst wäre ein verschobener Schritt „Schritt 2, 3, 4 angepasst“.
+  const stepsBefore = new Map(before.steps.map((st, i) => [st.id, { st, i }]));
+  const stepIdsAfter = new Set(after.steps.map((st) => st.id));
+  after.steps.forEach((b, i) => {
+    const old = stepsBefore.get(b.id);
+    if (!old) changes.push({ kind: 'step-added', index: i });
+    else if (old.st.text.trim() !== b.text.trim() || old.st.timerMinutes !== b.timerMinutes || !sameIds(old.st.ingredientIds, b.ingredientIds)) {
       changes.push({ kind: 'step-changed', index: i });
     }
-  }
+  });
+  before.steps.forEach((a, i) => {
+    if (!stepIdsAfter.has(a.id)) changes.push({ kind: 'step-removed', index: i });
+  });
+  // Reihenfolge: nur die Schritte vergleichen, die es vorher und nachher gibt
+  const keptBefore = before.steps.filter((st) => stepIdsAfter.has(st.id)).map((st) => st.id);
+  const keptAfter = after.steps.filter((st) => stepsBefore.has(st.id)).map((st) => st.id);
+  if (keptBefore.join() !== keptAfter.join()) changes.push({ kind: 'steps-reordered' });
 
   return changes;
 }
@@ -70,6 +79,7 @@ export function describeChange(c: ContentChange): string {
     case 'step-changed': return `Schritt ${c.index + 1} angepasst`;
     case 'step-added': return `Schritt ${c.index + 1} hinzugefügt`;
     case 'step-removed': return `Schritt ${c.index + 1} entfernt`;
+    case 'steps-reordered': return 'Reihenfolge der Schritte geändert';
     case 'field-changed': return `${c.field}: ${c.before} → ${c.after}`;
   }
 }

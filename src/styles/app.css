@@ -551,3 +551,18 @@ p { margin: 0; }
 .switch.is-on { background: var(--primary); }
 .switch.is-on > span { transform: translateX(20px); }
 @media (prefers-reduced-motion: reduce) { .switch, .switch > span { transition: none; } }
+
+/* ── Aktive Filter als Badges (Kochbuch) ─────────────────────── */
+.active-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: -6px; }
+.afilter {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 34px; padding: 0 10px 0 12px;
+  border-radius: 999px; background: var(--primary-soft); color: var(--primary-press);
+  font-size: 0.85rem; font-weight: 600;
+}
+.afilter svg:last-child { opacity: 0.65; }
+.afilter:active { background: var(--mint); }
+.active-filters .link { font-size: 0.82rem; padding: 4px 2px; }
+
+/* ── Schritte verschieben im Formular ────────────────────────── */
+.editor__stepactions { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.editor__stepactions .iconbtn:disabled { opacity: 0.25; }

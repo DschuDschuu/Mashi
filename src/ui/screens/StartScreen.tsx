@@ -8,6 +8,7 @@ import { RecipeCard } from '../components/RecipeCard';
 import { Empty, Section } from '../components/Controls';
 import { Icon } from '../components/Icon';
 import { deviceIcon } from '../catalogIcons';
+import { recipeCount } from '../format';
 
 const QUICK_DEVICES = ['herd', 'airfryer', 'backofen', 'monsieur-cuisine'];
 
@@ -45,7 +46,7 @@ export function StartScreen() {
             <button key={id} className={`quick tint-${d.tint}`} onClick={() => navigate(`/kochbuch?device=${id}`)}>
               <Icon name={deviceIcon(id)} size={30} />
               <span>{d.label}</span>
-              <small>{countFor(id)} Rezepte</small>
+              <small>{recipeCount(countFor(id))}</small>
             </button>
           );
         })}

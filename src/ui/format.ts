@@ -24,3 +24,8 @@ export function relativeDay(iso: string): string {
   if (days < 7) return `vor ${days} Tagen`;
   return new Date(iso).toLocaleDateString('de-DE', { day: 'numeric', month: 'short' });
 }
+
+/** „1 Rezept“, „0 Rezepte“, „5 Rezepte“ */
+export function recipeCount(n: number): string {
+  return `${n} ${n === 1 ? 'Rezept' : 'Rezepte'}`;
+}

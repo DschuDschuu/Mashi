@@ -134,3 +134,33 @@ describe('Filter', () => {
     expect(filterRecipes(recipes, { query: 'gochujang' }, nut).map((r) => r.id)).toContain('gochujang-bowl');
   });
 });
+
+describe('Versionen – Schritte verschieben', () => {
+  const content = (steps: string[]): RecipeContent => ({
+    ...base([], 2),
+    steps: steps.map((t) => ({ id: t, text: `Text ${t}` })),
+  });
+
+  it('meldet Verschieben als eine Änderung, nicht als „jeder Schritt angepasst“', () => {
+    expect(diffContent(content(['a', 'b', 'c']), content(['c', 'a', 'b']))).toEqual([{ kind: 'steps-reordered' }]);
+  });
+
+  it('ein Schritt dazwischen eingefügt ist KEIN Verschieben', () => {
+    const after = content(['a', 'b', 'c']);
+    after.steps.splice(1, 0, { id: 'neu', text: 'vergessen' });
+    expect(diffContent(content(['a', 'b', 'c']), after)).toEqual([{ kind: 'step-added', index: 1 }]);
+  });
+
+  it('verschoben und geändert: beides wird gemeldet', () => {
+    const after = content(['b', 'a']);
+    after.steps[1] = { ...after.steps[1], text: 'geändert' };
+    expect(diffContent(content(['a', 'b']), after)).toEqual([
+      { kind: 'step-changed', index: 1 },
+      { kind: 'steps-reordered' },
+    ]);
+  });
+
+  it('entfernen allein ist kein Verschieben', () => {
+    expect(diffContent(content(['a', 'b', 'c']), content(['a', 'c']))).toEqual([{ kind: 'step-removed', index: 1 }]);
+  });
+});

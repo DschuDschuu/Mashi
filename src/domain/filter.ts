@@ -1,3 +1,4 @@
+import { categoryInfo, deviceInfo } from './catalog';
 import { currentContent, totalMinutes } from './recipe';
 import { isInCookbook } from './status';
 import type { NutritionResult } from './nutrition/types';
@@ -58,9 +59,41 @@ export function filterRecipes(
   });
 }
 
+/** Zahl am Filter-Knopf – gleich der Anzahl Badges, damit beides zusammenpasst. */
 export function activeFilterCount(f: RecipeFilter): number {
-  return [
-    f.categories?.length, f.devices?.length, f.tags?.length,
-    f.maxMinutes !== undefined, f.maxKcal !== undefined, f.minProtein !== undefined, f.favoritesOnly,
-  ].filter(Boolean).length;
+  return activeFilters(f).length;
+}
+
+/** Ein aktiver Filter als Badge: was draufsteht und was genau er bedeutet. */
+export type ActiveFilter =
+  | { kind: 'device' | 'category' | 'tag'; value: string; label: string }
+  | { kind: 'maxMinutes' | 'maxKcal' | 'minProtein' | 'favorites'; label: string };
+
+/**
+ * Alle gesetzten Filter als Liste für die Badges – in der Reihenfolge des Filtermenüs.
+ * Suche und Status-Reiter zählen nicht dazu: beides ist ohnehin sichtbar.
+ */
+export function activeFilters(f: RecipeFilter): ActiveFilter[] {
+  const out: ActiveFilter[] = [];
+  for (const d of f.devices ?? []) out.push({ kind: 'device', value: d, label: deviceInfo(d).label });
+  for (const c of f.categories ?? []) out.push({ kind: 'category', value: c, label: categoryInfo(c).label });
+  if (f.maxMinutes !== undefined) out.push({ kind: 'maxMinutes', label: `≤ ${f.maxMinutes} Min.` });
+  if (f.maxKcal !== undefined) out.push({ kind: 'maxKcal', label: `≤ ${f.maxKcal} kcal` });
+  if (f.minProtein !== undefined) out.push({ kind: 'minProtein', label: `≥ ${f.minProtein} g Protein` });
+  for (const t of f.tags ?? []) out.push({ kind: 'tag', value: t, label: t });
+  if (f.favoritesOnly) out.push({ kind: 'favorites', label: 'Favoriten' });
+  return out;
+}
+
+/** Genau diesen einen Filter entfernen, alle anderen bleiben. */
+export function removeFilter(f: RecipeFilter, a: ActiveFilter): RecipeFilter {
+  switch (a.kind) {
+    case 'device': return { ...f, devices: (f.devices ?? []).filter((x) => x !== a.value) };
+    case 'category': return { ...f, categories: (f.categories ?? []).filter((x) => x !== a.value) };
+    case 'tag': return { ...f, tags: (f.tags ?? []).filter((x) => x !== a.value) };
+    case 'maxMinutes': return { ...f, maxMinutes: undefined };
+    case 'maxKcal': return { ...f, maxKcal: undefined };
+    case 'minProtein': return { ...f, minProtein: undefined };
+    case 'favorites': return { ...f, favoritesOnly: false };
+  }
 }
