@@ -6,7 +6,8 @@ import { Icon } from './Icon';
  * „Alles da“ oder „Fehlt: Pasta, Hokkaido · reicht nicht: Paprika“ – nach der Speisekammer.
  * Ohne stock (z. B. leere Speisekammer) zeigt sie nichts: dann weiß Mashi es schlicht nicht.
  */
-export function StockLine({ content, stock, max = 3 }: { content: RecipeContent; stock?: Map<string, Stock>; max?: number }) {
+/** @param compact kleine Karten: bis 2 Namen, sonst nur die Anzahl („Fehlt: 9 Zutaten“) – die Namen stehen im Rezept */
+export function StockLine({ content, stock, max = 3, compact = false }: { content: RecipeContent; stock?: Map<string, Stock>; max?: number; compact?: boolean }) {
   if (!stock?.size) return null;
   const { missing, short } = stockSummary(content, stock);
   if (!missing.length && !short.length) {
@@ -16,6 +17,7 @@ export function StockLine({ content, stock, max = 3 }: { content: RecipeContent;
   const clean = (names: string[]) => [...new Set(names.map((n) => n.replace(/\s*\(.*?\)/g, '').trim()))];
   const list = (names: string[]) => {
     const c = clean(names);
+    if (compact) return c.length <= 2 ? c.join(', ') : `${c.length} Zutaten`;
     return c.slice(0, max).join(', ') + (c.length > max ? ` und ${c.length - max} weitere` : '');
   };
   return (

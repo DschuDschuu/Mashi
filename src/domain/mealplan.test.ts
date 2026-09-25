@@ -124,9 +124,10 @@ describe('Einkaufsliste', () => {
   });
 
   it('markiert Grundvorrat, damit er ausgeblendet werden kann', () => {
-    const a = make('a', 'A', [{ id: '1', name: 'Olivenöl', amount: 2, unit: 'EL' }, { id: '2', name: 'Salz & Pfeffer' }, { id: '3', name: 'Reis', amount: 100, unit: 'g' }]);
+    const a = make('a', 'A', [{ id: '1', name: 'Olivenöl', amount: 2, unit: 'EL' }, { id: '2', name: 'Salz & Pfeffer' }, { id: '3', name: 'Hähnchenbrust', amount: 100, unit: 'g' }]);
+    // (Reis wäre vorbelegt „Immer im Haus“ – hier geht es um den festen Grundvorrat)
     const list = buildShoppingList(plan(['a', 2]), [a], localFoodTable);
-    expect(list.filter((i) => !i.pantry).map((i) => i.name)).toEqual(['Reis']);
+    expect(list.filter((i) => !i.pantry).map((i) => i.name)).toEqual(['Hähnchenbrust']);
   });
 
   it('optionale Zutaten stehen nicht drauf', () => {

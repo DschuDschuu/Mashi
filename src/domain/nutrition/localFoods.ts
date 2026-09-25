@@ -56,7 +56,7 @@ const ROWS: Row[] = [
   ['mozzarella', ['mozzarella', 'geriebener mozzarella', 'mini-mozzarella', 'mozzarella-kugeln'], 254, 18, 1.5, 19],
   ['butter', ['butter'], 741, 0.7, 0.6, 83, { portions: { EL: 12, TL: 4 } }],
   ['karotte', ['karotte', 'karotten', 'möhre', 'möhren'], 36, 0.9, 7.5, 0.2, { portions: { Stück: 80 } }],
-  ['hokkaido', ['hokkaido', 'hokkaidokürbis', 'kürbis'], 40, 1.7, 8, 0.2],
+  ['hokkaido', ['hokkaido', 'hokkaidokürbis', 'kürbis'], 40, 1.7, 8, 0.2, { portions: { Stück: 1000 } }],
   ['gemuesebruehe', ['gemüsebrühe', 'brühe', 'hühnerbrühe', 'geflügelbrühe'], 5, 0.2, 0.5, 0.2],
   ['mango', ['mango'], 60, 0.8, 15, 0.4, { portions: { Stück: 300 } }],
   ['chiasamen', ['chiasamen', 'chia'], 486, 17, 42, 31, { portions: { EL: 12, TL: 4 } }],

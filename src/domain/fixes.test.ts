@@ -205,7 +205,8 @@ describe('Alles da? – je Zutat', () => {
     { id: '5', name: 'Mozzarella', amount: 125, unit: 'g', optional: true },
   ]);
   it('da, knapp, fehlt, Grundvorrat – optionale Zutaten zählen nicht', () => {
-    const d = deductRecipe(pantry(item('h', 'Hähnchenbrust', 500, 'g'), item('p', 'Paprika', 1, 'Stück')), r.versions[0].content, 2, localFoodTable);
+    // ohne „Immer im Haus“ (sonst wäre Pasta nie „fehlt“)
+    const d = deductRecipe({ ...pantry(item('h', 'Hähnchenbrust', 500, 'g'), item('p', 'Paprika', 1, 'Stück')), basics: [] }, r.versions[0].content, 2, localFoodTable);
     // optionale Zutaten (5) bekommen gar keinen Status – sie fehlen nie
     expect([...d.stock.entries()]).toEqual([['1', 'da'], ['2', 'fehlt'], ['3', 'basis'], ['4', 'knapp']]);
     expect(stockSummary(r.versions[0].content, d.stock)).toEqual({ missing: ['Pasta'], short: ['Paprika'] });
@@ -216,5 +217,29 @@ describe('Alles da? – je Zutat', () => {
     const plan = { items: [{ recipeId: 'a', servings: 2 }, { recipeId: 'b', servings: 2 }], checked: [], cooked: [], updatedAt: '' };
     const dishes = plannedByDish(pantry(item('h', 'Hähnchenbrust', 500, 'g')), plan, [a, b], localFoodTable);
     expect(dishes.map((x) => x.stock.get('1'))).toEqual(['da', 'knapp']);
+  });
+});
+
+describe('„Immer im Haus“ und nicht umrechenbare Vorräte', () => {
+  const r = recipe('k', [
+    { id: '1', name: 'Hokkaido', amount: 200, unit: 'g' },
+    { id: '2', name: 'Pasta', amount: 250, unit: 'g' },
+    { id: '3', name: 'Rote Linsen', amount: 100, unit: 'g' },
+  ]);
+  const plan = { items: [{ recipeId: 'k', servings: 2 }], checked: [], cooked: [], updatedAt: '' };
+  const list = (p?: Pantry) => buildShoppingList(plan, [r], localFoodTable, p);
+
+  it('1 Stück Hokkaido reicht für 200 g – nicht mehr auf der Einkaufsliste', () => {
+    const h = list(pantry(item('h', 'Hokkaido', 1, 'Stück'))).find((i) => i.name === 'Hokkaido')!;
+    expect(h.covered).toBe(true);
+  });
+
+  it('Pasta ist vorbelegt „Immer im Haus“: Basics, nie „fehlt“ – eigene Liste ersetzt die Vorbelegung', () => {
+    const p = pantry(item('x', 'Quark', 250, 'g'));
+    expect(list(p).find((i) => i.name === 'Pasta')!.pantry).toBe(true);
+    expect(deductRecipe(p, r.versions[0].content, 2, localFoodTable).stock.get('2')).toBe('basis');
+    const own = { ...p, basics: ['Rote Linsen'] };
+    expect(list(own).find((i) => i.name === 'Pasta')!.pantry).toBe(false);
+    expect(list(own).find((i) => i.name === 'Rote Linsen')!.pantry).toBe(true);
   });
 });

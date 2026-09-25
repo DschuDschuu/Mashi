@@ -50,7 +50,7 @@ export function ShoppingScreen() {
               </button>
             ))}
           </div>
-          {view === 'basics' && <p className="muted small">Öl, Gewürze & Co. – hast du meist da. Abhaken, falls doch etwas fehlt.</p>}
+          {view === 'basics' && <p className="muted small">Öl, Gewürze und „Immer im Haus“ (einstellbar in der Speisekammer) – hast du meist da. Abhaken, falls doch etwas fehlt.</p>}
           {open.length === 0 && (
             <p className="muted">
               Alles erledigt.{' '}

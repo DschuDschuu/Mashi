@@ -1,3 +1,5 @@
+import type { PantryItem } from '../domain/pantry';
+import { formatAmount } from '../domain/scaling';
 import type { NutritionResult } from '../domain/nutrition/types';
 
 export function formatMinutes(min: number): string {
@@ -44,3 +46,7 @@ export function recipeCount(n: number): string {
 
 /** „1,70 €“ */
 export const euro = (n: number) => n.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
+
+/** „980 g“, „3 Stück“ – oder „vorhanden“, wenn die Menge unbekannt ist. */
+export const quantityLabel = (item: Pick<PantryItem, 'amount' | 'unit'>) =>
+  item.amount === undefined ? 'vorhanden' : `${formatAmount(item.amount, item.unit === 'Stück' ? 'Stück' : 'g')} ${item.unit ?? ''}`.trim();

@@ -8,13 +8,14 @@ import type { Recipe } from '../../domain/types';
 import {
   addToPlan, clearPlan, removeFromPlan, setPlanServings, togglePlanCooked, usePlan, useProducts, useRecipes,
 } from '../../data/store';
-import { navigate } from '../../router';
+import { navigate, useRoute } from '../../router';
 import { foodTable } from '../../services';
 import { Empty, Section, Stepper } from '../components/Controls';
 import { useShoppingCount } from '../useShoppingCount';
 import { useSheet } from '../useSheet';
+import { useMediaQuery } from '../useMediaQuery';
 import { UseUpBadge } from '../components/UseUpBadge';
-import { StockLine } from '../components/StockLine';
+import { PlannedGroup } from '../components/PlannedGroup';
 import { Icon, type IconName } from '../components/Icon';
 import { RecipeImage } from '../components/RecipeImage';
 import { StatusBadge } from '../components/StatusBadge';
@@ -45,7 +46,11 @@ export function PlanScreen() {
     .map((i) => ({ ...i, cooked: plan.cooked.includes(i.recipeId) }))
     // Gekochtes rutscht nach unten – oben steht, was noch ansteht
     .sort((a, b) => Number(a.cooked) - Number(b.cooked));
-  const { keys: useUp, plannedUseUp, dishStock } = useUseUp();
+  const { keys: useUp, plannedUseUp, dishes } = useUseUp();
+  // Tablet: rechts ist Platz – dort die Gruppe gleich offen
+  const wide = useMediaQuery('(min-width: 900px)');
+  // aus der Speisekammer „Für den Wochenplan reserviert ›“ → Gruppe gleich offen
+  const openReserved = useRoute().query.get('reserviert') === '1';
   const suggestions = useMemo(() => suggestRecipes(plan, recipes.filter(plannable), table, 5, new Set(useUp.keys())), [plan, recipes, table, useUp]);
   // Für das Einkaufswagen-Symbol: wie viel noch zu kaufen ist (ohne Basics wie Öl und Gewürze)
   const toBuy = useShoppingCount();
@@ -79,10 +84,12 @@ export function PlanScreen() {
                   </span>
                   <span className="suggestion__text">
                     <span className="list__title">{currentContent(recipe).title}</span>
-                    {!cooked && <StockLine content={currentContent(recipe)} stock={dishStock.get(recipe.id)} max={2} />}
-                    {costs.get(recipe.id) && <span className="small muted">ca. {euro(costs.get(recipe.id)!.total)}</span>}
                   </span>
                 </button>
+                {/* eigene Zeile unter Bild und Titel – sonst bleibt neben dem Portionen-Regler nur ein schmaler Streifen */}
+                <div className="plan-list__meta">
+                  {costs.get(recipe.id) && <span className="small muted">ca. {euro(costs.get(recipe.id)!.total)}</span>}
+                </div>
                 <div className="plan-list__servings">
                   <span className="small muted" aria-hidden="true">Portionen</span>
                   <Stepper small value={servings} onChange={(v) => setPlanServings(recipe.id, v)} label={`Portionen ${currentContent(recipe).title}`} />
@@ -121,33 +128,10 @@ export function PlanScreen() {
     </>
   );
 
-  // „Passt dazu“ – auf dem Tablet in der rechten Spalte
-  const suggestionList = (
-    <>
-      {suggestions.length > 0 && (
-        <Section icon="sparkles" title="Passt dazu">
-          <p className="muted small">Diese Rezepte teilen Zutaten mit deinem Plan.</p>
-          <ul className="list">
-            {suggestions.map(({ recipe, shared, useUp: useUpNames }) => (
-              <li key={recipe.id} className="list__item suggestion">
-                <button className="plan-list__hit" onClick={() => navigate(`/rezept/${recipe.id}`)}>
-                  <RecipeImage image={recipe.image} size="sm" />
-                  <span className="suggestion__text">
-                    <span className="list__title">{currentContent(recipe).title}</span>
-                    {useUpNames.length > 0 && <span className="useup-hint">Braucht auf: {useUpNames.join(', ')}</span>}
-                    {shared.length > 0 && <span className="small muted">Auch drin: {shared.slice(0, 4).join(', ')}{shared.length > 4 ? ' …' : ''}</span>}
-                  </span>
-                </button>
-                <button className="btn btn--soft btn--sm" onClick={() => add(recipe)} aria-label={`${currentContent(recipe).title} einplanen`}>
-                  <Icon name="plus" size={16} /> Plan
-                </button>
-              </li>
-            ))}
-          </ul>
-        </Section>
-      )}
-    </>
-  );
+  // Rechts (Tablet) bzw. unten (Handy): was die Gerichte aus der Speisekammer nehmen – statt „Passt dazu“.
+  // Vorschläge gibt es weiter beim „Gericht hinzufügen“.
+  const reserved = dishes.filter((d) => d.taken.length);
+  const sideList = reserved.length > 0 && <PlannedGroup dishes={reserved} urgent={plannedUseUp} open={openReserved || wide} />;
 
   return (
     <main className="screen screen--tabbed">
@@ -161,7 +145,7 @@ export function PlanScreen() {
       </header>
       <div className="plan-layout">
         <div className="plan-layout__main">{planList}</div>
-        <div className="plan-layout__side">{suggestionList}</div>
+        <div className="plan-layout__side">{sideList}</div>
       </div>
       {picking && <RecipePicker recipes={recipes.filter(plannable)} planned={plan.items.map((i) => i.recipeId)} suggestions={suggestions} onPick={add} onClose={() => setPicking(false)} />}
     </main>

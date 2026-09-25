@@ -47,6 +47,19 @@ const PANTRY = new Set([
 ]);
 
 /**
+ * „Immer im Haus“: was du selbst als Vorrat im Schrank führst (Pasta, Reis, Saucen …). Anders als der
+ * Grundvorrat oben zählt es bei Vorschlägen weiter mit – es landet nur auf der Einkaufsliste unter
+ * „Basics“ und wird nie als „fehlt“ gemeldet. Einstellbar in der Speisekammer (Pantry.basics).
+ */
+export const DEFAULT_BASICS = ['Pasta', 'Reis', 'Gochujang', 'Miso', 'Sesam', 'Sojasauce'];
+
+/** Schlüssel der „Immer im Haus“-Zutaten (fehlt die Liste: die Vorbelegung). */
+export function basicsKeys(pantry: Pick<Pantry, 'basics'> | undefined, table: FoodTable): Set<string> {
+  const names = pantry?.basics ?? DEFAULT_BASICS;
+  return new Set(names.map((name) => resolveIngredient({ id: name, name }, 1, table)?.key).filter((k): k is string => !!k));
+}
+
+/**
  * Wie wichtig eine gemeinsame Zutat für Meal Prep ist. Hähnchen, Pasta, Milchprodukte,
  * Eier und Brot bestimmen den Einkauf – Gemüse und Obst sind eher austauschbar.
  * Alles ohne feste Art (Soßen, Pasten, Hülsenfrüchte …) zählt normal.
@@ -244,6 +257,10 @@ export function buildShoppingList(plan: MealPlan, all: Recipe[], table: FoodTabl
     }
   }
 
+  // „Immer im Haus“ → auf der Liste unter „Basics“
+  const basics = basicsKeys(pantry, table);
+  for (const [key, g] of groups) if (basics.has(key)) g.pantry = true;
+
   const stock = (pantry?.items ?? [])
     .filter((it) => (it.amount ?? 1) > 0)
     .map((it) => ({ it, key: resolveIngredient({ id: it.id, name: it.name }, 1, table)?.key }));
@@ -278,7 +295,12 @@ function coverFromStock(items: PantryItem[], parts: Resolved[]): { open: number;
     used.push(it);
     if (it.amount === undefined) continue;
     const needs = measured.map((p) => needIn(it, p));
-    if (needs.some((n) => n === undefined)) continue; // nicht umrechenbar – nur als Hinweis
+    // nicht umrechenbar (z. B. „1 Stück“ gegen „200 g“ ohne bekanntes Stückgewicht): gilt als vorhanden –
+    // wie beim Kochen, wo dafür „Noch da?“ gefragt wird
+    if (needs.some((n) => n === undefined)) {
+      open = 0;
+      break;
+    }
     const full = needs.reduce((s: number, n) => s + n!, 0);
     if (full <= 0) continue;
     open -= Math.min(it.amount, full * open) / full;

@@ -1,6 +1,7 @@
 /// <reference types="pouchdb-core" />
 import { emptyPlan, type MealPlan } from '../domain/mealplan';
 import { mergeRecipes } from '../domain/merge';
+import { merge3Pantry, merge3Plan, merge3Products, merge3Recipe, unionPantry, unionPlan, unionProducts } from '../domain/syncMerge';
 import { emptyPantry, type Pantry } from '../domain/pantry';
 import type { MyProduct } from '../domain/nutrition/myProducts';
 import type { Recipe } from '../domain/types';
@@ -10,14 +11,29 @@ import type { RecipeRepository } from './repository';
 export type RecipeDoc = Recipe & { _id: string; _rev?: string; type: 'recipe' };
 export type RecipeDb = PouchDB.Database<RecipeDoc>;
 
+const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+
 /** „Meine Produkte“, Wochenplan und Speisekammer liegen je als EIN Dokument neben den Rezepten und werden mit abgeglichen. */
-const PRODUCTS_ID = 'meine-produkte';
-const PLAN_ID = 'wochenplan';
-const PANTRY_ID = 'speisekammer';
 type SingleDoc = {
   _id: string; _rev?: string; type: 'products' | 'plan' | 'pantry';
   products?: MyProduct[]; plan?: MealPlan; pantry?: Pantry; updatedAt: string;
 };
+
+/** Je Einzel-Dokument: wo es liegt und wie man zwei Fassungen zusammenführt. */
+interface SingleKind<T> {
+  id: string;
+  type: SingleDoc['type'];
+  field: 'products' | 'plan' | 'pantry';
+  merge3: (base: T, ours: T, theirs: T) => T;
+  union: (a: T, b: T) => T;
+  stamp: (data: T) => string;
+}
+const PRODUCTS: SingleKind<MyProduct[]> = {
+  id: 'meine-produkte', type: 'products', field: 'products', merge3: merge3Products, union: unionProducts,
+  stamp: (ps) => ps.reduce((m, p) => (p.updatedAt > m ? p.updatedAt : m), ''),
+};
+const PLAN: SingleKind<MealPlan> = { id: 'wochenplan', type: 'plan', field: 'plan', merge3: merge3Plan, union: unionPlan, stamp: (p) => p.updatedAt };
+const PANTRY: SingleKind<Pantry> = { id: 'speisekammer', type: 'pantry', field: 'pantry', merge3: merge3Pantry, union: unionPantry, stamp: (p) => p.updatedAt };
 
 /**
  * Rezepte in PouchDB (im Browser: IndexedDB). Ein Rezept = ein Dokument,
@@ -42,14 +58,20 @@ export class PouchRecipeRepository implements RecipeRepository {
     return out.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   }
 
-  save(recipe: Recipe): Promise<void> {
+  /**
+   * Speichern, ohne Neueres zu überschreiben: Was in der Datenbank liegt, wird mit unserer Änderung
+   * (base → recipe) zusammengeführt. Hat niemand anders geschrieben, ist das Ergebnis einfach recipe.
+   */
+  save(recipe: Recipe, base?: Recipe): Promise<Recipe> {
     return this.enqueue(async () => {
       for (let attempt = 0; attempt < 3; attempt++) {
-        const rev = await this.currentRev(recipe.id);
+        const current = await this.getOrUndefined(recipe.id);
+        const m = current && current.type === 'recipe' ? merge3Recipe(base ?? strip(current), recipe, strip(current)) : recipe;
+        const merged = same(m, recipe) ? recipe : m; // nichts dazugekommen → dasselbe Objekt (kein unnötiges Neuzeichnen)
         try {
-          const res = await this.db.put({ ...recipe, _id: recipe.id, _rev: rev, type: 'recipe' });
+          const res = await this.db.put({ ...merged, _id: recipe.id, _rev: current?._rev, type: 'recipe' });
           this.ownRevs.add(res.rev);
-          return;
+          return merged;
         } catch (e) {
           if ((e as { status?: number }).status !== 409) throw e; // 409 = jemand war schneller → neu versuchen
         }
@@ -70,59 +92,73 @@ export class PouchRecipeRepository implements RecipeRepository {
   }
 
   async loadProducts(): Promise<MyProduct[]> {
-    return (await this.loadSingle(PRODUCTS_ID))?.products ?? [];
+    return this.loadSingle(PRODUCTS, (d) => d.products ?? []);
   }
 
-  saveProducts(products: MyProduct[]): Promise<void> {
-    return this.saveSingle({ _id: PRODUCTS_ID, type: 'products', products, updatedAt: new Date().toISOString() });
+  saveProducts(products: MyProduct[], base?: MyProduct[]): Promise<MyProduct[]> {
+    return this.saveSingle(PRODUCTS, products, base, (d) => d.products ?? []);
   }
 
   async loadPlan(): Promise<MealPlan> {
-    return (await this.loadSingle(PLAN_ID))?.plan ?? emptyPlan();
+    return this.loadSingle(PLAN, (d) => d.plan ?? emptyPlan());
   }
 
-  savePlan(plan: MealPlan): Promise<void> {
-    return this.saveSingle({ _id: PLAN_ID, type: 'plan', plan, updatedAt: plan.updatedAt });
+  savePlan(plan: MealPlan, base?: MealPlan): Promise<MealPlan> {
+    return this.saveSingle(PLAN, plan, base, (d) => d.plan ?? emptyPlan());
   }
 
   async loadPantry(): Promise<Pantry> {
-    return { ...emptyPantry(), ...(await this.loadSingle(PANTRY_ID))?.pantry };
+    return this.loadSingle(PANTRY, (d) => ({ ...emptyPantry(), ...d.pantry }));
   }
 
-  savePantry(pantry: Pantry): Promise<void> {
-    return this.saveSingle({ _id: PANTRY_ID, type: 'pantry', pantry, updatedAt: pantry.updatedAt });
+  savePantry(pantry: Pantry, base?: Pantry): Promise<Pantry> {
+    return this.saveSingle(PANTRY, pantry, base, (d) => ({ ...emptyPantry(), ...d.pantry }));
   }
 
   /**
-   * Einzel-Dokumente (Produkte, Wochenplan, Speisekammer): Auf zwei Geräten offline geändert →
-   * die zuletzt geänderte Fassung gewinnt. Zusammenführen lohnt sich hier nicht.
+   * Einzel-Dokument laden. Offline auf zwei Geräten geändert (Konflikt) → beide Fassungen
+   * vereinen (union…) statt eine zu verwerfen; das Ergebnis wird gespeichert, die Konflikte gelöscht.
    */
-  private async loadSingle(id: string): Promise<SingleDoc | undefined> {
+  private async loadSingle<T>(kind: SingleKind<T>, pick: (d: SingleDoc) => T): Promise<T> {
     const db = this.db as unknown as PouchDB.Database<SingleDoc>;
+    let doc: PouchDB.Core.ExistingDocument<SingleDoc> & { _conflicts?: string[] };
     try {
-      const doc = await db.get(id, { conflicts: true });
-      if (!doc._conflicts?.length) return doc;
-      return this.enqueue(async () => {
-        const all = [doc, ...(await Promise.all(doc._conflicts!.map((rev) => db.get(id, { rev }))))];
-        const newest = all.reduce((a, b) => (b.updatedAt > a.updatedAt ? b : a));
-        // _conflicts ist nur eine Lese-Angabe – beim Speichern lehnt CouchDB es ab.
-        const { _conflicts: _c, ...clean } = newest as SingleDoc & { _conflicts?: string[] };
-        const res = await db.put({ ...clean, _rev: doc._rev });
-        this.ownRevs.add(res.rev);
-        for (const rev of doc._conflicts!) this.ownRevs.add((await db.remove(id, rev)).rev);
-        return newest;
-      });
+      doc = await db.get(kind.id, { conflicts: true });
     } catch (e) {
-      if ((e as { status?: number }).status === 404) return undefined;
+      if ((e as { status?: number }).status === 404) return pick({ _id: kind.id, type: kind.type, updatedAt: '' });
       throw e;
     }
+    if (!doc._conflicts?.length) return pick(doc);
+    return this.enqueue(async () => {
+      const others = await Promise.all(doc._conflicts!.map((rev) => db.get(kind.id, { rev })));
+      const data = others.reduce((acc, o) => kind.union(acc, pick(o)), pick(doc));
+      const res = await db.put({ _id: kind.id, _rev: doc._rev, type: kind.type, [kind.field]: data, updatedAt: kind.stamp(data) });
+      this.ownRevs.add(res.rev);
+      for (const rev of doc._conflicts!) this.ownRevs.add((await db.remove(kind.id, rev)).rev);
+      return data;
+    });
   }
 
-  private saveSingle(doc: SingleDoc): Promise<void> {
+  /**
+   * Einzel-Dokument speichern, ohne Neueres zu überschreiben: der aktuelle Stand in der Datenbank
+   * (theirs) + unsere Änderung (base → data). Ohne base: einfach data (z. B. Sicherung einspielen).
+   */
+  private saveSingle<T>(kind: SingleKind<T>, data: T, base: T | undefined, pick: (d: SingleDoc) => T): Promise<T> {
     const db = this.db as unknown as PouchDB.Database<SingleDoc>;
     return this.enqueue(async () => {
-      const res = await db.put({ ...doc, _rev: await this.currentRev(doc._id) });
-      this.ownRevs.add(res.rev);
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const current = await this.getOrUndefined(kind.id) as (PouchDB.Core.ExistingDocument<SingleDoc> | undefined);
+        const m = current && base !== undefined ? kind.merge3(base, data, pick(current)) : data;
+        const merged = same(m, data) ? data : m;
+        try {
+          const res = await db.put({ _id: kind.id, _rev: current?._rev, type: kind.type, [kind.field]: merged, updatedAt: kind.stamp(merged) });
+          this.ownRevs.add(res.rev);
+          return merged;
+        } catch (e) {
+          if ((e as { status?: number }).status !== 409) throw e; // Abgleich hat gerade geschrieben → nochmal mit dem neuen Stand
+        }
+      }
+      throw new Error(`${kind.id} konnte nicht gespeichert werden`);
     });
   }
 
@@ -160,8 +196,12 @@ export class PouchRecipeRepository implements RecipeRepository {
   }
 
   private async currentRev(id: string): Promise<string | undefined> {
+    return (await this.getOrUndefined(id))?._rev;
+  }
+
+  private async getOrUndefined(id: string): Promise<PouchDB.Core.ExistingDocument<RecipeDoc> | undefined> {
     try {
-      return (await this.db.get(id))._rev;
+      return await this.db.get(id);
     } catch (e) {
       if ((e as { status?: number }).status === 404) return undefined;
       throw e;

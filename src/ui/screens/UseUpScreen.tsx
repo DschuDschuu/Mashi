@@ -6,6 +6,7 @@ import { usePlan, useRecipes } from '../../data/store';
 import { navigate } from '../../router';
 import { Empty, Section } from '../components/Controls';
 import { PantryMatchList, RecipeIdeaPanel } from '../components/PantryMatches';
+import { Icon } from '../components/Icon';
 import { TopBar } from '../components/TopBar';
 import { useUseUp } from '../useUseUp';
 import { quantityLabel } from './PantryScreen';
@@ -48,6 +49,7 @@ export function UseUpScreen() {
                     {/* wie in der Speisekammer: links der Name, rechts Menge mit Datum darunter */}
                     <span className="pantry__name">
                       {e.item.name}
+                      {e.daysLeft <= 1 && !e.item.frozenAt && <span className="pantry__alarm" role="img" aria-label="läuft heute oder morgen ab"><Icon name="clock" size={14} /></span>}
                       {e.item.reduced && !e.item.frozenAt && <span className="badge tint-peach pantry__mhd">MHD</span>}
                     </span>
                     <span className="pantry__qty pantry__qty--stack">

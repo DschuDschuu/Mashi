@@ -1,5 +1,5 @@
 import type { PriceEntry } from './cost';
-import { needIn, resolveIngredient, type Resolved } from './mealplan';
+import { basicsKeys, needIn, resolveIngredient, type Resolved } from './mealplan';
 import type { FoodTable } from './nutrition/types';
 import type { ReceiptLine } from './receipt';
 import type { ReceiptSavings } from './savings';
@@ -63,6 +63,8 @@ export interface Pantry {
    * im Wochenplan zurück, kommt es wieder hinein. „Neue Woche beginnen“ leert es.
    */
   cookLog?: Record<string, Taken[]>;
+  /** „Immer im Haus“ (Namen) – fehlt die Liste, gilt DEFAULT_BASICS */
+  basics?: string[];
   /** schon importierte Bons (Einkaufstag|Endbetrag) – warnt vor doppeltem Import */
   receipts?: string[];
   /** deine Richtwerte „hält X Tage“ je Art (Gemüse, Milchprodukte …) – fehlt einer, gilt Mashis Standard */
@@ -301,6 +303,7 @@ export function deductRecipe(pantry: Pantry, content: RecipeContent, servings: n
   const toCheck: string[] = [];
   const checkIds: string[] = [];
   const stock = new Map<string, Stock>();
+  const basics = basicsKeys(pantry, table);
 
   for (const ing of content.ingredients) {
     const own = amounts[ing.id];
@@ -329,7 +332,7 @@ export function deductRecipe(pantry: Pantry, content: RecipeContent, servings: n
       open = full > 0 ? open - take / full : 0;
       if (!used.includes(item.name)) used.push(item.name);
     }
-    stock.set(ing.id, need.pantry ? 'basis' : !found ? 'fehlt' : open < 0.02 ? 'da' : 'knapp');
+    stock.set(ing.id, need.pantry || basics.has(need.key) ? 'basis' : !found ? 'fehlt' : open < 0.02 ? 'da' : 'knapp');
   }
   // Aufgebraucht = raus aus der Speisekammer
   return { pantry: { ...pantry, items: items.filter((it) => it.amount === undefined || it.amount > 0) }, used, toCheck, checkIds, stock };

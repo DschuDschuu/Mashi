@@ -142,7 +142,7 @@ describe('Meine Produkte in PouchDB', () => {
     expect(await repo.list()).toEqual([]); // die Produktliste ist kein Rezept
   });
 
-  it('löst einen Offline-Konflikt: die zuletzt geänderte Liste gewinnt, kein Konflikt bleibt', async () => {
+  it('löst einen Offline-Konflikt: dasselbe Produkt → das zuletzt geänderte, kein Konflikt bleibt', async () => {
     const phoneDb = newDb();
     const pcDb = newDb();
     const phone = new PouchRecipeRepository(phoneDb);
@@ -173,7 +173,7 @@ describe('Wochenplan in PouchDB', () => {
     expect(await repo.list()).toEqual([]);
   });
 
-  it('Offline auf zwei Geräten geändert: der zuletzt geänderte Plan gewinnt', async () => {
+  it('Offline auf zwei Geräten geändert: beide Pläne werden vereint, der zuletzt geänderte zuerst', async () => {
     const phoneDb = newDb();
     const pcDb = newDb();
     const phone = new PouchRecipeRepository(phoneDb);
@@ -183,8 +183,8 @@ describe('Wochenplan in PouchDB', () => {
     await pc.savePlan(plan('pc-spaeter', '2026-01-03T00:00:00.000Z'));
     await phone.savePlan(plan('handy-frueher', '2026-01-02T00:00:00.000Z'));
     await syncOnce(phoneDb, pcDb);
-    expect((await phone.loadPlan()).items[0].recipeId).toBe('pc-spaeter');
-    expect((await pc.loadPlan()).items[0].recipeId).toBe('pc-spaeter');
+    expect((await phone.loadPlan()).items.map((i) => i.recipeId)).toEqual(['pc-spaeter', 'handy-frueher']);
+    expect((await pc.loadPlan()).items.map((i) => i.recipeId)).toEqual(['pc-spaeter', 'handy-frueher']);
   });
 });
 
@@ -204,7 +204,7 @@ describe('Speisekammer in PouchDB', () => {
     expect(await repo.list()).toEqual([]);
   });
 
-  it('Offline auf zwei Geräten geändert: die zuletzt geänderte Speisekammer gewinnt', async () => {
+  it('Offline auf zwei Geräten geändert: gleicher Vorrat → die zuletzt geänderte Fassung', async () => {
     const phoneDb = newDb();
     const pcDb = newDb();
     const phone = new PouchRecipeRepository(phoneDb);
@@ -215,5 +215,59 @@ describe('Speisekammer in PouchDB', () => {
     await phone.savePantry(pantry('Handy früher', '2026-01-02T00:00:00.000Z'));
     await syncOnce(phoneDb, pcDb);
     expect((await phone.loadPantry()).items[0].name).toBe('PC später');
+  });
+});
+
+describe('Kein stilles Überschreiben mehr (Speichern mit dem vorherigen Stand)', () => {
+  const T0 = '2026-09-25T10:00:00.000Z';
+  const item = (id: string, name: string, amount: number) => ({ id, name, amount, unit: 'g' as const, addedAt: T0 });
+  const pantry = (items: ReturnType<typeof item>[], updatedAt = T0) => ({ items, rules: [], prices: [], updatedAt });
+
+  it('Speisekammer: Tablet hat alten Stand, Handy-Bon kam per Abgleich – beides bleibt, Mengen verrechnet', async () => {
+    const db = newDb();
+    const tablet = new PouchRecipeRepository(db);
+    const p0 = pantry([item('h', 'Hähnchenbrust', 400)]);
+    await tablet.savePantry(p0);
+    const loaded = await tablet.loadPantry();
+    // Abgleich bringt den Bon vom Handy in dieselbe Datenbank (anderes Repository = anderes Gerät)
+    await new PouchRecipeRepository(db).savePantry(pantry([item('h', 'Hähnchenbrust', 900), item('m', 'Milch', 1000)], later(T0, 60)));
+    // Tablet (noch mit altem Stand im Speicher) verkocht 300 g
+    const stored = await tablet.savePantry(pantry([item('h', 'Hähnchenbrust', 100)], later(T0, 120)), loaded);
+    const names = (p: { items: { name: string; amount?: number }[] }) => Object.fromEntries(p.items.map((i) => [i.name, i.amount]));
+    expect(names(stored)).toEqual({ Hähnchenbrust: 600, Milch: 1000 });
+    expect(names(await tablet.loadPantry())).toEqual({ Hähnchenbrust: 600, Milch: 1000 });
+  });
+
+  it('Wochenplan: Einplanen auf dem einen, Abhaken auf dem anderen Gerät – beides bleibt', async () => {
+    const db = newDb();
+    const a = new PouchRecipeRepository(db);
+    const base = { items: [{ recipeId: 'x', servings: 2 }], checked: [], cooked: [], updatedAt: T0 };
+    await a.savePlan(base);
+    await new PouchRecipeRepository(db).savePlan({ ...base, checked: ['food:reis'], updatedAt: later(T0, 60) });
+    const stored = await a.savePlan({ ...base, items: [...base.items, { recipeId: 'y', servings: 4 }], updatedAt: later(T0, 120) }, base);
+    expect([stored.items.map((i) => i.recipeId), stored.checked]).toEqual([['x', 'y'], ['food:reis']]);
+  });
+
+  it('Rezept: Favorit hier, Notiz vom anderen Gerät – beides bleibt', async () => {
+    const db = newDb();
+    const a = new PouchRecipeRepository(db);
+    const r0 = { ...sample(), favorite: false, notes: '' };
+    await a.save(r0);
+    await new PouchRecipeRepository(db).save({ ...r0, notes: 'Mehr Knoblauch', updatedAt: later(r0.updatedAt, 60) });
+    const stored = await a.save({ ...r0, favorite: true, updatedAt: later(r0.updatedAt, 120) }, r0);
+    expect([stored.favorite, stored.notes]).toEqual([true, 'Mehr Knoblauch']);
+  });
+
+  it('Offline-Konflikt: beide Speisekammern werden vereint statt eine zu verwerfen', async () => {
+    const phoneDb = newDb();
+    const pcDb = newDb();
+    const phone = new PouchRecipeRepository(phoneDb);
+    const pc = new PouchRecipeRepository(pcDb);
+    await phone.savePantry(pantry([item('q', 'Quark', 500)]));
+    await syncOnce(phoneDb, pcDb);
+    await phone.savePantry(pantry([item('q', 'Quark', 500), item('e', 'Eier', 600)], later(T0, 60)));
+    await pc.savePantry(pantry([item('q', 'Quark', 500), item('m', 'Milch', 1000)], later(T0, 120)));
+    await syncOnce(phoneDb, pcDb);
+    expect((await phone.loadPantry()).items.map((i) => i.name).sort()).toEqual(['Eier', 'Milch', 'Quark']);
   });
 });

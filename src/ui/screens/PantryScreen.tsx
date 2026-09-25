@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { resolveIngredient } from '../../domain/mealplan';
 import { withMyProducts } from '../../domain/nutrition/myProducts';
-import { recipesFromPantry, type DishReservation, type PantryItem, type PantryUnit } from '../../domain/pantry';
+import { recipesFromPantry, type PantryItem, type PantryUnit, type PlannedUse } from '../../domain/pantry';
 import { daysLabel, daysLeft, frozenSince, specialDays, useByOf } from '../../domain/shelfLife';
 import { formatAmount } from '../../domain/scaling';
 import {
@@ -17,18 +17,17 @@ import { IngredientNames } from '../components/IngredientNames';
 import { groupByKind } from '../foodGroups';
 import { useUseUp } from '../useUseUp';
 import { PantryMatchList, RecipeIdeaPanel } from '../components/PantryMatches';
-import { currentContent } from '../../domain/recipe';
 import { ShelfSettings } from '../components/ShelfSettings';
+import { BasicsSettings } from '../components/BasicsSettings';
 import { ProductsLink } from '../components/ProductsLink';
 import { TileSummary } from '../components/TileSummary';
-import { StockLine } from '../components/StockLine';
 import { toast } from '../toast';
 
 const UNITS: PantryUnit[] = ['g', 'ml', 'Stück'];
 
 
-export const quantityLabel = (item: Pick<PantryItem, 'amount' | 'unit'>) =>
-  item.amount === undefined ? 'vorhanden' : `${formatAmount(item.amount, item.unit === 'Stück' ? 'Stück' : 'g')} ${item.unit ?? ''}`.trim();
+import { quantityLabel } from '../format';
+export { quantityLabel }; // auch von hier erreichbar (Reste-Ansicht)
 
 /** Zahl aus einem Eingabefeld: „0,5“ und „0.5“, leer = keine Menge. */
 export const parseAmount = (s: string): number | undefined => {
@@ -82,10 +81,11 @@ export function PantryScreen() {
       // Gefroren: Datum des Einfrierens – erst nach Monaten ein Hinweis
       const since = frozenSince(item.frozenAt);
       return left <= 2
-        ? { text: `seit ${since} eingefroren`, urgent: true }
-        : { text: `eingefroren ${new Date(item.frozenAt).toLocaleDateString('de-DE', { day: 'numeric', month: 'numeric' })}`, urgent: false };
+        ? { text: `seit ${since} eingefroren`, urgent: true, alarm: false }
+        : { text: `eingefroren ${new Date(item.frozenAt).toLocaleDateString('de-DE', { day: 'numeric', month: 'numeric' })}`, urgent: false, alarm: false };
     }
-    return { text: left <= 2 ? daysLabel(left) : `bis ${d.toLocaleDateString('de-DE', { day: 'numeric', month: 'numeric' })}`, urgent: left <= 2 };
+    // heute, morgen oder schon drüber → zusätzlich eine rote Uhr am Namen
+    return { text: left <= 2 ? daysLabel(left) : `bis ${d.toLocaleDateString('de-DE', { day: 'numeric', month: 'numeric' })}`, urgent: left <= 2, alarm: left <= 1 };
   };
   const remove = (item: PantryItem) => {
     const undo = removePantryItem(item.id);
@@ -106,88 +106,100 @@ export function PantryScreen() {
       <PantryTabs active="pantry" />
       <IngredientNames />
 
-      {adding && <AddForm onDone={() => setAdding(false)} />}
+      {/* Tablet: links die Vorräte, rechts Vorschläge, „Was kann ich kochen?“ und „Verwalten“ */}
+      <div className="split">
+        <div className="split__main">
+          {adding && <AddForm onDone={() => setAdding(false)} />}
 
-      {toCheck.length > 0 && (
-        <Section icon="info" title="Noch da?">
-          <p className="muted small">Beim Kochen verwendet – ohne Menge weiß Mashi nicht, ob noch etwas übrig ist.</p>
-          <ul className="list">
-            {toCheck.map((i) => (
-              <li key={i.id} className="list__item pantry-check">
-                <span className="list__title">{i.name}</span>
-                <button className="btn btn--soft btn--sm" onClick={() => answerPantryCheck(i.id, true)}>Noch da</button>
-                <button className="btn btn--ghost btn--sm" onClick={() => {
-                  const undo = answerPantryCheck(i.id, false);
-                  if (undo) toast(`„${i.name}“ aufgebraucht`, { label: 'Rückgängig', run: undo });
-                }}>Aufgebraucht</button>
-              </li>
-            ))}
-          </ul>
-        </Section>
-      )}
-
-      {pantry.items.length === 0 ? (
-        <Empty icon="archive">Noch leer. Tippe unten auf ＋ – „Kassenbon importieren“ oder „Vorrat eintragen“. Mashi zeigt dir dann, was du damit kochen kannst.</Empty>
-      ) : (
-        groups.map(({ title, items }) => {
-          return (
-            <Section key={title} title={`${title} (${items.length})`}>
-              <ul className="pantry">
-                {items.map((i) => editing === i.id
-                  ? <EditRow key={i.id} item={i} estimate={useByOf({ ...i, useBy: undefined }, table, pantry.shelfDays)} reserved={reservedLabel(i)} onDone={() => setEditing(null)} />
-                  : (
-                    <li key={i.id} className="pantry__item">
-                      <button className="pantry__hit" onClick={() => setEditing(i.id)} aria-label={`${i.name} bearbeiten`}>
-                        {/* links nur der Name (groß), rechts die freie Menge mit dem Datum darunter */}
-                        <span className="pantry__name">{i.name}{i.reduced && !i.frozenAt && <span className="badge tint-peach pantry__mhd">MHD</span>}</span>
-                        <span className="pantry__qty pantry__qty--stack">
-                          {quantityLabel(freeOf(i) ?? i)}
-                          {shelfLabel(i) && <span className={`pantry__shelf${shelfLabel(i)!.urgent ? ' is-urgent' : ''}`}>{shelfLabel(i)!.text}</span>}
-                        </span>
-                      </button>
-                      <button className="iconbtn iconbtn--sm" aria-label={`${i.name} entfernen`} onClick={() => remove(i)}>
-                        <Icon name="close" size={16} />
-                      </button>
-                    </li>
-                  ))}
+          {toCheck.length > 0 && (
+            <Section icon="info" title="Noch da?">
+              <p className="muted small">Beim Kochen verwendet – ohne Menge weiß Mashi nicht, ob noch etwas übrig ist.</p>
+              <ul className="list">
+                {toCheck.map((i) => (
+                  <li key={i.id} className="list__item pantry-check">
+                    <span className="list__title">{i.name}</span>
+                    <button className="btn btn--soft btn--sm" onClick={() => answerPantryCheck(i.id, true)}>Noch da</button>
+                    <button className="btn btn--ghost btn--sm" onClick={() => {
+                      const undo = answerPantryCheck(i.id, false);
+                      if (undo) toast(`„${i.name}“ aufgebraucht`, { label: 'Rückgängig', run: undo });
+                    }}>Aufgebraucht</button>
+                  </li>
+                ))}
               </ul>
             </Section>
-          );
-        })
-      )}
+          )}
 
-      {dishes.some((d) => d.taken.length) && <PlannedGroup dishes={dishes.filter((d) => d.taken.length)} urgent={plannedUseUp} />}
+          {pantry.items.length === 0 ? (
+            <Empty icon="archive">Noch leer. Tippe unten auf ＋ – „Kassenbon importieren“ oder „Vorrat eintragen“. Mashi zeigt dir dann, was du damit kochen kannst.</Empty>
+          ) : (
+            groups.map(({ title, items }) => {
+              return (
+                <Section key={title} title={`${title} (${items.length})`}>
+                  <ul className="pantry">
+                    {items.map((i) => editing === i.id
+                      ? <EditRow key={i.id} item={i} estimate={useByOf({ ...i, useBy: undefined }, table, pantry.shelfDays)} reserved={reservedLabel(i)} onDone={() => setEditing(null)} />
+                      : (
+                        <li key={i.id} className="pantry__item">
+                          <button className="pantry__hit" onClick={() => setEditing(i.id)} aria-label={`${i.name} bearbeiten`}>
+                            {/* links nur der Name (groß), rechts die freie Menge mit dem Datum darunter */}
+                            <span className="pantry__name">
+                              {i.name}
+                              {shelfLabel(i)?.alarm && <span className="pantry__alarm" role="img" aria-label="läuft heute oder morgen ab"><Icon name="clock" size={14} /></span>}
+                              {i.reduced && !i.frozenAt && <span className="badge tint-peach pantry__mhd">MHD</span>}
+                            </span>
+                            <span className="pantry__qty pantry__qty--stack">
+                              {quantityLabel(freeOf(i) ?? i)}
+                              {shelfLabel(i) && <span className={`pantry__shelf${shelfLabel(i)!.urgent ? ' is-urgent' : ''}`}>{shelfLabel(i)!.text}</span>}
+                            </span>
+                          </button>
+                          <button className="iconbtn iconbtn--sm" aria-label={`${i.name} entfernen`} onClick={() => remove(i)}>
+                            <Icon name="close" size={16} />
+                          </button>
+                        </li>
+                      ))}
+                  </ul>
+                </Section>
+              );
+            })
+          )}
 
-      <RecipeIdeaPanel idea={idea} />
+        </div>
+        <div className="split__side">
+          {planned.size > 0 && <ReservedLink items={pantry.items} planned={planned} urgent={dishes.some((d) => plannedUseUp.has(d.recipeId) && d.taken.length > 0)} />}
 
-      {matches.length > 0 && (
-        <Section icon="sparkles" title="Was kann ich kochen?">
-          <PantryMatchList matches={matches} />
-        </Section>
-      )}
+          <RecipeIdeaPanel idea={idea} />
 
-      {/* Abgesetzt: das sind Einstellungen, keine Vorräte – eigener Kopf, zurückhaltender Stil */}
-      <section className="manage" aria-labelledby="manage-title">
-        <h2 className="manage__title" id="manage-title">Verwalten</h2>
-        <ProductsLink />
-        <ShelfSettings />
+          {matches.length > 0 && (
+            <Section icon="sparkles" title="Was kann ich kochen?">
+              <PantryMatchList matches={matches} />
+            </Section>
+          )}
 
-        {pantry.rules.length > 0 && (
-          <details className="panel fold learned">
-            <TileSummary icon="clipboard" title={`Gelernte Bon-Artikel (${pantry.rules.length})`} text="So übersetzt Mashi deine Kassenbons" />
-            <p className="muted small">Falsch gelernt? „Vergessen“ – beim nächsten Bon fragt Mashi wieder.</p>
-            <ul className="learned__list">
-              {[...pantry.rules].sort((a, b) => a.key.localeCompare(b.key, 'de')).map((r) => (
-                <li key={r.key}>
-                  <span className="learned__bon">{r.key}</span>
-                  <span className="small muted">{r.skip ? 'wird übersprungen' : `→ ${r.name}${r.amount ? ` · ${formatAmount(r.amount, 'g')} ${r.unit} je Stück` : ''}`}</span>
-                  <button className="link link--muted" onClick={() => forgetReceiptRule(r.key)}>Vergessen</button>
-                </li>
-              ))}
-            </ul>
-          </details>
-        )}
-      </section>
+          {/* Abgesetzt: das sind Einstellungen, keine Vorräte – eigener Kopf, zurückhaltender Stil */}
+          <section className="manage" aria-labelledby="manage-title">
+            <h2 className="manage__title" id="manage-title">Verwalten</h2>
+            <ProductsLink />
+            <ShelfSettings />
+            <BasicsSettings />
+
+            {pantry.rules.length > 0 && (
+              <details className="panel fold learned">
+                <TileSummary icon="clipboard" title={`Gelernte Bon-Artikel (${pantry.rules.length})`} text="So übersetzt Mashi deine Kassenbons" />
+                <p className="muted small">Falsch gelernt? „Vergessen“ – beim nächsten Bon fragt Mashi wieder.</p>
+                <ul className="learned__list">
+                  {[...pantry.rules].sort((a, b) => a.key.localeCompare(b.key, 'de')).map((r) => (
+                    <li key={r.key}>
+                      <span className="learned__bon">{r.key}</span>
+                      <span className="small muted">{r.skip ? 'wird übersprungen' : `→ ${r.name}${r.amount ? ` · ${formatAmount(r.amount, 'g')} ${r.unit} je Stück` : ''}`}</span>
+                      <button className="link link--muted" onClick={() => forgetReceiptRule(r.key)}>Vergessen</button>
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            )}
+          </section>
+        </div>
+      </div>
     </main>
   );
 }
@@ -310,43 +322,22 @@ function EditRow({ item, estimate, reserved, onDone }: { item: PantryItem; estim
   );
 }
 
-/**
- * „Für den Wochenplan“: je geplantem Gericht, was es aus der Speisekammer reserviert.
- * Standardmäßig zu. Braucht ein Gericht etwas auf, das bald weg muss: Uhr auf der Kachel
- * und rot im Kopf der Gruppe.
- */
-function PlannedGroup({ dishes, urgent }: { dishes: DishReservation[]; urgent: Map<string, string[]> }) {
-  const recipes = useRecipes();
-  const anyUrgent = dishes.some((d) => urgent.has(d.recipeId));
+
+/** Schmale Zeile: was für den Wochenplan reserviert ist – führt zum Wochenplan (Gruppe dort aufgeklappt). */
+function ReservedLink({ items, planned, urgent }: { items: PantryItem[]; planned: PlannedUse; urgent: boolean }) {
+  const parts = items.filter((i) => planned.has(i.id)).map((i) => {
+    const p = planned.get(i.id)!;
+    return `${p === 'all' ? quantityLabel(i) : quantityLabel({ amount: p, unit: i.unit })} ${i.name}`.replace(/^vorhanden /, '');
+  });
   return (
-    <details className="panel fold planned">
-      <TileSummary icon="calendar" title={`Für den Wochenplan (${dishes.length})`} text="Schon reserviert – wird beim Kochen abgezogen"
-        alert={anyUrgent ? 'Enthält etwas, das bald weg muss' : undefined} />
-      <ul className="planned__list">
-        {dishes.map((d) => {
-          const r = recipes.find((x) => x.id === d.recipeId);
-          if (!r) return null;
-          const soon = urgent.get(d.recipeId);
-          return (
-            <li key={d.recipeId}>
-              <button className="planned__dish" onClick={() => navigate(`/rezept/${d.recipeId}`)}>
-                <span className="planned__head">
-                  <strong>{currentContent(r).title}</strong>
-                  {soon && (
-                    <span className="planned__soon" title={`Braucht auf: ${soon.join(', ')}`}>
-                      <Icon name="clock" size={13} /> Bald verbrauchen
-                    </span>
-                  )}
-                </span>
-                <span className="small muted">
-                  {d.taken.map((t) => (t.amount !== undefined ? `${quantityLabel({ amount: t.amount, unit: t.item.unit })} ${t.item.name}` : t.item.name)).join(' · ')}
-                </span>
-                <StockLine content={currentContent(r)} stock={d.stock} />
-              </button>
-            </li>
-          );
-        })}
-      </ul>
-    </details>
+    <button className="panel link-row" onClick={() => navigate('/plan?reserviert=1')}>
+      <Icon name="calendar" size={20} />
+      <span className="link-row__text">
+        <strong>Für den Wochenplan reserviert</strong>
+        <small className="muted">{parts.slice(0, 3).join(' · ')}{parts.length > 3 ? ` und ${parts.length - 3} weitere` : ''}</small>
+      </span>
+      {urgent && <span className="fold__alert" role="img" aria-label="Enthält etwas, das bald weg muss"><Icon name="clock" size={18} /></span>}
+      <Icon name="chevron" size={18} />
+    </button>
   );
 }

@@ -32,6 +32,9 @@ let plan: MealPlan = emptyPlan();
 let planPending = 0;
 let pantry: Pantry = emptyPantry();
 let pantryPending = 0;
+let productsPending = 0;
+/** Ein Neuladen wurde übersprungen, weil noch gespeichert wurde → danach nachholen. */
+let reloadMissed = false;
 /** Letzter Speicherfehler (z. B. Speicher voll). Wird beim nächsten erfolgreichen Speichern gelöscht. */
 let saveError: string | null = null;
 let ready = false;
@@ -42,7 +45,7 @@ function emit() {
 }
 
 /** Jeder Speichervorgang meldet sich hier zurück – so bleibt ein Fehler nicht nur in der Konsole. */
-function tracked(p: Promise<void>): Promise<void> {
+function tracked<T>(p: Promise<T>): Promise<T | void> {
   return p.then(
     () => {
       if (saveError) {
@@ -63,14 +66,24 @@ function commit(changed: Recipe) {
   // JEDE Änderung bekommt einen Zeitstempel. Der Abgleich zwischen Geräten entscheidet
   // darüber, welche Fassung neuer ist (mergeRecipes) – vergessene Stempel = verlorene Änderungen.
   const next = { ...changed, updatedAt: now() };
-  recipes = recipes.some((r) => r.id === next.id) ? recipes.map((r) => (r.id === next.id ? next : r)) : [next, ...recipes];
+  const base = recipes.find((r) => r.id === next.id);
+  recipes = base ? recipes.map((r) => (r.id === next.id ? next : r)) : [next, ...recipes];
   emit();
   pending.set(next.id, (pending.get(next.id) ?? 0) + 1);
-  tracked(repo.save(next))
+  // base = der Stand, den wir geändert haben – so wird eine Änderung vom anderen Gerät nicht überschrieben
+  tracked(repo.save(next, base))
+    .then((stored) => {
+      // Zusammengeführt (anderes Gerät hat inzwischen auch geändert) → das anzeigen, falls hier nichts Neueres kam
+      if (stored && stored !== next && recipes.some((r) => r === next)) {
+        recipes = recipes.map((r) => (r === next ? stored : r));
+        emit();
+      }
+    })
     .finally(() => {
       const n = (pending.get(next.id) ?? 1) - 1;
       if (n > 0) pending.set(next.id, n);
       else pending.delete(next.id);
+      catchUpReload();
     });
 }
 
@@ -101,6 +114,7 @@ function scheduleReload() {
   clearTimeout(reloadTimer);
   reloadTimer = setTimeout(async () => {
     let loaded;
+    if (planPending || pantryPending || productsPending || pending.size) reloadMissed = true;
     try {
       loaded = await Promise.all([repo.list(), repo.loadProducts(), repo.loadPlan(), repo.loadPantry()]);
     } catch (e) {
@@ -110,7 +124,7 @@ function scheduleReload() {
       return;
     }
     const [fresh, freshProducts, freshPlan, freshPantry] = loaded;
-    products = freshProducts;
+    if (!productsPending) products = freshProducts;
     if (!planPending) plan = normalizePlan(freshPlan);
     if (!pantryPending) pantry = freshPantry;
     const inMemory = new Map(recipes.map((r) => [r.id, r]));
@@ -118,6 +132,13 @@ function scheduleReload() {
     for (const id of pending.keys()) if (!fresh.some((r) => r.id === id) && inMemory.has(id)) recipes.unshift(inMemory.get(id)!);
     emit();
   }, 300);
+}
+
+/** Nach dem letzten laufenden Speichern ein übersprungenes Neuladen nachholen – sonst bliebe die Anzeige alt. */
+function catchUpReload() {
+  if (!reloadMissed || planPending || pantryPending || productsPending || pending.size) return;
+  reloadMissed = false;
+  scheduleReload();
 }
 
 // ── Hooks ──────────────────────────────────────────────────────────
@@ -386,19 +407,38 @@ export function importProducts(incoming: MyProduct[]): number {
  * (gleiche Rezepte): So rechnen auch alle Rezeptkarten ihre Nährwerte neu.
  */
 export function saveProducts(next: MyProduct[]) {
+  const base = products;
   products = next;
   recipes = [...recipes];
   emit();
-  void tracked(repo.saveProducts(next));
+  productsPending++;
+  void tracked(repo.saveProducts(next, base))
+    .then((stored) => {
+      if (stored && stored !== next && products === next) {
+        products = stored;
+        recipes = [...recipes];
+        emit();
+      }
+    })
+    .finally(() => { productsPending--; catchUpReload(); });
 }
 
 // ── Wochenplan ─────────────────────────────────────────────────────
 
 function commitPlan(next: Omit<MealPlan, 'updatedAt'>) {
-  plan = { ...next, updatedAt: now() };
+  const base = plan;
+  const saved = { ...next, updatedAt: now() };
+  plan = saved;
   emit();
   planPending++;
-  void tracked(repo.savePlan(plan)).finally(() => planPending--);
+  void tracked(repo.savePlan(saved, base))
+    .then((stored) => {
+      if (stored && stored !== saved && plan === saved) {
+        plan = normalizePlan(stored);
+        emit();
+      }
+    })
+    .finally(() => { planPending--; catchUpReload(); });
 }
 
 /** Gibt false zurück, wenn das Rezept schon im Plan steht. */
@@ -488,15 +528,24 @@ export async function resetDemoData() {
 // ── Speisekammer ───────────────────────────────────────────────────
 
 function commitPantry(next: Omit<Pantry, 'updatedAt'>) {
-  pantry = { ...next, updatedAt: now() };
+  const base = pantry;
+  const saved = { ...next, updatedAt: now() };
+  pantry = saved;
   emit();
   pantryPending++;
-  void tracked(repo.savePantry(pantry)).finally(() => pantryPending--);
+  // base = der Stand, den wir geändert haben: kam inzwischen ein Bon vom Handy, bleibt er erhalten
+  void tracked(repo.savePantry(saved, base))
+    .then((stored) => {
+      if (stored && stored !== saved && pantry === saved) {
+        pantry = stored;
+        emit();
+      }
+    })
+    .finally(() => { pantryPending--; catchUpReload(); });
 }
 
-/** Geprüfte Bon-Zeilen übernehmen – und merken, damit der nächste Bon schon ausgefüllt ist. */
 /**
- * Geprüfte Bon-Zeilen übernehmen. onList = wie viele Einträge der Einkaufsliste damit erledigt sind:
+ * Geprüfte Bon-Zeilen übernehmen – und merken, damit der nächste Bon schon ausgefüllt ist. onList = wie viele Einträge der Einkaufsliste damit erledigt sind:
  * Was jetzt reicht, steht dort unter „Hast du schon“; was ohne Menge kam, wird abgehakt.
  * Hast du zu wenig gekauft, bleibt der Rest auf der Liste.
  */
@@ -552,6 +601,11 @@ export function answerPantryCheck(id: string, stillThere: boolean): (() => void)
     return undefined;
   }
   return removePantryItem(id);
+}
+
+/** „Immer im Haus“ – gilt auf allen Geräten. */
+export function setPantryBasics(basics: string[]) {
+  commitPantry({ ...pantry, basics });
 }
 
 /** Deine Richtwerte „hält X Tage“ (je Art oder Lebensmittel) – gelten auf allen Geräten. */

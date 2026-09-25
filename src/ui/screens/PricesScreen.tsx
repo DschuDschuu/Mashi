@@ -6,7 +6,6 @@ import { navigate } from '../../router';
 import { Empty, Section } from '../components/Controls';
 import { Icon } from '../components/Icon';
 import { PantryTabs, usePantrySwipe } from '../components/PlanTabs';
-import { ProductsLink } from '../components/ProductsLink';
 import { PriceChart } from '../components/PriceChart';
 import { euro } from '../format';
 
@@ -31,33 +30,37 @@ export function PricesScreen() {
     <main className="screen screen--tabbed" {...swipe}>
       <header className="page-head"><h1>Preise</h1></header>
       <PantryTabs active="prices" />
-      <SavingsTiles savings={pantry.savings ?? []} />
-
-      {trends.length === 0 ? (
-        <Empty icon="cart">
-          <span>
-            Noch kein Verlauf. Sobald du einen Artikel zum zweiten Mal per Kassenbon importierst, siehst du hier,
-            wie sich sein Preis entwickelt.{' '}
-            <button className="link" onClick={() => navigate('/speisekammer/bon')}>Kassenbon importieren</button>
-          </span>
-        </Empty>
-      ) : (
-        <>
-          {GROUPS.map((g) => {
-            const list = trends.filter((t) => t.direction === g.key);
-            if (!list.length) return null;
-            return (
-              <Section key={g.key} title={`${g.title} (${list.length})`}>
-                <ul className="prices">
-                  {list.map((t) => <PriceCard key={`${t.name}|${t.unit}`} trend={t} />)}
-                </ul>
-              </Section>
-            );
-          })}
-          <p className="muted small center">Regalpreise vom Kassenbon – Rabatte und Coupons zählen nicht mit, damit du echte Preiserhöhungen siehst.</p>
-        </>
-      )}
-      <ProductsLink />
+      <div className="split split--prices">
+        <div className="split__main">
+          <SavingsTiles savings={pantry.savings ?? []} />
+        </div>
+        <div className="split__side">
+          {trends.length === 0 ? (
+            <Empty icon="cart">
+              <span>
+                Noch kein Verlauf. Sobald du einen Artikel zum zweiten Mal per Kassenbon importierst, siehst du hier,
+                wie sich sein Preis entwickelt.{' '}
+                <button className="link" onClick={() => navigate('/speisekammer/bon')}>Kassenbon importieren</button>
+              </span>
+            </Empty>
+          ) : (
+            <>
+              {GROUPS.map((g) => {
+                const list = trends.filter((t) => t.direction === g.key);
+                if (!list.length) return null;
+                return (
+                  <Section key={g.key} title={`${g.title} (${list.length})`}>
+                    <ul className="prices">
+                      {list.map((t) => <PriceCard key={`${t.name}|${t.unit}`} trend={t} />)}
+                    </ul>
+                  </Section>
+                );
+              })}
+              <p className="muted small center">Regalpreise vom Kassenbon – Rabatte und Coupons zählen nicht mit, damit du echte Preiserhöhungen siehst.</p>
+            </>
+          )}
+        </div>
+      </div>
     </main>
   );
 }

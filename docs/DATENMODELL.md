@@ -45,9 +45,17 @@ Einzel-Dokumente, die ebenfalls auf alle Geräte abgeglichen werden:
 
 | `_id` | Inhalt | Konflikt (offline auf zwei Geräten geändert) |
 |---|---|---|
-| `meine-produkte` | `MyProduct[]` – Werte vom Etikett; `replaces` (Einträge der Tabelle) und/oder `names` (Zutatennamen, die die Tabelle nicht kennt) | neueste Fassung gewinnt |
-| `wochenplan` | `MealPlan` – `items: {recipeId, servings}[]`, abgehakte Einkäufe `checked`, diese Woche gekochte Gerichte `cooked`, „Doch kaufen“ trotz Vorrat `buy` | neueste Fassung gewinnt |
-| `speisekammer` | `Pantry` – Vorräte `items` (Name, Menge nur wo bekannt, Kaufdatum `boughtAt`, optional eigenes „Verbrauchen bis“ `useBy` – sonst geschätzt aus Art bzw. Lebensmittel, siehe `domain/shelfLife.ts`), eigene Richtwerte `shelfDays` (`kinds` je Art, `foods` je Lebensmittel, `reduced`/`frozen`/`thawed` für MHD-Ware, Gefrorenes, Aufgetautes), `cookLog` (was „Gekocht“ je geplantem Rezept genommen hat – Haken zurück = Zutaten zurück), schon importierte Bons `receipts` (Einkaufstag|Endbetrag, gegen doppelten Import), gelernte Bon-Artikel `rules` (auch Stück je Packung, z. B. 10er-Eier) (Bon-Name → Name, Menge je Stück, oder „überspringen“), zuletzt bezahlte Preise `prices` (€ je g oder je Stück), alle Preise mit Einkaufsdatum `history` (Preisverlauf) und die Ersparnis je Bon `savings` (Lidl Plus, Angebote) | neueste Fassung gewinnt |
+| `meine-produkte` | `MyProduct[]` – Werte vom Etikett; `replaces` (Einträge der Tabelle) und/oder `names` (Zutatennamen, die die Tabelle nicht kennt) | vereint (siehe unten) |
+| `wochenplan` | `MealPlan` – `items: {recipeId, servings}[]`, abgehakte Einkäufe `checked`, diese Woche gekochte Gerichte `cooked`, „Doch kaufen“ trotz Vorrat `buy` | vereint (siehe unten) |
+| `speisekammer` | `Pantry` – Vorräte `items` (Name, Menge nur wo bekannt, Kaufdatum `boughtAt`, optional eigenes „Verbrauchen bis“ `useBy` – sonst geschätzt aus Art bzw. Lebensmittel, siehe `domain/shelfLife.ts`), eigene Richtwerte `shelfDays` (`kinds` je Art, `foods` je Lebensmittel, `reduced`/`frozen`/`thawed` für MHD-Ware, Gefrorenes, Aufgetautes), „Immer im Haus“ `basics` (Namen; fehlt die Liste, gilt die Vorbelegung Pasta, Reis, Gochujang, Miso, Sesam, Sojasauce), `cookLog` (was „Gekocht“ je geplantem Rezept genommen hat – Haken zurück = Zutaten zurück), schon importierte Bons `receipts` (Einkaufstag|Endbetrag, gegen doppelten Import), gelernte Bon-Artikel `rules` (auch Stück je Packung, z. B. 10er-Eier) (Bon-Name → Name, Menge je Stück, oder „überspringen“), zuletzt bezahlte Preise `prices` (€ je g oder je Stück), alle Preise mit Einkaufsdatum `history` (Preisverlauf) und die Ersparnis je Bon `savings` (Lidl Plus, Angebote) | vereint (siehe unten) |
+
+**Zusammenführen statt Überschreiben** (`domain/syncMerge.ts`):
+- **Beim Speichern** gibt die App den Stand mit, den sie verändert hat (`base`). Der Speicherweg wendet diese
+  Änderung auf das an, was gerade in der Datenbank liegt (merge3) – liegt dort inzwischen etwas vom anderen Gerät,
+  bleibt es erhalten. Mengen in der Speisekammer werden dabei verrechnet (400 g verkocht + 500 g gekauft).
+  Rezepte ebenso: Versionen/Bewertungen beider Seiten, einfache Felder (Favorit, Notiz …) je nachdem, wer sie geändert hat.
+- **Offline-Konflikt** (beide Geräte ohne Netz geändert, kein gemeinsamer Stand bekannt): beide Fassungen werden
+  vereint (union…); bei gleichem Eintrag gewinnt die neuere. Gelöschtes kann dabei wieder auftauchen – bewusst, lieber als Datenverlust.
 
 `MyProduct` kann zusätzlich `packageAmount`/`packageUnit` (Packungsgröße – füllt beim Kassenbon die
 Menge aus), `packagePrice` (Preis von Hand), `ean` (Barcode, per Scan über Open Food Facts) und `shelfDays` („hält X Tage ab Kauf“) tragen. `PantryItem` kann `reduced` (MHD-Ware, vom Bon „RABATT 20%“ oder von Hand) und `frozenAt` (eingefroren am …, auch direkt beim Bon-Import, ganz oder Teil der Packungen) tragen; `ReceiptSavings.mhd` zählt MHD-Rabatte getrennt von den Angeboten.
