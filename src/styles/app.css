@@ -611,14 +611,14 @@ p { margin: 0; }
 .plan-list .stepper { flex: none; }
 .suggestion__text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 
-.shopping { list-style: none; margin: 0 0 8px; padding: 0; }
+.shopping { list-style: none; margin: 0; padding: 4px 14px; }
 .shopping__item { border-top: 1px solid var(--line); }
 .shopping__item:first-child { border-top: 0; }
 .shopping__item label { display: flex; align-items: center; gap: 12px; min-height: 46px; cursor: pointer; }
 .shopping__item input { width: 22px; height: 22px; accent-color: var(--primary); flex: none; }
 .shopping__name { flex: 1; font-weight: 600; }
 .shopping__qty { color: var(--ink-2); font-variant-numeric: tabular-nums; text-align: right; }
-.shopping__from { display: block; margin: -10px 0 8px 34px; }
+.shopping__from { display: block; font-size: 0.78rem; font-weight: 400; color: var(--ink-3); }
 .shopping__item.is-done .shopping__name, .shopping__item.is-done .shopping__qty { color: var(--ink-3); text-decoration: line-through; }
 
 .sheet--tall { max-height: 85vh; display: flex; flex-direction: column; gap: 12px; }
@@ -814,3 +814,36 @@ p { margin: 0; }
 .bonrow__productlabel select { min-width: 0; flex: 1; }
 .ean { font-family: ui-monospace, Consolas, monospace; letter-spacing: 0.03em; }
 .scan-note .btn { margin-top: 6px; }
+
+/* ── Einkaufsliste als eigene Seite ──────────────────────────── */
+.shopping__text { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.3; padding: 8px 0; }
+.shopping__text .shopping__name { flex: none; }
+.shopping__item.is-done .shopping__from { text-decoration: none; }
+.page-head .cart-btn { align-self: center; }
+
+/* Wisch-Karten über die ganze Breite – die nächste Karte schaut nicht mehr herein, die Punkte zeigen, dass es mehr gibt */
+.swiper { grid-auto-columns: 100%; }
+@media (min-width: 768px) {
+  .swiper { grid-auto-columns: 100%; max-width: 640px; }
+}
+
+/* ── Suchfeld leeren ─────────────────────────────────────────── */
+.search .search__clear { margin-left: auto; flex: none; }
+
+/* ── Filter: Leiste unten fest ───────────────────────────────── */
+.filters { padding-bottom: 76px; }
+.filterbar {
+  position: fixed; z-index: 20; left: 50%; transform: translateX(-50%); width: min(560px, 100%);
+  bottom: calc(var(--nav-h) + var(--safe-b));
+  display: grid; grid-template-columns: 1fr 1.6fr; gap: 10px;
+  padding: 10px var(--gutter); background: var(--bg); border-top: 1px solid var(--line);
+  box-shadow: 0 -6px 18px rgb(45 71 72 / 0.06);
+}
+@media (min-width: 768px) {
+  /* Tablet: Navigation links statt unten */
+  .filterbar { bottom: 0; left: calc(var(--rail) + (100% - var(--rail)) / 2); width: min(720px, calc(100% - var(--rail))); padding-bottom: calc(10px + var(--safe-b)); }
+}
+
+/* ── Hinweis mit „Rückgängig“ ────────────────────────────────── */
+.toast { display: flex; align-items: center; gap: 12px; justify-content: center; }
+.toast__action { flex: none; color: #9fe3dc; font-weight: 700; padding: 4px 2px; text-decoration: underline; text-underline-offset: 3px; }

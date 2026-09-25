@@ -33,8 +33,6 @@ export function StartScreen() {
         <Icon name="sparkles" size={20} className="home-head__spark home-head__spark--a" />
         <Icon name="sparkles" size={14} className="home-head__spark home-head__spark--b" />
       </header>
-      <p className="home-q">Was möchtest du heute kochen?</p>
-
       {planned.length > 0 ? (
         <section className="today" aria-labelledby="today-title">
           <div className="row-between">
@@ -45,6 +43,8 @@ export function StartScreen() {
         </section>
       ) : daily ? (
         <section className="today" aria-labelledby="today-title">
+          {/* Die Frage passt nur, wenn noch nichts geplant ist – beim Plan steht die Antwort ja schon da */}
+          <p className="home-q">Was möchtest du heute kochen?</p>
           <h2 className="today__title" id="today-title"><Icon name="sparkles" size={18} /> Rezept des Tages</h2>
           <BigCard recipe={daily} servings={currentContent(daily).servings} daily />
         </section>

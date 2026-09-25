@@ -4,7 +4,7 @@ import { useStoreReady } from './data/store';
 import { useRoute, type Route } from './router';
 import { BottomNav } from './ui/components/BottomNav';
 import { StatusBanner } from './ui/components/StatusBanner';
-import { useToast } from './ui/toast';
+import { dismissToast, useToast } from './ui/toast';
 import { AiCreateScreen } from './ui/screens/AiCreateScreen';
 import { ConnectScreen } from './ui/screens/ConnectScreen';
 import { CookbookScreen } from './ui/screens/CookbookScreen';
@@ -14,6 +14,7 @@ import { MoreScreen } from './ui/screens/MoreScreens';
 import { PlanScreen } from './ui/screens/PlanScreen';
 import { PantryScreen } from './ui/screens/PantryScreen';
 import { PricesScreen } from './ui/screens/PricesScreen';
+import { ShoppingScreen } from './ui/screens/ShoppingScreen';
 import { ReceiptImportScreen } from './ui/screens/ReceiptImportScreen';
 import { RecipeDetailScreen } from './ui/screens/RecipeDetailScreen';
 import { RecipeFormScreen } from './ui/screens/RecipeFormScreen';
@@ -31,6 +32,7 @@ function resolve(route: Route): { screen: ReactElement; tab?: string } {
     case 'testen': return { screen: <TestingScreen /> };
     case 'plan': return { screen: <PlanScreen />, tab: '/plan' };
     case 'preise': return { screen: <PricesScreen />, tab: '/plan' };
+    case 'einkauf': return { screen: <ShoppingScreen />, tab: '/plan' };
     case 'speisekammer':
       if (b === 'bon') return { screen: <ReceiptImportScreen shared={route.query.has('geteilt')} /> };
       return { screen: <PantryScreen />, tab: '/plan' };
@@ -71,7 +73,14 @@ export function App({ mode }: { mode: Mode | null }) {
       <StatusBanner />
       {screen}
       {!cooking && <BottomNav active={tab} onlyTablet={!tab} />}
-      {message && <div className="toast" role="status">{message}</div>}
+      {message && (
+        <div className="toast" role="status">
+          {message.text}
+          {message.action && (
+            <button className="toast__action" onClick={() => { message.action!.run(); dismissToast(); }}>{message.action.label}</button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

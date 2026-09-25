@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { recipeCost, sumCosts } from '../../domain/cost';
-import { buildShoppingList, suggestRecipes, type ShoppingItem, type Suggestion } from '../../domain/mealplan';
+import { buildShoppingList, suggestRecipes, type Suggestion } from '../../domain/mealplan';
 import { ingredientCompletions, longNotCooked, searchRecipes } from '../../domain/recipeSearch';
 import { withMyProducts } from '../../domain/nutrition/myProducts';
 import { currentContent } from '../../domain/recipe';
 import type { Recipe } from '../../domain/types';
 import {
-  addToPlan, clearPlan, removeFromPlan, setPlanServings, togglePlanCooked, toggleShoppingItem, usePlan, useProducts, useRecipes,
+  addToPlan, clearPlan, removeFromPlan, setPlanServings, togglePlanCooked, usePlan, useProducts, useRecipes,
 } from '../../data/store';
 import { navigate } from '../../router';
 import { foodTable } from '../../services';
@@ -33,7 +33,6 @@ export function PlanScreen() {
   const products = useProducts();
   const plan = usePlan();
   const [picking, setPicking] = useState(false);
-  const [showPantry, setShowPantry] = useState(false);
 
   const table = useMemo(() => withMyProducts(foodTable, products), [products]);
   const items = plan.items
@@ -43,11 +42,9 @@ export function PlanScreen() {
     // Gekochtes rutscht nach unten – oben steht, was noch ansteht
     .sort((a, b) => Number(a.cooked) - Number(b.cooked));
   const suggestions = useMemo(() => suggestRecipes(plan, recipes.filter(plannable), table), [plan, recipes, table]);
+  // Für das Einkaufswagen-Symbol: wie viel noch zu kaufen ist (ohne Basics wie Öl und Gewürze)
   const shopping = useMemo(() => buildShoppingList(plan, recipes, table), [plan, recipes, table]);
-  const pantryCount = shopping.filter((i) => i.pantry).length;
-  const visible = shopping.filter((i) => showPantry || !i.pantry);
-  const open = visible.filter((i) => !plan.checked.includes(i.key));
-  const done = visible.filter((i) => plan.checked.includes(i.key));
+  const toBuy = shopping.filter((i) => !i.pantry && !plan.checked.includes(i.key)).length;
   const portions = items.reduce((s, i) => s + i.servings, 0);
   const { prices } = usePricing();
   const costs = useMemo(() => new Map(items.map((i) => [i.recipeId, recipeCost(currentContent(i.recipe), i.servings, table, prices)])), [items, table, prices]);
@@ -104,8 +101,18 @@ export function PlanScreen() {
         <button className="btn btn--soft btn--block" onClick={() => setPicking(true)}>
           <Icon name="plus" size={18} /> Gericht hinzufügen
         </button>
+        {items.length > 0 && (
+          <button className="link link--muted center" onClick={() => confirm('Neue Woche beginnen? Plan, Haken und „Gekocht“ werden geleert – die Rezepte bleiben natürlich.') && clearPlan()}>
+            Neue Woche beginnen
+          </button>
+        )}
       </Section>
+    </>
+  );
 
+  // „Passt dazu“ – auf dem Tablet in der rechten Spalte
+  const suggestionList = (
+    <>
       {suggestions.length > 0 && (
         <Section icon="sparkles" title="Passt dazu">
           <p className="muted small">Diese Rezepte teilen Zutaten mit deinem Plan.</p>
@@ -130,50 +137,26 @@ export function PlanScreen() {
     </>
   );
 
-  const shoppingList = items.length > 0 && (
-    <Section icon="cart" title={`Einkaufsliste${open.length ? ` (${open.length})` : ''}`}>
-      <div className="panel">
-        {visible.length === 0 && <p className="muted small">Nichts einzukaufen.</p>}
-        <ul className="shopping">
-          {[...open, ...done].map((i) => <ShoppingRow key={i.key} item={i} checked={plan.checked.includes(i.key)} />)}
-        </ul>
-        {pantryCount > 0 && (
-          <button className="link" onClick={() => setShowPantry(!showPantry)}>
-            {showPantry ? 'Grundvorrat ausblenden' : `Grundvorrat zeigen (${pantryCount}: Öl, Gewürze …)`}
-          </button>
-        )}
-      </div>
-      <button className="link link--muted center" onClick={() => confirm('Neue Woche beginnen? Plan und Haken werden geleert – die Rezepte bleiben natürlich.') && clearPlan()}>
-        Neue Woche beginnen
-      </button>
-    </Section>
-  );
-
   return (
     <main className="screen screen--tabbed">
-      <header className="page-head"><h1>Wochenplan</h1></header>
+      <header className="page-head">
+        <h1>Wochenplan</h1>
+        <button className="iconbtn iconbtn--box cart-btn" onClick={() => navigate('/einkauf')}
+          aria-label={toBuy ? `Einkaufsliste – noch ${toBuy} Artikel` : 'Einkaufsliste'}>
+          <Icon name="cart" size={22} />
+          {toBuy > 0 && <span className="iconbtn__count">{toBuy}</span>}
+        </button>
+      </header>
       <PlanTabs active="plan" />
       <div className="plan-layout">
         <div className="plan-layout__main">{planList}</div>
-        <div className="plan-layout__side">{shoppingList}</div>
+        <div className="plan-layout__side">{suggestionList}</div>
       </div>
       {picking && <RecipePicker recipes={recipes.filter(plannable)} planned={plan.items.map((i) => i.recipeId)} suggestions={suggestions} onPick={add} onClose={() => setPicking(false)} />}
     </main>
   );
 }
 
-function ShoppingRow({ item, checked }: { item: ShoppingItem; checked: boolean }) {
-  return (
-    <li className={`shopping__item${checked ? ' is-done' : ''}`}>
-      <label>
-        <input type="checkbox" checked={checked} onChange={() => toggleShoppingItem(item.key)} />
-        <span className="shopping__name">{item.name}</span>
-        <span className="shopping__qty">{item.quantity}</span>
-      </label>
-      {item.from.length > 1 && <span className="shopping__from small muted">{item.from.length} Rezepte</span>}
-    </li>
-  );
-}
 
 /**
  * Auswahl als Blatt von unten. Ohne Suchbegriff: Vorschläge in Gruppen

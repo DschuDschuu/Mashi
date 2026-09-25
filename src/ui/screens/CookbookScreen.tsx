@@ -66,6 +66,11 @@ export function CookbookScreen({ route }: { route: Route }) {
         <label className="search">
           <Icon name="search" size={20} />
           <input value={f.query} onChange={(e) => set({ query: e.target.value })} placeholder="Suchen …" aria-label="Rezepte suchen" />
+          {f.query && (
+            <button type="button" className="iconbtn iconbtn--sm search__clear" onClick={() => set({ query: '' })} aria-label="Suche leeren">
+              <Icon name="close" size={16} />
+            </button>
+          )}
         </label>
         <button className={`iconbtn iconbtn--box${count ? ' is-on' : ''}`} onClick={() => setOpen(!open)} aria-expanded={open} aria-label="Filter">
           <Icon name="sliders" />
@@ -119,7 +124,13 @@ export function CookbookScreen({ route }: { route: Route }) {
           <FilterGroup title="Tags">
             <ChipSelect options={allTags.map((t) => ({ value: t, label: t }))} selected={f.tags ?? []} onChange={(tags) => set({ tags })} />
           </FilterGroup>
-          {count > 0 && <button className="link" onClick={() => setF({ query: f.query })}>Zurücksetzen</button>}
+          {/* Fest unten, damit man nach dem Auswählen nicht zurückscrollen muss */}
+          <div className="filterbar">
+            <button className="btn btn--ghost" disabled={!count} onClick={() => setF({ query: f.query })}>Zurücksetzen</button>
+            <button className="btn btn--primary" onClick={() => setOpen(false)}>
+              Fertig · {recipeCount(result.length)}
+            </button>
+          </div>
         </div>
       )}
 

@@ -4,6 +4,7 @@ import type { FoodTable } from './nutrition/types';
 import type { ReceiptLine } from './receipt';
 import type { ReceiptSavings } from './savings';
 import { currentContent } from './recipe';
+import type { MealPlan } from './mealplan';
 import type { Recipe, RecipeContent } from './types';
 
 /**
@@ -236,6 +237,24 @@ export interface PantryMatch {
  * Rezepte nach Übereinstimmung mit der Speisekammer. Grundvorrat (Öl, Salz, Gewürze) zählt
  * nicht mit – den hat man. Hähnchen & Co. wiegen mehr als Gemüse (wie im Wochenplan).
  */
+/**
+ * Was nach dem Wochenplan übrig bleibt: die noch nicht gekochten, geplanten Gerichte werden
+ * gedanklich schon abgezogen. Vorräte ohne Menge, die ein geplantes Gericht braucht, gelten als verplant.
+ */
+export function pantryAfterPlan(pantry: Pantry, plan: MealPlan, recipes: Recipe[], table: FoodTable): Pantry {
+  let rest = pantry;
+  const reserved = new Set<string>();
+  for (const item of plan.items) {
+    if (plan.cooked.includes(item.recipeId)) continue;
+    const r = recipes.find((x) => x.id === item.recipeId);
+    if (!r) continue;
+    const d = deductRecipe(rest, currentContent(r), item.servings, table);
+    d.toCheck.forEach((name) => reserved.add(receiptKey(name)));
+    rest = d.pantry;
+  }
+  return { ...rest, items: rest.items.filter((it) => !reserved.has(receiptKey(it.name))).map((it) => ({ ...it, check: false })) };
+}
+
 export function recipesFromPantry(pantry: Pantry, recipes: Recipe[], table: FoodTable, limit = 8): PantryMatch[] {
   const inStock = new Set(pantry.items.map((it) => itemAsIngredient(it, table)?.key).filter(Boolean));
   if (!inStock.size) return [];

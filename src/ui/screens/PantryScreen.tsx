@@ -1,10 +1,9 @@
 import { useMemo, useState } from 'react';
 import { resolveIngredient } from '../../domain/mealplan';
 import { withMyProducts } from '../../domain/nutrition/myProducts';
-import { recipesFromPantry, type PantryItem, type PantryUnit } from '../../domain/pantry';
+import { pantryAfterPlan, recipesFromPantry, type PantryItem, type PantryUnit } from '../../domain/pantry';
 import { currentContent } from '../../domain/recipe';
 import { formatAmount } from '../../domain/scaling';
-import type { FoodKind } from '../../domain/nutrition/types';
 import {
   addPantryItem, addToPlan, answerPantryCheck, forgetReceiptRule, removePantryItem, updatePantryItem,
   usePantry, usePlan, useProducts, useRecipes,
@@ -16,18 +15,11 @@ import { Icon } from '../components/Icon';
 import { PlanTabs } from '../components/PlanTabs';
 import { RecipeImage } from '../components/RecipeImage';
 import { IngredientNames } from '../components/IngredientNames';
+import { groupByKind } from '../foodGroups';
 import { toast } from '../toast';
 
 const UNITS: PantryUnit[] = ['g', 'ml', 'Stück'];
 
-/** Gruppen wie im Laden – damit die Liste nicht nur ein langer Haufen ist. */
-const GROUPS: { title: string; kinds: (FoodKind | undefined)[] }[] = [
-  { title: 'Fleisch, Fisch & Eier', kinds: ['protein', 'egg'] },
-  { title: 'Milchprodukte', kinds: ['dairy'] },
-  { title: 'Nudeln, Reis & Brot', kinds: ['staple', 'bread'] },
-  { title: 'Obst & Gemüse', kinds: ['vegetable', 'fruit'] },
-  { title: 'Sonstiges', kinds: [undefined] },
-];
 
 export const quantityLabel = (item: Pick<PantryItem, 'amount' | 'unit'>) =>
   item.amount === undefined ? 'vorhanden' : `${formatAmount(item.amount, item.unit === 'Stück' ? 'Stück' : 'g')} ${item.unit ?? ''}`.trim();
@@ -47,9 +39,18 @@ export function PantryScreen() {
   const [editing, setEditing] = useState<string | null>(null);
   const table = useMemo(() => withMyProducts(foodTable, products), [products]);
 
-  const kindOf = (item: PantryItem) => resolveIngredient({ id: item.id, name: item.name }, 1, table)?.food?.kind;
+  const kindOf = (item: PantryItem) => resolveIngredient({ id: item.id, name: item.name }, 1, table)?.kind;
   const toCheck = pantry.items.filter((i) => i.check);
-  const matches = useMemo(() => recipesFromPantry(pantry, recipes, table), [pantry, recipes, table]);
+  // Nur was nach dem Wochenplan übrig bleibt – und Gerichte, die schon eingeplant sind, nicht noch einmal vorschlagen
+  const matches = useMemo(() => {
+    const planned = new Set(plan.items.map((i) => i.recipeId));
+    const rest = pantryAfterPlan(pantry, plan, recipes, table);
+    return recipesFromPantry(rest, recipes.filter((r) => !planned.has(r.id)), table);
+  }, [pantry, plan, recipes, table]);
+  const remove = (item: PantryItem) => {
+    const undo = removePantryItem(item.id);
+    toast(`„${item.name}“ entfernt`, { label: 'Rückgängig', run: undo });
+  };
   const sorted = [...pantry.items].sort((a, b) => a.name.localeCompare(b.name, 'de'));
 
   return (
@@ -72,7 +73,10 @@ export function PantryScreen() {
               <li key={i.id} className="list__item pantry-check">
                 <span className="list__title">{i.name}</span>
                 <button className="btn btn--soft btn--sm" onClick={() => answerPantryCheck(i.id, true)}>Noch da</button>
-                <button className="btn btn--ghost btn--sm" onClick={() => answerPantryCheck(i.id, false)}>Aufgebraucht</button>
+                <button className="btn btn--ghost btn--sm" onClick={() => {
+                  const undo = answerPantryCheck(i.id, false);
+                  if (undo) toast(`„${i.name}“ aufgebraucht`, { label: 'Rückgängig', run: undo });
+                }}>Aufgebraucht</button>
               </li>
             ))}
           </ul>
@@ -82,11 +86,9 @@ export function PantryScreen() {
       {pantry.items.length === 0 ? (
         <Empty icon="archive">Noch leer. Importiere einen Kassenbon oder trag ein, was du da hast – Mashi zeigt dir dann, was du damit kochen kannst.</Empty>
       ) : (
-        GROUPS.map((g) => {
-          const items = sorted.filter((i) => g.kinds.includes(kindOf(i)));
-          if (!items.length) return null;
+        groupByKind(sorted, kindOf).map(({ title, items }) => {
           return (
-            <Section key={g.title} title={`${g.title} (${items.length})`}>
+            <Section key={title} title={`${title} (${items.length})`}>
               <ul className="pantry">
                 {items.map((i) => editing === i.id
                   ? <EditRow key={i.id} item={i} onDone={() => setEditing(null)} />
@@ -96,7 +98,7 @@ export function PantryScreen() {
                         <span className="pantry__name">{i.name}</span>
                         <span className="pantry__qty">{quantityLabel(i)}</span>
                       </button>
-                      <button className="iconbtn iconbtn--sm" aria-label={`${i.name} entfernen`} onClick={() => removePantryItem(i.id)}>
+                      <button className="iconbtn iconbtn--sm" aria-label={`${i.name} entfernen`} onClick={() => remove(i)}>
                         <Icon name="close" size={16} />
                       </button>
                     </li>

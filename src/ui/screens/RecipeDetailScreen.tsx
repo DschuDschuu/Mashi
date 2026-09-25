@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { categoryInfo, deviceInfo, DIFFICULTY_LABEL, SOURCE_INFO, STATUS_INFO } from '../../domain/catalog';
 import { currentContent, currentVersion, originalVersion } from '../../domain/recipe';
 import { formatQuantity, scaleIngredients } from '../../domain/scaling';
@@ -21,6 +21,7 @@ import { useRecipeCost } from '../useCosts';
 import { toast } from '../toast';
 import { useIsTablet } from '../useMediaQuery';
 import { useNutrition } from '../useNutrition';
+import { useSwipe } from '../useSwipe';
 
 const TABS = ['Zutaten', 'Zubereitung', 'Nährwerte', 'Notizen', 'Infos'] as const;
 type Tab = (typeof TABS)[number];
@@ -47,6 +48,17 @@ function Detail({ recipe }: { recipe: Recipe }) {
   const [imgBusy, setImgBusy] = useState(false);
   const n = useNutrition(c);
   const isTablet = useIsTablet();
+  const tabBar = useRef<HTMLDivElement>(null);
+  // Der gewählte Tab soll in der (seitlich scrollbaren) Tab-Leiste sichtbar sein – auch nach dem Wischen
+  // Nur seitlich verschieben – scrollIntoView würde sonst auch die ganze Seite nach oben ziehen
+  useEffect(() => {
+    const bar = tabBar.current;
+    const on = bar?.querySelector<HTMLElement>('.tab.is-on');
+    if (!bar || !on) return;
+    const b = bar.getBoundingClientRect();
+    const t = on.getBoundingClientRect();
+    if (t.left < b.left || t.right > b.right) bar.scrollLeft += t.left - b.left - 16;
+  }, [tab]);
 
   // Neue Version mit anderer Portionszahl → Regler nachziehen
   useEffect(() => {
@@ -153,14 +165,20 @@ const header = (
   // Auf dem Tablet stehen Zutaten und Zubereitung dauerhaft da – dann braucht es dafür keine Tabs.
   const tabs = isTablet ? TABLET_TABS : TABS;
   const activeTab: Tab = tabs.includes(tab) ? tab : tabs[0];
+  // Nach links wischen = nächster Tab, nach rechts = vorheriger
+  const step = (dir: 1 | -1) => {
+    const next = tabs[tabs.indexOf(activeTab) + dir];
+    if (next) setTab(next);
+  };
+  const swipe = useSwipe(() => step(1), () => step(-1));
   const tabArea = (
     <>
-      <div className="tabs" role="tablist">
+      <div className="tabs" role="tablist" ref={tabBar}>
         {tabs.map((t) => (
           <button key={t} role="tab" aria-selected={activeTab === t} className={`tab${activeTab === t ? ' is-on' : ''}`} onClick={() => setTab(t)}>{t}</button>
         ))}
       </div>
-      <div className="tabpanel" role="tabpanel">
+      <div className="tabpanel" role="tabpanel" {...swipe}>
         {activeTab === 'Zutaten' && ingredientsPanel}
         {activeTab === 'Zubereitung' && stepsPanel}
         {activeTab === 'Nährwerte' && <><NutritionDetails n={n} servings={servings} /><UnknownIngredients n={n} /></>}

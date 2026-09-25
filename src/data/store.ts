@@ -423,14 +423,27 @@ export function updatePantryItem(id: string, patch: Partial<Pick<PantryItem, 'na
   commitPantry({ ...pantry, items: pantry.items.map((i) => (i.id === id ? { ...i, ...patch, check: false } : i)) });
 }
 
-export function removePantryItem(id: string) {
+/** Entfernen – gibt „Rückgängig“ zurück: legt den Vorrat an dieselbe Stelle zurück. */
+export function removePantryItem(id: string): () => void {
+  const index = pantry.items.findIndex((i) => i.id === id);
+  const removed = pantry.items[index];
   commitPantry({ ...pantry, items: pantry.items.filter((i) => i.id !== id) });
+  return () => {
+    if (!removed || pantry.items.some((i) => i.id === removed.id)) return;
+    const items = [...pantry.items];
+    items.splice(Math.min(index, items.length), 0, { ...removed, check: false });
+    commitPantry({ ...pantry, items });
+  };
 }
 
 /** Antwort auf „Noch da?“ nach dem Kochen. */
-export function answerPantryCheck(id: string, stillThere: boolean) {
-  if (stillThere) commitPantry({ ...pantry, items: pantry.items.map((i) => (i.id === id ? { ...i, check: false } : i)) });
-  else removePantryItem(id);
+/** Antwort auf „Noch da?“ – „Aufgebraucht“ lässt sich rückgängig machen. */
+export function answerPantryCheck(id: string, stillThere: boolean): (() => void) | undefined {
+  if (stillThere) {
+    commitPantry({ ...pantry, items: pantry.items.map((i) => (i.id === id ? { ...i, check: false } : i)) });
+    return undefined;
+  }
+  return removePantryItem(id);
 }
 
 /** Gelernten Bon-Artikel vergessen (z. B. falsch zugeordnet). */

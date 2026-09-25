@@ -309,6 +309,11 @@ export function ProductForm({ initial, onSave, onCancel }: { initial?: Partial<M
         <label className="search">
           <Icon name="search" size={18} />
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Lebensmittel suchen, z. B. Milch" aria-label="Lebensmittel suchen" />
+          {search && (
+            <button type="button" className="iconbtn iconbtn--sm search__clear" onClick={() => setSearch('')} aria-label="Suche leeren">
+              <Icon name="close" size={16} />
+            </button>
+          )}
         </label>
         {hits.length > 0 && (
           <div className="chips">

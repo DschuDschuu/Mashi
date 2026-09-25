@@ -154,3 +154,14 @@ describe('Gekocht im Plan', () => {
     expect(normalizePlan({ items: [{ recipeId: 'a', servings: 2 }], checked: [], updatedAt: 'x' }).cooked).toEqual([]);
   });
 });
+
+describe('Einkaufsliste nach Art', () => {
+  it('jeder Eintrag kennt seine Art – für Gruppen wie im Laden', () => {
+    const a = make('a', 'A', [
+      { id: '1', name: 'Hähnchenbrust', amount: 300, unit: 'g' }, { id: '2', name: 'Paprika', amount: 1, unit: 'Stück' },
+      { id: '3', name: 'Joghurt', amount: 150, unit: 'g' }, { id: '4', name: 'Tortillas', amount: 4, unit: 'Stück' },
+    ]);
+    const kinds = Object.fromEntries(buildShoppingList(plan(['a', 2]), [a], localFoodTable).map((i) => [i.name, i.kind]));
+    expect(kinds).toEqual({ Hähnchenbrust: 'protein', Paprika: 'vegetable', 'Griechischer Joghurt': 'dairy', Tortillas: 'bread' });
+  });
+});

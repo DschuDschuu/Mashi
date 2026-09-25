@@ -78,6 +78,8 @@ export interface Resolved {
   pantry: boolean;
   /** Wichtigkeit für Vorschläge (siehe KIND_WEIGHT), 1 = normal */
   weight: number;
+  /** Art (Gemüse, Milchprodukt …) – für Gruppen in Einkaufsliste und Speisekammer */
+  kind?: FoodKind;
   /** das zugeordnete Lebensmittel (für Umrechnungen), fehlt bei unbekannten Zutaten */
   food?: FoodEntry;
   grams?: number;
@@ -105,6 +107,7 @@ export function resolveIngredient(ing: Ingredient, factor: number, table: FoodTa
     name: food?.name ?? ing.name,
     pantry: !!food && (!!food.negligible || PANTRY.has(food.ref.foodId)),
     weight: kind ? KIND_WEIGHT[kind] : 1,
+    kind,
     food,
     grams,
     amount,
@@ -177,6 +180,8 @@ export interface ShoppingItem {
   pantry: boolean;
   /** aus welchen Rezepten */
   from: string[];
+  /** Art des Lebensmittels – die Liste wird danach gruppiert wie im Laden */
+  kind?: FoodKind;
 }
 
 /**
@@ -185,13 +190,13 @@ export interface ShoppingItem {
  * Was sich nicht umrechnen lässt, steht getrennt da – nie falsch zusammengezählt.
  */
 export function buildShoppingList(plan: MealPlan, all: Recipe[], table: FoodTable): ShoppingItem[] {
-  const groups = new Map<string, { name: string; pantry: boolean; parts: Resolved[]; from: Set<string> }>();
+  const groups = new Map<string, { name: string; pantry: boolean; kind?: FoodKind; parts: Resolved[]; from: Set<string> }>();
   for (const item of plan.items) {
     const r = all.find((x) => x.id === item.recipeId);
     if (!r) continue;
     const title = currentContent(r).title;
     for (const x of resolveRecipe(r, item.servings, table)) {
-      const g = groups.get(x.key) ?? { name: x.name, pantry: x.pantry, parts: [], from: new Set<string>() };
+      const g = groups.get(x.key) ?? { name: x.name, pantry: x.pantry, kind: x.kind, parts: [], from: new Set<string>() };
       g.parts.push(x);
       g.from.add(title);
       groups.set(x.key, g);
@@ -199,7 +204,7 @@ export function buildShoppingList(plan: MealPlan, all: Recipe[], table: FoodTabl
   }
 
   return [...groups.entries()]
-    .map(([key, g]) => ({ key, name: g.name, quantity: quantityOf(g.parts), pantry: g.pantry, from: [...g.from] }))
+    .map(([key, g]) => ({ key, name: g.name, quantity: quantityOf(g.parts), pantry: g.pantry, from: [...g.from], ...(g.kind ? { kind: g.kind } : {}) }))
     .sort((a, b) => a.name.localeCompare(b.name, 'de'));
 }
 

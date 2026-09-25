@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createMockRecipes } from '../data/mockRecipes';
 import { localFoodTable } from './nutrition/localFoods';
-import { addItem, applyImport, deductRecipe, emptyPantry, proposeImport, recipesFromPantry, type Pantry } from './pantry';
+import { addItem, applyImport, deductRecipe, emptyPantry, pantryAfterPlan, proposeImport, recipesFromPantry, type Pantry } from './pantry';
 import { parseReceipt } from './receipt';
 import type { Ingredient, Recipe, RecipeContent } from './types';
 
@@ -109,5 +109,25 @@ describe('Was kann ich kochen?', () => {
 
   it('leere Speisekammer: keine Vorschläge', () => {
     expect(recipesFromPantry(emptyPantry(), recipes, localFoodTable)).toEqual([]);
+  });
+});
+
+describe('Was nach dem Wochenplan übrig bleibt', () => {
+  const planned = recipe('geplant', [{ id: '1', name: 'Hähnchenbrust', amount: 300, unit: 'g' }, { id: '2', name: 'Paprika', amount: 1, unit: 'Stück' }]);
+  const other = recipe('neu', [{ id: '1', name: 'Hähnchenbrust', amount: 300, unit: 'g' }, { id: '2', name: 'Reis', amount: 150, unit: 'g' }]);
+  const plan = (cooked: string[] = []) => ({ items: [{ recipeId: 'geplant', servings: 2 }], checked: [], cooked, updatedAt: '' });
+
+  it('zieht geplante, noch nicht gekochte Gerichte gedanklich ab – ohne die echte Speisekammer zu ändern', () => {
+    const p = stock(['Hähnchenbrust', 300, 'g'], ['Reis', 500, 'g'], ['Paprika', undefined, undefined]);
+    const rest = pantryAfterPlan(p, plan(), [planned, other], localFoodTable);
+    expect(rest.items.map((i) => [i.name, i.amount])).toEqual([['Reis', 500]]); // Hähnchen verplant, Paprika (ohne Menge) auch
+    expect(p.items).toHaveLength(3); // unverändert
+    // Das neue Gericht findet jetzt nur noch den Reis – das Hähnchen ist fürs geplante Gericht
+    expect(recipesFromPantry(rest, [other], localFoodTable)[0]).toMatchObject({ have: ['Reis'], missing: ['Hähnchenbrust'] });
+  });
+
+  it('schon Gekochtes ist schon abgezogen und wird nicht doppelt verplant', () => {
+    const p = stock(['Hähnchenbrust', 300, 'g']);
+    expect(pantryAfterPlan(p, plan(['geplant']), [planned], localFoodTable).items).toHaveLength(1);
   });
 });
