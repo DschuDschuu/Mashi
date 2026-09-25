@@ -27,7 +27,7 @@ export type CategoryId = string;
 export type Unit =
   | 'g' | 'kg' | 'ml' | 'l'
   | 'EL' | 'TL' | 'Prise'
-  | 'Stück' | 'Zehe' | 'Dose' | 'Bund' | 'Handvoll' | 'cm' | 'Messlöffel';
+  | 'Stück' | 'Zehe' | 'Dose' | 'Glas' | 'Bund' | 'Handvoll' | 'cm' | 'Messlöffel';
 
 export type Difficulty = 1 | 2 | 3;
 
@@ -110,7 +110,15 @@ export type RecipeImage =
   /** Prototyp: Pastellfläche mit Linienzeichnung statt Foto */
   | { kind: 'placeholder'; motif: ImageMotif; hue: number }
   /** Später: Supabase Storage URL (KI-Bild oder eigenes Foto) */
-  | { kind: 'url'; url: string; prompt?: string };
+  | {
+    kind: 'url'; url: string; prompt?: string;
+    /** Originalfoto (verkleinert) – damit der Ausschnitt später wieder änderbar ist */
+    original?: string;
+    /** gewählter Ausschnitt im Original: Mitte (Anteil 0–1) und Zoom */
+    crop?: ImageCrop;
+  };
+
+export interface ImageCrop { x: number; y: number; zoom: number }
 
 export interface Recipe {
   id: string;

@@ -75,7 +75,7 @@ function Feedback({ recipe }: { recipe: Recipe }) {
             }} />
           </label>
           {cropping && <ImageCropper src={cropping} onCancel={() => setCropping(null)}
-            onDone={(url) => { setPhoto({ kind: 'url', url }); setCropping(null); }} />}
+            onDone={({ url, original, crop }) => { setPhoto({ kind: 'url', url, original, crop }); setCropping(null); }} />}
           {!photo && <p className="muted small">Optional. Wird zum Bild des Rezepts – so sieht es bei dir aus.</p>}
         </div>
       </section>

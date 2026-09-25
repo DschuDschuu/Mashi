@@ -40,6 +40,8 @@ export function computeNutrition(content: RecipeContent, table: FoodTable, pick:
 
   const contributing = counted.filter((i) => i.food && i.grams !== undefined && (i.status === 'exact' || i.status === 'approx'));
   const total = sumNutrients(contributing.map((i) => ({ per100g: i.food!.per100g, grams: i.grams! })));
+  // Anteil je Zutat pro Portion – zeigt, welche Zutat am meisten ausmacht
+  for (const i of contributing) i.perServing = divide(sumNutrients([{ per100g: i.food!.per100g, grams: i.grams! }]), content.servings);
   const range = rangeOf(total, contributing);
   return { accuracy, total, perServing: divide(total, content.servings), items, ...(range ? { range } : {}) };
 }

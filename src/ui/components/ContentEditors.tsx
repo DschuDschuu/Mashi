@@ -5,7 +5,7 @@ import { Icon } from './Icon';
 import { AutoTextarea } from './AutoTextarea';
 import { IngredientNames } from './IngredientNames';
 
-const UNITS: Unit[] = ['g', 'kg', 'ml', 'l', 'EL', 'TL', 'Prise', 'Stück', 'Zehe', 'Dose', 'Bund', 'Handvoll', 'cm', 'Messlöffel'];
+const UNITS: Unit[] = ['g', 'kg', 'ml', 'l', 'EL', 'TL', 'Prise', 'Stück', 'Zehe', 'Dose', 'Glas', 'Bund', 'Handvoll', 'cm', 'Messlöffel'];
 
 /** Zutatenliste bearbeiten – geteilt von Testfeedback und Rezeptformular. */
 export function IngredientEditor({ items, onChange, newItem }: { items: Ingredient[]; onChange: (i: Ingredient[]) => void; newItem: () => Ingredient }) {

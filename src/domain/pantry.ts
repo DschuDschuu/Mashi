@@ -13,7 +13,7 @@ import type { Ingredient, Recipe, RecipeContent, Unit } from './types';
  * Speisekammer: was noch da ist. Gefüllt per Kassenbon oder von Hand,
  * geleert durch „Gekocht“. Mengen nur, wo bekannt – sonst „vorhanden“.
  */
-export type PantryUnit = 'g' | 'ml' | 'Stück';
+export type PantryUnit = 'g' | 'ml' | 'Stück' | 'Glas';
 
 export interface PantryItem {
   id: string;
@@ -210,8 +210,9 @@ function priceOf(row: ImportRow, date: string): PriceEntry | undefined {
   const paid = row.line.price;
   if (!paid) return undefined;
   const name = row.name.trim();
-  if (row.amount && row.unit !== 'Stück') return { name, perUnit: paid / row.amount, unit: 'g', date };
-  const pieces = row.unit === 'Stück' && row.amount ? row.amount : row.line.count;
+  const counted = row.unit === 'Stück' || row.unit === 'Glas';
+  if (row.amount && !counted) return { name, perUnit: paid / row.amount, unit: 'g', date };
+  const pieces = counted && row.amount ? row.amount : row.line.count;
   return { name, perUnit: paid / pieces, unit: 'Stück', date };
 }
 

@@ -65,7 +65,7 @@ werden nie gespeichert, sondern aus Zutaten × bekannten Preisen berechnet; Zuta
 genannt, nicht geschätzt.
 
 Vorschläge und Einkaufsliste werden nie gespeichert, sondern jedes Mal aus Plan + Rezepten
-berechnet (`domain/mealplan.ts`). Fotos liegen zugeschnitten im Kartenformat 4:3 (höchstens 800 px breit, JPEG) direkt im Rezept – der Ausschnitt wird beim Hochladen gewählt (`ui/components/ImageCropper.tsx`).
+berechnet (`domain/mealplan.ts`). Fotos liegen zugeschnitten im Kartenformat 4:3 (höchstens 800 px breit, JPEG) direkt im Rezept – der Ausschnitt wird beim Hochladen gewählt (`ui/components/ImageCropper.tsx`). Dazu `image.original` (das Foto verkleinert auf höchstens 1600 px) und `image.crop` (Mitte als Anteil + Zoom), damit der Ausschnitt später wieder änderbar ist. Einheit `Glas`: 1 Glas = Packungsgröße des eigenen Produkts, sonst Richtwert der Tabelle (Pesto 190 g), sonst grob 300 g.
 
 ## Geräte & Kategorien
 

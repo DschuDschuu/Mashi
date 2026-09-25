@@ -88,6 +88,8 @@ export interface IngredientNutrition {
   status: MatchStatus;
   food?: FoodEntry;
   grams?: number;
+  /** Anteil dieser Zutat pro Portion – nur wenn sie mitgerechnet wird */
+  perServing?: Nutrients;
 }
 
 export interface NutritionResult {

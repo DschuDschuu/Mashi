@@ -67,7 +67,7 @@ export function MyProductsPanel() {
             </div>
             <div className="product__main">
               <span className="product__kcal"><strong>{fmt(p.per100g.kcal)} kcal</strong> <em>pro 100 g</em></span>
-              <span className="small muted">{fmt(p.per100g.protein)} g Eiweiß · {fmt(p.per100g.carbs)} g KH · {fmt(p.per100g.fat)} g Fett</span>
+              <span className="small muted">{fmt(p.per100g.carbs)} g KH · {fmt(p.per100g.protein)} g Eiweiß · {fmt(p.per100g.fat)} g Fett</span>
               {p.packageAmount && (
                 <span className="small muted">
                   Packung: {fmt(p.packageAmount)} {p.packageUnit ?? 'g'}{p.packagePrice !== undefined && <> · {euro(p.packagePrice)}</>}
@@ -289,8 +289,8 @@ export function ProductForm({ initial, onSave, onCancel }: { initial?: Partial<M
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="z. B. Milch 0,1 % (Hausmarke)" />
       </label>
       <p className="small muted">Werte vom Etikett, pro 100 g bzw. 100 ml:</p>
-      <div className="row-2">{numField('kcal', 'kcal')}{numField('protein', 'Eiweiß (g)')}</div>
-      <div className="row-2">{numField('carbs', 'Kohlenhydrate (g)')}{numField('fat', 'Fett (g)')}</div>
+      <div className="row-2">{numField('kcal', 'kcal')}{numField('carbs', 'Kohlenhydrate (g)')}</div>
+      <div className="row-2">{numField('protein', 'Eiweiß (g)')}{numField('fat', 'Fett (g)')}</div>
 
       <p className="small muted">Packung (optional) – füllt beim Kassenbon die Menge aus und rechnet Kosten:</p>
       <div className="row-2 product-form__pack">

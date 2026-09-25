@@ -4,7 +4,7 @@ import type { FoodEntry } from './types';
 /** Standardvolumen in ml, falls das Lebensmittel nichts Eigenes angibt. */
 const DEFAULT_ML: Partial<Record<Unit, number>> = { EL: 15, TL: 5, Messlöffel: 30 };
 /** Grobe Standardgewichte – zählen immer als Schätzung. */
-const ROUGH_GRAMS: Partial<Record<Unit, number>> = { Prise: 0.5, Handvoll: 30, Bund: 50, Dose: 400 };
+const ROUGH_GRAMS: Partial<Record<Unit, number>> = { Prise: 0.5, Handvoll: 30, Bund: 50, Dose: 400, Glas: 300 };
 
 export interface GramConversion {
   grams: number;

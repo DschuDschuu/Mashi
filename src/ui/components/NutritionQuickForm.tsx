@@ -13,7 +13,8 @@ import { ChipSelect } from './Controls';
 import { Icon } from './Icon';
 import { parseNum, toField, type Values } from './productFields';
 
-const CORE = ['kcal', 'protein', 'carbs', 'fat'] as const;
+/** Reihenfolge wie überall in Mashi: kcal · Kohlenhydrate · Eiweiß · Fett */
+const CORE = ['kcal', 'carbs', 'protein', 'fat'] as const;
 const LABEL: Record<(typeof CORE)[number], string> = { kcal: 'kcal', protein: 'Eiweiß (g)', carbs: 'Kohlenhydrate (g)', fat: 'Fett (g)' };
 
 /**
@@ -73,7 +74,7 @@ export function NutritionQuickForm({ ingredient, onSave, onCancel }: {
       setNote(missing.length === 4
         ? 'Auf dem Foto war keine Nährwerttabelle zu lesen. Tipp: nah und gerade fotografieren – oder die Werte abtippen.'
         : missing.length
-          ? `Vom Etikett gelesen – ${missing.map((k) => LABEL[k].replace(' (g)', '')).join(', ')} bitte noch abtippen. Kurz mit dem Etikett vergleichen.`
+          ? `Vom Etikett gelesen – ${[...missing].sort((a, b) => CORE.indexOf(a) - CORE.indexOf(b)).map((k) => LABEL[k].replace(' (g)', '')).join(', ')} bitte noch abtippen. Kurz mit dem Etikett vergleichen.`
           : 'Vom Etikett gelesen – bitte kurz vergleichen, die Texterkennung verliest sich manchmal.');
     } catch (e) {
       console.error('Mashi: Etikett ließ sich nicht lesen', e);
@@ -118,7 +119,8 @@ export function NutritionQuickForm({ ingredient, onSave, onCancel }: {
   };
 
   const submit = () => {
-    const [kcal, protein, carbs, fat] = CORE.map((k) => parseNum(values[k]));
+    // nach Namen, nicht nach Position – die Reihenfolge der Felder darf sich ändern
+    const kcal = parseNum(values.kcal), protein = parseNum(values.protein), carbs = parseNum(values.carbs), fat = parseNum(values.fat);
     if (kcal === undefined || protein === undefined || carbs === undefined || fat === undefined) {
       return setError('Bitte alle vier Werte eintragen (pro 100 g bzw. 100 ml).');
     }

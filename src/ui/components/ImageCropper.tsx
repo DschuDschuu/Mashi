@@ -1,11 +1,22 @@
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent, type WheelEvent } from 'react';
 import { useSheet } from '../useSheet';
+import type { ImageCrop } from '../../domain/types';
 
 /** Kartenformat: so erscheint das Foto im Kochbuch (die Karten schneiden höchstens noch ein paar Pixel ab). */
 export const CARD_ASPECT = 4 / 3;
 const MAX_ZOOM = 4;
 /** Ausgabe: 800 px breit reicht fürs Handy und hält das Rezept-Dokument klein (es wird abgeglichen). */
 const OUT_WIDTH = 800;
+/** Original zum späteren Neu-Zuschneiden: verkleinert, damit das Rezept nicht zu groß wird */
+const ORIGINAL_MAX = 1600;
+
+export interface CropResult {
+  /** der Ausschnitt fürs Kochbuch */
+  url: string;
+  /** das (verkleinerte) Original – damit der Ausschnitt jederzeit änderbar bleibt */
+  original: string;
+  crop: ImageCrop;
+}
 
 /**
  * Bildausschnitt wählen: fester Rahmen im Kartenformat, das Bild darunter verschieben (Finger/Maus/Pfeiltasten)
@@ -14,9 +25,11 @@ const OUT_WIDTH = 800;
  * Intern merken wir uns die Bildmitte (in Bildpixeln) und den Zoom – nicht die Pixelposition im Rahmen.
  * So bleibt der Ausschnitt gleich, auch wenn sich die Rahmenbreite ändert (Drehen, Tablet).
  */
-export function ImageCropper({ src, onDone, onCancel, aspect = CARD_ASPECT }: {
+export function ImageCropper({ src, initial, onDone, onCancel, aspect = CARD_ASPECT }: {
   src: Blob | string;
-  onDone: (dataUrl: string) => void;
+  /** vorheriger Ausschnitt (beim Ändern) – sonst mittig, ganz herausgezoomt */
+  initial?: ImageCrop;
+  onDone: (result: CropResult) => void;
   onCancel: () => void;
   aspect?: number;
 }) {
@@ -34,7 +47,13 @@ export function ImageCropper({ src, onDone, onCancel, aspect = CARD_ASPECT }: {
     // Nach dem Aufräumen (anderes Bild, Dialog zu) keine Meldungen mehr – sonst meldet das
     // abgebrochene Laden „Fehler“, weil seine URL schon widerrufen ist.
     let live = true;
-    el.onload = () => { if (live) { setImg(el); setView({ cx: el.naturalWidth / 2, cy: el.naturalHeight / 2, zoom: 1 }); } };
+    el.onload = () => {
+      if (!live) return;
+      setImg(el);
+      setView(initial
+        ? { cx: initial.x * el.naturalWidth, cy: initial.y * el.naturalHeight, zoom: initial.zoom }
+        : { cx: el.naturalWidth / 2, cy: el.naturalHeight / 2, zoom: 1 });
+    };
     el.onerror = () => { if (live) setFailed(true); };
     el.src = url;
     return () => { live = false; if (typeof src !== 'string') URL.revokeObjectURL(url); };
@@ -136,7 +155,12 @@ export function ImageCropper({ src, onDone, onCancel, aspect = CARD_ASPECT }: {
     canvas.width = outW;
     canvas.height = Math.round(outW / aspect);
     canvas.getContext('2d')!.drawImage(img, v.cx - sw / 2, v.cy - sh / 2, sw, sh, 0, 0, canvas.width, canvas.height);
-    onDone(canvas.toDataURL('image/jpeg', 0.8));
+    onDone({
+      url: canvas.toDataURL('image/jpeg', 0.8),
+      // Schon ein Original (beim Ändern)? Dann bleibt es – sonst die neue Datei verkleinert aufheben
+      original: typeof src === 'string' ? src : downscaled(img, ORIGINAL_MAX),
+      crop: { x: v.cx / w, y: v.cy / h, zoom: v.zoom },
+    });
   };
 
   return (
@@ -169,4 +193,14 @@ export function ImageCropper({ src, onDone, onCancel, aspect = CARD_ASPECT }: {
       </div>
     </div>
   );
+}
+
+/** Bild auf höchstens max px (lange Seite) verkleinern, als JPEG */
+function downscaled(img: HTMLImageElement, max: number): string {
+  const scale = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(img.naturalWidth * scale);
+  canvas.height = Math.round(img.naturalHeight * scale);
+  canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL('image/jpeg', 0.75);
 }

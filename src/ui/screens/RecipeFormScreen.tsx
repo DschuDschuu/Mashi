@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { CATEGORIES } from '../../domain/catalog';
 import { cloneContent, currentContent, newId } from '../../domain/recipe';
-import type { Difficulty, RecipeContent, RecipeImage } from '../../domain/types';
+import type { Difficulty, RecipeContent, RecipeImage, ImageCrop } from '../../domain/types';
 import type { TextImport } from '../../domain/importText';
 import { createRecipe, regenerateImage, saveContent, setImage as storeImage, useRecipe } from '../../data/store';
 import { goBack, navigate } from '../../router';
@@ -37,7 +37,7 @@ export function RecipeFormScreen({ editId, draft }: { editId?: string; draft?: T
   const set = (patch: Partial<RecipeContent>) => setC((prev) => ({ ...prev, ...patch }));
 
   /** Bild, das gerade zugeschnitten wird: neu gewählte Datei oder das vorhandene Foto */
-  const [cropping, setCropping] = useState<Blob | string | null>(null);
+  const [cropping, setCropping] = useState<{ src: Blob | string; initial?: ImageCrop } | null>(null);
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -69,7 +69,7 @@ export function RecipeFormScreen({ editId, draft }: { editId?: string; draft?: T
   };
 
   return (
-    <main className="screen">
+    <main className="screen screen--cta">
       <TopBar title={existing ? 'Rezept bearbeiten' : draft ? 'Import prüfen' : 'Eigenes Rezept'} />
       <form className="stack" onSubmit={submit} noValidate>
         {draft && (
@@ -86,15 +86,15 @@ export function RecipeFormScreen({ editId, draft }: { editId?: string; draft?: T
           <div className="stack stack--tight">
             <label className="btn btn--soft">
               {image?.kind === 'url' ? 'Anderes Foto' : 'Eigenes Foto wählen'}
-              <input type="file" accept="image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) setCropping(f); e.target.value = ''; }} />
+              <input type="file" accept="image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) setCropping({ src: f }); e.target.value = ''; }} />
             </label>
-            {image?.kind === 'url' && <button type="button" className="btn btn--ghost btn--sm" onClick={() => setCropping(image.url)}>Ausschnitt ändern</button>}
+            {image?.kind === 'url' && <button type="button" className="btn btn--ghost btn--sm" onClick={() => setCropping(image.original ? { src: image.original, initial: image.crop } : { src: image.url })}>Ausschnitt ändern</button>}
             {image?.kind === 'url' && <button type="button" className="btn btn--ghost btn--sm" onClick={() => setImage(undefined)}>Foto entfernen</button>}
           </div>
         </div>
 
-        {cropping && <ImageCropper src={cropping} onCancel={() => setCropping(null)}
-          onDone={(url) => { setImage({ kind: 'url', url }); setCropping(null); }} />}
+        {cropping && <ImageCropper src={cropping.src} initial={cropping.initial} onCancel={() => setCropping(null)}
+          onDone={({ url, original, crop }) => { setImage({ kind: 'url', url, original, crop }); setCropping(null); }} />}
 
         <label className="field"><span>Titel</span>
           <input value={c.title} onChange={(e) => set({ title: e.target.value })} placeholder="z. B. Omas Kartoffelsalat" required />
@@ -149,7 +149,10 @@ export function RecipeFormScreen({ editId, draft }: { editId?: string; draft?: T
         )}
 
         {error && <p className="error" role="alert">{error}</p>}
-        <button className="btn btn--primary btn--block btn--lg" type="submit">{existing ? 'Als neue Version speichern' : 'Rezept speichern'}</button>
+        {/* immer erreichbar – auch mitten in langen Zutatenlisten */}
+        <div className="bottom-cta">
+          <button className="btn btn--primary btn--block btn--lg" type="submit">{existing ? 'Als neue Version speichern' : 'Rezept speichern'}</button>
+        </div>
       </form>
     </main>
   );

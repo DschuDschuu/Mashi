@@ -1,7 +1,7 @@
 import type { Ingredient, RecipeContent, Unit } from './types';
 
 /** Einheiten, die man in Brüchen denkt (½ EL) statt in Dezimalzahlen. */
-const COUNT_UNITS: ReadonlySet<Unit> = new Set(['EL', 'TL', 'Prise', 'Stück', 'Zehe', 'Dose', 'Bund', 'Handvoll', 'cm', 'Messlöffel']);
+const COUNT_UNITS: ReadonlySet<Unit> = new Set(['EL', 'TL', 'Prise', 'Stück', 'Zehe', 'Dose', 'Glas', 'Bund', 'Handvoll', 'cm', 'Messlöffel']);
 
 /** Skaliert die Zutatenmengen auf eine neue Portionszahl. Rundet NICHT – das macht erst die Anzeige. */
 export function scaleIngredients(content: RecipeContent, servings: number): Ingredient[] {
@@ -43,7 +43,7 @@ export function formatAmount(amount: number, unit?: Unit): string {
 }
 
 /** Einheiten mit eigener Mehrzahl – „2 Zehen“, nicht „2 Zehe“. Stück, EL, g … bleiben gleich. */
-const PLURAL: Partial<Record<Unit, string>> = { Zehe: 'Zehen', Dose: 'Dosen', Prise: 'Prisen' };
+const PLURAL: Partial<Record<Unit, string>> = { Zehe: 'Zehen', Dose: 'Dosen', Prise: 'Prisen', Glas: 'Gläser' };
 
 /** „2 Zehen“, „1½ EL“, „340 g“ – Menge und Einheit, wie sie im Rezept stehen. */
 export function formatUnitAmount(amount: number, unit?: Unit): string {

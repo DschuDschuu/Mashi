@@ -1110,3 +1110,9 @@ label.btn.is-disabled { opacity: 0.6; pointer-events: none; }
 .plan-list__hit { flex: 1 1 11rem; }
 .plan-list__meta { flex: 0 1 14rem; }
 .plan-list__meta .dishnut { row-gap: 0; }
+
+/* Anteil je Zutat unter „Wie wurde gerechnet?“ */
+.matchlist__per { grid-column: 2; color: var(--ink-2); }
+.matchlist__per strong { color: var(--ink); font-weight: 600; }
+/* Formulare mit fester Speichern-Leiste: unten Platz, damit nichts darunter verschwindet */
+.screen--cta { padding-bottom: calc(96px + var(--safe-b)); }

@@ -50,6 +50,14 @@ export interface MyProduct {
 
 export const MY_PRODUCTS_PROVIDER = 'mashi-meine-produkte';
 
+/** 1 Glas = Packungsgröße des Produkts (in g; ml über die Dichte des ersetzten Eintrags) */
+function glassOf(p: MyProduct, replaced?: FoodEntry): number | undefined {
+  if (!p.packageAmount) return undefined;
+  if (p.packageUnit === 'g' || p.packageUnit === undefined) return p.packageAmount;
+  if (p.packageUnit === 'ml') return p.packageAmount * (replaced?.density ?? 1);
+  return undefined;
+}
+
 /** Ein Produkt als Tabelleneintrag. Umrechnungen (Dichte, Stückgewicht) erbt es vom ersetzten Eintrag. */
 function asEntry(p: MyProduct, replaced?: FoodEntry): FoodEntry {
   return {
@@ -57,7 +65,7 @@ function asEntry(p: MyProduct, replaced?: FoodEntry): FoodEntry {
     name: p.name,
     per100g: p.per100g,
     ...(replaced?.density !== undefined ? { density: replaced.density } : {}),
-    ...(replaced?.portions ? { portions: replaced.portions } : {}),
+    ...(replaced?.portions || glassOf(p, replaced) ? { portions: { ...replaced?.portions, ...(glassOf(p, replaced) ? { Glas: glassOf(p, replaced) } : {}) } } : {}),
     ...(replaced?.kind ? { kind: replaced.kind } : {}),
     ...(replaced ? { baseId: replaced.ref.foodId } : {}),
     ...(p.shelfDays ? { shelfDays: p.shelfDays } : {}),
@@ -111,7 +119,8 @@ export function withMyProducts(base: FoodTable, products: MyProduct[]): FoodTabl
         if (ref.foodId.startsWith('sorten:')) {
           const key = ref.foodId.slice('sorten:'.length);
           const ps = byName.get(key) ?? byReplaced.get(key);
-          return ps && asGroup(ps, key, byReplaced.has(key) ? base.byRef({ provider: ref.provider, foodId: key }) : undefined);
+          const exact = base.matchName(key);
+          return ps && asGroup(ps, key, byReplaced.has(key) ? base.byRef({ provider: ref.provider, foodId: key }) : exact?.quality === 'exact' ? exact.food : undefined);
         }
         const p = products.find((x) => x.id === ref.foodId);
         return p ? asEntry(p) : undefined;
@@ -123,8 +132,10 @@ export function withMyProducts(base: FoodTable, products: MyProduct[]): FoodTabl
       // Eigene Namen zuerst: Du hast das Produkt ausdrücklich für diese Zutat angelegt.
       const n = normalizeName(name);
       const own = byName.get(n);
-      if (own) return { food: asGroup(own, n), quality: 'exact' };
       const m = base.matchName(name);
+      // Kennt die Tabelle den Namen genau (Pesto), übernimmt das Produkt deren Umrechnungen
+      // (1 Glas, 1 EL, Dichte) – falls du selbst keine Packungsgröße eingetragen hast
+      if (own) return { food: asGroup(own, n, m?.quality === 'exact' ? m.food : undefined), quality: 'exact' };
       const self = byOwnName.get(n);
       if (self) {
         // Umrechnungen (Dichte, Stückgewicht) vom ersetzten Eintrag behalten, wenn der Name dorthin führt

@@ -110,3 +110,10 @@ describe('Text aus einem Foto', () => {
     expect(cleanOcrText('Zutaten\n\n\n\n250 g Linsen\n')).toBe('Zutaten\n\n250 g Linsen');
   });
 });
+
+describe('Einheit Glas', () => {
+  it('liest „Glas“ und „Gläser“', () => {
+    expect(brief('1 Glas Pesto')).toBe('1 | Glas | Pesto');
+    expect(brief('2 Gläser Kichererbsen')).toBe('2 | Glas | Kichererbsen');
+  });
+});

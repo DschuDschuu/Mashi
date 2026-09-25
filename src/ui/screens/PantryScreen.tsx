@@ -26,7 +26,7 @@ import { BarcodeScanner } from '../components/BarcodeScanner';
 import type { MyProduct } from '../../domain/nutrition/myProducts';
 import { FOOD_CHOICES, normalizeName } from '../../domain/nutrition/localFoods';
 
-const UNITS: PantryUnit[] = ['g', 'ml', 'Stück'];
+const UNITS: PantryUnit[] = ['g', 'ml', 'Stück', 'Glas'];
 
 
 import { quantityLabel } from '../format';

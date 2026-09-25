@@ -40,6 +40,8 @@ function packOf(r: Row): Partial<MyProduct> {
   const n = parseAmount(r.amountText);
   if (n === undefined || r.line.weightKg !== undefined) return {};
   const unit = r.unit ?? 'g';
+  // „Glas“ ist selbst die Packung – daraus lässt sich keine Packungsgröße ablesen
+  if (unit === 'Glas') return {};
   return { packageAmount: n, packageUnit: unit };
 }
 

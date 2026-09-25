@@ -122,3 +122,20 @@ describe('Favorit unter den Sorten (★)', () => {
     expect(withFavorite(both, [A, B], null).some((p) => p.favorite)).toBe(false);
   });
 });
+
+describe('Einheit Glas', () => {
+  const A190: MyProduct = { ...A, packageAmount: 190, packageUnit: 'g' };
+  it('1 Glas = Packungsgröße des eigenen Produkts, sonst Richtwert der Tabelle', () => {
+    const glass = (t: typeof table) => computeNutrition({ ...dish(1), ingredients: [{ id: 'g', name: 'Grünes Pesto', amount: 1, unit: 'Glas' }] }, t);
+    expect(glass(withMyProducts(localFoodTable, [A190])).items[0].grams).toBe(190); // Produkt: 190 g
+    expect(glass(withMyProducts(localFoodTable, [A])).items[0].grams).toBe(190); // ohne Packungsgröße: Richtwert der Tabelle
+    expect(glass(localFoodTable).items[0].grams).toBe(190);                       // Tabelle: Pesto 190 g
+    expect(glass(localFoodTable).items[0].status).toBe('exact');
+  });
+
+  it('rechnet Vorrat in Glas gegen Gramm im Rezept', () => {
+    const p = { ...emptyPantry(), items: stockOf({ productId: 'p-a', amount: 2, unit: 'Glas' }) };
+    const d = deductRecipe(p, { ...dish(95), servings: 2 }, 2, withMyProducts(localFoodTable, [A190]));
+    expect(d.pantry.items[0].amount).toBeCloseTo(1.5); // 95 g von 2 Gläsern à 190 g
+  });
+});

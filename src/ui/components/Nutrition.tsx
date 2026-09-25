@@ -27,8 +27,8 @@ export function NutritionTiles({ n }: { n: NutritionResult }) {
   return (
     <div className="tiles">
       <div className="tile"><strong>{ca}{Math.round(p.kcal)}</strong><span>kcal</span></div>
-      <div className="tile"><strong>{gram(p.protein)}</strong><span>Protein</span></div>
       <div className="tile"><strong>{gram(p.carbs)}</strong><span>Kohlenhydr.</span></div>
+      <div className="tile"><strong>{gram(p.protein)}</strong><span>Protein</span></div>
       <div className="tile"><strong>{gram(p.fat)}</strong><span>Fett</span></div>
       <VariantRange n={n} />
     </div>
@@ -61,7 +61,7 @@ const MATCH_LABEL: Record<MatchStatus, string> = {
 
 export function NutritionDetails({ n, servings }: { n: NutritionResult; servings: number }) {
   const rows: [string, keyof NonNullable<NutritionResult['total']>][] = [
-    ['Kalorien', 'kcal'], ['Protein', 'protein'], ['Kohlenhydrate', 'carbs'], ['Fett', 'fat'],
+    ['Kalorien', 'kcal'], ['Kohlenhydrate', 'carbs'], ['Protein', 'protein'], ['Fett', 'fat'],
     ['Ballaststoffe', 'fiber'], ['Zucker', 'sugar'], ['Ges. Fettsäuren', 'satFat'], ['Salz', 'salt'],
   ];
   return (
@@ -98,6 +98,11 @@ export function NutritionDetails({ n, servings }: { n: NutritionResult; servings
                 {i.food && i.status !== 'unmatched' ? `${i.food.variants?.length ? (i.food.favoriteId ? `★ ${i.food.variants.find((v) => v.id === i.food!.favoriteId)?.name} (Favorit)` : `Ø ${i.food.variants.length} Sorten`) : i.food.name}${i.grams !== undefined ? ` · ${Math.round(i.grams)} g` : ''} · ` : ''}
                 {i.food?.userZero ? 'ohne Nährwerte (von dir)' : MATCH_LABEL[i.status]}
               </span>
+              {i.perServing && (
+                <span className="matchlist__per small">
+                  pro Portion: <strong>{Math.round(i.perServing.kcal)} kcal</strong> · {gram(i.perServing.carbs)} KH · {gram(i.perServing.protein)} Eiweiß · {gram(i.perServing.fat)} Fett
+                </span>
+              )}
               <ZeroToggle item={i} />
               {i.food?.variants && i.food.variants.length > 1 && <FavoriteChips item={i} />}
             </li>

@@ -49,4 +49,4 @@ export const euro = (n: number) => n.toLocaleString('de-DE', { style: 'currency'
 
 /** „980 g“, „3 Stück“ – oder „vorhanden“, wenn die Menge unbekannt ist. */
 export const quantityLabel = (item: Pick<PantryItem, 'amount' | 'unit'>) =>
-  item.amount === undefined ? 'vorhanden' : `${formatAmount(item.amount, item.unit === 'Stück' ? 'Stück' : 'g')} ${item.unit ?? ''}`.trim();
+  item.amount === undefined ? 'vorhanden' : `${formatAmount(item.amount, item.unit === 'Stück' || item.unit === 'Glas' ? 'Stück' : 'g')} ${item.unit ?? ''}`.trim();

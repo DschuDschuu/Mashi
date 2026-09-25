@@ -150,6 +150,11 @@ function resolveRecipe(r: Recipe, servings: number, table: FoodTable): Resolved[
 /** Wie viel von einem Vorrat eine Zutat braucht – in der Einheit des Vorrats. undefined = nicht umrechenbar. */
 export function needIn(item: Pick<PantryItem, 'unit'>, need: Resolved): number | undefined {
   if (need.amount === undefined) return undefined;
+  if (item.unit === 'Glas') {
+    if (need.unit === 'Glas') return need.amount;
+    const glass = need.food?.portions?.Glas;
+    return need.grams !== undefined && glass ? need.grams / glass : undefined;
+  }
   if (item.unit === 'Stück') {
     // Vom Bon kommt Dosenware als „Stück“ – eine Dose im Rezept ist ein Stück im Vorrat
     if (need.unit === 'Stück' || need.unit === 'Dose' || need.unit === undefined) return need.amount;
@@ -316,7 +321,7 @@ const scaleParts = (parts: Resolved[], f: number): Resolved[] => parts.map((p) =
 
 const stockLabel = (it: PantryItem) => (it.amount === undefined
   ? 'vorhanden'
-  : `${formatAmount(it.amount, it.unit === 'Stück' ? 'Stück' : 'g')} ${it.unit ?? ''}`.trim() + (it.frozenAt ? ' (gefroren)' : ''));
+  : `${formatAmount(it.amount, it.unit === 'Stück' || it.unit === 'Glas' ? 'Stück' : 'g')} ${it.unit ?? ''}`.trim() + (it.frozenAt ? ' (gefroren)' : ''));
 
 function quantityOf(parts: Resolved[]): string {
   const withAmount = parts.filter((p) => p.amount !== undefined);

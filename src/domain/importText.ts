@@ -22,10 +22,10 @@ export interface TextImport {
 const UNIT_WORDS: [RegExp, Unit][] = [
   [/^kg$/i, 'kg'], [/^g$/i, 'g'], [/^ml$/i, 'ml'], [/^(l|liter)$/i, 'l'],
   [/^EL$/, 'EL'], [/^TL$/, 'TL'], [/^Prisen?$/i, 'Prise'],
-  [/^(Stück|Stk\.?|Scheiben?)$/i, 'Stück'], [/^Zehen?$/i, 'Zehe'], [/^Dosen?$/i, 'Dose'],
+  [/^(Stück|Stk\.?|Scheiben?)$/i, 'Stück'], [/^Zehen?$/i, 'Zehe'], [/^Dosen?$/i, 'Dose'], [/^(Glas|Gläser)$/i, 'Glas'],
   [/^Bund$/i, 'Bund'], [/^Handvoll$/i, 'Handvoll'], [/^cm$/i, 'cm'], [/^Messlöffel$/i, 'Messlöffel'],
 ];
-const UNIT_PATTERN = 'kg|g|ml|[Ll]iter|l|EL|TL|Prisen?|Stück|Stk\\.?|Scheiben?|Zehen?|Dosen?|Bund|Handvoll|cm|Messlöffel';
+const UNIT_PATTERN = 'kg|g|ml|[Ll]iter|l|EL|TL|Prisen?|Stück|Stk\\.?|Scheiben?|Zehen?|Dosen?|Glas|Gläser|Bund|Handvoll|cm|Messlöffel';
 
 const FRACTIONS: Record<string, number> = { '½': 0.5, '¼': 0.25, '¾': 0.75, '⅓': 1 / 3, '⅔': 2 / 3 };
 const NUMBER = String.raw`(?:\d+(?:[.,]\d+)?\s*[½¼¾⅓⅔]?|[½¼¾⅓⅔])`;
