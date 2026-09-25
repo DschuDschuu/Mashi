@@ -11,7 +11,7 @@ import { formatMinutes, kcalLabel, portionCount } from '../format';
 import { toast } from '../toast';
 import { recipeNutrition } from '../useNutrition';
 import { expiryLabel } from '../../domain/shelfLife';
-import { openRecipeIdea, useUseUp } from '../useUseUp';
+import { useUseUp } from '../useUseUp';
 
 /**
  * Startseite: nur das, was heute ansteht. Geplantes als große Karten zum Wischen –
@@ -25,7 +25,7 @@ export function StartScreen() {
     .filter((i) => !plan.cooked.includes(i.recipeId)) // schon Gekochtes ist erledigt
     .map((i) => ({ recipe: recipes.find((r) => r.id === i.recipeId), servings: i.servings }))
     .filter((i): i is { recipe: Recipe; servings: number } => !!i.recipe);
-  const { expiring: all, usingUp, idea } = useUseUp();
+  const { expiring: all, usingUp } = useUseUp();
   // Jeder Name nur einmal – die Liste ist nach Dringlichkeit sortiert, der dringendste Eintrag bleibt
   const expiring = all.filter((e, i) => all.findIndex((o) => o.item.name === e.item.name) === i);
   const daily = recipeOfTheDay(recipes, new Date(), new Set(usingUp.keys()));
@@ -39,7 +39,7 @@ export function StartScreen() {
         <Icon name="sparkles" size={14} className="home-head__spark home-head__spark--b" />
       </header>
       {expiring.length > 0 && (
-        <button className="useup-banner" onClick={() => navigate('/speisekammer')}>
+        <button className="useup-banner" onClick={() => navigate('/reste')}>
           <Icon name="clock" size={18} />
           <span>
             <strong>Bald verbrauchen:</strong>{' '}
@@ -47,11 +47,6 @@ export function StartScreen() {
             {expiring.length > 3 ? ` und ${expiring.length - 3} mehr` : ''}
           </span>
           <Icon name="chevron" size={16} />
-        </button>
-      )}
-      {idea.length > 0 && (
-        <button className="link useup-idea" onClick={() => openRecipeIdea(idea)}>
-          <Icon name="sparkles" size={14} /> Kein Rezept braucht alles auf – passendes Rezept generieren
         </button>
       )}
       {planned.length > 0 ? (

@@ -3,10 +3,9 @@ import { resolveIngredient } from '../../domain/mealplan';
 import { withMyProducts } from '../../domain/nutrition/myProducts';
 import { recipesFromPantry, type PantryItem, type PantryUnit } from '../../domain/pantry';
 import { daysLabel, daysLeft, frozenSince, specialDays, useByOf } from '../../domain/shelfLife';
-import { currentContent } from '../../domain/recipe';
 import { formatAmount } from '../../domain/scaling';
 import {
-  addPantryItem, addToPlan, answerPantryCheck, forgetReceiptRule, freezePantryItem, removePantryItem, thawPantryItem, updatePantryItem,
+  addPantryItem, answerPantryCheck, forgetReceiptRule, freezePantryItem, removePantryItem, thawPantryItem, updatePantryItem,
   usePantry, usePlan, useProducts, useRecipes,
 } from '../../data/store';
 import { navigate } from '../../router';
@@ -14,10 +13,10 @@ import { foodTable } from '../../services';
 import { Empty, Section } from '../components/Controls';
 import { Icon } from '../components/Icon';
 import { PlanTabs } from '../components/PlanTabs';
-import { RecipeImage } from '../components/RecipeImage';
 import { IngredientNames } from '../components/IngredientNames';
 import { groupByKind } from '../foodGroups';
-import { openRecipeIdea, useUseUp } from '../useUseUp';
+import { useUseUp } from '../useUseUp';
+import { PantryMatchList, RecipeIdeaPanel } from '../components/PantryMatches';
 import { ShelfSettings } from '../components/ShelfSettings';
 import { toast } from '../toast';
 
@@ -133,40 +132,12 @@ export function PantryScreen() {
         })
       )}
 
-      {idea.length > 0 && (
-        <div className="panel useup-idea-panel">
-          <p className="small">Kein Rezept braucht <strong>{idea.join(', ')}</strong> zusammen auf.</p>
-          <button className="btn btn--soft btn--sm" onClick={() => openRecipeIdea(idea)}><Icon name="sparkles" size={16} /> Passendes Rezept generieren</button>
-        </div>
-      )}
+      <RecipeIdeaPanel idea={idea} />
 
       {matches.length > 0 && (
         <Section icon="sparkles" title="Was kann ich kochen?">
           <p className="muted small">Rezepte mit den meisten Zutaten aus deiner Speisekammer. Öl, Salz und Gewürze zählen nicht mit.</p>
-          <ul className="list">
-            {matches.map((m) => {
-              const inPlan = plan.items.some((i) => i.recipeId === m.recipe.id);
-              return (
-                <li key={m.recipe.id} className="list__item suggestion">
-                  <button className="plan-list__hit" onClick={() => navigate(`/rezept/${m.recipe.id}`)}>
-                    <RecipeImage image={m.recipe.image} size="sm" />
-                    <span className="suggestion__text">
-                      <span className="list__title">{currentContent(m.recipe).title}</span>
-                      <span className="small muted">
-                        {m.useUp.length > 0 && <span className="useup-hint">Braucht auf: {m.useUp.join(', ')} · </span>}
-                        {m.missing.length === 0 ? 'Alles da' : `${m.have.length} von ${m.have.length + m.missing.length} da · fehlt: ${m.missing.slice(0, 3).join(', ')}${m.missing.length > 3 ? ' …' : ''}`}
-                      </span>
-                    </span>
-                  </button>
-                  {!inPlan && (
-                    <button className="btn btn--soft btn--sm" onClick={() => { addToPlan(m.recipe.id); toast('Eingeplant'); }} aria-label={`${currentContent(m.recipe).title} einplanen`}>
-                      <Icon name="plus" size={16} /> Plan
-                    </button>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
+          <PantryMatchList matches={matches} />
         </Section>
       )}
 

@@ -21,6 +21,7 @@ import { RecipeFormScreen } from './ui/screens/RecipeFormScreen';
 import { StartScreen } from './ui/screens/StartScreen';
 import { TestFeedbackScreen } from './ui/screens/TestFeedbackScreen';
 import { TestingScreen } from './ui/screens/TestingScreen';
+import { UseUpScreen } from './ui/screens/UseUpScreen';
 
 /** Routen-Tabelle. Tabs zeigen die untere Navigation, Unterseiten nicht. */
 function resolve(route: Route): { screen: ReactElement; tab?: string } {
@@ -31,6 +32,7 @@ function resolve(route: Route): { screen: ReactElement; tab?: string } {
     // „Zum Testen“ ist kein eigener Tab mehr – erreichbar über Start und Kochbuch
     case 'testen': return { screen: <TestingScreen /> };
     case 'plan': return { screen: <PlanScreen />, tab: '/plan' };
+    case 'reste': return { screen: <UseUpScreen /> };
     case 'preise': return { screen: <PricesScreen />, tab: '/plan' };
     case 'einkauf': return { screen: <ShoppingScreen />, tab: '/plan' };
     case 'speisekammer':

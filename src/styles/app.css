@@ -897,7 +897,6 @@ p { margin: 0; }
 .pantry-freeze { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; width: 100%; }
 .pantry-freeze input { width: 6em; margin: 0 4px; }
 .pantry-frozen { margin: 0; }
-.useup-idea { display: inline-flex; align-items: center; gap: 6px; margin: -4px 0 8px; font-size: 0.88rem; }
 .useup-idea-panel { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
 .useup-idea-panel p { margin: 0; }
 .bonrow__flags { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; }
