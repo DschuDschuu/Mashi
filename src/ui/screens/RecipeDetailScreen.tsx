@@ -42,7 +42,11 @@ export function RecipeDetailScreen({ id }: { id: string }) {
 
 function Detail({ recipe }: { recipe: Recipe }) {
   const c = currentContent(recipe);
-  const [servings, setServings] = useState(c.servings);
+  const planned = usePlan().items.find((i) => i.recipeId === recipe.id);
+  // Im Wochenplan mit 6 Portionen → hier auch 6 (für Mengen, Kochmodus und das Abziehen beim Kochen).
+  // null = nicht angefasst → folgt dem Plan; der kann beim Start erst nach dem ersten Zeichnen ankommen.
+  const [own, setServings] = useState<number | null>(null);
+  const servings = own ?? planned?.servings ?? c.servings;
   const [tab, setTab] = useState<Tab>('Zutaten');
   const [menu, setMenu] = useState(false);
   const [imgBusy, setImgBusy] = useState(false);
@@ -60,9 +64,9 @@ function Detail({ recipe }: { recipe: Recipe }) {
     if (t.left < b.left || t.right > b.right) bar.scrollLeft += t.left - b.left - 16;
   }, [tab]);
 
-  // Neue Version mit anderer Portionszahl → Regler nachziehen
+  // Neue Version mit anderer Portionszahl → eigene Wahl vergessen, wieder dem Plan bzw. Rezept folgen
   useEffect(() => {
-    setServings(c.servings);
+    setServings(null);
   }, [c.servings]);
 
   const ingredients = scaleIngredients(c, servings);
@@ -265,7 +269,7 @@ function StatusAction({ recipe }: { recipe: Recipe }) {
           <p><strong><Icon name="sparkles" size={18} />Das ist eine KI-Idee.</strong> Sie ist noch nicht in deinem Kochbuch. Möchtest du sie ausprobieren?</p>
           <div className="row-gap">
             <button className="btn btn--primary" onClick={() => { setStatus(recipe.id, 'zum_testen'); toast('Zum Testen vorgemerkt'); }}>Zum Testen vormerken</button>
-            <button className="btn btn--ghost" onClick={() => { deleteRecipe(recipe.id); toast('Idee verworfen'); goBack('/testen'); }}>Verwerfen</button>
+            <button className="btn btn--ghost" onClick={() => { const undo = deleteRecipe(recipe.id); toast('Idee verworfen', { label: 'Rückgängig', run: undo }); goBack('/kochbuch'); }}>Verwerfen</button>
           </div>
         </div>
       );

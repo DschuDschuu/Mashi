@@ -1,5 +1,5 @@
 import type { PriceEntry } from './cost';
-import { resolveIngredient, type Resolved } from './mealplan';
+import { needIn, resolveIngredient, type Resolved } from './mealplan';
 import type { FoodTable } from './nutrition/types';
 import type { ReceiptLine } from './receipt';
 import type { ReceiptSavings } from './savings';
@@ -58,6 +58,13 @@ export interface Pantry {
   history?: PriceEntry[];
   /** Ersparnis je Bon (Lidl Plus, Angebote) */
   savings?: ReceiptSavings[];
+  /**
+   * Was „Gekocht“ je geplantem Rezept aus der Speisekammer genommen hat – nimmst du den Haken
+   * im Wochenplan zurück, kommt es wieder hinein. „Neue Woche beginnen“ leert es.
+   */
+  cookLog?: Record<string, Taken[]>;
+  /** schon importierte Bons (Einkaufstag|Endbetrag) – warnt vor doppeltem Import */
+  receipts?: string[];
   /** deine Richtwerte „hält X Tage“ je Art (Gemüse, Milchprodukte …) – fehlt einer, gilt Mashis Standard */
   shelfDays?: ShelfDays;
   updatedAt: string;
@@ -157,7 +164,8 @@ export function applyImport(pantry: Pantry, rows: ImportRow[], now = new Date().
     const perPiece = row.line.weightKg === undefined && row.amount !== undefined ? row.amount / row.line.count : undefined;
     rules.set(row.key, {
       key: row.key, name: row.name.trim(),
-      ...(perPiece !== undefined && row.unit !== 'Stück' ? { amount: perPiece } : {}),
+      // Auch in Stück: „Eier 10er“ = 10 Stück je Packung. Nur 1 Stück je Packung muss man sich nicht merken.
+      ...(perPiece !== undefined && !(row.unit === 'Stück' && perPiece === 1) ? { amount: perPiece } : {}),
       ...(row.unit ? { unit: row.unit } : {}),
       ...(row.productId ? { productId: row.productId } : {}),
     });
@@ -177,7 +185,9 @@ export function applyImport(pantry: Pantry, rows: ImportRow[], now = new Date().
       const key = receiptKey(price.name);
       // Ein nachträglich importierter alter Bon überschreibt keinen neueren Preis
       if ((prices.get(key)?.date ?? '') <= price.date) prices.set(key, price);
-      history.push(price);
+      const same = history.findIndex((h) => receiptKey(h.name) === key && h.date.slice(0, 10) === price.date.slice(0, 10));
+      if (same >= 0) history[same] = price;
+      else history.push(price);
     }
   }
   return { ...pantry, items, rules: [...rules.values()], prices: [...prices.values()], history };
@@ -259,21 +269,11 @@ export interface Deduction {
   used: string[];
   /** verwendet, aber ohne Menge – bitte prüfen */
   toCheck: string[];
+  /** dieselben als IDs – Namen können doppelt vorkommen */
+  checkIds: string[];
 }
 
 const itemAsIngredient = (item: PantryItem, table: FoodTable) => resolveIngredient({ id: item.id, name: item.name }, 1, table);
-
-/** Wie viel von einem Vorrat ein Rezept braucht – in der Einheit des Vorrats. undefined = nicht umrechenbar. */
-function needIn(item: PantryItem, need: Resolved): number | undefined {
-  if (need.amount === undefined) return undefined;
-  if (item.unit === 'Stück') {
-    if (need.unit === 'Stück' || need.unit === undefined) return need.amount;
-    const piece = need.food?.portions?.Stück;
-    return need.grams !== undefined && piece ? need.grams / piece : undefined;
-  }
-  // g und ml: gleich behandelt (für Joghurt, Milch & Co. nah genug)
-  return need.grams ?? (need.unit === 'ml' ? need.amount : undefined);
-}
 
 /**
  * @param amounts Mengen „nur dieses Mal“ je Zutat-ID (in der Einheit der Zutat, schon für diese
@@ -288,24 +288,35 @@ export function deductRecipe(pantry: Pantry, content: RecipeContent, servings: n
   const byUrgency = [...items].sort((a, b) => rank(a) - rank(b));
   const used: string[] = [];
   const toCheck: string[] = [];
+  const checkIds: string[] = [];
 
   for (const ing of content.ingredients) {
     const own = amounts[ing.id];
     const need = own === undefined ? resolveIngredient(ing, factor, table) : resolveIngredient({ ...ing, amount: own }, 1, table);
     if (!need || need.food?.negligible) continue; // Salz, Wasser & Co. führt niemand im Vorrat
-    const item = byUrgency.find((it) => keyOf.get(it.id) === need.key && (it.amount ?? 1) > 0);
-    if (!item) continue;
-    const amount = item.amount === undefined ? undefined : needIn(item, need);
-    if (item.amount === undefined || amount === undefined) {
-      item.check = true;
-      toCheck.push(item.name);
-      continue;
+    // Über alle passenden Vorräte verteilen, dringendster zuerst: 300 g MHD-Hähnchen leer, der Rest
+    // von der frischen Packung. Gerechnet wird mit dem offenen Anteil – die Vorräte können
+    // verschiedene Einheiten haben (g hier, Stück dort).
+    let open = 1;
+    for (const item of byUrgency) {
+      if (open < 1e-6) break;
+      if (keyOf.get(item.id) !== need.key || (item.amount ?? 1) <= 0) continue;
+      const full = item.amount === undefined ? undefined : needIn(item, need);
+      if (item.amount === undefined || full === undefined) {
+        // Menge unbekannt: gilt als ausreichend – „Noch da?“ fragen
+        item.check = true;
+        toCheck.push(item.name);
+        checkIds.push(item.id);
+        break;
+      }
+      const take = Math.min(item.amount, full * open);
+      item.amount = Math.max(0, Math.round((item.amount - take) * 10) / 10);
+      open = full > 0 ? open - take / full : 0;
+      if (!used.includes(item.name)) used.push(item.name);
     }
-    item.amount = Math.max(0, Math.round((item.amount - amount) * 10) / 10);
-    used.push(item.name);
   }
   // Aufgebraucht = raus aus der Speisekammer
-  return { pantry: { ...pantry, items: items.filter((it) => it.amount === undefined || it.amount > 0) }, used, toCheck };
+  return { pantry: { ...pantry, items: items.filter((it) => it.amount === undefined || it.amount > 0) }, used, toCheck, checkIds };
 }
 
 // ── Was kann ich kochen? ───────────────────────────────────────────
@@ -326,16 +337,17 @@ export interface PantryMatch {
  */
 export function pantryAfterPlan(pantry: Pantry, plan: MealPlan, recipes: Recipe[], table: FoodTable): Pantry {
   let rest = pantry;
+  // nach ID, nicht nach Name – sonst fiele „Paprika 3 Stück“ mit raus, nur weil es auch „Paprika“ ohne Menge gibt
   const reserved = new Set<string>();
   for (const item of plan.items) {
     if (plan.cooked.includes(item.recipeId)) continue;
     const r = recipes.find((x) => x.id === item.recipeId);
     if (!r) continue;
     const d = deductRecipe(rest, currentContent(r), item.servings, table);
-    d.toCheck.forEach((name) => reserved.add(receiptKey(name)));
+    d.checkIds.forEach((id) => reserved.add(id));
     rest = d.pantry;
   }
-  return { ...rest, items: rest.items.filter((it) => !reserved.has(receiptKey(it.name))).map((it) => ({ ...it, check: false })) };
+  return { ...rest, items: rest.items.filter((it) => !reserved.has(it.id)).map((it) => ({ ...it, check: false })) };
 }
 
 /**
@@ -402,4 +414,61 @@ export function leftoverSuggestions(pantry: Pantry, ingredients: Ingredient[], t
     out.push({ ingredientId: ing.id, name: ing.name, amount: ing.amount * (item.amount! / inItem), planned: ing.amount, unit: ing.unit });
   }
   return out;
+}
+
+// ── Doppelte Bons ──────────────────────────────────────────────────
+
+/** Ein Bon = Einkaufstag + Endbetrag. Ohne beides kein sicherer Schlüssel. */
+export const bonKey = (paidAt?: string, total?: number) => (paidAt && total !== undefined ? `${paidAt.slice(0, 10)}|${total}` : undefined);
+
+/** Diesen Bon schon importiert? */
+export const alreadyImported = (pantry: Pantry, key?: string) => !!key && (pantry.receipts ?? []).includes(key);
+
+/** Bon als importiert merken (die letzten 200 reichen). */
+export function rememberReceipt(pantry: Pantry, key?: string): Pantry {
+  if (!key || alreadyImported(pantry, key)) return pantry;
+  return { ...pantry, receipts: [...(pantry.receipts ?? []), key].slice(-200) };
+}
+
+// ── Gekocht zurücknehmen ───────────────────────────────────────────
+
+/** Ein Vorrat, wie er VOR dem Kochen war, und wie viel davon genommen wurde (ohne Menge: nur „Noch da?“ gesetzt). */
+export interface Taken {
+  item: PantryItem;
+  amount?: number;
+}
+
+/** Was sich zwischen vorher und nachher geändert hat – für „Rückgängig“. */
+export function takenBetween(before: Pantry, after: Pantry): Taken[] {
+  const out: Taken[] = [];
+  for (const b of before.items) {
+    const a = after.items.find((x) => x.id === b.id);
+    if (!a) out.push({ item: b, ...(b.amount !== undefined ? { amount: b.amount } : {}) }); // ganz aufgebraucht
+    else if (b.amount !== undefined && a.amount !== undefined && a.amount < b.amount) out.push({ item: b, amount: Math.round((b.amount - a.amount) * 10) / 10 });
+    else if (a.check && !b.check) out.push({ item: b });
+  }
+  return out;
+}
+
+/**
+ * Wieder zurücklegen – relativ, nicht als Schnappschuss: Was du inzwischen geändert hast
+ * (z. B. ein Bon dazwischen), bleibt erhalten; nur die genommene Menge kommt dazu.
+ */
+export function restock(pantry: Pantry, taken: Taken[]): Pantry {
+  const items = [...pantry.items];
+  for (const t of taken) {
+    const i = items.findIndex((x) => x.id === t.item.id);
+    if (i < 0) {
+      items.push({ ...t.item });
+      continue;
+    }
+    const x = items[i];
+    const { check: _c, ...rest } = x;
+    items[i] = {
+      ...rest,
+      ...(t.amount !== undefined && x.amount !== undefined ? { amount: Math.round((x.amount + t.amount) * 10) / 10 } : {}),
+      ...(t.item.check ? { check: true } : {}),
+    };
+  }
+  return { ...pantry, items };
 }

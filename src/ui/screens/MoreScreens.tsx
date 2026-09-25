@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { createBackup, parseBackup, type ParsedBackup } from '../../domain/backup';
 import type { MyProduct } from '../../domain/nutrition/myProducts';
 import { currentContent } from '../../domain/recipe';
-import { disconnect, leaveDemo, savedSyncConfig, useSyncState } from '../../data/backend';
+import { disconnect, leaveDemo, savedSyncConfig, uploadPending, useSyncState } from '../../data/backend';
 import { deleteRecipe, importProducts, importRecipes, isDemo, resetDemoData, restoreRecipe, useProducts, useRecipes } from '../../data/store';
 import type { Recipe } from '../../domain/types';
 import { Empty, Section, Switch } from '../components/Controls';
@@ -76,6 +76,7 @@ export function MoreScreen() {
 
 function SyncPanel() {
   const state = useSyncState();
+  const [leaving, setLeaving] = useState(false);
   const cfg = savedSyncConfig();
   const label = {
     aus: ["grey", "Nicht verbunden"],
@@ -90,9 +91,16 @@ function SyncPanel() {
       {state.kind === "fehler" && <p className="error">{state.message}</p>}
       {state.kind === "aktuell" && <p className="muted small">Zuletzt abgeglichen: {new Date(state.at).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })} Uhr</p>}
       {cfg && <p className="muted small">Angemeldet als <strong>{cfg.username}</strong> · {new URL(cfg.url).host}</p>}
-      <button className="btn btn--ghost" onClick={async () => {
-        if (confirm("Auf diesem Gerät abmelden? Die lokale Kopie wird gelöscht – auf dem Server und deinen anderen Geräten bleibt alles erhalten.")) await disconnect();
-      }}>Auf diesem Gerät abmelden</button>
+      <button className="btn btn--ghost" disabled={leaving} onClick={async () => {
+        if (!confirm("Auf diesem Gerät abmelden? Die lokale Kopie wird gelöscht – auf dem Server und deinen anderen Geräten bleibt alles erhalten.")) return;
+        setLeaving(true);
+        // Erst hochladen, was noch nicht abgeglichen ist – sonst wäre es mit der lokalen Kopie weg
+        if (!(await uploadPending())) {
+          const anyway = confirm("Nicht alles ist beim Server angekommen (offline oder Anmeldung abgelaufen). Trotzdem abmelden? Änderungen, die nur auf diesem Gerät sind, gehen dann verloren. Tipp: vorher unten „Sicherung herunterladen“.");
+          if (!anyway) return setLeaving(false);
+        }
+        await disconnect();
+      }}>{leaving ? "Lade noch hoch …" : "Auf diesem Gerät abmelden"}</button>
     </div>
   );
 }

@@ -1,9 +1,9 @@
 import { useSyncExternalStore } from 'react';
-import { emptyPlan, normalizePlan, toggleCooked, type MealPlan } from '../domain/mealplan';
+import { buildShoppingList, emptyPlan, normalizePlan, resolveIngredient, toggleCooked, type MealPlan } from '../domain/mealplan';
 import { mergeRecipes } from '../domain/merge';
 import { withMyProducts, type MyProduct } from '../domain/nutrition/myProducts';
 import {
-  addItem, applyImport, deductRecipe, emptyPantry, freezeItem, thawItem, type ImportRow, type Pantry, type PantryItem, type PantryUnit,
+  addItem, applyImport, bonKey, deductRecipe, emptyPantry, freezeItem, rememberReceipt, restock, takenBetween, thawItem, type Taken, type ImportRow, type Pantry, type PantryItem, type PantryUnit,
 } from '../domain/pantry';
 import { currentContent, currentVersion, newId, withNewVersion } from '../domain/recipe';
 import { recordSavings, type BonSavings } from '../domain/savings';
@@ -100,7 +100,16 @@ let reloadTimer: ReturnType<typeof setTimeout> | undefined;
 function scheduleReload() {
   clearTimeout(reloadTimer);
   reloadTimer = setTimeout(async () => {
-    const [fresh, freshProducts, freshPlan, freshPantry] = await Promise.all([repo.list(), repo.loadProducts(), repo.loadPlan(), repo.loadPantry()]);
+    let loaded;
+    try {
+      loaded = await Promise.all([repo.list(), repo.loadProducts(), repo.loadPlan(), repo.loadPantry()]);
+    } catch (e) {
+      console.error('Mashi: Änderungen vom anderen Gerät ließen sich nicht laden', e);
+      saveError = 'Änderungen von deinem anderen Gerät ließen sich nicht laden. Lade die Seite bitte neu.';
+      emit();
+      return;
+    }
+    const [fresh, freshProducts, freshPlan, freshPantry] = loaded;
     products = freshProducts;
     if (!planPending) plan = normalizePlan(freshPlan);
     if (!pantryPending) pantry = freshPantry;
@@ -175,6 +184,10 @@ export interface CookedResult {
   used: string[];
   /** verwendet, aber ohne Menge – „Noch da?“ */
   toCheck: string[];
+  /** Haken im Plan zurückgenommen: das kam wieder in die Speisekammer */
+  restored?: string[];
+  /** „Rückgängig“ direkt danach: Speisekammer, Plan-Haken und „zuletzt gekocht“ wie vorher */
+  undo?: () => void;
 }
 
 /**
@@ -186,16 +199,48 @@ export function markCooked(id: string, servings?: number, amounts: Record<string
   const r = get(id);
   commit({ ...r, lastCookedAt: now() });
   const planned = plan.items.find((i) => i.recipeId === id);
-  if (planned && plan.cooked.includes(id)) return { used: [], toCheck: [] };
+  if (planned && plan.cooked.includes(id)) return { used: [], toCheck: [], undo: () => commit({ ...get(id), lastCookedAt: r.lastCookedAt }) };
   if (planned) commitPlan(toggleCooked(plan, id, true));
-  return consume(r, servings ?? planned?.servings ?? currentContent(r).servings, amounts);
+  const result = consume(r, servings ?? planned?.servings ?? currentContent(r).servings, amounts, !!planned);
+  return {
+    ...result,
+    undo: () => {
+      result.undo?.();
+      if (planned && plan.cooked.includes(id)) commitPlan({ ...plan, cooked: plan.cooked.filter((x) => x !== id) });
+      commit({ ...get(id), lastCookedAt: r.lastCookedAt });
+    },
+  };
 }
 
-function consume(r: Recipe, servings: number, amounts: Record<string, number> = {}): CookedResult {
+/**
+ * Zutaten abziehen. undo legt genau das Genommene zurück. log = im Wochenplan abgehakt →
+ * merken, damit auch späteres Zurücknehmen des Hakens die Zutaten zurückbringt.
+ */
+function consume(r: Recipe, servings: number, amounts: Record<string, number> = {}, log = false): CookedResult {
   if (!pantry.items.length) return { used: [], toCheck: [] };
+  const before = pantry;
   const d = deductRecipe(pantry, currentContent(r), servings, withMyProducts(foodTable, products), amounts);
-  if (d.used.length || d.toCheck.length) commitPantry(d.pantry);
-  return { used: d.used, toCheck: d.toCheck };
+  if (!d.used.length && !d.toCheck.length) return { used: [], toCheck: [] };
+  const taken = takenBetween(before, d.pantry);
+  commitPantry(log ? { ...d.pantry, cookLog: { ...pruneCookLog(d.pantry.cookLog), [r.id]: taken } } : d.pantry);
+  return { used: d.used, toCheck: d.toCheck, undo: () => putBack(r.id, taken) };
+}
+
+/** Genommenes zurücklegen und den Merkzettel dafür löschen. */
+function putBack(recipeId: string, taken: Taken[]) {
+  const { [recipeId]: _done, ...rest } = pantry.cookLog ?? {};
+  const back = restock(pantry, taken);
+  commitPantry(Object.keys(rest).length ? { ...back, cookLog: rest } : withoutCookLog(back));
+}
+
+/** Nur Einträge für Gerichte behalten, die im Plan noch als gekocht gelten. */
+function pruneCookLog(log: Pantry['cookLog']): Record<string, Taken[]> {
+  return Object.fromEntries(Object.entries(log ?? {}).filter(([id]) => plan.cooked.includes(id)));
+}
+
+function withoutCookLog(p: Pantry): Pantry {
+  const { cookLog: _l, ...rest } = p;
+  return rest;
 }
 
 interface CreateOptions {
@@ -291,11 +336,19 @@ export function restoreRecipe(id: string) {
   commit({ ...rest, updatedAt: now() });
 }
 
-export function deleteRecipe(id: string) {
+/** Endgültig löschen – gibt „Rückgängig“ zurück (legt das Rezept samt Plan-Eintrag wieder an). */
+export function deleteRecipe(id: string): () => void {
+  const removed = recipes.find((r) => r.id === id);
+  const planned = plan.items.find((i) => i.recipeId === id);
   recipes = recipes.filter((r) => r.id !== id);
-  if (plan.items.some((i) => i.recipeId === id)) removeFromPlan(id);
+  if (planned) removeFromPlan(id);
   emit();
   void tracked(repo.remove(id));
+  return () => {
+    if (!removed || recipes.some((r) => r.id === id)) return;
+    commit(removed); // gelöscht = Grabstein in CouchDB; neu speichern legt das Rezept wieder an
+    if (planned) addToPlan(id, planned.servings);
+  };
 }
 
 /**
@@ -355,12 +408,29 @@ export function addToPlan(recipeId: string, servings = currentContent(get(recipe
   return true;
 }
 
-export function removeFromPlan(recipeId: string) {
+/** Aus dem Plan nehmen – gibt „Rückgängig“ zurück (gleiche Stelle, Portionen und Gekocht-Haken). */
+export function removeFromPlan(recipeId: string): () => void {
+  const index = plan.items.findIndex((i) => i.recipeId === recipeId);
+  const removed = plan.items[index];
+  const wasCooked = plan.cooked.includes(recipeId);
   commitPlan({ ...plan, items: plan.items.filter((i) => i.recipeId !== recipeId), cooked: plan.cooked.filter((id) => id !== recipeId) });
+  return () => {
+    if (!removed || plan.items.some((i) => i.recipeId === recipeId)) return;
+    const items = [...plan.items];
+    items.splice(Math.min(index, items.length), 0, removed);
+    commitPlan({ ...plan, items, cooked: wasCooked ? [...plan.cooked, recipeId] : plan.cooked });
+  };
 }
 
 export function setPlanServings(recipeId: string, servings: number) {
   commitPlan({ ...plan, items: plan.items.map((i) => (i.recipeId === recipeId ? { ...i, servings } : i)) });
+}
+
+/** Einkaufsliste: trotz Vorrat kaufen – oder wieder mit dem Vorrat verrechnen. */
+export function toggleBuyAnyway(key: string) {
+  const buy = plan.buy ?? [];
+  const next = buy.includes(key) ? buy.filter((k) => k !== key) : [...buy, key];
+  commitPlan({ ...plan, buy: next });
 }
 
 export function toggleShoppingItem(key: string) {
@@ -376,15 +446,31 @@ export function togglePlanCooked(recipeId: string): CookedResult | null {
   const next = toggleCooked(plan, recipeId);
   if (next === plan) return null;
   commitPlan(next);
-  if (!next.cooked.includes(recipeId)) return null;
+  if (!next.cooked.includes(recipeId)) {
+    // Haken zurückgenommen → was „Gekocht“ genommen hatte, kommt zurück
+    const taken = pantry.cookLog?.[recipeId];
+    if (!taken?.length) return null;
+    putBack(recipeId, taken);
+    return { used: [], toCheck: [], restored: [...new Set(taken.map((t) => t.item.name))] };
+  }
   const r = get(recipeId);
   commit({ ...r, lastCookedAt: now() });
-  return consume(r, next.items.find((i) => i.recipeId === recipeId)!.servings);
+  const result = consume(r, next.items.find((i) => i.recipeId === recipeId)!.servings, {}, true);
+  return {
+    ...result,
+    undo: () => {
+      result.undo?.();
+      if (plan.cooked.includes(recipeId)) commitPlan({ ...plan, cooked: plan.cooked.filter((x) => x !== recipeId) });
+      commit({ ...get(recipeId), lastCookedAt: r.lastCookedAt });
+    },
+  };
 }
 
 /** „Neue Woche“: Plan, Haken und „Gekocht“ leeren. */
 export function clearPlan() {
   commitPlan({ items: [], checked: [], cooked: [] });
+  // Neue Woche: das Zurücklegen alter Gerichte ist erledigt
+  if (pantry.cookLog) commitPantry(withoutCookLog(pantry));
 }
 
 export function isDemo(): boolean {
@@ -409,11 +495,22 @@ function commitPantry(next: Omit<Pantry, 'updatedAt'>) {
 }
 
 /** Geprüfte Bon-Zeilen übernehmen – und merken, damit der nächste Bon schon ausgefüllt ist. */
-export function importReceipt(rows: ImportRow[], paidAt?: string, savings?: BonSavings): number {
+/**
+ * Geprüfte Bon-Zeilen übernehmen. onList = wie viele Einträge der Einkaufsliste damit erledigt sind:
+ * Was jetzt reicht, steht dort unter „Hast du schon“; was ohne Menge kam, wird abgehakt.
+ * Hast du zu wenig gekauft, bleibt der Rest auf der Liste.
+ */
+export function importReceipt(rows: ImportRow[], paidAt?: string, savings?: BonSavings): { count: number; onList: number } {
   const t = now();
-  const next = applyImport(pantry, rows, t, () => newId('v'), paidAt ?? t);
+  const next = rememberReceipt(applyImport(pantry, rows, t, () => newId('v'), paidAt ?? t), bonKey(paidAt, savings?.total));
   commitPantry(savings ? recordSavings(next, savings, paidAt ?? t) : next);
-  return rows.filter((r) => !r.skip).length;
+
+  const table = withMyProducts(foodTable, products);
+  const bought = new Set(rows.filter((r) => !r.skip).map((r) => resolveIngredient({ id: r.key, name: r.name }, 1, table)?.key));
+  const list = buildShoppingList(plan, recipes, table, pantry).filter((i) => bought.has(i.key) && !plan.checked.includes(i.key));
+  const tick = list.filter((i) => !i.covered && i.have === 'vorhanden').map((i) => i.key);
+  if (tick.length) commitPlan({ ...plan, checked: [...plan.checked, ...tick] });
+  return { count: rows.filter((r) => !r.skip).length, onList: list.filter((i) => i.covered).length + tick.length };
 }
 
 export function addPantryItem(name: string, amount?: number, unit?: PantryUnit) {

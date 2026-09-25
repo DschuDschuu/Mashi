@@ -23,7 +23,8 @@ const SEGMENTS: { value: Segment; label: string }[] = [
 const SEGMENT_FILTER: Record<Segment, Partial<RecipeFilter>> = {
   alle: {},
   favoriten: { favoritesOnly: true },
-  zum_testen: { statuses: ['zum_testen'] },
+  // KI-Ideen gehören hierher – sonst wären sie nach dem Zurückgehen nirgends mehr zu finden
+  zum_testen: { statuses: ['ki_entwurf', 'zum_testen'] },
 };
 
 /** Filter aus der URL lesen – so funktionieren die Schnellfilter der Startseite als Links. */

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { proposeImport, type ImportRow, type PantryUnit } from '../../domain/pantry';
+import { alreadyImported, bonKey, proposeImport, type ImportRow, type PantryUnit } from '../../domain/pantry';
 import { parseReceipt, parseReceiptDate } from '../../domain/receipt';
 import { parseSavings } from '../../domain/savings';
 import { formatAmount } from '../../domain/scaling';
@@ -125,15 +125,18 @@ export function ReceiptImportScreen({ shared }: { shared: boolean }) {
   const taking = rows.filter((r) => !r.skip).length;
 
   const apply = () => {
-    const n = importReceipt(rows.map(fromRow), paidAt, savings);
+    const { count: n, onList } = importReceipt(rows.map(fromRow), paidAt, savings);
     const frozen = rows.filter((r) => !r.skip && r.freeze).length;
-    toast(n ? `${n} Artikel in der Speisekammer${frozen ? `, davon ${frozen} eingefroren` : ''}` : 'Gemerkt – nichts übernommen');
+    toast(n
+      ? `${n} Artikel in der Speisekammer${frozen ? `, davon ${frozen} eingefroren` : ''}${onList ? ` · ${onList} auf der Einkaufsliste erledigt` : ''}`
+      : 'Gemerkt – nichts übernommen');
     navigate('/speisekammer', { replace: true });
   };
 
   return (
     <main className="screen">
-      <TopBar title="Kassenbon importieren" backTo="/speisekammer" />
+      <TopBar title="Kassenbon importieren" backTo="/speisekammer"
+        confirmBack={stage === 'review' ? 'Bon-Prüfung verlassen? Deine Änderungen an den Zeilen gehen verloren.' : undefined} />
       <IngredientNames />
 
       {stage === 'pick' && (
@@ -174,6 +177,12 @@ export function ReceiptImportScreen({ shared }: { shared: boolean }) {
 
       {stage === 'review' && (
         <div className="stack">
+          {alreadyImported(pantry, bonKey(paidAt, savings?.total)) && (
+            <p className="error" role="alert">
+              Diesen Bon ({paidAt && new Date(paidAt).toLocaleDateString('de-DE')}, {savings?.total !== undefined && euro(savings.total)}) hast du schon importiert.
+              Übernimmst du ihn noch einmal, zählen die Mengen doppelt – überspringe dann lieber alles, was schon in der Speisekammer ist.
+            </p>
+          )}
           <p className="muted">
             {paidAt && <>Einkauf vom <strong>{new Date(paidAt).toLocaleDateString('de-DE')}</strong> · </>}
             {savings && (savings.lidlPlus > 0 || savings.offers > 0 || savings.mhd > 0) && (

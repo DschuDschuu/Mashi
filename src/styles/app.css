@@ -901,3 +901,6 @@ p { margin: 0; }
 .useup-idea-panel p { margin: 0; }
 .bonrow__flags { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; }
 .bonrow__freeze { display: inline-flex; align-items: center; gap: 6px; }
+.shopping__row { display: flex; align-items: center; gap: 12px; min-height: 46px; }
+.shopping__item.is-have .shopping__name { color: var(--ink-2); }
+.shopping__undo { display: block; margin: -6px 0 8px 34px; font-size: 0.8rem; }

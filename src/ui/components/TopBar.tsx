@@ -2,11 +2,12 @@ import type { ReactNode } from 'react';
 import { goBack } from '../../router';
 import { Icon } from './Icon';
 
-export function TopBar({ title, back = true, backTo = '/', right }: { title?: ReactNode; back?: boolean; backTo?: string; right?: ReactNode }) {
+/** @param confirmBack Frage vor dem Zurückgehen, z. B. wenn sonst Eingaben verloren gingen */
+export function TopBar({ title, back = true, backTo = '/', right, confirmBack }: { title?: ReactNode; back?: boolean; backTo?: string; right?: ReactNode; confirmBack?: string }) {
   return (
     <header className="topbar">
       {back ? (
-        <button className="iconbtn" onClick={() => goBack(backTo)} aria-label="Zurück">
+        <button className="iconbtn" onClick={() => (!confirmBack || confirm(confirmBack)) && goBack(backTo)} aria-label="Zurück">
           <Icon name="back" />
         </button>
       ) : <span className="iconbtn-spacer" />}

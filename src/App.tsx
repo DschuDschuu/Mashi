@@ -29,7 +29,7 @@ function resolve(route: Route): { screen: ReactElement; tab?: string } {
   switch (a) {
     case undefined: return { screen: <StartScreen />, tab: '/' };
     case 'kochbuch': return { screen: <CookbookScreen key={route.query.toString()} route={route} />, tab: '/kochbuch' };
-    // „Zum Testen“ ist kein eigener Tab mehr – erreichbar über Start und Kochbuch
+    // „Zum Testen“ ist kein eigener Tab mehr – Kochbuch → „Zum Testen“ zeigt KI-Ideen und Rezepte zum Testen
     case 'testen': return { screen: <TestingScreen /> };
     case 'plan': return { screen: <PlanScreen />, tab: '/plan' };
     case 'reste': return { screen: <UseUpScreen /> };

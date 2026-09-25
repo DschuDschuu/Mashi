@@ -6,7 +6,7 @@ import { withMyProducts } from '../../domain/nutrition/myProducts';
 import { currentContent } from '../../domain/recipe';
 import type { Recipe } from '../../domain/types';
 import {
-  addToPlan, clearPlan, removeFromPlan, setPlanServings, togglePlanCooked, usePlan, useProducts, useRecipes,
+  addToPlan, clearPlan, removeFromPlan, setPlanServings, togglePlanCooked, usePantry, usePlan, useProducts, useRecipes,
 } from '../../data/store';
 import { navigate } from '../../router';
 import { foodTable } from '../../services';
@@ -45,8 +45,9 @@ export function PlanScreen() {
   const { keys: useUp } = useUseUp();
   const suggestions = useMemo(() => suggestRecipes(plan, recipes.filter(plannable), table, 5, new Set(useUp.keys())), [plan, recipes, table, useUp]);
   // Für das Einkaufswagen-Symbol: wie viel noch zu kaufen ist (ohne Basics wie Öl und Gewürze)
-  const shopping = useMemo(() => buildShoppingList(plan, recipes, table), [plan, recipes, table]);
-  const toBuy = shopping.filter((i) => !i.pantry && !plan.checked.includes(i.key)).length;
+  const pantry = usePantry();
+  const shopping = useMemo(() => buildShoppingList(plan, recipes, table, pantry), [plan, recipes, table, pantry]);
+  const toBuy = shopping.filter((i) => !i.pantry && !i.covered && !plan.checked.includes(i.key)).length;
   const portions = items.reduce((s, i) => s + i.servings, 0);
   const { prices } = usePricing();
   const costs = useMemo(() => new Map(items.map((i) => [i.recipeId, recipeCost(currentContent(i.recipe), i.servings, table, prices)])), [items, table, prices]);
@@ -81,7 +82,10 @@ export function PlanScreen() {
                   <span className="small muted" aria-hidden="true">Portionen</span>
                   <Stepper value={servings} onChange={(v) => setPlanServings(recipe.id, v)} label="Portionen" />
                 </div>
-                <button className="iconbtn iconbtn--sm" aria-label={`${currentContent(recipe).title} aus dem Plan nehmen`} onClick={() => removeFromPlan(recipe.id)}>
+                <button className="iconbtn iconbtn--sm" aria-label={`${currentContent(recipe).title} aus dem Plan nehmen`} onClick={() => {
+                  const undo = removeFromPlan(recipe.id);
+                  toast(`„${currentContent(recipe).title}“ aus dem Plan genommen`, { label: 'Rückgängig', run: undo });
+                }}>
                   <Icon name="close" size={18} />
                 </button>
               </li>

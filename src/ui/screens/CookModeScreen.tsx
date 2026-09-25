@@ -219,11 +219,16 @@ function clock(ms: number): string {
 function useWakeLock() {
   useEffect(() => {
     let lock: WakeLockSentinel | undefined;
-    const request = () => navigator.wakeLock?.request('screen').then((l) => { lock = l; }).catch(() => {});
+    let left = false;
+    const request = () => navigator.wakeLock?.request('screen').then((l) => {
+      if (left) void l.release(); // Kochmodus schon verlassen
+      else lock = l;
+    }).catch(() => {});
     request();
     const onVisible = () => document.visibilityState === 'visible' && request();
     document.addEventListener('visibilitychange', onVisible);
     return () => {
+      left = true;
       document.removeEventListener('visibilitychange', onVisible);
       void lock?.release();
     };

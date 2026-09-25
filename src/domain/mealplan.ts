@@ -1,9 +1,11 @@
 import type { FoodEntry, FoodKind, FoodTable } from './nutrition/types';
 import { toGrams } from './nutrition/units';
 import { normalizeName } from './nutrition/localFoods';
+import { MY_PRODUCTS_PROVIDER } from './nutrition/myProducts';
 import { currentContent } from './recipe';
 import { formatAmount, formatUnitAmount } from './scaling';
 import type { Ingredient, Recipe, Unit } from './types';
+import type { Pantry, PantryItem } from './pantry';
 
 /** Der Wochenplan: eine Liste „Diese Woche“ – ohne feste Tage, passend zu Meal Prep. */
 export interface PlanItem {
@@ -17,6 +19,8 @@ export interface MealPlan {
   checked: string[];
   /** diese Woche schon gekochte Gerichte (recipeId) – bleiben bis „Neue Woche“ im Plan */
   cooked: string[];
+  /** Einkaufsliste: trotz Vorrat ganz kaufen (ShoppingItem.key) – „Doch kaufen“ */
+  buy?: string[];
   updatedAt: string;
 }
 
@@ -58,10 +62,11 @@ export const KIND_WEIGHT: Record<FoodKind, number> = {
 const KIND_BY_NAME: [FoodKind, RegExp][] = [
   ['bread', /brot|brötchen|toast|wrap|tortilla|fladen|baguette|pita|bagel/],
   // „hack“ nur am Wortende (Rinderhack, Hackfleisch) – nicht „gehackte Mandeln“
-  ['protein', /hähnchen|huhn|hühner|pute|rind|schwein|lachs|thunfisch|fisch|garnele|shrimp|tofu|tempeh|hack(fleisch)?\b|steak|filet/],
+  // Nicht: Brühe, Fond, Saucen, Konserven – „Rinderbrühe“ und „Fischsauce“ sind kein Frischfleisch; Thunfisch meist aus der Dose
+  ['protein', /^(?!.*(brühe|fond|sauce|soße|dose|konserve|pulver|würze|gewürz|paste|chips|thunfisch(?!steak|filet)))(?=.*(hähnchen|huhn|hühner|pute|rind|schwein|lachs|fisch|garnele|shrimp|tofu|tempeh|hack(fleisch)?\b|steak|filet))/],
   // „reis“ nur am Wortanfang/-ende (Basmatireis, Reisnudeln) – nicht „Preiselbeeren“
   ['staple', /nudel|pasta|spaghetti|penne|(^|[\s-])reis|reis($|[\s-])|kartoffel|couscous|bulgur|quinoa|gnocchi|spätzle/],
-  ['dairy', /käse|joghurt|quark|milch|sahne|skyr|feta|ricotta|mascarpone/],
+  ['dairy', /^(?!.*(kondensmilch|milchpulver|kokos|hafer|soja|mandel))(?=.*(käse|joghurt|quark|milch|sahne|skyr|feta|ricotta|mascarpone))/],
   ['egg', /(^|\s)eier?(\s|$)/],
   // Frisches Obst und Gemüse – aber nicht aus Dose, Glas oder Tube (Tomatenmark, Apfelmus, Orangensaft …)
   ['vegetable', /^(?!.*(mark|passiert|gehackt|stückig|dose|getrocknet|eingelegt|pesto|soße|sauce|brühe|chips|kerne|samen))(?=.*(zucchini|brokkoli|blumenkohl|aubergine|lauch|porree|sellerie|champignon|pilz|kohl|salat|rucola|radieschen|rettich|tomate|gurke|möhre|karotte|paprika|spinat|mangold|kürbis|fenchel|spargel|rote bete|zuckerschote|grüne bohnen))/],
@@ -70,6 +75,9 @@ const KIND_BY_NAME: [FoodKind, RegExp][] = [
 
 function kindFor(food: FoodEntry | undefined, name: string): FoodKind | undefined {
   if (food?.kind) return food.kind;
+  // Die Tabelle kennt es und gibt ihm bewusst keine Art (Kokosmilch, gehackte Tomaten, Brühe) → so lassen.
+  // Nur Unbekanntes und eigene Produkte ohne ersetzten Eintrag werden am Namen eingeordnet.
+  if (food && food.ref.provider !== MY_PRODUCTS_PROVIDER) return undefined;
   const n = normalizeName(name);
   return KIND_BY_NAME.find(([, re]) => re.test(n))?.[0];
 }
@@ -122,6 +130,19 @@ function resolveRecipe(r: Recipe, servings: number, table: FoodTable): Resolved[
   const c = currentContent(r);
   const factor = servings / c.servings;
   return c.ingredients.map((i) => resolveIngredient(i, factor, table)).filter((x): x is Resolved => x !== null);
+}
+
+/** Wie viel von einem Vorrat eine Zutat braucht – in der Einheit des Vorrats. undefined = nicht umrechenbar. */
+export function needIn(item: Pick<PantryItem, 'unit'>, need: Resolved): number | undefined {
+  if (need.amount === undefined) return undefined;
+  if (item.unit === 'Stück') {
+    // Vom Bon kommt Dosenware als „Stück“ – eine Dose im Rezept ist ein Stück im Vorrat
+    if (need.unit === 'Stück' || need.unit === 'Dose' || need.unit === undefined) return need.amount;
+    const piece = need.food?.portions?.Stück;
+    return need.grams !== undefined && piece ? need.grams / piece : undefined;
+  }
+  // g und ml: gleich behandelt (für Joghurt, Milch & Co. nah genug)
+  return need.grams ?? (need.unit === 'ml' ? need.amount : undefined);
 }
 
 // ── Vorschläge ─────────────────────────────────────────────────────
@@ -195,16 +216,23 @@ export interface ShoppingItem {
   from: string[];
   /** Art des Lebensmittels – die Liste wird danach gruppiert wie im Laden */
   kind?: FoodKind;
+  /** was davon in der Speisekammer ist, z. B. „500 g“ oder „vorhanden“ */
+  have?: string;
+  /** reicht der Vorrat ganz – dann „Hast du schon“ statt einkaufen */
+  covered?: boolean;
 }
 
 /**
  * Fasst alle Zutaten der geplanten Rezepte zusammen (auf die geplanten Portionen umgerechnet).
  * Gleiche Einheit → addieren. Verschiedene Einheiten → in Gramm, wo möglich.
  * Was sich nicht umrechnen lässt, steht getrennt da – nie falsch zusammengezählt.
+ * Schon Gekochtes fällt weg. Mit Speisekammer: Vorrat wird abgezogen (600 g geplant, 500 g da →
+ * „100 g“ mit „500 g vorrätig“); reicht er ganz, ist der Eintrag „covered“.
  */
-export function buildShoppingList(plan: MealPlan, all: Recipe[], table: FoodTable): ShoppingItem[] {
+export function buildShoppingList(plan: MealPlan, all: Recipe[], table: FoodTable, pantry?: Pantry): ShoppingItem[] {
   const groups = new Map<string, { name: string; pantry: boolean; kind?: FoodKind; parts: Resolved[]; from: Set<string> }>();
   for (const item of plan.items) {
+    if (plan.cooked.includes(item.recipeId)) continue; // schon gekocht → nichts mehr einzukaufen
     const r = all.find((x) => x.id === item.recipeId);
     if (!r) continue;
     const title = currentContent(r).title;
@@ -216,10 +244,55 @@ export function buildShoppingList(plan: MealPlan, all: Recipe[], table: FoodTabl
     }
   }
 
+  const stock = (pantry?.items ?? [])
+    .filter((it) => (it.amount ?? 1) > 0)
+    .map((it) => ({ it, key: resolveIngredient({ id: it.id, name: it.name }, 1, table)?.key }));
+
   return [...groups.entries()]
-    .map(([key, g]) => ({ key, name: g.name, quantity: quantityOf(g.parts), pantry: g.pantry, from: [...g.from], ...(g.kind ? { kind: g.kind } : {}) }))
+    .map(([key, g]): ShoppingItem => {
+      const base: ShoppingItem = { key, name: g.name, quantity: quantityOf(g.parts), pantry: g.pantry, from: [...g.from], ...(g.kind ? { kind: g.kind } : {}) };
+      const mine = stock.filter((s) => s.key === key).map((s) => s.it);
+      if (!mine.length) return base;
+      // „Doch kaufen“: volle Menge, der Vorrat steht nur als Hinweis dabei
+      if (plan.buy?.includes(key)) return { ...base, have: mine.map(stockLabel).join(' + ') };
+      const { open, used } = coverFromStock(mine, g.parts);
+      const have = used.map(stockLabel).join(' + ') || 'vorhanden';
+      if (open < 0.02) return { ...base, have, covered: true };
+      return { ...base, have, ...(open < 1 ? { quantity: quantityOf(scaleParts(g.parts, open)) } : {}) };
+    })
     .sort((a, b) => a.name.localeCompare(b.name, 'de'));
 }
+
+/**
+ * Wie viel des Bedarfs der Vorrat deckt: open = noch offener Anteil (1 = nichts da, 0 = reicht).
+ * Vorräte ohne Menge zählen nicht (Hinweis „vorhanden“, einkaufen musst du selbst entscheiden) –
+ * außer das Rezept nennt selbst keine Menge (Salz, „etwas Petersilie“).
+ */
+function coverFromStock(items: PantryItem[], parts: Resolved[]): { open: number; used: PantryItem[] } {
+  const measured = parts.filter((p) => p.amount !== undefined);
+  if (!measured.length) return { open: 0, used: items };
+  let open = 1;
+  const used: PantryItem[] = [];
+  for (const it of items) {
+    if (open < 1e-6) break;
+    used.push(it);
+    if (it.amount === undefined) continue;
+    const needs = measured.map((p) => needIn(it, p));
+    if (needs.some((n) => n === undefined)) continue; // nicht umrechenbar – nur als Hinweis
+    const full = needs.reduce((s: number, n) => s + n!, 0);
+    if (full <= 0) continue;
+    open -= Math.min(it.amount, full * open) / full;
+  }
+  return { open: Math.max(0, open), used };
+}
+
+const scaleParts = (parts: Resolved[], f: number): Resolved[] => parts.map((p) => ({
+  ...p, ...(p.amount !== undefined ? { amount: p.amount * f } : {}), ...(p.grams !== undefined ? { grams: p.grams * f } : {}),
+}));
+
+const stockLabel = (it: PantryItem) => (it.amount === undefined
+  ? 'vorhanden'
+  : `${formatAmount(it.amount, it.unit === 'Stück' ? 'Stück' : 'g')} ${it.unit ?? ''}`.trim() + (it.frozenAt ? ' (gefroren)' : ''));
 
 function quantityOf(parts: Resolved[]): string {
   const withAmount = parts.filter((p) => p.amount !== undefined);

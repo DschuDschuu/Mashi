@@ -27,7 +27,11 @@ export function BarcodeScanner({ onCode, onClose }: { onCode: (ean: string) => v
     (async () => {
       try {
         stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
-        if (done || !video.current) return;
+        if (done || !video.current) {
+          // Schon wieder geschlossen, während die Kamera anging – sonst bliebe sie an
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
         video.current.srcObject = stream;
         await video.current.play();
         setStatus('Halte den Strichcode ins Bild.');

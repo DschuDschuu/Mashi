@@ -62,7 +62,12 @@ export async function boot(): Promise<Mode | null> {
   const cfg = savedSyncConfig();
 
   if (mode === 'sync' && cfg) {
-    const local = new PouchDB(LOCAL_DB) as RecipeDb;
+    // auto_compaction: alte Revisionen (samt Fotos) nicht ewig aufheben
+    const local = new PouchDB(LOCAL_DB, { auto_compaction: true }) as RecipeDb;
+    // Einmal aufräumen, was sich vor auto_compaction angesammelt hat – im Hintergrund
+    void local.compact().catch(() => {});
+    // Den Browser bitten, die Daten nicht bei Platzmangel wegzuräumen
+    void navigator.storage?.persist?.().catch(() => false);
     await initStore(new PouchRecipeRepository(local));
     startSync(local, remoteDb(remoteFactory, cfg), setState);
     return 'sync';
@@ -92,8 +97,21 @@ export function startDemo() {
 }
 
 /**
+ * Vor dem Abmelden alles hochladen, was dieses Gerät noch nicht abgeglichen hat.
+ * false = hat nicht geklappt (offline, Anmeldung abgelaufen) – dann gingen Änderungen verloren.
+ */
+export async function uploadPending(timeoutMs = 15_000): Promise<boolean> {
+  const cfg = savedSyncConfig();
+  if (!cfg) return true;
+  const local = new PouchDB(LOCAL_DB) as RecipeDb;
+  const push = local.replicate.to(remoteDb(remoteFactory, cfg)).then(() => true, () => false);
+  const timeout = new Promise<boolean>((r) => setTimeout(() => r(false), timeoutMs));
+  return Promise.race([push, timeout]);
+}
+
+/**
  * Abmelden: Zugangsdaten UND die lokale Kopie auf diesem Gerät löschen.
- * Auf dem Server und deinen anderen Geräten bleibt alles erhalten.
+ * Auf dem Server und deinen anderen Geräten bleibt alles erhalten – vorher erst uploadPending().
  */
 export async function disconnect() {
   localStorage.removeItem(SYNC_KEY);

@@ -69,7 +69,7 @@ export function recipeCost(content: RecipeContent, servings: number, table: Food
 function quantityIn(unit: 'g' | 'Stück', need: NonNullable<ReturnType<typeof resolveIngredient>>): number | undefined {
   if (need.amount === undefined) return undefined;
   if (unit === 'g') return need.grams ?? (need.unit === 'ml' ? need.amount : undefined);
-  if (need.unit === 'Stück' || need.unit === undefined) return need.amount;
+  if (need.unit === 'Stück' || need.unit === 'Dose' || need.unit === undefined) return need.amount;
   const piece = need.food?.portions?.Stück;
   return need.grams !== undefined && piece ? need.grams / piece : undefined;
 }
