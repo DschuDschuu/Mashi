@@ -2,7 +2,7 @@ import type { RecipeContent } from '../types';
 import { toGrams } from './units';
 import {
   CORE_NUTRIENTS, OPTIONAL_NUTRIENTS,
-  type FoodTable, type IngredientNutrition, type NutritionAccuracy, type NutritionResult, type Nutrients,
+  type FoodEntry, type FoodTable, type IngredientNutrition, type NutritionAccuracy, type NutritionResult, type Nutrients,
 } from './types';
 
 /**
@@ -15,11 +15,11 @@ export const UNAVAILABLE_SHARE = 0.3;
  * Berechnet Nährwerte rein mathematisch aus Zutaten × Lebensmitteltabelle.
  * Keine Zahl stammt aus der KI – die Engine kennt nur Zutaten, Mengen und die FoodTable.
  */
-export function computeNutrition(content: RecipeContent, table: FoodTable): NutritionResult {
+export function computeNutrition(content: RecipeContent, table: FoodTable, pick: Readonly<Record<string, string>> = {}): NutritionResult {
   const items: IngredientNutrition[] = content.ingredients.map((ing) => {
     const base = { ingredientId: ing.id, name: ing.name };
     const refFood = ing.foodRef ? table.byRef(ing.foodRef) : undefined;
-    const match = refFood ? { food: refFood, quality: 'exact' as const } : table.matchName(ing.name);
+    const match = chosen(refFood ? { food: refFood, quality: 'exact' as const } : table.matchName(ing.name), pick[ing.id]);
 
     if (ing.optional) return { ...base, status: 'ignored', food: match?.food };
     if (!match) return { ...base, status: ing.amount === undefined ? 'no-amount' : 'unmatched', grams: gramsIfObvious(ing.amount, ing.unit) };
@@ -40,7 +40,32 @@ export function computeNutrition(content: RecipeContent, table: FoodTable): Nutr
 
   const contributing = counted.filter((i) => i.food && i.grams !== undefined && (i.status === 'exact' || i.status === 'approx'));
   const total = sumNutrients(contributing.map((i) => ({ per100g: i.food!.per100g, grams: i.grams! })));
-  return { accuracy, total, perServing: divide(total, content.servings), items };
+  const range = rangeOf(total, contributing);
+  return { accuracy, total, perServing: divide(total, content.servings), items, ...(range ? { range } : {}) };
+}
+
+/** Beim Planen/Kochen gewählte Sorte statt des Durchschnitts (Umrechnungen bleiben die der Zutat) */
+function chosen<M extends { food: FoodEntry }>(match: M | undefined, productId: string | undefined): M | undefined {
+  const v = productId ? match?.food.variants?.find((x) => x.id === productId) : undefined;
+  if (!match || !v) return match;
+  const { variants: _all, ...food } = match.food;
+  return { ...match, food: { ...food, name: v.name, per100g: v.per100g } };
+}
+
+/** Kleinster/größter Wert, je nachdem welche Sorte man nimmt – jede Zutat mit Sorten für sich */
+function rangeOf(total: Nutrients, parts: IngredientNutrition[]): NutritionResult['range'] {
+  const varying = parts.filter((i) => i.food?.variants?.length && !i.food.favoriteId);
+  if (!varying.length) return undefined;
+  const span = (k: 'kcal' | 'protein'): [number, number] => {
+    let lo = total[k], hi = total[k];
+    for (const i of varying) {
+      const vals = i.food!.variants!.map((v) => v.per100g[k]);
+      lo += (i.grams! / 100) * (Math.min(...vals) - i.food!.per100g[k]);
+      hi += (i.grams! / 100) * (Math.max(...vals) - i.food!.per100g[k]);
+    }
+    return [lo, hi];
+  };
+  return { kcal: span('kcal'), protein: span('protein') };
 }
 
 function rateAccuracy(counted: IngredientNutrition[]): NutritionAccuracy {

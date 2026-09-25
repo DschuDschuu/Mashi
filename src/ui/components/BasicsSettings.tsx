@@ -40,9 +40,10 @@ function productFor(name: string, products: MyProduct[]): Partial<MyProduct> {
   const id = food?.ref.foodId;
   const existing = products.find((p) => p.names?.includes(n) || (id && p.replaces.includes(id)) || normalizeName(p.name) === n);
   if (existing) return existing;
+  // neu = „Eigene Nährwerte“ (keine bestimmte Packung); mit Barcode oder Packung wird es zum Produkt
   return food
-    ? { name, replaces: [id!], per100g: food.per100g }
-    : { name, replaces: [], names: [n] };
+    ? { name, replaces: [id!], per100g: food.per100g, generic: true }
+    : { name, replaces: [], names: [n], generic: true };
 }
 
 /** „Ohne Nährwerte“: Gewürze & Co., die in Rezepten nicht mitgezählt werden. */

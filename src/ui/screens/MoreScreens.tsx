@@ -7,6 +7,7 @@ import { deleteRecipe, importProducts, importRecipes, isDemo, resetDemoData, res
 import type { Recipe } from '../../domain/types';
 import { Empty, Section, Switch } from '../components/Controls';
 import { TopBar } from '../components/TopBar';
+import { MacroGoalSettings } from '../components/MacroGoalSettings';
 import { Icon } from '../components/Icon';
 import { RecipeImage } from '../components/RecipeImage';
 import { updateSettings, useSettings } from '../settings';
@@ -57,6 +58,7 @@ export function MoreScreen() {
             onChange={(showStepIngredients) => updateSettings({ showStepIngredients })}
           />
         </div>
+        <MacroGoalSettings />
       </Section>
 
       <Section title="Sicherung">

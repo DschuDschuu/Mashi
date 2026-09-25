@@ -1,7 +1,10 @@
 import { normalizeName } from '../../domain/nutrition/localFoods';
-import { setNoNutrition, useNoNutrition } from '../../data/store';
+import { setFavoriteVariant, setNoNutrition, useNoNutrition } from '../../data/store';
+import { Icon } from './Icon';
+import { toast } from '../toast';
 import type { MatchStatus, NutritionResult } from '../../domain/nutrition/types';
 import { gram } from '../format';
+import { noticeableRange } from '../../domain/nutrition/variants';
 
 const ACCURACY = {
   berechnet: { dot: 'green', label: 'Berechnet' },
@@ -27,7 +30,23 @@ export function NutritionTiles({ n }: { n: NutritionResult }) {
       <div className="tile"><strong>{gram(p.protein)}</strong><span>Protein</span></div>
       <div className="tile"><strong>{gram(p.carbs)}</strong><span>Kohlenhydr.</span></div>
       <div className="tile"><strong>{gram(p.fat)}</strong><span>Fett</span></div>
+      <VariantRange n={n} />
     </div>
+  );
+}
+
+/**
+ * Mehrere eigene Sorten (z. B. zwei Pestos): gerechnet wird mit dem Durchschnitt – verändern die
+ * Sorten das Gericht spürbar, steht hier die Spanne. Beim Planen/Kochen zählt dann die echte Sorte.
+ */
+function VariantRange({ n }: { n: NutritionResult }) {
+  const r = noticeableRange(n);
+  if (!r) return null;
+  const names = [...new Set(n.items.filter((i) => i.food?.variants?.length).map((i) => i.name))];
+  return (
+    <p className="variant-range small muted">
+      Je nach Sorte ({names.join(', ')}): {Math.round(r.kcal[0])}–{Math.round(r.kcal[1])} kcal · {gram(r.protein[0])}–{gram(r.protein[1])} Protein pro Portion
+    </p>
   );
 }
 
@@ -76,10 +95,11 @@ export function NutritionDetails({ n, servings }: { n: NutritionResult; servings
               <span className={`dot dot--${i.status === 'exact' ? 'green' : i.status === 'ignored' ? 'grey' : 'yellow'}`} />
               <span className="matchlist__name">{i.name}</span>
               <span className="muted small">
-                {i.food && i.status !== 'unmatched' ? `${i.food.name}${i.grams !== undefined ? ` · ${Math.round(i.grams)} g` : ''} · ` : ''}
+                {i.food && i.status !== 'unmatched' ? `${i.food.variants?.length ? (i.food.favoriteId ? `★ ${i.food.variants.find((v) => v.id === i.food!.favoriteId)?.name} (Favorit)` : `Ø ${i.food.variants.length} Sorten`) : i.food.name}${i.grams !== undefined ? ` · ${Math.round(i.grams)} g` : ''} · ` : ''}
                 {i.food?.userZero ? 'ohne Nährwerte (von dir)' : MATCH_LABEL[i.status]}
               </span>
               <ZeroToggle item={i} />
+              {i.food?.variants && i.food.variants.length > 1 && <FavoriteChips item={i} />}
             </li>
           ))}
         </ul>
@@ -104,4 +124,26 @@ function ZeroToggle({ item }: { item: NutritionResult['items'][number] }) {
     return <button type="button" className="link matchlist__toggle" onClick={() => setNoNutrition(list.filter((n) => !hit(n)))}>wieder mitzählen</button>;
   }
   return <button type="button" className="link link--muted matchlist__toggle" onClick={() => setNoNutrition([...list, label])}>nicht mitzählen</button>;
+}
+
+/** Sorten einer Zutat mit Stern: antippen = Favorit (gilt für alle Rezepte), nochmal = zurücknehmen */
+function FavoriteChips({ item }: { item: NutritionResult['items'][number] }) {
+  const all = item.food!.variants!;
+  return (
+    <span className="matchlist__favs">
+      {all.map((v) => {
+        const on = item.food!.favoriteId === v.id;
+        return (
+          <button key={v.id} type="button" className={`favchip${on ? ' is-on' : ''}`} aria-pressed={on}
+            aria-label={on ? `${v.name}: Favorit zurücknehmen` : `${v.name} als Favorit`}
+            onClick={() => {
+              setFavoriteVariant(all, on ? null : v.id);
+              toast(on ? 'Favorit zurückgenommen – Rezepte rechnen wieder mit dem Durchschnitt' : `★ „${v.name}“ ist dein Favorit – gilt für alle Rezepte`);
+            }}>
+            <Icon name="star" size={13} filled={on} /> {v.name} · {Math.round(v.per100g.kcal)} kcal
+          </button>
+        );
+      })}
+    </span>
+  );
 }

@@ -9,6 +9,7 @@ import { currentContent, currentVersion, newId, withNewVersion } from '../domain
 import { recordSavings, type BonSavings } from '../domain/savings';
 import { specialDays, type ShelfDays } from '../domain/shelfLife';
 import { DEFAULT_NO_NUTRITION } from '../domain/nutrition/noNutrition';
+import { DEFAULT_MACRO_GOAL, withFavorite, type MacroGoal } from '../domain/nutrition/variants';
 import { canTransition } from '../domain/status';
 import type { Rating, Recipe, RecipeContent, RecipeImage, RecipeSource, RecipeStatus } from '../domain/types';
 import { foodTable, imageProvider } from '../services';
@@ -175,6 +176,19 @@ export function useNoNutrition(): string[] {
   return useSyncExternalStore(subscribe, currentNoNutrition);
 }
 
+/** Makro-Ziel (Anteil an den Kalorien) – schlägt beim Planen/Kochen die passendere Sorte vor */
+export function currentMacroGoal(): MacroGoal {
+  return pantry.macroGoal ?? DEFAULT_MACRO_GOAL;
+}
+
+export function useMacroGoal(): MacroGoal {
+  return useSyncExternalStore(subscribe, currentMacroGoal);
+}
+
+export function currentPantry(): Pantry {
+  return pantry;
+}
+
 export function usePlan(): MealPlan {
   return useSyncExternalStore(subscribe, () => plan);
 }
@@ -226,13 +240,13 @@ export interface CookedResult {
  * aus der Speisekammer nehmen. Schon im Plan abgehakt → nicht ein zweites Mal abziehen.
  * @param amounts Mengen „nur dieses Mal“ je Zutat-ID (z. B. 3 statt 2 Tomaten) – das Rezept bleibt unverändert
  */
-export function markCooked(id: string, servings?: number, amounts: Record<string, number> = {}): CookedResult {
+export function markCooked(id: string, servings?: number, amounts: Record<string, number> = {}, variants?: Record<string, string>): CookedResult {
   const r = get(id);
   commit({ ...r, lastCookedAt: now() });
   const planned = plan.items.find((i) => i.recipeId === id);
   if (planned && plan.cooked.includes(id)) return { used: [], toCheck: [], undo: () => commit({ ...get(id), lastCookedAt: r.lastCookedAt }) };
   if (planned) commitPlan(toggleCooked(plan, id, true));
-  const result = consume(r, servings ?? planned?.servings ?? currentContent(r).servings, amounts, !!planned);
+  const result = consume(r, servings ?? planned?.servings ?? currentContent(r).servings, amounts, !!planned, variants ?? planned?.variants);
   return {
     ...result,
     undo: () => {
@@ -247,10 +261,10 @@ export function markCooked(id: string, servings?: number, amounts: Record<string
  * Zutaten abziehen. undo legt genau das Genommene zurück. log = im Wochenplan abgehakt →
  * merken, damit auch späteres Zurücknehmen des Hakens die Zutaten zurückbringt.
  */
-function consume(r: Recipe, servings: number, amounts: Record<string, number> = {}, log = false): CookedResult {
+function consume(r: Recipe, servings: number, amounts: Record<string, number> = {}, log = false, variants: Record<string, string> = {}): CookedResult {
   if (!pantry.items.length) return { used: [], toCheck: [] };
   const before = pantry;
-  const d = deductRecipe(pantry, currentContent(r), servings, withMyProducts(foodTable, products), amounts);
+  const d = deductRecipe(pantry, currentContent(r), servings, withMyProducts(foodTable, products), amounts, variants);
   if (!d.used.length && !d.toCheck.length) return { used: [], toCheck: [] };
   const taken = takenBetween(before, d.pantry);
   commitPantry(log ? { ...d.pantry, cookLog: { ...pruneCookLog(d.pantry.cookLog), [r.id]: taken } } : d.pantry);
@@ -452,10 +466,15 @@ function commitPlan(next: Omit<MealPlan, 'updatedAt'>) {
 }
 
 /** Gibt false zurück, wenn das Rezept schon im Plan steht. */
-export function addToPlan(recipeId: string, servings = currentContent(get(recipeId)).servings): boolean {
+export function addToPlan(recipeId: string, servings = currentContent(get(recipeId)).servings, variants: Record<string, string> = {}): boolean {
   if (plan.items.some((i) => i.recipeId === recipeId)) return false;
-  commitPlan({ ...plan, items: [...plan.items, { recipeId, servings }] });
+  commitPlan({ ...plan, items: [...plan.items, { recipeId, servings, ...(Object.keys(variants).length ? { variants } : {}) }] });
   return true;
+}
+
+/** Welche Sorte ein geplantes Gericht nimmt (z. B. welches Pesto) – auf der Plan-Karte umwählbar */
+export function setPlanVariants(recipeId: string, variants: Record<string, string>) {
+  commitPlan({ ...plan, items: plan.items.map((i) => (i.recipeId === recipeId ? { ...i, variants } : i)) });
 }
 
 /** Aus dem Plan nehmen – gibt „Rückgängig“ zurück (gleiche Stelle, Portionen und Gekocht-Haken). */
@@ -505,7 +524,8 @@ export function togglePlanCooked(recipeId: string): CookedResult | null {
   }
   const r = get(recipeId);
   commit({ ...r, lastCookedAt: now() });
-  const result = consume(r, next.items.find((i) => i.recipeId === recipeId)!.servings, {}, true);
+  const item = next.items.find((i) => i.recipeId === recipeId)!;
+  const result = consume(r, item.servings, {}, true, item.variants);
   return {
     ...result,
     undo: () => {
@@ -572,9 +592,9 @@ export function importReceipt(rows: ImportRow[], paidAt?: string, savings?: BonS
   return { count: rows.filter((r) => !r.skip).length, onList: list.filter((i) => i.covered).length + tick.length };
 }
 
-export function addPantryItem(name: string, amount?: number, unit?: PantryUnit) {
+export function addPantryItem(name: string, amount?: number, unit?: PantryUnit, productId?: string) {
   if (!name.trim()) return;
-  commitPantry({ ...pantry, items: addItem(pantry.items, { name: name.trim(), amount, unit }, now(), () => newId('v')) });
+  commitPantry({ ...pantry, items: addItem(pantry.items, { name: name.trim(), amount, unit, productId }, now(), () => newId('v')) });
 }
 
 export function updatePantryItem(id: string, patch: Partial<Pick<PantryItem, 'name' | 'amount' | 'unit' | 'useBy' | 'reduced'>>) {
@@ -614,6 +634,17 @@ export function answerPantryCheck(id: string, stillThere: boolean): (() => void)
 }
 
 /** „Ohne Nährwerte“ – gilt auf allen Geräten; Rezeptkarten neu zeichnen, ihre kcal ändern sich. */
+/** Favorit (★) unter den Sorten einer Zutat setzen – null nimmt ihn zurück. Gilt für alle Rezepte. */
+export function setFavoriteVariant(group: readonly { id: string }[], favoriteId: string | null) {
+  const stamp = now();
+  const ids = new Set(group.map((g) => g.id));
+  saveProducts(withFavorite(products, group, favoriteId).map((p) => (ids.has(p.id) ? { ...p, updatedAt: stamp } : p)));
+}
+
+export function setMacroGoal(goal: MacroGoal) {
+  commitPantry({ ...pantry, macroGoal: goal });
+}
+
 export function setNoNutrition(names: string[]) {
   commitPantry({ ...pantry, noNutrition: names });
   recipes = [...recipes];

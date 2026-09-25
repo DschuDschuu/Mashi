@@ -52,7 +52,7 @@ function resolve(route: Route): { screen: ReactElement; tab?: string } {
       if (b === 'import') return { screen: <ImportScreen /> };
       return { screen: <RecipeFormScreen key="neu" /> };
     case 'rezept':
-      if (c === 'kochen') return { screen: <CookModeScreen id={b} servings={Number(route.query.get('p')) || undefined} /> };
+      if (c === 'kochen') return { screen: <CookModeScreen id={b} servings={Number(route.query.get('p')) || undefined} variants={parseVariants(route.query.get('s'))} /> };
       if (c === 'test') return { screen: <TestFeedbackScreen key={b} id={b} /> };
       if (c === 'bearbeiten') return { screen: <RecipeFormScreen key={b} editId={b} /> };
       return { screen: <RecipeDetailScreen key={b} id={b} /> };
@@ -93,4 +93,16 @@ export function App({ mode }: { mode: Mode | null }) {
       )}
     </div>
   );
+}
+
+/** „?s=…“ – im Rezept gewählte Sorten (Zutat-ID → Produkt-ID); alles andere wird ignoriert */
+function parseVariants(raw: string | null): Record<string, string> | undefined {
+  if (!raw) return undefined;
+  try {
+    const v: unknown = JSON.parse(raw);
+    if (typeof v !== 'object' || v === null || Array.isArray(v)) return undefined;
+    return Object.fromEntries(Object.entries(v).filter((e): e is [string, string] => typeof e[1] === 'string'));
+  } catch {
+    return undefined;
+  }
 }

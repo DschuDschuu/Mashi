@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { FOOD_CHOICES, normalizeName } from '../../domain/nutrition/localFoods';
+import { FOOD_CHOICES } from '../../domain/nutrition/localFoods';
 import type { MyProduct } from '../../domain/nutrition/myProducts';
 import type { NutritionResult } from '../../domain/nutrition/types';
 import { newId } from '../../domain/recipe';
@@ -11,6 +11,8 @@ import { euro } from '../format';
 import { BarcodeScanner } from './BarcodeScanner';
 import { toast } from '../toast';
 import { Icon } from './Icon';
+import { NutritionQuickForm } from './NutritionQuickForm';
+import { parseNum, toField, type Values } from './productFields';
 
 const foodName = (id: string) => FOOD_CHOICES.find((f) => f.id === id)?.name ?? id;
 
@@ -44,14 +46,9 @@ export function MyProductsPanel() {
     }
   };
 
-  return (
-    <div className="panel stack">
-      <p className="muted small">
-        Was du immer in derselben Sorte kaufst. Mashi rechnet dann in allen Rezepten mit deinen Werten vom Etikett statt mit Richtwerten.
-      </p>
-      {products.length === 0 && !editing && <p className="small">Noch keine Produkte.</p>}
-
-      {products.map((p) =>
+  const own = products.filter((p) => !p.generic);
+  const generic = products.filter((p) => p.generic);
+  const row = (p: MyProduct) =>
         editing !== 'neu' && editing?.id === p.id ? (
           <ProductForm key={p.id} initial={p} onSave={save} onCancel={() => setEditing(null)} />
         ) : (
@@ -85,8 +82,16 @@ export function MyProductsPanel() {
               </span>
             </div>
           </div>
-        ),
-      )}
+        );
+
+  return (
+    <>
+    <div className="panel stack">
+      <p className="muted small">
+        Was du immer in derselben Sorte kaufst. Mashi rechnet dann in allen Rezepten mit deinen Werten vom Etikett statt mit Richtwerten.
+      </p>
+      {own.length === 0 && !editing && <p className="small">Noch keine Produkte.</p>}
+      {own.map(row)}
 
       {editing === 'neu' ? (
         <ProductForm onSave={save} onCancel={() => setEditing(null)} />
@@ -96,18 +101,18 @@ export function MyProductsPanel() {
         </button>
       )}
     </div>
+    {generic.length > 0 && (
+      <div className="panel stack">
+        <h2 className="h3">Eigene Nährwerte</h2>
+        <p className="muted small">Werte für eine Zutat, egal welche Marke – angelegt im Nährwerte-Tab eines Rezepts. Mit Barcode oder Packungsgröße wird daraus ein Produkt.</p>
+        {generic.map(row)}
+      </div>
+    )}
+    </>
   );
 }
 
-/** Zahl vom Etikett: akzeptiert „3,4“ und „3.4“. */
-function parseNum(s: string): number | undefined {
-  const n = Number(s.replace(',', '.').trim());
-  return s.trim() !== '' && Number.isFinite(n) && n >= 0 ? n : undefined;
-}
 
-const toField = (n: number | undefined) => (n === undefined ? '' : String(n).replace('.', ','));
-
-type Values = { kcal: string; protein: string; carbs: string; fat: string };
 
 /**
  * Zutaten, die Mashi in diesem Rezept nicht kennt – mit der Möglichkeit, sie direkt
@@ -122,22 +127,22 @@ export function UnknownIngredients({ n }: { n: NutritionResult }) {
   const save = (p: MyProduct) => {
     saveProducts([...products, p]);
     setOpen(null);
-    toast(`„${p.name}“ angelegt – alle Rezepte rechnen neu`);
+    toast(p.generic ? `Nährwerte für „${p.name}“ gespeichert – alle Rezepte rechnen neu` : `„${p.name}“ angelegt – alle Rezepte rechnen neu`);
   };
 
   return (
     <div className="panel stack unknown-ings">
       <p className="small">
         <strong>{unknown.length === 1 ? '1 Zutat kennt' : `${unknown.length} Zutaten kennt`} Mashi noch nicht.</strong>{' '}
-        Mit den Werten vom Etikett wird die Berechnung genauer – in jedem Rezept, das sie verwendet.
+        Mit ihren Nährwerten – vom Etikett-Foto, aus Open Food Facts oder abgetippt – wird die Berechnung genauer, in jedem Rezept.
       </p>
       {unknown.map((name) =>
         open === name ? (
-          <ProductForm key={name} initial={{ name, names: [normalizeName(name)], replaces: [] }} onSave={save} onCancel={() => setOpen(null)} />
+          <NutritionQuickForm key={name} ingredient={name} onSave={save} onCancel={() => setOpen(null)} />
         ) : (
           <div key={name} className="row-between">
             <span>{name}</span>
-            <button className="btn btn--soft btn--sm" onClick={() => setOpen(name)}><Icon name="plus" size={16} /> Als Produkt anlegen</button>
+            <button className="btn btn--soft btn--sm" onClick={() => setOpen(name)}><Icon name="plus" size={16} /> Nährwerte hinzufügen</button>
           </div>
         ),
       )}
@@ -202,6 +207,7 @@ export function ProductForm({ initial, onSave, onCancel }: { initial?: Partial<M
       ...(amount ? { packageAmount: amount, packageUnit: packUnit } : {}),
       ...(amount && price !== undefined ? { packagePrice: price } : {}),
       ...(shelfDays ? { shelfDays } : {}),
+      ...(initial?.generic && !ean && !amount ? { generic: true } : {}),
       updatedAt: new Date().toISOString(),
     });
   };

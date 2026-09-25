@@ -1,4 +1,5 @@
 import { normalizeName } from './localFoods';
+import { averageNutrients } from './variants';
 import type { FoodEntry, FoodTable, Nutrients } from './types';
 
 /**
@@ -33,6 +34,17 @@ export interface MyProduct {
   ean?: string;
   /** hält ab Kauf so viele Tage (von dir) – leer = Mashi schätzt */
   shelfDays?: number;
+  /**
+   * „Eigene Nährwerte“ statt „Mein Produkt“: nur Werte für einen Zutatennamen, keine bestimmte
+   * Packung. Rechnet genauso; steht auf der Produkte-Seite in einer eigenen Gruppe. Bekommt es
+   * Barcode oder Packungsgröße, wird es zum richtigen Produkt.
+   */
+  generic?: boolean;
+  /**
+   * Favorit unter mehreren Sorten derselben Zutat (★): Rezepte rechnen dann mit dieser Sorte statt
+   * mit dem Durchschnitt, und liegt sie im Vorrat, nimmt Mashi sie beim Planen ohne Nachfrage.
+   */
+  favorite?: boolean;
   updatedAt: string;
 }
 
@@ -53,25 +65,54 @@ function asEntry(p: MyProduct, replaced?: FoodEntry): FoodEntry {
 }
 
 /**
+ * Mehrere Produkte für dieselbe Zutat: Durchschnitt als Wert, die einzelnen als Sorten.
+ * Die ID hängt an der Zutat (nicht an den Produkten), damit Vorrat und Rezept denselben
+ * Schlüssel bekommen – auch wenn später eine dritte Sorte dazukommt.
+ */
+function asGroup(ps: MyProduct[], key: string, replaced?: FoodEntry): FoodEntry {
+  if (ps.length === 1) return asEntry(ps[0], replaced);
+  const days = ps.map((p) => p.shelfDays).filter((d): d is number => d !== undefined);
+  // Favorit: dessen Werte statt des Durchschnitts (Schlüssel bleibt – Vorrat und Rezept finden sich weiter)
+  const fav = ps.find((p) => p.favorite);
+  return {
+    ...asEntry(ps[0], replaced),
+    ref: { provider: MY_PRODUCTS_PROVIDER, foodId: `sorten:${key}` },
+    name: replaced?.name ?? key.charAt(0).toLocaleUpperCase('de-DE') + key.slice(1),
+    per100g: fav ? fav.per100g : averageNutrients(ps.map((p) => p.per100g)),
+    ...(days.length === ps.length ? { shelfDays: Math.min(...days) } : { shelfDays: undefined }),
+    variants: ps.map((p) => ({ id: p.id, name: p.name, per100g: p.per100g, ...(p.favorite ? { favorite: true } : {}) })),
+    ...(fav ? { favoriteId: fav.id } : {}),
+  };
+}
+
+const push = <K, V>(m: Map<K, V[]>, k: K, v: V) => m.set(k, [...(m.get(k) ?? []), v]);
+
+/**
  * Legt „Meine Produkte“ über eine Lebensmitteltabelle. Die Zuordnung „Name → Lebensmittel“
  * bleibt die der allgemeinen Tabelle – nur die Werte kommen dann von deinem Produkt.
  * So bleibt die Genauigkeit (berechnet/geschätzt) dieselbe wie vorher.
  */
 export function withMyProducts(base: FoodTable, products: MyProduct[]): FoodTable {
   if (!products.length) return base;
-  const byReplaced = new Map<string, MyProduct>();
-  for (const p of products) for (const r of p.replaces) byReplaced.set(r, p);
-  const byName = new Map<string, MyProduct>();
-  for (const p of products) for (const n of p.names ?? []) byName.set(normalizeName(n), p);
+  // Mehrere Produkte für dasselbe = Sorten (siehe asGroup)
+  const byReplaced = new Map<string, MyProduct[]>();
+  for (const p of products) for (const r of p.replaces) push(byReplaced, r, p);
+  const byName = new Map<string, MyProduct[]>();
+  for (const p of products) for (const n of new Set((p.names ?? []).map(normalizeName))) push(byName, n, p);
   // Ein Produkt passt immer auch auf seinen eigenen Namen („Frischkäse Balance“)
   const byOwnName = new Map(products.map((p) => [normalizeName(p.name), p]));
   const swap = (food: FoodEntry): FoodEntry => {
-    const p = byReplaced.get(food.ref.foodId);
-    return p ? asEntry(p, food) : food;
+    const ps = byReplaced.get(food.ref.foodId);
+    return ps ? asGroup(ps, food.ref.foodId, food) : food;
   };
   return {
     byRef(ref) {
       if (ref.provider === MY_PRODUCTS_PROVIDER) {
+        if (ref.foodId.startsWith('sorten:')) {
+          const key = ref.foodId.slice('sorten:'.length);
+          const ps = byName.get(key) ?? byReplaced.get(key);
+          return ps && asGroup(ps, key, byReplaced.has(key) ? base.byRef({ provider: ref.provider, foodId: key }) : undefined);
+        }
         const p = products.find((x) => x.id === ref.foodId);
         return p ? asEntry(p) : undefined;
       }
@@ -82,7 +123,7 @@ export function withMyProducts(base: FoodTable, products: MyProduct[]): FoodTabl
       // Eigene Namen zuerst: Du hast das Produkt ausdrücklich für diese Zutat angelegt.
       const n = normalizeName(name);
       const own = byName.get(n);
-      if (own) return { food: asEntry(own), quality: 'exact' };
+      if (own) return { food: asGroup(own, n), quality: 'exact' };
       const m = base.matchName(name);
       const self = byOwnName.get(n);
       if (self) {

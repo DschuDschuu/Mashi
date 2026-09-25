@@ -26,6 +26,7 @@ import { toast } from '../toast';
 import { useIsTablet } from '../useMediaQuery';
 import { useNutrition } from '../useNutrition';
 import { useSwipe } from '../useSwipe';
+import { useVariantPrompt } from '../components/VariantSheet';
 
 // Vier kurze Tabs passen auch aufs schmale Handy (375 px) – die Infos stehen unter „Notizen“
 const TABS = ['Zutaten', 'Schritte', 'Nährwerte', 'Notizen'] as const;
@@ -56,6 +57,7 @@ function Detail({ recipe }: { recipe: Recipe }) {
   const [menu, setMenu] = useState(false);
   const [imgBusy, setImgBusy] = useState(false);
   const n = useNutrition(c);
+  const variantPrompt = useVariantPrompt();
   const isTablet = useIsTablet();
   const tabBar = useRef<HTMLDivElement>(null);
   // Der gewählte Tab soll in der (seitlich scrollbaren) Tab-Leiste sichtbar sein – auch nach dem Wischen
@@ -199,10 +201,18 @@ const header = (
     </>
   );
 
+  // Mehrere Sorten im Vorrat (z. B. zwei Pestos)? Erst fragen, welche – geplant: die Wahl vom Plan
+  const startCooking = () => {
+    if (planned) return navigate(`/rezept/${recipe.id}/kochen?p=${servings}`);
+    variantPrompt.ask(c, undefined, (pick) => navigate(`/rezept/${recipe.id}/kochen?p=${servings}${Object.keys(pick).length ? `&s=${encodeURIComponent(JSON.stringify(pick))}` : ''}`));
+  };
   const cookButton = (
-    <button className="btn btn--primary btn--block btn--lg" onClick={() => navigate(`/rezept/${recipe.id}/kochen?p=${servings}`)}>
-      <Icon name="play" size={18} filled /> Kochmodus starten
-    </button>
+    <>
+      <button className="btn btn--primary btn--block btn--lg" onClick={startCooking}>
+        <Icon name="play" size={18} filled /> Kochmodus starten
+      </button>
+      {variantPrompt.sheet}
+    </>
   );
 
   if (isTablet) {
@@ -253,6 +263,7 @@ function CostLine({ content, servings }: { content: RecipeContent; servings: num
 /** Für Meal Prep: mit der eingestellten Portionszahl in „Diese Woche“ aufnehmen. */
 function PlanButton({ recipe, servings }: { recipe: Recipe; servings: number }) {
   const inPlan = usePlan().items.find((i) => i.recipeId === recipe.id);
+  const prompt = useVariantPrompt();
   if (inPlan) {
     return (
       <button className="plan-chip is-on" onClick={() => navigate('/plan')}>
@@ -261,9 +272,15 @@ function PlanButton({ recipe, servings }: { recipe: Recipe; servings: number }) 
     );
   }
   return (
-    <button className="plan-chip" onClick={() => { addToPlan(recipe.id, servings); toast(`Eingeplant: ${portionCount(servings)}`); }}>
-      <Icon name="calendar" size={16} /> Zum Wochenplan ({portionCount(servings)})
-    </button>
+    <>
+      <button className="plan-chip" onClick={() => prompt.ask(currentContent(recipe), undefined, (pick) => {
+        addToPlan(recipe.id, servings, pick);
+        toast(`Eingeplant: ${portionCount(servings)}`);
+      })}>
+        <Icon name="calendar" size={16} /> Zum Wochenplan ({portionCount(servings)})
+      </button>
+      {prompt.sheet}
+    </>
   );
 }
 

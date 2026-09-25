@@ -1,4 +1,5 @@
 import type { PriceEntry } from './cost';
+import type { MacroGoal } from './nutrition/variants';
 import { basicsKeys, needIn, resolveIngredient, type Resolved } from './mealplan';
 import type { FoodTable } from './nutrition/types';
 import type { ReceiptLine } from './receipt';
@@ -31,6 +32,8 @@ export interface PantryItem {
   frozenAt?: string;
   /** Nach dem Kochen verwendet, aber ohne Menge – „Noch da?“ fragen */
   check?: boolean;
+  /** welche Sorte („Mein Produkt“) – vom Kassenbon oder Barcode; zählt beim Planen/Kochen */
+  productId?: string;
 }
 
 /**
@@ -67,6 +70,8 @@ export interface Pantry {
   basics?: string[];
   /** „Ohne Nährwerte“ (Namen, z. B. Gewürze) – fehlt die Liste, gilt DEFAULT_NO_NUTRITION */
   noNutrition?: string[];
+  /** Makro-Ziel (Anteil an den Kalorien) – schlägt beim Planen die passendere Sorte vor; fehlt es, gilt 40/30/30 */
+  macroGoal?: MacroGoal;
   /** schon importierte Bons (Einkaufstag|Endbetrag) – warnt vor doppeltem Import */
   receipts?: string[];
   /** deine Richtwerte „hält X Tage“ je Art (Gemüse, Milchprodukte …) – fehlt einer, gilt Mashis Standard */
@@ -177,11 +182,11 @@ export function applyImport(pantry: Pantry, rows: ImportRow[], now = new Date().
     const share = frozenShare(row);
     const part = (f: number) => (row.amount === undefined ? undefined : Math.round(row.amount * f * 10) / 10);
     // Der frische Teil wie gewohnt – Gefrorenes als eigener Eintrag, eingefroren am Einkaufstag
-    if (share < 1) items = addItem(items, { name, amount: part(1 - share), unit: row.unit, boughtAt: paidAt, reduced: row.reduced }, now, newId);
+    if (share < 1) items = addItem(items, { name, amount: part(1 - share), unit: row.unit, boughtAt: paidAt, reduced: row.reduced, productId: row.productId }, now, newId);
     if (share > 0) {
       items = [...items, {
         id: newId(), name, ...(row.amount !== undefined ? { amount: part(share), unit: row.unit } : {}),
-        addedAt: now, boughtAt: paidAt, frozenAt: paidAt, ...(row.reduced ? { reduced: true } : {}),
+        addedAt: now, boughtAt: paidAt, frozenAt: paidAt, ...(row.reduced ? { reduced: true } : {}), ...(row.productId ? { productId: row.productId } : {}),
       }];
     }
     const price = priceOf(row, paidAt);
@@ -215,15 +220,16 @@ function priceOf(row: ImportRow, date: string): PriceEntry | undefined {
  * Gefrorenes und MHD-Ware bleiben eigene Einträge – sie halten ganz anders als frische Ware.
  */
 export function addItem(
-  items: PantryItem[], add: { name: string; amount?: number; unit?: PantryUnit; boughtAt?: string; reduced?: boolean }, now: string, newId = defaultId,
+  items: PantryItem[], add: { name: string; amount?: number; unit?: PantryUnit; boughtAt?: string; reduced?: boolean; productId?: string }, now: string, newId = defaultId,
 ): PantryItem[] {
-  const i = items.findIndex((x) => sameName(x.name, add.name) && !x.frozenAt && !!x.reduced === !!add.reduced
+  // verschiedene Sorten bleiben getrennt – sonst wüsste Mashi nicht mehr, welches Pesto da ist
+  const i = items.findIndex((x) => sameName(x.name, add.name) && !x.frozenAt && !!x.reduced === !!add.reduced && x.productId === add.productId
     && (x.unit === add.unit || x.amount === undefined || add.amount === undefined));
   const bought = add.boughtAt ?? now;
   if (i < 0) {
     return [...items, {
       id: newId(), name: add.name, ...(add.amount !== undefined ? { amount: add.amount, unit: add.unit } : {}),
-      addedAt: now, boughtAt: bought, ...(add.reduced ? { reduced: true } : {}),
+      addedAt: now, boughtAt: bought, ...(add.reduced ? { reduced: true } : {}), ...(add.productId ? { productId: add.productId } : {}),
     }];
   }
   const x = items[i];
@@ -294,7 +300,11 @@ const itemAsIngredient = (item: PantryItem, table: FoodTable) => resolveIngredie
  * @param amounts Mengen „nur dieses Mal“ je Zutat-ID (in der Einheit der Zutat, schon für diese
  *   Portionen) – z. B. 3 statt 2 Tomaten, um den Rest mitzuverbrauchen. Das Rezept bleibt, wie es ist.
  */
-export function deductRecipe(pantry: Pantry, content: RecipeContent, servings: number, table: FoodTable, amounts: Readonly<Record<string, number>> = {}): Deduction {
+export function deductRecipe(
+  pantry: Pantry, content: RecipeContent, servings: number, table: FoodTable, amounts: Readonly<Record<string, number>> = {},
+  /** gewählte Sorte je Zutat (Plan/Kochmodus) – deren Packung wird zuerst genommen */
+  prefer: Readonly<Record<string, string>> = {},
+): Deduction {
   const factor = servings / content.servings;
   const keyOf = new Map(pantry.items.map((it) => [it.id, itemAsIngredient(it, table)?.key]));
   // Gibt es etwas doppelt (MHD-Ware + frische Packung, oder gefroren), zuerst das, was eher weg muss
@@ -316,7 +326,9 @@ export function deductRecipe(pantry: Pantry, content: RecipeContent, servings: n
     // verschiedene Einheiten haben (g hier, Stück dort).
     let open = 1;
     let found = false;
-    for (const item of byUrgency) {
+    const sort = prefer[ing.id];
+    const order = sort ? [...byUrgency].sort((a, b) => Number(b.productId === sort) - Number(a.productId === sort)) : byUrgency;
+    for (const item of order) {
       if (open < 1e-6) break;
       if (keyOf.get(item.id) !== need.key || (item.amount ?? 1) <= 0) continue;
       found = true;
@@ -364,7 +376,7 @@ export function pantryAfterPlan(pantry: Pantry, plan: MealPlan, recipes: Recipe[
     if (plan.cooked.includes(item.recipeId)) continue;
     const r = recipes.find((x) => x.id === item.recipeId);
     if (!r) continue;
-    const d = deductRecipe(rest, currentContent(r), item.servings, table);
+    const d = deductRecipe(rest, currentContent(r), item.servings, table, {}, item.variants);
     d.checkIds.forEach((id) => reserved.add(id));
     rest = d.pantry;
   }
@@ -519,7 +531,7 @@ export function plannedByDish(pantry: Pantry, plan: MealPlan, recipes: Recipe[],
     if (plan.cooked.includes(item.recipeId)) continue;
     const r = recipes.find((x) => x.id === item.recipeId);
     if (!r) continue;
-    const d = deductRecipe(rest, currentContent(r), item.servings, table);
+    const d = deductRecipe(rest, currentContent(r), item.servings, table, {}, item.variants);
     out.push({ recipeId: r.id, taken: takenBetween(rest, d.pantry), stock: d.stock });
     // „Noch da?“-Markierung nur gedacht – fürs nächste Gericht wieder wie vorher
     rest = { ...d.pantry, items: d.pantry.items.map((it) => ({ ...it, check: originalCheck.get(it.id) })) };

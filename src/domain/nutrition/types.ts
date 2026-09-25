@@ -36,6 +36,22 @@ export interface FoodEntry {
   baseId?: string;
   /** von dir auf „ohne Nährwerte“ gestellt (siehe noNutrition.ts) – im Rezept wieder umschaltbar */
   userZero?: boolean;
+  /**
+   * Mehrere eigene Sorten für diese Zutat (siehe variants.ts): per100g ist dann der Durchschnitt,
+   * hier stehen die einzelnen Sorten – für die Spanne und die Auswahl beim Planen/Kochen.
+   */
+  variants?: FoodVariant[];
+  /** davon dein Favorit (★) – dann sind per100g seine Werte, keine Spanne */
+  favoriteId?: string;
+}
+
+/** Eine Sorte = ein eigenes Produkt („Pesto verde (K-Classic)“) */
+export interface FoodVariant {
+  /** ID des Produkts in „Meine Produkte“ */
+  id: string;
+  name: string;
+  per100g: Nutrients;
+  favorite?: boolean;
 }
 
 /**
@@ -80,4 +96,6 @@ export interface NutritionResult {
   total: Nutrients | null;
   perServing: Nutrients | null;
   items: IngredientNutrition[];
+  /** gesamt: kleinster und größter Wert je nach Sorte – nur wenn Zutaten mehrere Sorten haben */
+  range?: { kcal: [number, number]; protein: [number, number] };
 }

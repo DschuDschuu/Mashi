@@ -12,6 +12,9 @@ import { StepIngredients } from '../components/StepIngredients';
 import { cookedToast } from '../cookedToast';
 import { toast } from '../toast';
 import { useMediaQuery } from '../useMediaQuery';
+import { DishNutrition } from '../components/DishNutrition';
+import { pickFor } from '../../domain/nutrition/variants';
+import { choicesFor } from '../useNutrition';
 
 interface TimerState {
   step: number;
@@ -21,7 +24,7 @@ interface TimerState {
   remainingMs: number;
 }
 
-export function CookModeScreen({ id, servings }: { id: string; servings?: number }) {
+export function CookModeScreen({ id, servings, variants }: { id: string; servings?: number; variants?: Record<string, string> }) {
   const recipe = useRecipe(id);
   const [step, setStep] = useState(0);
   const [showIngredients, setShowIngredients] = useState(false);
@@ -72,6 +75,8 @@ export function CookModeScreen({ id, servings }: { id: string; servings?: number
 
   if (!recipe) return null;
   const c = currentContent(recipe);
+  // Sorte: im Rezept gewählt – sonst die vom Plan – sonst Vorschlag (eine im Vorrat = diese)
+  const own = variants ?? plan.items.find((i) => i.recipeId === recipe.id)?.variants;
   const s = c.steps[step];
   const last = step === c.steps.length - 1;
   const ingredients = base.map((i) => (i.id in amounts ? { ...i, amount: amounts[i.id] } : i));
@@ -89,7 +94,7 @@ export function CookModeScreen({ id, servings }: { id: string; servings?: number
   const resume = () => timer && setTimer({ ...timer, endsAt: Date.now() + timer.remainingMs });
 
   const finish = () => {
-    cookedToast(markCooked(recipe.id, servings ?? c.servings, amounts));
+    cookedToast(markCooked(recipe.id, servings ?? c.servings, amounts, pickFor(choicesFor(c), own)));
     if (recipe.status === 'zum_testen' || recipe.status === 'bewaehrt') navigate(`/rezept/${recipe.id}/test`, { replace: true });
     else goBack(`/rezept/${recipe.id}`);
   };
@@ -119,6 +124,7 @@ export function CookModeScreen({ id, servings }: { id: string; servings?: number
           </button>
         )}
       </header>
+      <DishNutrition content={c} own={own} className="cook__nutri" />
 
       {(wide || showIngredients) && (
         <div className="cook__ingredients">

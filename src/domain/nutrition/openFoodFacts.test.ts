@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fromOpenFoodFacts, isValidEan, parseQuantity } from './openFoodFacts';
+import { fromOpenFoodFacts, fromOpenFoodFactsSearch, isValidEan, parseQuantity } from './openFoodFacts';
 
 // Erfundenes Produkt im Aufbau einer Open-Food-Facts-Antwort
 const RESPONSE = {
@@ -46,5 +46,23 @@ describe('Open Food Facts → Mein Produkt', () => {
     expect(isValidEan('96385074')).toBe(true);       // EAN-8
     expect(isValidEan('4006381333932')).toBe(false); // letzte Ziffer falsch
     expect(isValidEan('12345')).toBe(false);
+  });
+});
+
+describe('Open Food Facts – Suche nach Namen', () => {
+  it('liefert nur Treffer mit allen vier Werten, ohne doppelte Barcodes', () => {
+    const full = { ...RESPONSE.product, code: '4000000000017' };
+    const hits = fromOpenFoodFactsSearch({
+      products: [
+        full,
+        { ...full },                                                     // doppelt
+        { code: '4000000000024', product_name: 'Ohne Werte', nutriments: { 'energy-kcal_100g': 50 } },
+        { product_name: 'Ohne Barcode', nutriments: RESPONSE.product.nutriments },
+      ],
+    });
+    expect(hits.map((h) => [h.ean, h.name, h.per100g.kcal])).toEqual([['4000000000017', 'Mozzarella light (Hausmarke)', 165]]);
+  });
+  it('verträgt eine leere Antwort', () => {
+    expect(fromOpenFoodFactsSearch({})).toEqual([]);
   });
 });

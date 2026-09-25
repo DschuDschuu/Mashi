@@ -5,7 +5,7 @@ import { recipesFromPantry, type PantryItem, type PantryUnit } from '../../domai
 import { daysLabel, daysLeft, frozenSince, specialDays, useByOf } from '../../domain/shelfLife';
 import { formatAmount } from '../../domain/scaling';
 import {
-  addPantryItem, answerPantryCheck, forgetReceiptRule, freezePantryItem, removePantryItem, thawPantryItem, updatePantryItem,
+  addPantryItem, answerPantryCheck, currentPantry, forgetReceiptRule, freezePantryItem, removePantryItem, thawPantryItem, updatePantryItem,
   usePantry, usePlan, useProducts, useRecipes,
 } from '../../data/store';
 import { navigate, useRoute } from '../../router';
@@ -22,6 +22,9 @@ import { BasicsSettings, NoNutritionSettings } from '../components/BasicsSetting
 import { ProductsLink } from '../components/ProductsLink';
 import { TileSummary } from '../components/TileSummary';
 import { toast } from '../toast';
+import { BarcodeScanner } from '../components/BarcodeScanner';
+import type { MyProduct } from '../../domain/nutrition/myProducts';
+import { FOOD_CHOICES, normalizeName } from '../../domain/nutrition/localFoods';
 
 const UNITS: PantryUnit[] = ['g', 'ml', 'Stück'];
 
@@ -40,6 +43,8 @@ export function PantryScreen() {
   const pantry = usePantry();
   const recipes = useRecipes();
   const products = useProducts();
+  /** Sorte eines Vorrats (vom Bon oder Barcode), z. B. „Pesto verde (K-Classic)“ */
+  const sortName = (id: string) => products.find((p) => p.id === id)?.name;
   const plan = usePlan();
   const [adding, setAdding] = useState(false);
   // Plus-Menü → „Vorrat eintragen“ öffnet das Formular – auch wenn du schon hier bist.
@@ -146,6 +151,7 @@ export function PantryScreen() {
                               {i.name}
                               {shelfLabel(i)?.alarm && <span className="pantry__alarm" role="img" aria-label="läuft heute oder morgen ab"><Icon name="clock" size={14} /></span>}
                               {i.reduced && !i.frozenAt && <span className="badge tint-peach pantry__mhd">MHD</span>}
+                              {i.productId && sortName(i.productId) && <span className="pantry__sort">{sortName(i.productId)}</span>}
                             </span>
                             <span className="pantry__qty pantry__qty--stack">
                               {quantityLabel(freeOf(i) ?? i)}
@@ -219,13 +225,33 @@ function AddForm({ onDone }: { onDone: () => void }) {
   const [name, setName] = useState('');
   const [amount, setAmount] = useState('');
   const [unit, setUnit] = useState<PantryUnit>('g');
+  const products = useProducts();
+  /** per Barcode erkannte Sorte („Mein Produkt“) – zählt dann beim Planen/Kochen */
+  const [product, setProduct] = useState<MyProduct | null>(null);
+  const [scanning, setScanning] = useState(false);
+  const onCode = (code: string) => {
+    setScanning(false);
+    const p = products.find((x) => x.ean === code);
+    if (!p) {
+      toast('Diesen Barcode kennt Mashi noch nicht – leg das Produkt unter „Meine Produkte“ an, dann klappt es beim nächsten Mal.');
+      return;
+    }
+    setProduct(p);
+    // Name wie in Rezepten („grünes pesto“), nicht wie auf der Packung – so findet das Rezept den Vorrat
+    const n = p.names?.[0] ?? (p.replaces[0] ? FOOD_CHOICES.find((f) => f.id === p.replaces[0])?.name : undefined) ?? p.name;
+    // Schreibweise wie beim vorhandenen Vorrat, sonst mit großem Anfangsbuchstaben
+    const known = currentPantry().items.find((it) => normalizeName(it.name) === normalizeName(n))?.name;
+    if (!name.trim()) setName(known ?? n.charAt(0).toLocaleUpperCase('de-DE') + n.slice(1));
+    if (!amount && p.packageAmount && p.packageUnit) { setAmount(String(p.packageAmount).replace('.', ',')); setUnit(p.packageUnit); }
+  };
   const submit = () => {
     if (!name.trim()) return;
     const a = parseAmount(amount);
-    addPantryItem(name, a, a === undefined ? undefined : unit);
+    addPantryItem(name, a, a === undefined ? undefined : unit, product?.id);
     toast(`„${name.trim()}“ in der Speisekammer`);
     setName('');
     setAmount('');
+    setProduct(null);
   };
   return (
     <div className="panel stack">
@@ -234,11 +260,15 @@ function AddForm({ onDone }: { onDone: () => void }) {
           onKeyDown={(e) => e.key === 'Enter' && submit()} />
       </label>
       <AmountFields amount={amount} unit={unit} onAmount={setAmount} onUnit={setUnit} />
-      <p className="small muted">Menge leer lassen = einfach „vorhanden“.</p>
+      {product
+        ? <p className="scan-note" role="status">Sorte: <strong>{product.name}</strong> <button type="button" className="link" onClick={() => setProduct(null)}>entfernen</button></p>
+        : <p className="small muted">Menge leer lassen = einfach „vorhanden“.</p>}
       <div className="row-gap">
         <button className="btn btn--primary" onClick={submit} disabled={!name.trim()}>Hinzufügen</button>
+        <button type="button" className="btn btn--soft" onClick={() => setScanning(true)}><Icon name="camera" size={16} /> Barcode</button>
         <button className="btn btn--ghost" onClick={onDone}>Fertig</button>
       </div>
+      {scanning && <BarcodeScanner onCode={onCode} onClose={() => setScanning(false)} />}
     </div>
   );
 }

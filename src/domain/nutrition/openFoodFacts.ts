@@ -16,7 +16,9 @@ export interface ScannedProduct {
 type OffNutriments = Record<string, number | string | undefined>;
 interface OffResponse {
   status?: number;
-  product?: {
+  product?: OffProduct;
+}
+interface OffProduct {
     product_name?: string;
     product_name_de?: string;
     brands?: string;
@@ -24,7 +26,6 @@ interface OffResponse {
     product_quantity?: number | string;
     product_quantity_unit?: string;
     nutriments?: OffNutriments;
-  };
 }
 
 const num = (v: unknown): number | undefined => {
@@ -87,4 +88,20 @@ export function isValidEan(code: string): boolean {
   const check = digits.pop()!;
   const sum = digits.reverse().reduce((s, d, i) => s + d * (i % 2 === 0 ? 3 : 1), 0);
   return (10 - (sum % 10)) % 10 === check;
+}
+
+/**
+ * Antwort der Namenssuche → Treffer zum Auswählen. Treffer ohne die vier Hauptwerte fallen weg
+ * (damit kann man nicht rechnen), doppelte Barcodes auch.
+ */
+export function fromOpenFoodFactsSearch(res: { products?: (OffProduct & { code?: string })[] }): ScannedProduct[] {
+  const seen = new Set<string>();
+  const out: ScannedProduct[] = [];
+  for (const p of res.products ?? []) {
+    if (!p.code || seen.has(p.code)) continue;
+    seen.add(p.code);
+    const hit = fromOpenFoodFacts(p.code, { status: 1, product: p });
+    if (hit) out.push(hit);
+  }
+  return out;
 }

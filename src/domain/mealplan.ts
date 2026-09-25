@@ -11,6 +11,8 @@ import type { Pantry, PantryItem } from './pantry';
 export interface PlanItem {
   recipeId: string;
   servings: number;
+  /** gewählte Sorte je Zutat (Zutat-ID → „Mein Produkt“), z. B. welches Pesto – siehe variants.ts */
+  variants?: Record<string, string>;
 }
 
 export interface MealPlan {
