@@ -34,6 +34,8 @@ export interface FoodEntry {
   shelfDays?: number;
   /** Bei eigenen Produkten: der Eintrag der allgemeinen Tabelle, den es ersetzt (für dessen Richtwerte) */
   baseId?: string;
+  /** von dir auf „ohne Nährwerte“ gestellt (siehe noNutrition.ts) – im Rezept wieder umschaltbar */
+  userZero?: boolean;
 }
 
 /**

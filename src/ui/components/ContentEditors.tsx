@@ -2,6 +2,8 @@ import { newId } from '../../domain/recipe';
 import { stepIngredients } from '../../domain/stepIngredients';
 import type { Ingredient, Step, Unit } from '../../domain/types';
 import { Icon } from './Icon';
+import { AutoTextarea } from './AutoTextarea';
+import { IngredientNames } from './IngredientNames';
 
 const UNITS: Unit[] = ['g', 'kg', 'ml', 'l', 'EL', 'TL', 'Prise', 'Stück', 'Zehe', 'Dose', 'Bund', 'Handvoll', 'cm', 'Messlöffel'];
 
@@ -11,6 +13,8 @@ export function IngredientEditor({ items, onChange, newItem }: { items: Ingredie
   return (
     <div className="editor">
       <h3 className="small muted">Zutaten</h3>
+      {/* Gleiche Vorschläge wie in der Speisekammer – gleiche Namen, damit Vorrat und Nährwerte die Zutat wiederfinden */}
+      <IngredientNames />
       {items.map((it, idx) => (
         <div key={it.id} className="editor__row">
           <input
@@ -22,7 +26,7 @@ export function IngredientEditor({ items, onChange, newItem }: { items: Ingredie
             <option value="">–</option>
             {UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
           </select>
-          <input className="editor__name" aria-label="Zutat" placeholder="Zutat" value={it.name} onChange={(e) => update(idx, { name: e.target.value })} />
+          <input className="editor__name" aria-label="Zutat" placeholder="Zutat" list="ingredient-names" value={it.name} onChange={(e) => update(idx, { name: e.target.value })} />
           <button type="button" className="iconbtn iconbtn--sm" aria-label={`${it.name || 'Zutat'} entfernen`} onClick={() => onChange(items.filter((_, i) => i !== idx))}>
             <Icon name="close" size={16} />
           </button>
@@ -49,7 +53,7 @@ export function StepEditor({ steps, ingredients, onChange }: { steps: Step[]; in
         <div key={s.id} className="editor__step">
           <span className="steps__num">{idx + 1}</span>
           <div className="editor__stepbody">
-            <textarea rows={2} aria-label={`Schritt ${idx + 1}`} value={s.text} onChange={(e) => update(idx, { text: e.target.value })} />
+            <AutoTextarea aria-label={`Schritt ${idx + 1}`} value={s.text} onChange={(e) => update(idx, { text: e.target.value })} />
             <label className="editor__timer">
               <Icon name="timer" size={14} />
               <input type="number" inputMode="numeric" min={0} placeholder="–" aria-label="Timer in Minuten" value={s.timerMinutes ?? ''}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseIngredientLine, parseRecipeText } from './importText';
+import { cleanOcrText, parseIngredientLine, parseRecipeText } from './importText';
 
 const brief = (t: string) => {
   const i = parseIngredientLine(t);
@@ -94,5 +94,19 @@ Möhren anbraten, Linsen dazugeben, Feta darüberbröseln.
     expect(r.content).toMatchObject({ title: 'Testsuppe', servings: 6 });
     expect(r.content.steps.map((s) => s.timerMinutes)).toEqual([undefined, 20]);
     expect(r.warnings).toEqual([]);
+  });
+});
+
+describe('Text aus einem Foto', () => {
+  it('macht aus dem Strich nach einer Zahl wieder ein l', () => {
+    expect(cleanOcrText('1 | Gemüsebrühe\n0,5| Milch')).toBe('1 l Gemüsebrühe\n0,5 l Milch');
+    expect(brief(cleanOcrText('1 | Gemüsebrühe'))).toBe('1 | l | Gemüsebrühe');
+  });
+  it('lässt Striche ohne Zahl davor stehen und fügt Brüche zusammen', () => {
+    expect(cleanOcrText('Salz | Pfeffer')).toBe('Salz | Pfeffer');
+    expect(cleanOcrText('1 /2 TL Zimt')).toBe('1/2 TL Zimt');
+  });
+  it('fasst viele Leerzeilen zusammen', () => {
+    expect(cleanOcrText('Zutaten\n\n\n\n250 g Linsen\n')).toBe('Zutaten\n\n250 g Linsen');
   });
 });

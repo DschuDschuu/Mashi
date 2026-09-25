@@ -4,7 +4,8 @@ import { withMyProducts, type MyProduct } from '../domain/nutrition/myProducts';
 import type { FoodTable, NutritionResult } from '../domain/nutrition/types';
 import { currentContent } from '../domain/recipe';
 import type { Recipe, RecipeContent } from '../domain/types';
-import { currentProducts, useProducts } from '../data/store';
+import { currentNoNutrition, currentProducts, useNoNutrition, useProducts } from '../data/store';
+import { withoutNutrition } from '../domain/nutrition/noNutrition';
 import { foodTable } from '../services';
 
 /**
@@ -13,20 +14,23 @@ import { foodTable } from '../services';
  * Produktliste nicht ändert; eine neue Liste bekommt einen frischen Cache.
  */
 let cachedFor: MyProduct[] | null = null;
+let cachedZero: string[] | null = null;
 let table: FoodTable = foodTable;
 let cache = new WeakMap<RecipeContent, NutritionResult>();
 
-function tableFor(products: MyProduct[]): FoodTable {
-  if (products !== cachedFor) {
+/** „Ohne Nährwerte“ (Gewürze …) kommt obendrauf – ändert sich eins von beiden, frischer Cache. */
+function tableFor(products: MyProduct[], zero: string[]): FoodTable {
+  if (products !== cachedFor || zero !== cachedZero) {
     cachedFor = products;
-    table = withMyProducts(foodTable, products);
+    cachedZero = zero;
+    table = withoutNutrition(withMyProducts(foodTable, products), zero);
     cache = new WeakMap();
   }
   return table;
 }
 
-export function nutritionOf(content: RecipeContent, products: MyProduct[] = currentProducts()): NutritionResult {
-  const t = tableFor(products);
+export function nutritionOf(content: RecipeContent, products: MyProduct[] = currentProducts(), zero: string[] = currentNoNutrition()): NutritionResult {
+  const t = tableFor(products, zero);
   let n = cache.get(content);
   if (!n) {
     n = computeNutrition(content, t);
@@ -39,5 +43,6 @@ export const recipeNutrition = (r: Recipe) => nutritionOf(currentContent(r));
 
 export function useNutrition(content: RecipeContent): NutritionResult {
   const products = useProducts();
-  return useMemo(() => nutritionOf(content, products), [content, products]);
+  const zero = useNoNutrition();
+  return useMemo(() => nutritionOf(content, products, zero), [content, products, zero]);
 }

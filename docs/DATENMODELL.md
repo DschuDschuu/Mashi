@@ -47,7 +47,7 @@ Einzel-Dokumente, die ebenfalls auf alle Geräte abgeglichen werden:
 |---|---|---|
 | `meine-produkte` | `MyProduct[]` – Werte vom Etikett; `replaces` (Einträge der Tabelle) und/oder `names` (Zutatennamen, die die Tabelle nicht kennt) | vereint (siehe unten) |
 | `wochenplan` | `MealPlan` – `items: {recipeId, servings}[]`, abgehakte Einkäufe `checked`, diese Woche gekochte Gerichte `cooked`, „Doch kaufen“ trotz Vorrat `buy` | vereint (siehe unten) |
-| `speisekammer` | `Pantry` – Vorräte `items` (Name, Menge nur wo bekannt, Kaufdatum `boughtAt`, optional eigenes „Verbrauchen bis“ `useBy` – sonst geschätzt aus Art bzw. Lebensmittel, siehe `domain/shelfLife.ts`), eigene Richtwerte `shelfDays` (`kinds` je Art, `foods` je Lebensmittel, `reduced`/`frozen`/`thawed` für MHD-Ware, Gefrorenes, Aufgetautes), „Immer im Haus“ `basics` (Namen; fehlt die Liste, gilt die Vorbelegung Pasta, Reis, Gochujang, Miso, Sesam, Sojasauce), `cookLog` (was „Gekocht“ je geplantem Rezept genommen hat – Haken zurück = Zutaten zurück), schon importierte Bons `receipts` (Einkaufstag|Endbetrag, gegen doppelten Import), gelernte Bon-Artikel `rules` (auch Stück je Packung, z. B. 10er-Eier) (Bon-Name → Name, Menge je Stück, oder „überspringen“), zuletzt bezahlte Preise `prices` (€ je g oder je Stück), alle Preise mit Einkaufsdatum `history` (Preisverlauf) und die Ersparnis je Bon `savings` (Lidl Plus, Angebote) | vereint (siehe unten) |
+| `speisekammer` | `Pantry` – Vorräte `items` (Name, Menge nur wo bekannt, Kaufdatum `boughtAt`, optional eigenes „Verbrauchen bis“ `useBy` – sonst geschätzt aus Art bzw. Lebensmittel, siehe `domain/shelfLife.ts`), eigene Richtwerte `shelfDays` (`kinds` je Art, `foods` je Lebensmittel, `reduced`/`frozen`/`thawed` für MHD-Ware, Gefrorenes, Aufgetautes), „Immer im Haus“ `basics` (Namen; fehlt die Liste, gilt die Vorbelegung Pasta, Reis, Gochujang, Miso, Sesam, Sojasauce; eigene Nährwerte dazu liegen als „Mein Produkt“ in `meine-produkte`), „Ohne Nährwerte“ `noNutrition` (Gewürze & Co., die in Rezepten wie Salz nicht mitzählen; fehlt die Liste, gilt die Vorbelegung aus `domain/nutrition/noNutrition.ts`), `cookLog` (was „Gekocht“ je geplantem Rezept genommen hat – Haken zurück = Zutaten zurück), schon importierte Bons `receipts` (Einkaufstag|Endbetrag, gegen doppelten Import), gelernte Bon-Artikel `rules` (auch Stück je Packung, z. B. 10er-Eier) (Bon-Name → Name, Menge je Stück, oder „überspringen“), zuletzt bezahlte Preise `prices` (€ je g oder je Stück), alle Preise mit Einkaufsdatum `history` (Preisverlauf) und die Ersparnis je Bon `savings` (Lidl Plus, Angebote) | vereint (siehe unten) |
 
 **Zusammenführen statt Überschreiben** (`domain/syncMerge.ts`):
 - **Beim Speichern** gibt die App den Stand mit, den sie verändert hat (`base`). Der Speicherweg wendet diese
@@ -65,7 +65,7 @@ werden nie gespeichert, sondern aus Zutaten × bekannten Preisen berechnet; Zuta
 genannt, nicht geschätzt.
 
 Vorschläge und Einkaufsliste werden nie gespeichert, sondern jedes Mal aus Plan + Rezepten
-berechnet (`domain/mealplan.ts`). Fotos liegen verkleinert (800 px, JPEG) direkt im Rezept.
+berechnet (`domain/mealplan.ts`). Fotos liegen zugeschnitten im Kartenformat 4:3 (höchstens 800 px breit, JPEG) direkt im Rezept – der Ausschnitt wird beim Hochladen gewählt (`ui/components/ImageCropper.tsx`).
 
 ## Geräte & Kategorien
 

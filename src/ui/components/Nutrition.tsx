@@ -1,3 +1,5 @@
+import { normalizeName } from '../../domain/nutrition/localFoods';
+import { setNoNutrition, useNoNutrition } from '../../data/store';
 import type { MatchStatus, NutritionResult } from '../../domain/nutrition/types';
 import { gram } from '../format';
 
@@ -75,8 +77,9 @@ export function NutritionDetails({ n, servings }: { n: NutritionResult; servings
               <span className="matchlist__name">{i.name}</span>
               <span className="muted small">
                 {i.food && i.status !== 'unmatched' ? `${i.food.name}${i.grams !== undefined ? ` · ${Math.round(i.grams)} g` : ''} · ` : ''}
-                {MATCH_LABEL[i.status]}
+                {i.food?.userZero ? 'ohne Nährwerte (von dir)' : MATCH_LABEL[i.status]}
               </span>
+              <ZeroToggle item={i} />
             </li>
           ))}
         </ul>
@@ -85,4 +88,20 @@ export function NutritionDetails({ n, servings }: { n: NutritionResult; servings
       <p className="hint small">Nährwerte sind abhängig von den verwendeten Produkten und können abweichen.</p>
     </div>
   );
+}
+
+/**
+ * „Nicht mitzählen“ / „wieder mitzählen“ – schreibt in die Liste „Ohne Nährwerte“ (gilt für alle Rezepte).
+ * Nicht bei Salz & Co., die zählen ohnehin nie.
+ */
+function ZeroToggle({ item }: { item: NutritionResult['items'][number] }) {
+  const list = useNoNutrition();
+  // Salz & Co. und optionale Zutaten zählen ohnehin nicht – da gibt es nichts umzuschalten
+  if (item.status === 'ignored' && !item.food?.userZero) return null;
+  const label = item.food && item.status !== 'unmatched' ? item.food.name : item.name;
+  if (item.food?.userZero) {
+    const hit = (n: string) => normalizeName(n) === normalizeName(item.name) || normalizeName(n) === normalizeName(item.food!.name);
+    return <button type="button" className="link matchlist__toggle" onClick={() => setNoNutrition(list.filter((n) => !hit(n)))}>wieder mitzählen</button>;
+  }
+  return <button type="button" className="link link--muted matchlist__toggle" onClick={() => setNoNutrition([...list, label])}>nicht mitzählen</button>;
 }

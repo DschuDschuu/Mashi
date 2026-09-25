@@ -8,6 +8,7 @@ import {
 import { currentContent, currentVersion, newId, withNewVersion } from '../domain/recipe';
 import { recordSavings, type BonSavings } from '../domain/savings';
 import { specialDays, type ShelfDays } from '../domain/shelfLife';
+import { DEFAULT_NO_NUTRITION } from '../domain/nutrition/noNutrition';
 import { canTransition } from '../domain/status';
 import type { Rating, Recipe, RecipeContent, RecipeImage, RecipeSource, RecipeStatus } from '../domain/types';
 import { foodTable, imageProvider } from '../services';
@@ -163,6 +164,15 @@ export function useProducts(): MyProduct[] {
 /** Für Berechnungen außerhalb von React (z. B. Nährwerte auf den Rezeptkarten). */
 export function currentProducts(): MyProduct[] {
   return products;
+}
+
+/** „Ohne Nährwerte“ – stabile Referenz, solange sich die Liste nicht ändert (für den Nährwert-Cache). */
+export function currentNoNutrition(): string[] {
+  return pantry.noNutrition ?? DEFAULT_NO_NUTRITION;
+}
+
+export function useNoNutrition(): string[] {
+  return useSyncExternalStore(subscribe, currentNoNutrition);
 }
 
 export function usePlan(): MealPlan {
@@ -601,6 +611,13 @@ export function answerPantryCheck(id: string, stillThere: boolean): (() => void)
     return undefined;
   }
   return removePantryItem(id);
+}
+
+/** „Ohne Nährwerte“ – gilt auf allen Geräten; Rezeptkarten neu zeichnen, ihre kcal ändern sich. */
+export function setNoNutrition(names: string[]) {
+  commitPantry({ ...pantry, noNutrition: names });
+  recipes = [...recipes];
+  emit();
 }
 
 /** „Immer im Haus“ – gilt auf allen Geräten. */

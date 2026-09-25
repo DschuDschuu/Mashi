@@ -65,6 +65,8 @@ export interface Pantry {
   cookLog?: Record<string, Taken[]>;
   /** „Immer im Haus“ (Namen) – fehlt die Liste, gilt DEFAULT_BASICS */
   basics?: string[];
+  /** „Ohne Nährwerte“ (Namen, z. B. Gewürze) – fehlt die Liste, gilt DEFAULT_NO_NUTRITION */
+  noNutrition?: string[];
   /** schon importierte Bons (Einkaufstag|Endbetrag) – warnt vor doppeltem Import */
   receipts?: string[];
   /** deine Richtwerte „hält X Tage“ je Art (Gemüse, Milchprodukte …) – fehlt einer, gilt Mashis Standard */

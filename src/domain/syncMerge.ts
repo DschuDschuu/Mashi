@@ -87,6 +87,7 @@ export function merge3Pantry(base: Pantry, ours: Pantry, theirs: Pantry): Pantry
     receipts: merge3Set(base.receipts, ours.receipts, theirs.receipts),
     shelfDays: merge3Value(base.shelfDays, ours.shelfDays, theirs.shelfDays),
     basics: merge3Value(base.basics, ours.basics, theirs.basics),
+    noNutrition: merge3Value(base.noNutrition, ours.noNutrition, theirs.noNutrition),
     cookLog: Object.keys(cookLog).length ? cookLog : undefined,
     updatedAt: later(ours.updatedAt, theirs.updatedAt)!,
   };

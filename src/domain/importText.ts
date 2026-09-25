@@ -244,3 +244,18 @@ function diffFrom(s: string): Difficulty {
   if (/schwer|anspruchsvoll/i.test(s)) return 3;
   return 1;
 }
+
+/**
+ * Texterkennung (Foto einer Kochbuchseite) verliest typische Zeichen. Vor dem Erkennen glätten:
+ * - „1 | Brühe“ → „1 l Brühe“: ein kleines l nach einer Zahl wird oft zum senkrechten Strich
+ * - „1/2“ bleibt, aber „1 /2“ und „1/ 2“ werden zu „1/2“
+ * - mehr als eine Leerzeile hintereinander → eine
+ * Sonst nichts – lieber einen Fehler stehen lassen, den man sieht, als falsch „korrigieren“.
+ */
+export function cleanOcrText(text: string): string {
+  return text
+    .replace(/(\d)\s*[|]\s+/g, '$1 l ')
+    .replace(/(\d)\s*\/\s*(\d)/g, '$1/$2')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}

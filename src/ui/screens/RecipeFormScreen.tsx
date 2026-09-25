@@ -10,7 +10,8 @@ import { IngredientEditor, StepEditor } from '../components/ContentEditors';
 import { RecipeImage as RecipeImageView } from '../components/RecipeImage';
 import { Icon } from '../components/Icon';
 import { TopBar } from '../components/TopBar';
-import { downscale } from '../photo';
+import { AutoTextarea } from '../components/AutoTextarea';
+import { ImageCropper } from '../components/ImageCropper';
 import { toast } from '../toast';
 
 const EMPTY: RecipeContent = {
@@ -35,10 +36,8 @@ export function RecipeFormScreen({ editId, draft }: { editId?: string; draft?: T
   const [error, setError] = useState<string | null>(null);
   const set = (patch: Partial<RecipeContent>) => setC((prev) => ({ ...prev, ...patch }));
 
-  const onPhoto = async (file: File | undefined) => {
-    if (!file) return;
-    setImage({ kind: 'url', url: await downscale(file) });
-  };
+  /** Bild, das gerade zugeschnitten wird: neu gewählte Datei oder das vorhandene Foto */
+  const [cropping, setCropping] = useState<Blob | string | null>(null);
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -87,17 +86,21 @@ export function RecipeFormScreen({ editId, draft }: { editId?: string; draft?: T
           <div className="stack stack--tight">
             <label className="btn btn--soft">
               {image?.kind === 'url' ? 'Anderes Foto' : 'Eigenes Foto wählen'}
-              <input type="file" accept="image/*" hidden onChange={(e) => onPhoto(e.target.files?.[0])} />
+              <input type="file" accept="image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) setCropping(f); e.target.value = ''; }} />
             </label>
+            {image?.kind === 'url' && <button type="button" className="btn btn--ghost btn--sm" onClick={() => setCropping(image.url)}>Ausschnitt ändern</button>}
             {image?.kind === 'url' && <button type="button" className="btn btn--ghost btn--sm" onClick={() => setImage(undefined)}>Foto entfernen</button>}
           </div>
         </div>
+
+        {cropping && <ImageCropper src={cropping} onCancel={() => setCropping(null)}
+          onDone={(url) => { setImage({ kind: 'url', url }); setCropping(null); }} />}
 
         <label className="field"><span>Titel</span>
           <input value={c.title} onChange={(e) => set({ title: e.target.value })} placeholder="z. B. Omas Kartoffelsalat" required />
         </label>
         <label className="field"><span>Beschreibung</span>
-          <textarea rows={2} value={c.description} onChange={(e) => set({ description: e.target.value })} />
+          <AutoTextarea value={c.description} onChange={(e) => set({ description: e.target.value })} />
         </label>
 
         <div className="panel">
@@ -135,7 +138,7 @@ export function RecipeFormScreen({ editId, draft }: { editId?: string; draft?: T
         {!existing && (
           <>
             <label className="field"><span>Persönliche Notizen</span>
-              <textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
+              <AutoTextarea value={notes} onChange={(e) => setNotes(e.target.value)} />
             </label>
             <div className="panel">
               <h3 className="small muted">Hast du es schon mal gekocht?</h3>
