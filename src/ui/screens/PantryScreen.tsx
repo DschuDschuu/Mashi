@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { resolveIngredient } from '../../domain/mealplan';
 import { withMyProducts } from '../../domain/nutrition/myProducts';
-import { recipesFromPantry, type PantryItem, type PantryUnit, type PlannedUse } from '../../domain/pantry';
+import { recipesFromPantry, type PantryItem, type PantryUnit } from '../../domain/pantry';
 import { daysLabel, daysLeft, frozenSince, specialDays, useByOf } from '../../domain/shelfLife';
 import { formatAmount } from '../../domain/scaling';
 import {
@@ -56,7 +56,7 @@ export function PantryScreen() {
   const kindOf = (item: PantryItem) => resolveIngredient({ id: item.id, name: item.name }, 1, table)?.kind;
   const toCheck = pantry.items.filter((i) => i.check);
   // Nur was nach dem Wochenplan übrig bleibt – bald Ablaufendes zuerst; Eingeplantes nicht noch einmal vorschlagen
-  const { rest, keys, idea, planned, dishes, plannedUseUp } = useUseUp();
+  const { rest, keys, idea, planned } = useUseUp();
   // Oben nur, was frei ist – Verplantes steht in „Für den Wochenplan“ (abgezogen wird erst beim Kochen)
   const freeOf = (item: PantryItem): PantryItem | null => {
     const p = planned.get(item.id);
@@ -165,7 +165,6 @@ export function PantryScreen() {
 
         </div>
         <div className="split__side">
-          {planned.size > 0 && <ReservedLink items={pantry.items} planned={planned} urgent={dishes.some((d) => plannedUseUp.has(d.recipeId) && d.taken.length > 0)} />}
 
           <RecipeIdeaPanel idea={idea} />
 
@@ -319,25 +318,5 @@ function EditRow({ item, estimate, reserved, onDone }: { item: PantryItem; estim
         </div>
       )}
     </li>
-  );
-}
-
-
-/** Schmale Zeile: was für den Wochenplan reserviert ist – führt zum Wochenplan (Gruppe dort aufgeklappt). */
-function ReservedLink({ items, planned, urgent }: { items: PantryItem[]; planned: PlannedUse; urgent: boolean }) {
-  const parts = items.filter((i) => planned.has(i.id)).map((i) => {
-    const p = planned.get(i.id)!;
-    return `${p === 'all' ? quantityLabel(i) : quantityLabel({ amount: p, unit: i.unit })} ${i.name}`.replace(/^vorhanden /, '');
-  });
-  return (
-    <button className="panel link-row" onClick={() => navigate('/plan?reserviert=1')}>
-      <Icon name="calendar" size={20} />
-      <span className="link-row__text">
-        <strong>Für den Wochenplan reserviert</strong>
-        <small className="muted">{parts.slice(0, 3).join(' · ')}{parts.length > 3 ? ` und ${parts.length - 3} weitere` : ''}</small>
-      </span>
-      {urgent && <span className="fold__alert" role="img" aria-label="Enthält etwas, das bald weg muss"><Icon name="clock" size={18} /></span>}
-      <Icon name="chevron" size={18} />
-    </button>
   );
 }

@@ -1019,7 +1019,6 @@ p { margin: 0; }
 .plan-list__meta:empty { display: none; }
 .useup-banner { margin-top: 0; }
 .useup-banner__text { display: flex; flex-direction: column; gap: 2px; }
-.useup-banner + .home-rows { margin-top: -8px; } /* mit dem Abstand der Seite (18 px) = 10 px */
 /* Banner: auf dem Handy „Bald verbrauchen“ in eigener Zeile – wo Platz ist, alles in einer Zeile */
 @media (min-width: 600px) {
   .useup-banner__text { flex-direction: row; flex-wrap: wrap; gap: 0 6px; }
@@ -1040,3 +1039,10 @@ p { margin: 0; }
 .basics__add { display: flex; gap: 8px; }
 .basics__add input { flex: 1; min-width: 0; }
 @media (min-width: 768px) { .nav__settings { order: 2; } }
+/* „Fehlt noch“ im Wochenplan */
+.missing { gap: 10px; }
+.missing__title { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 1rem; }
+.missing__title svg { color: var(--art); }
+.missing__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.missing__list li { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; border-top: 1px solid var(--line); font-size: 0.92rem; }
+.missing__list li:first-child { border-top: 0; }

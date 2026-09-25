@@ -1,6 +1,6 @@
 import { useMemo, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { recipeCost, sumCosts } from '../../domain/cost';
-import { suggestRecipes, type Suggestion } from '../../domain/mealplan';
+import { suggestRecipes, type ShoppingItem, type Suggestion } from '../../domain/mealplan';
 import { ingredientCompletions, longNotCooked, searchRecipes } from '../../domain/recipeSearch';
 import { withMyProducts } from '../../domain/nutrition/myProducts';
 import { currentContent } from '../../domain/recipe';
@@ -8,12 +8,11 @@ import type { Recipe } from '../../domain/types';
 import {
   addToPlan, clearPlan, removeFromPlan, setPlanServings, togglePlanCooked, usePlan, useProducts, useRecipes,
 } from '../../data/store';
-import { navigate, useRoute } from '../../router';
+import { navigate } from '../../router';
 import { foodTable } from '../../services';
 import { Empty, Section, Stepper } from '../components/Controls';
-import { useShoppingCount } from '../useShoppingCount';
+import { useMissing } from '../useShoppingCount';
 import { useSheet } from '../useSheet';
-import { useMediaQuery } from '../useMediaQuery';
 import { UseUpBadge } from '../components/UseUpBadge';
 import { PlannedGroup } from '../components/PlannedGroup';
 import { Icon, type IconName } from '../components/Icon';
@@ -47,13 +46,10 @@ export function PlanScreen() {
     // Gekochtes rutscht nach unten – oben steht, was noch ansteht
     .sort((a, b) => Number(a.cooked) - Number(b.cooked));
   const { keys: useUp, plannedUseUp, dishes } = useUseUp();
-  // Tablet: rechts ist Platz – dort die Gruppe gleich offen
-  const wide = useMediaQuery('(min-width: 900px)');
-  // aus der Speisekammer „Für den Wochenplan reserviert ›“ → Gruppe gleich offen
-  const openReserved = useRoute().query.get('reserviert') === '1';
   const suggestions = useMemo(() => suggestRecipes(plan, recipes.filter(plannable), table, 5, new Set(useUp.keys())), [plan, recipes, table, useUp]);
   // Für das Einkaufswagen-Symbol: wie viel noch zu kaufen ist (ohne Basics wie Öl und Gewürze)
-  const toBuy = useShoppingCount();
+  const missing = useMissing();
+  const toBuy = missing.length;
   const portions = items.reduce((s, i) => s + i.servings, 0);
   const { prices } = usePricing();
   const costs = useMemo(() => new Map(items.map((i) => [i.recipeId, recipeCost(currentContent(i.recipe), i.servings, table, prices)])), [items, table, prices]);
@@ -128,10 +124,16 @@ export function PlanScreen() {
     </>
   );
 
-  // Rechts (Tablet) bzw. unten (Handy): was die Gerichte aus der Speisekammer nehmen – statt „Passt dazu“.
+  // Rechts (Tablet) bzw. unten (Handy): was noch fehlt (immer offen), darunter was die Gerichte
+  // aus der Speisekammer nehmen (zum Aufklappen) – statt „Passt dazu“.
   // Vorschläge gibt es weiter beim „Gericht hinzufügen“.
   const reserved = dishes.filter((d) => d.taken.length);
-  const sideList = reserved.length > 0 && <PlannedGroup dishes={reserved} urgent={plannedUseUp} open={openReserved || wide} />;
+  const sideList = (
+    <>
+      <MissingPanel items={missing} />
+      {reserved.length > 0 && <PlannedGroup dishes={reserved} urgent={plannedUseUp} />}
+    </>
+  );
 
   return (
     <main className="screen screen--tabbed">
@@ -315,4 +317,25 @@ function pickerGroups(candidates: Recipe[], suggestions: Suggestion[]): { title:
     .map((recipe) => ({ recipe }));
   groups.push({ title: groups.some((g) => g.items.length) ? 'Alle anderen' : 'Alle Rezepte', icon: 'book', items: rest });
   return groups.filter((g) => g.items.length);
+}
+
+/** „Fehlt noch“: was für die geplanten Gerichte noch eingekauft werden muss – immer offen, führt zur Einkaufsliste. */
+function MissingPanel({ items }: { items: ShoppingItem[] }) {
+  return (
+    <section className="panel missing" aria-labelledby="missing-title">
+      <div className="row-between">
+        <h2 className="missing__title" id="missing-title"><Icon name="cart" size={18} /> Fehlt noch{items.length ? ` (${items.length})` : ''}</h2>
+        {items.length > 0 && <button className="link" onClick={() => navigate('/einkauf')}>Einkaufsliste</button>}
+      </div>
+      {items.length === 0 ? (
+        <p className="muted small">Alles da – für die geplanten Gerichte musst du nichts mehr kaufen.</p>
+      ) : (
+        <ul className="missing__list">
+          {items.map((i) => (
+            <li key={i.key}><span>{i.name}</span><span className="muted">{i.quantity}</span></li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
 }

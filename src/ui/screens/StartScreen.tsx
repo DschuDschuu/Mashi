@@ -46,6 +46,19 @@ export function StartScreen() {
         <Icon name="sparkles" size={14} className="home-head__spark home-head__spark--b" />
         <SettingsButton className="home-head__settings" />
       </header>
+      {expiring.length > 0 && (
+        <button className="useup-banner" onClick={() => navigate('/reste')}>
+          <Icon name="clock" size={18} />
+          <span className="useup-banner__text">
+            <strong>Bald verbrauchen</strong>
+            <span>
+              {expiring.slice(0, 3).map((e) => `${e.item.name} (${expiryLabel(e)}${reserved.has(e.item.id) ? ', eingeplant' : ''})`).join(', ')}
+              {expiring.length > 3 ? ` und ${expiring.length - 3} mehr` : ''}
+            </span>
+          </span>
+          <Icon name="chevron" size={16} />
+        </button>
+      )}
       {planned.length > 0 ? (
         <section className="today" aria-labelledby="today-title">
           <div className="row-between">
@@ -65,19 +78,6 @@ export function StartScreen() {
         <Empty icon="book">
           Noch keine Rezepte im Kochbuch. Leg über ＋ eins an oder spiel eine Sicherung ein (Zahnrad oben → Sicherung).
         </Empty>
-      )}
-      {expiring.length > 0 && (
-        <button className="useup-banner" onClick={() => navigate('/reste')}>
-          <Icon name="clock" size={18} />
-          <span className="useup-banner__text">
-            <strong>Bald verbrauchen</strong>
-            <span>
-              {expiring.slice(0, 3).map((e) => `${e.item.name} (${expiryLabel(e)}${reserved.has(e.item.id) ? ', eingeplant' : ''})`).join(', ')}
-              {expiring.length > 3 ? ` und ${expiring.length - 3} mehr` : ''}
-            </span>
-          </span>
-          <Icon name="chevron" size={16} />
-        </button>
       )}
       <Shortcuts />
     </main>
