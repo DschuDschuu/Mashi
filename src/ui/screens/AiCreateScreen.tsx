@@ -10,8 +10,8 @@ import { TopBar } from '../components/TopBar';
 const WISHES = ['Proteinreich', 'Vegetarisch', 'Low Calorie', 'Koreanisch', 'Meal Prep', 'Comfort Food'];
 const TIMES = [15, 20, 30, 45];
 
-export function AiCreateScreen() {
-  const [prompt, setPrompt] = useState('');
+export function AiCreateScreen({ initialPrompt = '' }: { initialPrompt?: string }) {
+  const [prompt, setPrompt] = useState(initialPrompt);
   // null = nicht angefasst → Portionen aus dem Freitext („für drei Personen“) haben Vorrang
   const [servings, setServings] = useState<number | null>(null);
   const [devices, setDevices] = useState<string[]>([]);

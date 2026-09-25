@@ -16,11 +16,11 @@ Mit Lidl Plus
 
 describe('Ersparnis vom Kassenbon', () => {
   it('trennt Lidl Plus und Angebote – ohne die Sammelzeilen doppelt zu zählen', () => {
-    expect(parseSavings(BON)).toEqual({ lidlPlus: 0.4, offers: 1.5, total: 7.46 });
+    expect(parseSavings(BON)).toEqual({ lidlPlus: 0.4, offers: 1.5, mhd: 0, total: 7.46 });
   });
 
   it('verschlucktes Minus der Texterkennung zählt trotzdem als Ersparnis', () => {
-    expect(parseSavings('Preisvorteil 2,00\nLidl Plus Rabatt 0,70\nZu zahlen 20,21')).toEqual({ lidlPlus: 0.7, offers: 2, total: 20.21 });
+    expect(parseSavings('Preisvorteil 2,00\nLidl Plus Rabatt 0,70\nZu zahlen 20,21')).toEqual({ lidlPlus: 0.7, offers: 2, mhd: 0, total: 20.21 });
   });
 
   it('Coupons zählen zu Lidl Plus', () => {
@@ -30,13 +30,13 @@ describe('Ersparnis vom Kassenbon', () => {
   it('derselbe Bon zweimal importiert zählt einmal; Monate getrennt', () => {
     let p = recordSavings(emptyPantry(), parseSavings(BON), '2026-09-15T12:00:00.000Z');
     p = recordSavings(p, parseSavings(BON), '2026-09-15T12:00:00.000Z'); // doppelt
-    p = recordSavings(p, { lidlPlus: 0.7, offers: 2, total: 20.21 }, '2026-09-20T12:00:00.000Z');
-    p = recordSavings(p, { lidlPlus: 1, offers: 0, total: 5 }, '2026-08-30T12:00:00.000Z');
-    expect(monthSavings(p.savings!, 2026, 8)).toEqual({ lidlPlus: 1.1, offers: 3.5, receipts: 2 }); // September
-    expect(monthSavings(p.savings!, 2026, 7)).toEqual({ lidlPlus: 1, offers: 0, receipts: 1 });     // August
+    p = recordSavings(p, { lidlPlus: 0.7, offers: 2, mhd: 0, total: 20.21 }, '2026-09-20T12:00:00.000Z');
+    p = recordSavings(p, { lidlPlus: 1, offers: 0, mhd: 0, total: 5 }, '2026-08-30T12:00:00.000Z');
+    expect(monthSavings(p.savings!, 2026, 8)).toEqual({ lidlPlus: 1.1, offers: 3.5, mhd: 0, receipts: 2 }); // September
+    expect(monthSavings(p.savings!, 2026, 7)).toEqual({ lidlPlus: 1, offers: 0, mhd: 0, receipts: 1 });     // August
   });
 
   it('Bon ohne Rabatte legt keinen Eintrag an', () => {
-    expect(recordSavings(emptyPantry(), { lidlPlus: 0, offers: 0 }, '2026-09-15T12:00:00.000Z').savings).toBeUndefined();
+    expect(recordSavings(emptyPantry(), { lidlPlus: 0, offers: 0, mhd: 0 }, '2026-09-15T12:00:00.000Z').savings).toBeUndefined();
   });
 });

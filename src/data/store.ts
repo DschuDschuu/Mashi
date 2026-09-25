@@ -3,10 +3,11 @@ import { emptyPlan, normalizePlan, toggleCooked, type MealPlan } from '../domain
 import { mergeRecipes } from '../domain/merge';
 import { withMyProducts, type MyProduct } from '../domain/nutrition/myProducts';
 import {
-  addItem, applyImport, deductRecipe, emptyPantry, type ImportRow, type Pantry, type PantryItem, type PantryUnit,
+  addItem, applyImport, deductRecipe, emptyPantry, freezeItem, thawItem, type ImportRow, type Pantry, type PantryItem, type PantryUnit,
 } from '../domain/pantry';
 import { currentContent, currentVersion, newId, withNewVersion } from '../domain/recipe';
-import { recordSavings } from '../domain/savings';
+import { recordSavings, type BonSavings } from '../domain/savings';
+import { specialDays, type ShelfDays } from '../domain/shelfLife';
 import { canTransition } from '../domain/status';
 import type { Rating, Recipe, RecipeContent, RecipeImage, RecipeSource, RecipeStatus } from '../domain/types';
 import { foodTable, imageProvider } from '../services';
@@ -179,19 +180,20 @@ export interface CookedResult {
 /**
  * „Fertig“ im Kochmodus: zuletzt gekocht merken, im Wochenplan abhaken und die Zutaten
  * aus der Speisekammer nehmen. Schon im Plan abgehakt → nicht ein zweites Mal abziehen.
+ * @param amounts Mengen „nur dieses Mal“ je Zutat-ID (z. B. 3 statt 2 Tomaten) – das Rezept bleibt unverändert
  */
-export function markCooked(id: string, servings?: number): CookedResult {
+export function markCooked(id: string, servings?: number, amounts: Record<string, number> = {}): CookedResult {
   const r = get(id);
   commit({ ...r, lastCookedAt: now() });
   const planned = plan.items.find((i) => i.recipeId === id);
   if (planned && plan.cooked.includes(id)) return { used: [], toCheck: [] };
   if (planned) commitPlan(toggleCooked(plan, id, true));
-  return consume(r, servings ?? planned?.servings ?? currentContent(r).servings);
+  return consume(r, servings ?? planned?.servings ?? currentContent(r).servings, amounts);
 }
 
-function consume(r: Recipe, servings: number): CookedResult {
+function consume(r: Recipe, servings: number, amounts: Record<string, number> = {}): CookedResult {
   if (!pantry.items.length) return { used: [], toCheck: [] };
-  const d = deductRecipe(pantry, currentContent(r), servings, withMyProducts(foodTable, products));
+  const d = deductRecipe(pantry, currentContent(r), servings, withMyProducts(foodTable, products), amounts);
   if (d.used.length || d.toCheck.length) commitPantry(d.pantry);
   return { used: d.used, toCheck: d.toCheck };
 }
@@ -407,7 +409,7 @@ function commitPantry(next: Omit<Pantry, 'updatedAt'>) {
 }
 
 /** Geprüfte Bon-Zeilen übernehmen – und merken, damit der nächste Bon schon ausgefüllt ist. */
-export function importReceipt(rows: ImportRow[], paidAt?: string, savings?: { lidlPlus: number; offers: number; total?: number }): number {
+export function importReceipt(rows: ImportRow[], paidAt?: string, savings?: BonSavings): number {
   const t = now();
   const next = applyImport(pantry, rows, t, () => newId('v'), paidAt ?? t);
   commitPantry(savings ? recordSavings(next, savings, paidAt ?? t) : next);
@@ -419,8 +421,18 @@ export function addPantryItem(name: string, amount?: number, unit?: PantryUnit) 
   commitPantry({ ...pantry, items: addItem(pantry.items, { name: name.trim(), amount, unit }, now(), () => newId('v')) });
 }
 
-export function updatePantryItem(id: string, patch: Partial<Pick<PantryItem, 'name' | 'amount' | 'unit'>>) {
+export function updatePantryItem(id: string, patch: Partial<Pick<PantryItem, 'name' | 'amount' | 'unit' | 'useBy' | 'reduced'>>) {
   commitPantry({ ...pantry, items: pantry.items.map((i) => (i.id === id ? { ...i, ...patch, check: false } : i)) });
+}
+
+/** Einfrieren – ganz oder nur einen Teil (amount in der Einheit des Vorrats). */
+export function freezePantryItem(id: string, amount?: number) {
+  commitPantry({ ...pantry, items: freezeItem(pantry.items, id, now(), amount, () => newId('v')) });
+}
+
+/** Auftauen – hält danach nur noch kurz (einstellbar, Standard 1 Tag). */
+export function thawPantryItem(id: string) {
+  commitPantry({ ...pantry, items: thawItem(pantry.items, id, now(), specialDays('thawed', pantry.shelfDays)) });
 }
 
 /** Entfernen – gibt „Rückgängig“ zurück: legt den Vorrat an dieselbe Stelle zurück. */
@@ -436,14 +448,19 @@ export function removePantryItem(id: string): () => void {
   };
 }
 
-/** Antwort auf „Noch da?“ nach dem Kochen. */
-/** Antwort auf „Noch da?“ – „Aufgebraucht“ lässt sich rückgängig machen. */
+/** Antwort auf „Noch da?“ nach dem Kochen – „Aufgebraucht“ lässt sich rückgängig machen. */
 export function answerPantryCheck(id: string, stillThere: boolean): (() => void) | undefined {
   if (stillThere) {
     commitPantry({ ...pantry, items: pantry.items.map((i) => (i.id === id ? { ...i, check: false } : i)) });
     return undefined;
   }
   return removePantryItem(id);
+}
+
+/** Deine Richtwerte „hält X Tage“ (je Art oder Lebensmittel) – gelten auf allen Geräten. */
+export function setPantryShelfDays(shelfDays: ShelfDays) {
+  const { shelfDays: _old, ...rest } = pantry;
+  commitPantry(Object.keys(shelfDays).length ? { ...rest, shelfDays } : rest);
 }
 
 /** Gelernten Bon-Artikel vergessen (z. B. falsch zugeordnet). */

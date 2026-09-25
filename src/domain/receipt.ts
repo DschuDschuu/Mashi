@@ -11,6 +11,8 @@ export interface ReceiptLine {
   /** bei loser Ware: „0,982 kg x 1,19 EUR/kg“ */
   weightKg?: number;
   price?: number;
+  /** darunter stand „RABATT 20%“ – bei Lidl der Aufkleber für Ware kurz vor dem MHD */
+  reduced?: boolean;
 }
 
 const NUM = String.raw`\d+[.,]\d{2}`;
@@ -21,6 +23,12 @@ const NUM = String.raw`\d+[.,]\d{2}`;
 const ITEM = new RegExp(String.raw`^(.+?)\s+(?:(${NUM})\s*x\s*(\d+)\s+)?(-?${NUM})(?:\d|\s*[A-Z0-9]{1,2})?$`);
 /** „0,982 kg x 1,19 EUR/kg“ */
 const WEIGHT = new RegExp(String.raw`^(\d+[.,]\d{3})\s*kg\s*x\s*${NUM}\s*EUR\s*/\s*kg`, 'i');
+/**
+ * „RABATT 20%“ direkt unter einem Artikel (bei loser Ware unter der Gewichtszeile) = reduzierte
+ * MHD-Ware. „Lidl Plus Rabatt“ beginnt anders und zählt nicht. Das Minus verschluckt die
+ * Texterkennung manchmal – deshalb reicht der Anfang der Zeile.
+ */
+const MHD_DISCOUNT = /^rabatt\b/i;
 /** Keine Artikel: Pfand, Rabatte, Gutscheine */
 const NOT_AN_ITEM = /^(pfand|leergut|preisvorteil|lidl plus rabatt|rabatt|coupon|gutschein|rundung)/i;
 /** Ab hier kommt nur noch Bezahlung, Steuer, Kleingedrucktes */
@@ -55,6 +63,11 @@ export function parseReceipt(text: string): ReceiptLine[] {
     if (w) {
       const last = out[out.length - 1];
       if (last) last.weightKg = num(w[1]);
+      continue;
+    }
+    if (MHD_DISCOUNT.test(line)) {
+      const last = out[out.length - 1];
+      if (last) last.reduced = true;
       continue;
     }
     const m = line.match(ITEM);

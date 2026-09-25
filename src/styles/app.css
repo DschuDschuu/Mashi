@@ -417,7 +417,19 @@ p { margin: 0; }
 .cook__progress { display: flex; flex-direction: column; gap: 6px; font-weight: 700; font-size: 0.88rem; color: var(--ink-2); text-align: center; }
 .bar { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
 .bar > div { height: 100%; background: var(--primary); border-radius: 3px; transition: width 0.25s; }
-.cook__ingredients { margin: 12px 0 0; padding: 14px 18px; list-style: none; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); display: grid; gap: 6px; font-size: 1.05rem; }
+.cook__ingredients { margin: 12px 0 0; padding: 14px 18px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); display: grid; gap: 10px; font-size: 1.05rem; }
+.cook__ingredients ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.cook__ingredients > p { margin: 0; }
+.cook__ing { all: unset; cursor: pointer; display: block; width: 100%; border-radius: 6px; }
+.cook__ing:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.cook__ing:disabled { cursor: default; }
+.cook__ingredients li.is-changed strong { color: var(--primary); }
+.cook__edit { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.cook__edit input { width: 5.5em; font-size: 1rem; }
+.cook__leftovers { margin-top: 12px; padding: 12px 14px; background: var(--primary-soft); border-radius: var(--r); display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.cook__leftovers p { margin: 0; }
+.cook__leftover-list { display: flex; flex-wrap: wrap; gap: 8px; }
+.cook__leftovers .btn { background: var(--surface); }
 .cook__step { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 28px; padding: 24px 4px; }
 .cook__title { color: var(--ink-3); font-weight: 700; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.06em; }
 .cook__text { font-size: clamp(1.45rem, 6.2vw, 2rem); line-height: 1.35; font-weight: 600; }
@@ -514,11 +526,12 @@ p { margin: 0; }
 @media (min-width: 900px) {
   .cook--wide {
     display: grid; grid-template-columns: minmax(260px, 30%) minmax(0, 1fr);
-    grid-template-rows: auto 1fr auto auto;
-    grid-template-areas: "head head" "ing step" "ing pill" "ing nav";
+    grid-template-rows: auto auto 1fr auto auto;
+    grid-template-areas: "head head" "ing left" "ing step" "ing pill" "ing nav";
     column-gap: 36px; padding: 16px 36px calc(24px + var(--safe-b));
   }
   .cook--wide .cook__head { grid-area: head; }
+  .cook--wide .cook__leftovers { grid-area: left; }
   .cook--wide .cook__ingredients { grid-area: ing; align-self: start; margin-top: 20px; font-size: 1.12rem; gap: 10px; max-height: calc(100dvh - 140px); overflow-y: auto; }
   .cook--wide .cook__step { grid-area: step; padding: 32px 0; }
   .cook--wide .cook__pill { grid-area: pill; }
@@ -847,3 +860,45 @@ p { margin: 0; }
 /* ── Hinweis mit „Rückgängig“ ────────────────────────────────── */
 .toast { display: flex; align-items: center; gap: 12px; justify-content: center; }
 .toast__action { flex: none; color: #9fe3dc; font-weight: 700; padding: 4px 2px; text-decoration: underline; text-underline-offset: 3px; }
+
+/* ── Bald verbrauchen ────────────────────────────────────────── */
+.useup-banner {
+  display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+  padding: 12px 14px; border-radius: var(--r); background: var(--peach); color: var(--ink); font-size: 0.9rem;
+}
+.useup-banner > svg:first-child { flex: none; color: var(--art); }
+.useup-banner > span { flex: 1; min-width: 0; }
+.useup-hint { margin: 0; font-size: 0.82rem; font-weight: 600; color: #9a5a2f; }
+.pantry__qty { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.25; }
+.pantry__shelf { font-size: 0.75rem; color: var(--ink-3); }
+.pantry__shelf.is-urgent { color: #9a5a2f; font-weight: 700; }
+.pantry-date { display: flex; flex-direction: column; gap: 2px; }
+.pantry-date input { border: 1px solid var(--line); background: var(--surface); border-radius: var(--r-sm); padding: 8px 10px; font-size: 0.95rem; }
+
+/* ── Haltbarkeit einstellen ─────────────────────────────────── */
+.shelf__group { border-top: 1px solid var(--line); padding: 8px 0; }
+.shelf__group:first-of-type { margin-top: 8px; }
+.shelf__group > summary { cursor: pointer; display: flex; justify-content: space-between; gap: 10px; font-weight: 600; }
+.shelf__rows { display: grid; gap: 6px; padding: 8px 0 4px; }
+.shelf__row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.shelf__input { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-3); font-size: 0.9rem; }
+.shelf__input input { width: 4em; text-align: right; }
+.shelf__group > summary { list-style: none; }
+.shelf__group > summary::-webkit-details-marker { display: none; }
+.shelf__group > summary > span:first-child::before { content: '▸'; display: inline-block; width: 1.1em; color: var(--ink-3); }
+.shelf__group[open] > summary > span:first-child::before { content: '▾'; }
+
+/* ── MHD-Ware, Gefroren, Rezeptidee ─────────────────────────── */
+.savings__tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.savings__tiles .stat__value { font-size: clamp(1rem, 4.6vw, 1.35rem); }
+.pantry__mhd { margin-left: 6px; font-size: 0.68rem; vertical-align: middle; }
+.pantry-mhd, .bonrow__mhd { display: inline-flex; align-items: center; gap: 6px; }
+.pantry-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.pantry-freeze { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; width: 100%; }
+.pantry-freeze input { width: 6em; margin: 0 4px; }
+.pantry-frozen { margin: 0; }
+.useup-idea { display: inline-flex; align-items: center; gap: 6px; margin: -4px 0 8px; font-size: 0.88rem; }
+.useup-idea-panel { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.useup-idea-panel p { margin: 0; }
+.bonrow__flags { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; }
+.bonrow__freeze { display: inline-flex; align-items: center; gap: 6px; }

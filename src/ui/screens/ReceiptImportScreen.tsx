@@ -24,6 +24,9 @@ type Row = ImportRow & { amountText: string };
 
 const UNITS: PantryUnit[] = ['g', 'ml', 'Stück'];
 
+/** Packungen einer Zeile – lose Ware zählt als eine (alles oder nichts einfrieren). */
+const packs = (r: ImportRow) => (r.line.weightKg === undefined ? r.line.count : 1);
+
 /** Gewicht loser Ware steht auf dem Bon (Gesamtmenge) – sonst fragt Mashi „je Stück/Packung“. */
 const perPiece = (r: ImportRow) => r.line.weightKg === undefined && r.line.count > 1;
 
@@ -123,7 +126,8 @@ export function ReceiptImportScreen({ shared }: { shared: boolean }) {
 
   const apply = () => {
     const n = importReceipt(rows.map(fromRow), paidAt, savings);
-    toast(n ? `${n} Artikel in der Speisekammer` : 'Gemerkt – nichts übernommen');
+    const frozen = rows.filter((r) => !r.skip && r.freeze).length;
+    toast(n ? `${n} Artikel in der Speisekammer${frozen ? `, davon ${frozen} eingefroren` : ''}` : 'Gemerkt – nichts übernommen');
     navigate('/speisekammer', { replace: true });
   };
 
@@ -172,10 +176,10 @@ export function ReceiptImportScreen({ shared }: { shared: boolean }) {
         <div className="stack">
           <p className="muted">
             {paidAt && <>Einkauf vom <strong>{new Date(paidAt).toLocaleDateString('de-DE')}</strong> · </>}
-            {savings && (savings.lidlPlus > 0 || savings.offers > 0) && (
-              <>Gespart: {savings.lidlPlus > 0 && <>Lidl Plus <strong>{euro(savings.lidlPlus)}</strong></>}
-                {savings.lidlPlus > 0 && savings.offers > 0 && ' · '}
-                {savings.offers > 0 && <>Angebote <strong>{euro(savings.offers)}</strong></>} · </>
+            {savings && (savings.lidlPlus > 0 || savings.offers > 0 || savings.mhd > 0) && (
+              <>Gespart: {([['Lidl Plus', savings.lidlPlus], ['Angebote', savings.offers], ['MHD-Ware', savings.mhd]] as const)
+                .filter(([, v]) => v > 0)
+                .map(([label, v], n) => <span key={label}>{n > 0 && ' · '}{label} <strong>{euro(v)}</strong></span>)} · </>
             )}
             {rows.length} Artikel gefunden. Prüfe Name und Menge – <strong>Name wie im Rezept</strong> (z. B. „Hähnchenbrust“), damit Mashi den Vorrat beim Kochen findet. Mengen leer lassen = „vorhanden“.
           </p>
@@ -200,6 +204,27 @@ export function ReceiptImportScreen({ shared }: { shared: boolean }) {
                       </select>
                     </div>
                     {perPiece(r) && <span className="small muted">× {r.line.count} gekauft</span>}
+                  </div>
+                )}
+                {!r.skip && (
+                  <div className="bonrow__flags">
+                    <label className="bonrow__mhd">
+                      <input type="checkbox" checked={!!r.reduced} onChange={(e) => update(i, { reduced: e.target.checked })} />
+                      <span>MHD-Ware</span>
+                      {r.line.reduced && <span className="small muted">· auf dem Bon „RABATT“</span>}
+                    </label>
+                    <label className="bonrow__mhd">
+                      <input type="checkbox" checked={!!r.freeze} onChange={(e) => update(i, { freeze: e.target.checked ? packs(r) : undefined })} />
+                      <span>Einfrieren</span>
+                    </label>
+                    {!!r.freeze && packs(r) > 1 && (
+                      <label className="small bonrow__freeze">
+                        <select value={r.freeze} onChange={(e) => update(i, { freeze: Number(e.target.value) })} aria-label="Wie viele Packungen einfrieren">
+                          {Array.from({ length: packs(r) }, (_, n) => n + 1).map((n) => <option key={n} value={n}>{n}</option>)}
+                        </select>
+                        von {packs(r)} · Rest frisch
+                      </label>
+                    )}
                   </div>
                 )}
                 {!r.skip && (products.length > 0 || creating !== i) && (

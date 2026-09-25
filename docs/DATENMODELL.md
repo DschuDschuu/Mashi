@@ -47,10 +47,10 @@ Einzel-Dokumente, die ebenfalls auf alle Geräte abgeglichen werden:
 |---|---|---|
 | `meine-produkte` | `MyProduct[]` – Werte vom Etikett; `replaces` (Einträge der Tabelle) und/oder `names` (Zutatennamen, die die Tabelle nicht kennt) | neueste Fassung gewinnt |
 | `wochenplan` | `MealPlan` – `items: {recipeId, servings}[]`, abgehakte Einkäufe `checked`, diese Woche gekochte Gerichte `cooked` | neueste Fassung gewinnt |
-| `speisekammer` | `Pantry` – Vorräte `items` (Name, Menge nur wo bekannt), gelernte Bon-Artikel `rules` (Bon-Name → Name, Menge je Stück, oder „überspringen“), zuletzt bezahlte Preise `prices` (€ je g oder je Stück), alle Preise mit Einkaufsdatum `history` (Preisverlauf) und die Ersparnis je Bon `savings` (Lidl Plus, Angebote) | neueste Fassung gewinnt |
+| `speisekammer` | `Pantry` – Vorräte `items` (Name, Menge nur wo bekannt, Kaufdatum `boughtAt`, optional eigenes „Verbrauchen bis“ `useBy` – sonst geschätzt aus Art bzw. Lebensmittel, siehe `domain/shelfLife.ts`), eigene Richtwerte `shelfDays` (`kinds` je Art, `foods` je Lebensmittel, `reduced`/`frozen`/`thawed` für MHD-Ware, Gefrorenes, Aufgetautes), gelernte Bon-Artikel `rules` (Bon-Name → Name, Menge je Stück, oder „überspringen“), zuletzt bezahlte Preise `prices` (€ je g oder je Stück), alle Preise mit Einkaufsdatum `history` (Preisverlauf) und die Ersparnis je Bon `savings` (Lidl Plus, Angebote) | neueste Fassung gewinnt |
 
 `MyProduct` kann zusätzlich `packageAmount`/`packageUnit` (Packungsgröße – füllt beim Kassenbon die
-Menge aus), `packagePrice` (Preis von Hand) und `ean` (Barcode, per Scan über Open Food Facts) tragen.
+Menge aus), `packagePrice` (Preis von Hand), `ean` (Barcode, per Scan über Open Food Facts) und `shelfDays` („hält X Tage ab Kauf“) tragen. `PantryItem` kann `reduced` (MHD-Ware, vom Bon „RABATT 20%“ oder von Hand) und `frozenAt` (eingefroren am …, auch direkt beim Bon-Import, ganz oder Teil der Packungen) tragen; `ReceiptSavings.mhd` zählt MHD-Rabatte getrennt von den Angeboten.
 Ein Produkt passt immer auch auf seinen eigenen Namen. Gelernte Bon-Artikel können über `productId`
 einem Produkt zugeordnet sein – dann gilt beim nächsten Bon dessen aktuelle Packungsgröße. Kosten eines Rezepts (`domain/cost.ts`)
 werden nie gespeichert, sondern aus Zutaten × bekannten Preisen berechnet; Zutaten ohne Preis werden

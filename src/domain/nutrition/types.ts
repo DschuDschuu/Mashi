@@ -30,6 +30,10 @@ export interface FoodEntry {
   negligible?: boolean;
   /** Art des Lebensmittels – z. B. für den Wochenplan: Hähnchen und Pasta zählen mehr als Paprika. */
   kind?: FoodKind;
+  /** Haltbarkeit ab Kauf in Tagen – nur bei eigenen Produkten, wenn dort eingetragen */
+  shelfDays?: number;
+  /** Bei eigenen Produkten: der Eintrag der allgemeinen Tabelle, den es ersetzt (für dessen Richtwerte) */
+  baseId?: string;
 }
 
 /**

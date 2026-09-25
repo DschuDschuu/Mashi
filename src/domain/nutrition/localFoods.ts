@@ -147,7 +147,8 @@ const FOODS: FoodEntry[] = ROWS.map(([id, aliases, kcal, protein, carbs, fat, ex
 }));
 
 /** Alle allgemeinen Lebensmittel (für „Meine Produkte“: was soll ein Produkt ersetzen?). */
-export const FOOD_CHOICES: { id: string; name: string }[] = FOODS.filter((f) => !f.negligible).map((f) => ({ id: f.ref.foodId, name: f.name }));
+export const FOOD_CHOICES: { id: string; name: string; kind?: FoodKind }[] = FOODS.filter((f) => !f.negligible)
+  .map((f) => ({ id: f.ref.foodId, name: f.name, ...(f.kind ? { kind: f.kind } : {}) }));
 
 /** Klammern und Zusätze entfernen: „Paprika (rot oder bunt)“ → „paprika“ */
 export function normalizeName(name: string): string {

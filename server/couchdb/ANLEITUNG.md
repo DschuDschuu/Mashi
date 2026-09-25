@@ -11,7 +11,7 @@ Der Port 5984 wird **nicht** auf dem Host veröffentlicht.
 | `docker-compose.yml` | CouchDB 3.5 + Traefik-Labels (HTTPS, HTTP→HTTPS-Umleitung) |
 | `mashi.ini` | Einstellungen: Pflicht-Anmeldung, CORS für die App, Einzelserver |
 | `.env.example` | Vorlage für Subdomain und Admin-Zugang → als `.env` kopieren |
-| `setup.sh` | Einmalig nach dem Start: Datenbank + App-Benutzer + Zugriffsregel, mit Gegenproben |
+| `setup.sh` | Pro Person einmal: Datenbank + App-Benutzer + Zugriffsregel, mit Gegenproben |
 
 ## Schritte
 
@@ -27,7 +27,8 @@ Der Port 5984 wird **nicht** auf dem Host veröffentlicht.
    ```sh
    docker compose up -d
    ```
-5. **Einrichten** (fragt Benutzername + Passwort für Julias App-Zugang, verdeckt):
+5. **Einrichten** (fragt Datenbankname – Enter = `mashi` –, dann Benutzername + Passwort für
+   Julias App-Zugang, verdeckt):
    ```sh
    sh setup.sh
    ```
@@ -36,11 +37,32 @@ Der Port 5984 wird **nicht** auf dem Host veröffentlicht.
 Julia trägt danach in der App nur ein: Adresse `https://<subdomain>/mashi`, Benutzername, Passwort.
 Der Admin-Zugang kommt **nie** in die App.
 
+## Weitere Person hinzufügen
+
+Jede Person bekommt eine **eigene Datenbank** mit eigenem Benutzer – eigene Rezepte, Produkte,
+Wochenplan und Speisekammer. Nichts wird geteilt, und niemand sieht die Daten des anderen.
+
+1. Auf dem Server im Ordner mit `.env`:
+   ```sh
+   sh setup.sh
+   ```
+   Bei „Name der Datenbank“ **nicht** Enter drücken, sondern einen eigenen Namen eingeben,
+   z. B. `mashi-tom` (nur Kleinbuchstaben, Ziffern, `_` und `-`). Dann Benutzername und Passwort
+   der neuen Person.
+2. In der App (auf dem Gerät der neuen Person): „Mit Server verbinden“ → Adresse
+   `https://<subdomain>/mashi-tom`, Benutzername, Passwort.
+
+**Schutz vor Aussperren:** Gibt es die Datenbank schon und gehört sie jemand anderem, bricht
+`setup.sh` mit „STOPP“ ab und ändert nichts. Wer versehentlich Enter drückt, sperrt also
+nicht Julia aus `mashi` aus. Für dieselbe Person darf das Skript beliebig oft laufen (z. B. um
+ein Passwort neu zu setzen).
+
 ## Sicherheit
 
 - Ohne Anmeldung: alles `401`. Der App-Benutzer ist **kein** Admin und nur Mitglied der
-  Datenbank `mashi` – er kann keine anderen Datenbanken sehen, anlegen oder Rechte ändern.
-- Ein fremder angemeldeter Benutzer bekommt auf `mashi` ein `403`.
+  eigenen Datenbank (`mashi` bzw. `mashi-tom`) – er kann keine anderen Datenbanken sehen, anlegen oder Rechte ändern.
+- Ein fremder angemeldeter Benutzer bekommt auf `mashi` ein `403` – das gilt genauso zwischen
+  `mashi` und `mashi-tom`.
 - Optional: Rate-Limit-Middleware in `docker-compose.yml` einkommentieren (Passwort-Raten).
 
 ## Lokal getestet (2026-09-23, couchdb:3.5 = 3.5.2)
@@ -49,6 +71,8 @@ Container startet, `single_node` legt `_users`/`_replicator` an, CORS-Einstellun
 `setup.sh` läuft durch (auch zweimal hintereinander; Passwort mit `"` und `\` funktioniert),
 App-Benutzer liest/schreibt (200/201), falsches Passwort 401, fremder Benutzer 403,
 App-Benutzer darf keine DB anlegen und sich nicht zum Admin machen (401).
+Zweite Person (2026-09-25): `mashi-tom` angelegt, Julia → `mashi-tom` 403, Tom → `mashi` 403,
+Tom mit versehentlich `mashi` → STOPP, Julia bleibt einziges Mitglied von `mashi`.
 Traefik/Let's Encrypt konnte lokal nicht getestet werden – das prüft `setup.sh` auf dem Server
 gleich mit (erster Schritt: HTTPS + Admin-Anmeldung).
 

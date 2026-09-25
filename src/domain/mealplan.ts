@@ -63,6 +63,9 @@ const KIND_BY_NAME: [FoodKind, RegExp][] = [
   ['staple', /nudel|pasta|spaghetti|penne|(^|[\s-])reis|reis($|[\s-])|kartoffel|couscous|bulgur|quinoa|gnocchi|spätzle/],
   ['dairy', /käse|joghurt|quark|milch|sahne|skyr|feta|ricotta|mascarpone/],
   ['egg', /(^|\s)eier?(\s|$)/],
+  // Frisches Obst und Gemüse – aber nicht aus Dose, Glas oder Tube (Tomatenmark, Apfelmus, Orangensaft …)
+  ['vegetable', /^(?!.*(mark|passiert|gehackt|stückig|dose|getrocknet|eingelegt|pesto|soße|sauce|brühe|chips|kerne|samen))(?=.*(zucchini|brokkoli|blumenkohl|aubergine|lauch|porree|sellerie|champignon|pilz|kohl|salat|rucola|radieschen|rettich|tomate|gurke|möhre|karotte|paprika|spinat|mangold|kürbis|fenchel|spargel|rote bete|zuckerschote|grüne bohnen))/],
+  ['fruit', /^(?!.*(saft|mus\b|konfitüre|marmelade|essig|getrocknet|dose|sirup|preiselbeer))(?=.*(apfel|äpfel|birne|beere|kirsche|traube|orange|mandarine|clementine|zitrone|limette|pfirsich|nektarine|pflaume|aprikose|melone|ananas|kiwi|granatapfel|feige))/],
 ];
 
 function kindFor(food: FoodEntry | undefined, name: string): FoodKind | undefined {
@@ -128,6 +131,8 @@ export interface Suggestion {
   score: number;
   /** gemeinsame Zutaten, wichtigste zuerst */
   shared: string[];
+  /** bald ablaufende Vorräte, die das Rezept aufbraucht */
+  useUp: string[];
 }
 
 /**
@@ -136,7 +141,13 @@ export interface Suggestion {
  * als eine Zwiebel) UND nach Art (Hähnchen, Pasta, Milchprodukte ×3, Gemüse und Obst ×0,3).
  * Ein kleiner Bonus je gemeinsamer Zutat, damit auch Kleinkram zählt.
  */
-export function suggestRecipes(plan: MealPlan, all: Recipe[], table: FoodTable, limit = 5): Suggestion[] {
+/** Bald Ablaufendes aus der Speisekammer zählt wie 400 g einer normalen gemeinsamen Zutat */
+const USE_UP_POINTS = 400;
+
+/**
+ * @param useUp Schlüssel bald ablaufender Vorräte – Rezepte, die sie aufbrauchen, werden bevorzugt
+ */
+export function suggestRecipes(plan: MealPlan, all: Recipe[], table: FoodTable, limit = 5, useUp: ReadonlySet<string> = new Set()): Suggestion[] {
   const planned = new Set(plan.items.map((i) => i.recipeId));
   if (!planned.size) return [];
 
@@ -153,7 +164,9 @@ export function suggestRecipes(plan: MealPlan, all: Recipe[], table: FoodTable, 
     .filter((r) => !planned.has(r.id) && !r.archivedAt && r.status !== 'ki_entwurf')
     .map((r) => {
       const byKey = new Map<string, { name: string; grams: number; weight: number }>();
+      const usedUp = new Map<string, string>();
       for (const x of resolveRecipe(r, currentContent(r).servings, table)) {
+        if (!x.pantry && useUp.has(x.key)) usedUp.set(x.key, x.name);
         if (x.pantry || !have.has(x.key)) continue;
         const prev = byKey.get(x.key);
         byKey.set(x.key, { name: x.name, grams: (prev?.grams ?? 0) + (x.grams ?? 1), weight: x.weight });
@@ -161,8 +174,8 @@ export function suggestRecipes(plan: MealPlan, all: Recipe[], table: FoodTable, 
       const sharedList = [...byKey.entries()]
         .map(([key, v]) => ({ name: v.name, points: v.weight * (Math.min(v.grams, have.get(key)!) + 25) }))
         .sort((a, b) => b.points - a.points);
-      const score = sharedList.reduce((s, x) => s + x.points, 0);
-      return { recipe: r, score, shared: sharedList.map((x) => x.name) };
+      const score = sharedList.reduce((s, x) => s + x.points, 0) + usedUp.size * USE_UP_POINTS;
+      return { recipe: r, score, shared: sharedList.map((x) => x.name), useUp: [...usedUp.values()] };
     })
     .filter((s) => s.score > 0)
     .sort((a, b) => b.score - a.score)

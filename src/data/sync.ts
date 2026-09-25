@@ -39,7 +39,7 @@ export async function testConnection(factory: RemoteFactory, cfg: SyncConfig): P
   } catch (e) {
     const status = (e as { status?: number }).status;
     if (status === 401) return 'Benutzername oder Passwort stimmt nicht.';
-    if (status === 403) return 'Dieser Benutzer hat keinen Zugriff auf die Mashi-Datenbank.';
+    if (status === 403) return 'Dieser Benutzer hat keinen Zugriff auf diese Datenbank. Hast du eine eigene (z. B. …/mashi-tom)? Dann unter „Server ändern“ die Adresse anpassen.';
     if (status === 404) return 'Die Datenbank gibt es auf dem Server nicht – Adresse prüfen (endet sie auf /mashi?).';
     return 'Server nicht erreichbar. Adresse prüfen – oder CORS ist auf dem Server noch nicht für Mashi freigegeben.';
   }

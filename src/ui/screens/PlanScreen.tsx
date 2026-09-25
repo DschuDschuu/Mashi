@@ -18,6 +18,7 @@ import { StatusBadge } from '../components/StatusBadge';
 import { euro, portionCount, recipeCount, relativeDay } from '../format';
 import { usePricing } from '../useCosts';
 import { cookedToast } from '../cookedToast';
+import { useUseUp } from '../useUseUp';
 import { toast } from '../toast';
 
 /** Was sich planen lässt: alles außer Archiv und reinen KI-Ideen (die sind noch kein Rezept). */
@@ -41,7 +42,8 @@ export function PlanScreen() {
     .map((i) => ({ ...i, cooked: plan.cooked.includes(i.recipeId) }))
     // Gekochtes rutscht nach unten – oben steht, was noch ansteht
     .sort((a, b) => Number(a.cooked) - Number(b.cooked));
-  const suggestions = useMemo(() => suggestRecipes(plan, recipes.filter(plannable), table), [plan, recipes, table]);
+  const { keys: useUp } = useUseUp();
+  const suggestions = useMemo(() => suggestRecipes(plan, recipes.filter(plannable), table, 5, new Set(useUp.keys())), [plan, recipes, table, useUp]);
   // Für das Einkaufswagen-Symbol: wie viel noch zu kaufen ist (ohne Basics wie Öl und Gewürze)
   const shopping = useMemo(() => buildShoppingList(plan, recipes, table), [plan, recipes, table]);
   const toBuy = shopping.filter((i) => !i.pantry && !plan.checked.includes(i.key)).length;
@@ -117,13 +119,14 @@ export function PlanScreen() {
         <Section icon="sparkles" title="Passt dazu">
           <p className="muted small">Diese Rezepte teilen Zutaten mit deinem Plan.</p>
           <ul className="list">
-            {suggestions.map(({ recipe, shared }) => (
+            {suggestions.map(({ recipe, shared, useUp: useUpNames }) => (
               <li key={recipe.id} className="list__item suggestion">
                 <button className="plan-list__hit" onClick={() => navigate(`/rezept/${recipe.id}`)}>
                   <RecipeImage image={recipe.image} size="sm" />
                   <span className="suggestion__text">
                     <span className="list__title">{currentContent(recipe).title}</span>
-                    <span className="small muted">Auch drin: {shared.slice(0, 4).join(', ')}{shared.length > 4 ? ' …' : ''}</span>
+                    {useUpNames.length > 0 && <span className="useup-hint">Braucht auf: {useUpNames.join(', ')}</span>}
+                    {shared.length > 0 && <span className="small muted">Auch drin: {shared.slice(0, 4).join(', ')}{shared.length > 4 ? ' …' : ''}</span>}
                   </span>
                 </button>
                 <button className="btn btn--soft btn--sm" onClick={() => add(recipe)} aria-label={`${currentContent(recipe).title} einplanen`}>

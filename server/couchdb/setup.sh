@@ -2,9 +2,11 @@
 # Mashi – Einrichtung der CouchDB (einmalig nach dem ersten `docker compose up -d`).
 #
 # Legt an:
-#   1. die Datenbank "mashi"
+#   1. eine Datenbank – "mashi" oder für jede weitere Person eine eigene (z. B. "mashi-tom")
 #   2. einen eigenen Benutzer für die App (KEIN Admin)
-#   3. Zugriffsregel: nur dieser Benutzer darf die Datenbank lesen und schreiben
+#   3. Zugriffsregel: nur dieser Benutzer darf diese Datenbank lesen und schreiben
+# Jede Person hat so ihre eigenen Rezepte, Produkte, Wochenplan und Speisekammer.
+# Schutz: Gehört eine Datenbank schon jemand anderem, bricht das Skript ab, statt ihn auszusperren.
 # Und prüft am Ende, dass ein Fremder ohne Anmeldung abgewiesen wird.
 #
 # Aufruf im Ordner mit der .env:   sh setup.sh
@@ -35,6 +37,12 @@ case "$code" in
   *)   echo "  Unerwartete Antwort: $code"; exit 1;;
 esac
 
+printf "Name der Datenbank (Enter = mashi; für eine weitere Person z. B. mashi-tom): "
+read -r DB
+DB="${DB:-mashi}"
+# CouchDB: Kleinbuchstabe am Anfang, dann Kleinbuchstaben, Ziffern, _ und -
+echo "$DB" | grep -Eq '^[a-z][a-z0-9_-]*$' || { echo "Ungültiger Name – nur Kleinbuchstaben, Ziffern, _ und -, Anfang mit Buchstabe."; exit 1; }
+
 printf "Benutzername für die Mashi-App (z. B. julia): "
 read -r APP_USER
 [ -n "$APP_USER" ] || { echo "Benutzername darf nicht leer sein."; exit 1; }
@@ -45,9 +53,21 @@ stty echo 2>/dev/null || true
 [ "$APP_PASS" = "$APP_PASS2" ] || { echo "Passwörter stimmen nicht überein."; exit 1; }
 [ ${#APP_PASS} -ge 12 ] || { echo "Bitte mindestens 12 Zeichen."; exit 1; }
 
-echo "→ Datenbank 'mashi' …"
-code=$(status -u "$ADMIN" -X PUT "$URL/mashi")
-case "$code" in 201|202) echo "  angelegt";; 412) echo "  gibt es schon – bleibt unverändert";; *) echo "  Fehler: $code"; exit 1;; esac
+echo "→ Datenbank '$DB' …"
+code=$(status -u "$ADMIN" -X PUT "$URL/$DB")
+case "$code" in
+  201|202) echo "  angelegt";;
+  412)
+    echo "  gibt es schon – bleibt unverändert"
+    # Wem gehört sie? Ist schon jemand anderes eingetragen, NICHT überschreiben – sonst wäre er ausgesperrt.
+    MEMBERS=$(curl -s -u "$ADMIN" "$URL/$DB/_security" | sed -n 's/.*"members":{"names":\[\([^]]*\)\].*/\1/p')
+    if [ -n "$MEMBERS" ] && ! echo "$MEMBERS" | grep -q "\"$APP_USER\""; then
+      echo "  STOPP: '$DB' gehört schon $MEMBERS."
+      echo "  Für eine weitere Person bitte einen eigenen Namen wählen, z. B. mashi-$APP_USER."
+      exit 1
+    fi;;
+  *) echo "  Fehler: $code"; exit 1;;
+esac
 
 echo "→ Benutzer '$APP_USER' …"
 DOC_URL="$URL/_users/org.couchdb.user:$APP_USER"
@@ -57,23 +77,23 @@ code=$(status -u "$ADMIN" -X PUT "$DOC_URL" -H 'Content-Type: application/json' 
 case "$code" in 201|202) if [ -n "$REV" ]; then echo "  gab es schon – Passwort neu gesetzt"; else echo "  angelegt"; fi;; *) echo "  Fehler: $code"; exit 1;; esac
 unset APP_PASS APP_PASS2 BODY
 
-echo "→ Zugriffsregel: nur '$APP_USER' darf in 'mashi' …"
+echo "→ Zugriffsregel: nur '$APP_USER' darf in '$DB' …"
 SEC="{\"admins\":{\"names\":[],\"roles\":[]},\"members\":{\"names\":[\"$(esc "$APP_USER")\"],\"roles\":[]}}"
-code=$(status -u "$ADMIN" -X PUT "$URL/mashi/_security" -H 'Content-Type: application/json' -d "$SEC")
+code=$(status -u "$ADMIN" -X PUT "$URL/$DB/_security" -H 'Content-Type: application/json' -d "$SEC")
 [ "$code" = "200" ] && echo "  gesetzt" || { echo "  Fehler: $code"; exit 1; }
 
 echo "→ Gegenprobe: Zugriff ohne Anmeldung muss abgewiesen werden …"
-code=$(status "$URL/mashi")
+code=$(status "$URL/$DB")
 [ "$code" = "401" ] && echo "  ok (401 – gesperrt)" || { echo "  ACHTUNG: Antwort $code statt 401 – mashi.ini wird nicht gelesen?"; exit 1; }
 
 echo "→ Gegenprobe: CORS für die App …"
-cors=$(curl -s -o /dev/null -D - -X OPTIONS "$URL/mashi" \
+cors=$(curl -s -o /dev/null -D - -X OPTIONS "$URL/$DB" \
   -H 'Origin: https://dschudschuu.github.io' -H 'Access-Control-Request-Method: GET' \
   | tr -d '\r' | sed -n 's/^[Aa]ccess-[Cc]ontrol-[Aa]llow-[Oo]rigin: //p')
 [ "$cors" = "https://dschudschuu.github.io" ] && echo "  ok" || echo "  ACHTUNG: CORS-Antwort '$cors' – [cors] in mashi.ini prüfen."
 
 echo
 echo "Fertig. In der Mashi-App eintragen:"
-echo "  Adresse:      $URL/mashi"
+echo "  Adresse:      $URL/$DB"
 echo "  Benutzername: $APP_USER"
 echo "  Passwort:     (das eben gewählte)"

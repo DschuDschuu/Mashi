@@ -45,6 +45,7 @@ export function ConnectScreen() {
         {showUrl ? (
           <label className="field"><span>Adresse deiner Mashi-Datenbank</span>
             <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://mashi-db.<server-ip>.sslip.io/mashi" inputMode="url" autoCapitalize="off" autoCorrect="off" spellCheck={false} />
+            <small className="hint">Jede Person hat ihre eigene Datenbank – z. B. …/mashi für dich, …/mashi-tom für Tom.</small>
           </label>
         ) : (
           <button type="button" className="link link--muted" onClick={() => setShowUrl(true)}>Server: {DEFAULT_DB_URL.replace(/^https?:\/\//, '')} · ändern</button>

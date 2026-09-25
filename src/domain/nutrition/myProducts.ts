@@ -31,6 +31,8 @@ export interface MyProduct {
   packagePrice?: number;
   /** Barcode (EAN), falls per Scan angelegt – erkennt das Produkt beim nächsten Scan wieder */
   ean?: string;
+  /** hält ab Kauf so viele Tage (von dir) – leer = Mashi schätzt */
+  shelfDays?: number;
   updatedAt: string;
 }
 
@@ -45,6 +47,8 @@ function asEntry(p: MyProduct, replaced?: FoodEntry): FoodEntry {
     ...(replaced?.density !== undefined ? { density: replaced.density } : {}),
     ...(replaced?.portions ? { portions: replaced.portions } : {}),
     ...(replaced?.kind ? { kind: replaced.kind } : {}),
+    ...(replaced ? { baseId: replaced.ref.foodId } : {}),
+    ...(p.shelfDays ? { shelfDays: p.shelfDays } : {}),
   };
 }
 
@@ -106,5 +110,6 @@ export function isValidProduct(v: unknown): v is MyProduct {
     && (p.packagePrice === undefined || isNum(p.packagePrice))
     && (p.packageUnit === undefined || ['g', 'ml', 'Stück'].includes(p.packageUnit as string))
     && (p.ean === undefined || typeof p.ean === 'string')
+    && (p.shelfDays === undefined || isNum(p.shelfDays))
     && !!n && isNum(n.kcal) && isNum(n.protein) && isNum(n.carbs) && isNum(n.fat);
 }

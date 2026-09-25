@@ -95,8 +95,8 @@ function PriceCard({ trend: t }: { trend: PriceTrend }) {
 }
 
 /**
- * Was du in einem Monat gespart hast – Lidl Plus und Angebote nebeneinander.
- * Zwei Zahlen, kein Diagramm: Es geht um die Summe, nicht um einen Verlauf.
+ * Was du in einem Monat gespart hast – Lidl Plus, Angebote und MHD-Ware nebeneinander.
+ * Drei Zahlen, kein Diagramm: Es geht um die Summe, nicht um einen Verlauf.
  */
 function SavingsTiles({ savings }: { savings: ReceiptSavings[] }) {
   const today = new Date();
@@ -116,7 +116,7 @@ function SavingsTiles({ savings }: { savings: ReceiptSavings[] }) {
           <Icon name="chevron" size={18} />
         </button>
       </div>
-      <div className="row-2">
+      <div className="savings__tiles">
         <div className="stat tint-mint">
           <span className="stat__label">Lidl Plus</span>
           <strong className="stat__value">{euro(m.lidlPlus)}</strong>
@@ -125,10 +125,14 @@ function SavingsTiles({ savings }: { savings: ReceiptSavings[] }) {
           <span className="stat__label">Angebote</span>
           <strong className="stat__value">{euro(m.offers)}</strong>
         </div>
+        <div className="stat tint-peach">
+          <span className="stat__label">MHD-Ware</span>
+          <strong className="stat__value">{euro(m.mhd)}</strong>
+        </div>
       </div>
       <p className="small muted center">
         {m.receipts
-          ? `aus ${m.receipts} ${m.receipts === 1 ? 'Kassenbon' : 'Kassenbons'} · zusammen ${euro(m.lidlPlus + m.offers)}`
+          ? `aus ${m.receipts} ${m.receipts === 1 ? 'Kassenbon' : 'Kassenbons'} · zusammen ${euro(m.lidlPlus + m.offers + m.mhd)}`
           : savings.length ? 'In diesem Monat kein Bon mit Rabatten.' : 'Zählt ab dem nächsten Kassenbon, den du importierst.'}
       </p>
     </section>

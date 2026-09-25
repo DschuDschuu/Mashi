@@ -3,7 +3,8 @@ import { FOOD_CHOICES, normalizeName } from '../../domain/nutrition/localFoods';
 import type { MyProduct } from '../../domain/nutrition/myProducts';
 import type { NutritionResult } from '../../domain/nutrition/types';
 import { newId } from '../../domain/recipe';
-import { saveProducts, useProducts } from '../../data/store';
+import { shelfDaysForFood } from '../../domain/shelfLife';
+import { saveProducts, usePantry, useProducts } from '../../data/store';
 import type { ScannedProduct } from '../../domain/nutrition/openFoodFacts';
 import { barcodeLookup } from '../../services';
 import { euro } from '../format';
@@ -12,6 +13,14 @@ import { toast } from '../toast';
 import { Icon } from './Icon';
 
 const foodName = (id: string) => FOOD_CHOICES.find((f) => f.id === id)?.name ?? id;
+
+/** Was Mashi ohne Angabe schätzt – vom ersetzten Lebensmittel (Mozzarella 7 Tage) */
+function shelfEstimate(replaces: string[], custom: Parameters<typeof shelfDaysForFood>[2]): string {
+  const id = replaces[0];
+  const days = id ? shelfDaysForFood(id, FOOD_CHOICES.find((f) => f.id === id)?.kind, custom) : undefined;
+  if (!id) return 'leer = Mashi schätzt';
+  return days ? `leer = geschätzt ${days} Tage` : 'leer = hält lange';
+}
 const fmt = (n: number) => n.toLocaleString('de-DE', { maximumFractionDigits: 1 });
 
 /**
@@ -57,6 +66,7 @@ export function MyProductsPanel() {
                   Packung: {fmt(p.packageAmount)} {p.packageUnit ?? 'g'}{p.packagePrice !== undefined && <> · {euro(p.packagePrice)}</>}
                 </span>
               )}
+              {p.shelfDays && <span className="small muted">hält {p.shelfDays === 1 ? '1 Tag' : `${p.shelfDays} Tage`} ab Kauf</span>}
               {p.ean && <span className="small muted">Barcode: <span className="ean">{p.ean}</span></span>}
               <span className="small">
                 {p.replaces.length > 0 && <>ersetzt: {p.replaces.map(foodName).join(', ')}</>}
@@ -153,6 +163,8 @@ export function ProductForm({ initial, onSave, onCancel }: { initial?: Partial<M
   const [packAmount, setPackAmount] = useState(toField(initial?.packageAmount));
   const [packUnit, setPackUnit] = useState<'g' | 'ml' | 'Stück'>(initial?.packageUnit ?? 'g');
   const [packPrice, setPackPrice] = useState(toField(initial?.packagePrice));
+  const [shelf, setShelf] = useState(toField(initial?.shelfDays));
+  const shelfCustom = usePantry().shelfDays;
   const [search, setSearch] = useState('');
   const [error, setError] = useState<string | null>(null);
 
@@ -173,6 +185,8 @@ export function ProductForm({ initial, onSave, onCancel }: { initial?: Partial<M
     const amount = parseNum(packAmount);
     const price = parseNum(packPrice);
     if (price !== undefined && !amount) return setError('Für den Preis braucht Mashi die Packungsgröße.');
+    const shelfDays = parseNum(shelf);
+    if (shelf.trim() && (!shelfDays || shelfDays > 365 || !Number.isInteger(shelfDays))) return setError('Haltbarkeit bitte in ganzen Tagen (1 bis 365).');
     onSave({
       id: initial?.id ?? newId('p'),
       name: name.trim(),
@@ -183,6 +197,7 @@ export function ProductForm({ initial, onSave, onCancel }: { initial?: Partial<M
       ...(ean ? { ean } : {}),
       ...(amount ? { packageAmount: amount, packageUnit: packUnit } : {}),
       ...(amount && price !== undefined ? { packagePrice: price } : {}),
+      ...(shelfDays ? { shelfDays } : {}),
       updatedAt: new Date().toISOString(),
     });
   };
@@ -281,6 +296,9 @@ export function ProductForm({ initial, onSave, onCancel }: { initial?: Partial<M
           <input inputMode="decimal" value={packPrice} onChange={(e) => setPackPrice(e.target.value)} placeholder="kommt sonst vom Bon" />
         </label>
       </div>
+      <label className="field"><span>Hält ab Kauf (Tage, optional)</span>
+        <input inputMode="numeric" value={shelf} onChange={(e) => setShelf(e.target.value)} placeholder={shelfEstimate(replaces, shelfCustom)} />
+      </label>
 
       {names.length > 0 && (
         <div className="stack">

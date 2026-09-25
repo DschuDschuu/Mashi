@@ -1,11 +1,16 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { withMyProducts } from '../../domain/nutrition/myProducts';
+import { leftoverSuggestions, pantryAfterPlan } from '../../domain/pantry';
 import { currentContent } from '../../domain/recipe';
-import { formatQuantity, scaleIngredients } from '../../domain/scaling';
-import { markCooked, useRecipe } from '../../data/store';
+import { formatAmount, formatQuantity, formatUnitAmount, scaleIngredients } from '../../domain/scaling';
+import type { Ingredient } from '../../domain/types';
+import { markCooked, usePantry, usePlan, useProducts, useRecipe, useRecipes } from '../../data/store';
+import { foodTable } from '../../services';
 import { goBack, navigate } from '../../router';
 import { Icon } from '../components/Icon';
 import { StepIngredients } from '../components/StepIngredients';
 import { cookedToast } from '../cookedToast';
+import { toast } from '../toast';
 import { useMediaQuery } from '../useMediaQuery';
 
 interface TimerState {
@@ -25,6 +30,27 @@ export function CookModeScreen({ id, servings }: { id: string; servings?: number
   useWakeLock();
   // Tablet quer: Zutaten dauerhaft als Spalte neben dem Schritt
   const wide = useMediaQuery('(min-width: 900px)');
+  /** Mengen „nur dieses Mal“ je Zutat-ID – das Rezept bleibt, wie es ist */
+  const [amounts, setAmounts] = useState<Record<string, number>>({});
+  const [editing, setEditing] = useState<string | null>(null);
+  const [noLeftovers, setNoLeftovers] = useState(false);
+  const pantry = usePantry();
+  const plan = usePlan();
+  const recipes = useRecipes();
+  const products = useProducts();
+
+  const base = useMemo(() => {
+    if (!recipe) return [];
+    const c = currentContent(recipe);
+    return scaleIngredients(c, servings ?? c.servings);
+  }, [recipe, servings]);
+  // Reste mitverbrauchen – aber nicht, was andere geplante Gerichte noch brauchen
+  const leftovers = useMemo(() => {
+    if (!recipe) return [];
+    const table = withMyProducts(foodTable, products);
+    const others = { ...plan, items: plan.items.filter((i) => i.recipeId !== recipe.id) };
+    return leftoverSuggestions(pantryAfterPlan(pantry, others, recipes, table), base, table);
+  }, [recipe, base, pantry, plan, recipes, products]);
 
   // Läuft ein Timer, 4× pro Sekunde neu zeichnen
   useEffect(() => {
@@ -48,14 +74,22 @@ export function CookModeScreen({ id, servings }: { id: string; servings?: number
   const c = currentContent(recipe);
   const s = c.steps[step];
   const last = step === c.steps.length - 1;
-  const ingredients = scaleIngredients(c, servings ?? c.servings);
+  const ingredients = base.map((i) => (i.id in amounts ? { ...i, amount: amounts[i.id] } : i));
+  const openLeftovers = noLeftovers ? [] : leftovers.filter((l) => !(l.ingredientId in amounts));
+  const setAmount = (ing: Ingredient, amount: number | undefined) => {
+    const { [ing.id]: _old, ...rest } = amounts;
+    const original = base.find((b) => b.id === ing.id)?.amount;
+    // Wieder die Rezeptmenge → keine Ausnahme mehr
+    setAmounts(amount === undefined || (original !== undefined && Math.abs(amount - original) < 1e-9) ? rest : { ...rest, [ing.id]: amount });
+    setEditing(null);
+  };
 
   const startTimer = (minutes: number) => setTimer({ step, totalMs: minutes * 60_000, remainingMs: minutes * 60_000, endsAt: Date.now() + minutes * 60_000 });
   const pause = () => timer && setTimer({ ...timer, endsAt: undefined, remainingMs: remaining });
   const resume = () => timer && setTimer({ ...timer, endsAt: Date.now() + timer.remainingMs });
 
   const finish = () => {
-    cookedToast(markCooked(recipe.id, servings ?? c.servings));
+    cookedToast(markCooked(recipe.id, servings ?? c.servings, amounts));
     if (recipe.status === 'zum_testen' || recipe.status === 'bewaehrt') navigate(`/rezept/${recipe.id}/test`, { replace: true });
     else goBack(`/rezept/${recipe.id}`);
   };
@@ -78,9 +112,45 @@ export function CookModeScreen({ id, servings }: { id: string; servings?: number
       </header>
 
       {(wide || showIngredients) && (
-        <ul className="cook__ingredients">
-          {ingredients.map((i) => <li key={i.id}><strong>{formatQuantity(i)}</strong> {i.name}</li>)}
-        </ul>
+        <div className="cook__ingredients">
+          <ul>
+            {ingredients.map((i) => {
+              const original = base.find((b) => b.id === i.id)!;
+              const changed = i.id in amounts;
+              return (
+                <li key={i.id} className={changed ? 'is-changed' : undefined}>
+                  {editing === i.id ? (
+                    <AmountEdit ing={i} changed={changed} onSave={(v) => setAmount(i, v)} onCancel={() => setEditing(null)} />
+                  ) : (
+                    <button type="button" className="cook__ing" onClick={() => setEditing(i.id)} disabled={i.amount === undefined}
+                      aria-label={`${formatQuantity(i)} ${i.name} – Menge nur für dieses Mal ändern`}>
+                      <strong>{formatQuantity(i)}</strong> {i.name}
+                      {changed && <span className="small muted"> · im Rezept {formatQuantity(original)}</span>}
+                    </button>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+          <p className="small muted">Menge antippen, um sie nur für dieses Mal zu ändern.</p>
+        </div>
+      )}
+
+      {openLeftovers.length > 0 && (
+        <div className="cook__leftovers" role="status">
+          <p><Icon name="sparkles" size={16} /> <strong>Reste mitverbrauchen?</strong> Nur für dieses Mal – das Rezept bleibt.</p>
+          <div className="cook__leftover-list">
+            {openLeftovers.map((l) => (
+              <button key={l.ingredientId} className="btn btn--soft btn--sm" onClick={() => {
+                setAmounts({ ...amounts, [l.ingredientId]: l.amount });
+                toast(`${formatUnitAmount(l.amount, l.unit)} ${l.name} – nur dieses Mal`);
+              }}>
+                {formatUnitAmount(l.amount, l.unit)} {l.name} statt {formatAmount(l.planned, l.unit)}
+              </button>
+            ))}
+          </div>
+          <button className="link link--muted" onClick={() => setNoLeftovers(true)}>Nein danke</button>
+        </div>
       )}
 
       <section className="cook__step" aria-live="polite">
@@ -119,6 +189,24 @@ export function CookModeScreen({ id, servings }: { id: string; servings?: number
           : <button className="btn btn--primary btn--xl" onClick={() => setStep(step + 1)}>Weiter</button>}
       </footer>
     </main>
+  );
+}
+
+/** Menge „nur dieses Mal“ eintippen – 0,5 und 0.5 gehen beide; leer = zurück zur Rezeptmenge. */
+function AmountEdit({ ing, changed, onSave, onCancel }: { ing: Ingredient; changed: boolean; onSave: (amount: number | undefined) => void; onCancel: () => void }) {
+  const [text, setText] = useState(String(Math.round((ing.amount ?? 0) * 100) / 100).replace('.', ','));
+  const submit = () => {
+    const n = Number(text.replace(',', '.').trim());
+    onSave(text.trim() && Number.isFinite(n) && n > 0 ? n : undefined);
+  };
+  return (
+    <form className="cook__edit" onSubmit={(e) => { e.preventDefault(); submit(); }}>
+      <input inputMode="decimal" value={text} onChange={(e) => setText(e.target.value)} autoFocus aria-label={`Menge ${ing.name}`}
+        onKeyDown={(e) => e.key === 'Escape' && onCancel()} />
+      <span>{ing.unit ?? ''} {ing.name}</span>
+      <button className="btn btn--primary btn--sm">OK</button>
+      {changed && <button type="button" className="link link--muted" onClick={() => onSave(undefined)}>Wie im Rezept</button>}
+    </form>
   );
 }
 

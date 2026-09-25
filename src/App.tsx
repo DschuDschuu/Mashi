@@ -38,7 +38,7 @@ function resolve(route: Route): { screen: ReactElement; tab?: string } {
       return { screen: <PantryScreen />, tab: '/plan' };
     case 'mehr': return { screen: <MoreScreen />, tab: '/mehr' };
     case 'neu':
-      if (b === 'ki') return { screen: <AiCreateScreen /> };
+      if (b === 'ki') return { screen: <AiCreateScreen initialPrompt={route.query.get('text') ?? ''} /> };
       if (b === 'import') return { screen: <ImportScreen /> };
       return { screen: <RecipeFormScreen key="neu" /> };
     case 'rezept':
