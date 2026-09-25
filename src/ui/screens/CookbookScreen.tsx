@@ -42,7 +42,9 @@ function filterFromQuery(q: URLSearchParams): RecipeFilter {
 export function CookbookScreen({ route }: { route: Route }) {
   const recipes = useRecipes();
   // „Favoriten“ auf der Startseite verlinkt ?fav=1 → gleich im passenden Segment öffnen
-  const [segment, setSegment] = useState<Segment>(route.query.get('fav') === '1' ? 'favoriten' : 'alle');
+  const [segment, setSegment] = useState<Segment>(
+    route.query.get('segment') === 'testen' ? 'zum_testen' : route.query.get('fav') === '1' ? 'favoriten' : 'alle',
+  );
   const [f, setF] = useState<RecipeFilter>(() => filterFromQuery(route.query));
   // Bewusst zu: Wer vom Schnellfilter kommt, will Ergebnisse sehen, nicht das Panel.
   const [open, setOpen] = useState(false);
@@ -138,7 +140,7 @@ export function CookbookScreen({ route }: { route: Route }) {
       {result.length ? (
         <div className="grid">{result.map((r) => <RecipeCard key={r.id} recipe={r} />)}</div>
       ) : (
-        <Empty icon="search">Keine Rezepte gefunden. Probier weniger Filter.</Empty>
+        <Empty icon="search">{emptyText(segment, badges.length > 0 || !!f.query?.trim())}</Empty>
       )}
     </main>
   );
@@ -151,4 +153,12 @@ function FilterGroup({ title, children }: { title: string; children: ReactNode }
       {children}
     </div>
   );
+}
+
+/** Leer – aber warum? Mit Filter: weniger Filter. Ohne: sagen, wie etwas hineinkommt. */
+function emptyText(segment: Segment, filtered: boolean): string {
+  if (filtered) return 'Keine Rezepte gefunden. Probier weniger Filter oder eine andere Suche.';
+  if (segment === 'favoriten') return 'Noch keine Favoriten – tippe auf einem Rezept auf das Herz.';
+  if (segment === 'zum_testen') return 'Nichts zum Testen. Neue Ideen kommen über ＋ → „Mit KI erstellen“ oder „Eigenes Rezept“.';
+  return 'Noch keine Rezepte im Kochbuch. Leg über ＋ eins an.';
 }

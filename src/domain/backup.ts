@@ -2,7 +2,7 @@ import { isValidProduct, type MyProduct } from './nutrition/myProducts';
 import type { Recipe, RecipeSource, RecipeStatus } from './types';
 
 /**
- * Format der Sicherungsdatei („Mehr → Sicherung herunterladen / einspielen“).
+ * Format der Sicherungsdatei („Einstellungen → Sicherung herunterladen / einspielen“).
  * Bewusst einfach: die Rezepte genau so, wie Mashi sie speichert.
  */
 export interface BackupFile {

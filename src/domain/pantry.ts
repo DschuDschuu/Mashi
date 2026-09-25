@@ -271,6 +271,17 @@ export interface Deduction {
   toCheck: string[];
   /** dieselben als IDs – Namen können doppelt vorkommen */
   checkIds: string[];
+  /** je Zutat-ID: da, reicht nicht ganz, fehlt – oder Grundvorrat (Öl, Salz …, nie „fehlt“) */
+  stock: Map<string, Stock>;
+}
+
+/** Ist die Zutat in der Speisekammer? „basis“ = Grundvorrat, den man hat (Öl, Salz, Gewürze). */
+export type Stock = 'da' | 'knapp' | 'fehlt' | 'basis';
+
+/** „Fehlt: …“ und „reicht nicht: …“ – ohne optionale Zutaten und ohne Grundvorrat. */
+export function stockSummary(content: RecipeContent, stock: Map<string, Stock>): { missing: string[]; short: string[] } {
+  const pick = (s: Stock) => [...new Set(content.ingredients.filter((i) => !i.optional && stock.get(i.id) === s).map((i) => i.name))];
+  return { missing: pick('fehlt'), short: pick('knapp') };
 }
 
 const itemAsIngredient = (item: PantryItem, table: FoodTable) => resolveIngredient({ id: item.id, name: item.name }, 1, table);
@@ -289,6 +300,7 @@ export function deductRecipe(pantry: Pantry, content: RecipeContent, servings: n
   const used: string[] = [];
   const toCheck: string[] = [];
   const checkIds: string[] = [];
+  const stock = new Map<string, Stock>();
 
   for (const ing of content.ingredients) {
     const own = amounts[ing.id];
@@ -298,15 +310,18 @@ export function deductRecipe(pantry: Pantry, content: RecipeContent, servings: n
     // von der frischen Packung. Gerechnet wird mit dem offenen Anteil – die Vorräte können
     // verschiedene Einheiten haben (g hier, Stück dort).
     let open = 1;
+    let found = false;
     for (const item of byUrgency) {
       if (open < 1e-6) break;
       if (keyOf.get(item.id) !== need.key || (item.amount ?? 1) <= 0) continue;
+      found = true;
       const full = item.amount === undefined ? undefined : needIn(item, need);
       if (item.amount === undefined || full === undefined) {
         // Menge unbekannt: gilt als ausreichend – „Noch da?“ fragen
         item.check = true;
         toCheck.push(item.name);
         checkIds.push(item.id);
+        open = 0;
         break;
       }
       const take = Math.min(item.amount, full * open);
@@ -314,9 +329,10 @@ export function deductRecipe(pantry: Pantry, content: RecipeContent, servings: n
       open = full > 0 ? open - take / full : 0;
       if (!used.includes(item.name)) used.push(item.name);
     }
+    stock.set(ing.id, need.pantry ? 'basis' : !found ? 'fehlt' : open < 0.02 ? 'da' : 'knapp');
   }
   // Aufgebraucht = raus aus der Speisekammer
-  return { pantry: { ...pantry, items: items.filter((it) => it.amount === undefined || it.amount > 0) }, used, toCheck, checkIds };
+  return { pantry: { ...pantry, items: items.filter((it) => it.amount === undefined || it.amount > 0) }, used, toCheck, checkIds, stock };
 }
 
 // ── Was kann ich kochen? ───────────────────────────────────────────
@@ -471,4 +487,57 @@ export function restock(pantry: Pantry, taken: Taken[]): Pantry {
     };
   }
   return { ...pantry, items };
+}
+
+// ── Verplant ───────────────────────────────────────────────────────
+
+/** Für geplante Gerichte reserviert – je Vorrat. Wert: wie viel (in seiner Einheit); 'all' = alles (oder ohne Menge). */
+export type PlannedUse = Map<string, number | 'all'>;
+
+/** Was ein geplantes Gericht aus der Speisekammer reserviert (ohne Menge: amount fehlt). */
+export interface DishReservation {
+  recipeId: string;
+  taken: Taken[];
+  /** je Zutat: da / knapp / fehlt – nach dem, was die Gerichte davor schon brauchen */
+  stock: Map<string, Stock>;
+}
+
+/**
+ * Je noch nicht gekochtem Gericht im Wochenplan: was es von der Speisekammer brauchen wird –
+ * in Plan-Reihenfolge, wie beim Kochen. Abgezogen wird erst beim Kochen; das hier ist nur die Anzeige.
+ */
+export function plannedByDish(pantry: Pantry, plan: MealPlan, recipes: Recipe[], table: FoodTable): DishReservation[] {
+  const originalCheck = new Map(pantry.items.map((it) => [it.id, it.check]));
+  let rest = pantry;
+  const out: DishReservation[] = [];
+  for (const item of plan.items) {
+    if (plan.cooked.includes(item.recipeId)) continue;
+    const r = recipes.find((x) => x.id === item.recipeId);
+    if (!r) continue;
+    const d = deductRecipe(rest, currentContent(r), item.servings, table);
+    out.push({ recipeId: r.id, taken: takenBetween(rest, d.pantry), stock: d.stock });
+    // „Noch da?“-Markierung nur gedacht – fürs nächste Gericht wieder wie vorher
+    rest = { ...d.pantry, items: d.pantry.items.map((it) => ({ ...it, check: originalCheck.get(it.id) })) };
+  }
+  return out;
+}
+
+/**
+ * Summe je Vorrat über alle geplanten Gerichte: wie viel verplant ist. 'all' = alles (oder ohne Menge).
+ * Die Speisekammer zeigt oben nur, was frei bleibt.
+ */
+export function plannedUse(pantry: Pantry, plan: MealPlan, recipes: Recipe[], table: FoodTable, dishes = plannedByDish(pantry, plan, recipes, table)): PlannedUse {
+  const out: PlannedUse = new Map();
+  for (const d of dishes) {
+    for (const t of d.taken) {
+      const prev = out.get(t.item.id);
+      if (t.amount === undefined || prev === 'all') out.set(t.item.id, 'all');
+      else out.set(t.item.id, Math.round(((prev ?? 0) + t.amount) * 10) / 10);
+    }
+  }
+  for (const [id, v] of out) {
+    const item = pantry.items.find((x) => x.id === id);
+    if (v !== 'all' && item?.amount !== undefined && v >= item.amount - 1e-9) out.set(id, 'all');
+  }
+  return out;
 }

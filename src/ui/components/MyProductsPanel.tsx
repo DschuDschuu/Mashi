@@ -56,11 +56,21 @@ export function MyProductsPanel() {
           <ProductForm key={p.id} initial={p} onSave={save} onCancel={() => setEditing(null)} />
         ) : (
           <div key={p.id} className="product">
-            <div className="product__main">
+            {/* Knöpfe klein und immer oben rechts – ein langer Name bricht in seiner Spalte um */}
+            <div className="product__head">
               <strong>{p.name}</strong>
-              <span className="small muted">
-                {fmt(p.per100g.kcal)} kcal · {fmt(p.per100g.protein)} g Eiweiß · {fmt(p.per100g.carbs)} g KH · {fmt(p.per100g.fat)} g Fett <em>pro 100 g</em>
-              </span>
+              <div className="product__actions">
+                <button className="iconbtn iconbtn--sm" aria-label={`${p.name} bearbeiten`} onClick={() => setEditing(p)}>
+                  <Icon name="pencil" size={17} />
+                </button>
+                <button className="iconbtn iconbtn--sm" aria-label={`${p.name} entfernen`} onClick={() => remove(p)}>
+                  <Icon name="trash" size={17} />
+                </button>
+              </div>
+            </div>
+            <div className="product__main">
+              <span className="product__kcal"><strong>{fmt(p.per100g.kcal)} kcal</strong> <em>pro 100 g</em></span>
+              <span className="small muted">{fmt(p.per100g.protein)} g Eiweiß · {fmt(p.per100g.carbs)} g KH · {fmt(p.per100g.fat)} g Fett</span>
               {p.packageAmount && (
                 <span className="small muted">
                   Packung: {fmt(p.packageAmount)} {p.packageUnit ?? 'g'}{p.packagePrice !== undefined && <> · {euro(p.packagePrice)}</>}
@@ -73,12 +83,6 @@ export function MyProductsPanel() {
                 {p.replaces.length > 0 && !!p.names?.length && ' · '}
                 {!!p.names?.length && <>gilt für: {p.names.join(', ')}</>}
               </span>
-            </div>
-            <div className="row-gap">
-              <button className="btn btn--ghost btn--sm" onClick={() => setEditing(p)}>Bearbeiten</button>
-              <button className="iconbtn iconbtn--sm" aria-label={`${p.name} entfernen`} onClick={() => remove(p)}>
-                <Icon name="trash" size={18} />
-              </button>
             </div>
           </div>
         ),
@@ -283,7 +287,7 @@ export function ProductForm({ initial, onSave, onCancel }: { initial?: Partial<M
       <div className="row-2">{numField('carbs', 'Kohlenhydrate (g)')}{numField('fat', 'Fett (g)')}</div>
 
       <p className="small muted">Packung (optional) – füllt beim Kassenbon die Menge aus und rechnet Kosten:</p>
-      <div className="row-2">
+      <div className="row-2 product-form__pack">
         <label className="field"><span>Packungsgröße</span>
           <span className="pantry-amount">
             <input inputMode="decimal" value={packAmount} onChange={(e) => setPackAmount(e.target.value)} placeholder="z. B. 125" />

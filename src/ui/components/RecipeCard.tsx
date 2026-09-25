@@ -38,13 +38,13 @@ export function RecipeCard({ recipe, wide = false }: { recipe: Recipe; wide?: bo
         <h3 className="card__title">{c.title}</h3>
         {/* Unten verankert – auch leere Zeilen behalten ihre Höhe, damit nebeneinander nichts springt */}
         <div className="card__bottom">
-          <p className="card__meta">
-            <Icon name="clock" size={13} /> {formatMinutesShort(totalMinutes(c))}
-            <span className="card__meta-sep" />
-            <Icon name="users" size={13} /> {c.servings} Port.
+          {/* links Zeit / kcal, rechts Portionen / Protein – so stehen die Werte in einer Reihe untereinander */}
+          <p className="card__meta card__meta--split">
+            <span><Icon name="clock" size={13} /> {formatMinutesShort(totalMinutes(c))}</span>
+            <span><Icon name="users" size={13} /> {c.servings} Port.</span>
           </p>
-          <p className="card__meta">
-            {n.perServing ? <>{kcal} · {Math.round(n.perServing.protein)} g Protein</> : ' '}
+          <p className="card__meta card__meta--split">
+            {n.perServing ? <><span>{kcal}</span><span>{Math.round(n.perServing.protein)} g Protein</span></> : ' '}
           </p>
           <div className="card__chips">
             {category && <span className="chip chip--xs">{category.label}</span>}

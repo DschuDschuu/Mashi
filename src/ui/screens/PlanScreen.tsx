@@ -1,17 +1,20 @@
-import { useEffect, useMemo, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { useMemo, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { recipeCost, sumCosts } from '../../domain/cost';
-import { buildShoppingList, suggestRecipes, type Suggestion } from '../../domain/mealplan';
+import { suggestRecipes, type Suggestion } from '../../domain/mealplan';
 import { ingredientCompletions, longNotCooked, searchRecipes } from '../../domain/recipeSearch';
 import { withMyProducts } from '../../domain/nutrition/myProducts';
 import { currentContent } from '../../domain/recipe';
 import type { Recipe } from '../../domain/types';
 import {
-  addToPlan, clearPlan, removeFromPlan, setPlanServings, togglePlanCooked, usePantry, usePlan, useProducts, useRecipes,
+  addToPlan, clearPlan, removeFromPlan, setPlanServings, togglePlanCooked, usePlan, useProducts, useRecipes,
 } from '../../data/store';
 import { navigate } from '../../router';
 import { foodTable } from '../../services';
 import { Empty, Section, Stepper } from '../components/Controls';
-import { PlanTabs } from '../components/PlanTabs';
+import { useShoppingCount } from '../useShoppingCount';
+import { useSheet } from '../useSheet';
+import { UseUpBadge } from '../components/UseUpBadge';
+import { StockLine } from '../components/StockLine';
 import { Icon, type IconName } from '../components/Icon';
 import { RecipeImage } from '../components/RecipeImage';
 import { StatusBadge } from '../components/StatusBadge';
@@ -42,12 +45,10 @@ export function PlanScreen() {
     .map((i) => ({ ...i, cooked: plan.cooked.includes(i.recipeId) }))
     // Gekochtes rutscht nach unten – oben steht, was noch ansteht
     .sort((a, b) => Number(a.cooked) - Number(b.cooked));
-  const { keys: useUp } = useUseUp();
+  const { keys: useUp, plannedUseUp, dishStock } = useUseUp();
   const suggestions = useMemo(() => suggestRecipes(plan, recipes.filter(plannable), table, 5, new Set(useUp.keys())), [plan, recipes, table, useUp]);
   // Für das Einkaufswagen-Symbol: wie viel noch zu kaufen ist (ohne Basics wie Öl und Gewürze)
-  const pantry = usePantry();
-  const shopping = useMemo(() => buildShoppingList(plan, recipes, table, pantry), [plan, recipes, table, pantry]);
-  const toBuy = shopping.filter((i) => !i.pantry && !i.covered && !plan.checked.includes(i.key)).length;
+  const toBuy = useShoppingCount();
   const portions = items.reduce((s, i) => s + i.servings, 0);
   const { prices } = usePricing();
   const costs = useMemo(() => new Map(items.map((i) => [i.recipeId, recipeCost(currentContent(i.recipe), i.servings, table, prices)])), [items, table, prices]);
@@ -60,7 +61,7 @@ export function PlanScreen() {
 
   const planList = (
     <>
-      <Section icon="calendar" title={items.length ? `Diese Woche · ${items.length} ${items.length === 1 ? 'Gericht' : 'Gerichte'}, ${portionCount(portions)}` : 'Diese Woche'}>
+      <Section icon="calendar" title={items.length ? `${items.length} ${items.length === 1 ? 'Gericht' : 'Gerichte'} · ${portionCount(portions)}` : 'Noch nichts geplant'}>
         {items.length === 0 ? (
           <Empty icon="calendar">Wähle ein Gericht – Mashi schlägt dir dann Rezepte mit ähnlichen Zutaten vor. So kaufst du weniger ein und es bleibt nichts übrig.</Empty>
         ) : (
@@ -72,15 +73,19 @@ export function PlanScreen() {
                   <Icon name="check" size={16} />
                 </button>
                 <button className="plan-list__hit" onClick={() => navigate(`/rezept/${recipe.id}`)}>
-                  <RecipeImage image={recipe.image} size="sm" />
+                  <span className="img-badged">
+                    <RecipeImage image={recipe.image} size="sm" />
+                    {!cooked && <UseUpBadge compact names={plannedUseUp.get(recipe.id) ?? []} />}
+                  </span>
                   <span className="suggestion__text">
                     <span className="list__title">{currentContent(recipe).title}</span>
+                    {!cooked && <StockLine content={currentContent(recipe)} stock={dishStock.get(recipe.id)} max={2} />}
                     {costs.get(recipe.id) && <span className="small muted">ca. {euro(costs.get(recipe.id)!.total)}</span>}
                   </span>
                 </button>
                 <div className="plan-list__servings">
                   <span className="small muted" aria-hidden="true">Portionen</span>
-                  <Stepper value={servings} onChange={(v) => setPlanServings(recipe.id, v)} label="Portionen" />
+                  <Stepper small value={servings} onChange={(v) => setPlanServings(recipe.id, v)} label={`Portionen ${currentContent(recipe).title}`} />
                 </div>
                 <button className="iconbtn iconbtn--sm" aria-label={`${currentContent(recipe).title} aus dem Plan nehmen`} onClick={() => {
                   const undo = removeFromPlan(recipe.id);
@@ -154,7 +159,6 @@ export function PlanScreen() {
           {toBuy > 0 && <span className="iconbtn__count">{toBuy}</span>}
         </button>
       </header>
-      <PlanTabs active="plan" />
       <div className="plan-layout">
         <div className="plan-layout__main">{planList}</div>
         <div className="plan-layout__side">{suggestionList}</div>
@@ -180,11 +184,7 @@ function RecipePicker({ recipes, planned, suggestions, onPick, onClose }: {
 }) {
   const [q, setQ] = useState('');
   const [active, setActive] = useState(0);
-  useEffect(() => {
-    const onKey = (e: globalThis.KeyboardEvent) => e.key === 'Escape' && onClose();
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  const sheetRef = useSheet(onClose);
 
   const candidates = recipes.filter((r) => !planned.includes(r.id));
   const query = q.trim();
@@ -213,7 +213,7 @@ function RecipePicker({ recipes, planned, suggestions, onPick, onClose }: {
         <Icon name="book" size={26} />
         <div className="stack stack--tight">
           <p>Noch keine Rezepte, die du einplanen kannst.</p>
-          <p className="small muted">Leg eins an oder spiel eine Sicherung ein (Mehr → Sicherung). KI-Ideen zuerst „Zum Testen“ vormerken.</p>
+          <p className="small muted">Leg eins an oder spiel eine Sicherung ein (Einstellungen → Sicherung). KI-Ideen zuerst „Zum Testen“ vormerken.</p>
           <button className="btn btn--soft btn--sm" onClick={() => { onClose(); navigate('/neu/manuell'); }}>Rezept anlegen</button>
         </div>
       </div>
@@ -247,7 +247,7 @@ function RecipePicker({ recipes, planned, suggestions, onPick, onClose }: {
 
   return (
     <div className="sheet-backdrop" onClick={onClose}>
-      <div className="sheet sheet--tall" role="dialog" aria-modal="true" aria-label="Gericht auswählen" onClick={(e) => e.stopPropagation()}>
+      <div className="sheet sheet--tall" role="dialog" aria-modal="true" aria-label="Gericht auswählen" onClick={(e) => e.stopPropagation()} ref={sheetRef}>
         <div className="sheet__grip" />
         <h2 className="sheet__title">Gericht auswählen</h2>
         {candidates.length > 0 && (
@@ -255,7 +255,7 @@ function RecipePicker({ recipes, planned, suggestions, onPick, onClose }: {
             <Icon name="search" size={18} />
             <input value={q} onChange={(e) => search(e.target.value)} onKeyDown={onKeyDown}
               placeholder="Rezept oder Zutat, z. B. Hähnchen" aria-label="Rezept suchen" autoFocus
-              role="combobox" aria-expanded={searching} aria-controls="picker-results" aria-autocomplete="list" enterKeyHint="go" />
+              aria-controls="picker-results" enterKeyHint="go" />
             {q && <button type="button" className="iconbtn iconbtn--sm" onClick={() => search('')} aria-label="Suche leeren"><Icon name="close" size={16} /></button>}
           </label>
         )}
@@ -268,7 +268,7 @@ function RecipePicker({ recipes, planned, suggestions, onPick, onClose }: {
             ))}
           </div>
         )}
-        <div className="picker" id="picker-results" role="listbox" aria-label="Rezepte">{body}</div>
+        <div className="picker" id="picker-results" aria-label="Rezepte" aria-live="polite">{body}</div>
       </div>
     </div>
   );
@@ -283,7 +283,7 @@ function PickRow({ recipe, title, hint, active = false, onPick }: {
 }) {
   return (
     <li>
-      <button className={`list__item picker__item${active ? ' is-active' : ''}`} role="option" aria-selected={active} onClick={() => onPick(recipe)}>
+      <button className={`list__item picker__item${active ? ' is-active' : ''}`} aria-current={active ? 'true' : undefined} onClick={() => onPick(recipe)}>
         <RecipeImage image={recipe.image} size="sm" />
         <span className="suggestion__text">
           <span className="list__title">{title}</span>

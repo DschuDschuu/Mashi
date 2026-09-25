@@ -5,7 +5,8 @@ import { usePantry } from '../../data/store';
 import { navigate } from '../../router';
 import { Empty, Section } from '../components/Controls';
 import { Icon } from '../components/Icon';
-import { PlanTabs } from '../components/PlanTabs';
+import { PantryTabs, usePantrySwipe } from '../components/PlanTabs';
+import { ProductsLink } from '../components/ProductsLink';
 import { PriceChart } from '../components/PriceChart';
 import { euro } from '../format';
 
@@ -22,13 +23,14 @@ const GROUPS: { key: PriceTrend['direction']; title: string }[] = [
  * Verglichen wird mit dem vorigen Einkauf; das Diagramm zeigt den ganzen Verlauf.
  */
 export function PricesScreen() {
+  const swipe = usePantrySwipe('prices');
   const pantry = usePantry();
   const trends = useMemo(() => priceTrends(pantry.history ?? pantry.prices ?? []), [pantry]);
 
   return (
-    <main className="screen screen--tabbed">
+    <main className="screen screen--tabbed" {...swipe}>
       <header className="page-head"><h1>Preise</h1></header>
-      <PlanTabs active="prices" />
+      <PantryTabs active="prices" />
       <SavingsTiles savings={pantry.savings ?? []} />
 
       {trends.length === 0 ? (
@@ -55,6 +57,7 @@ export function PricesScreen() {
           <p className="muted small center">Regalpreise vom Kassenbon – Rabatte und Coupons zählen nicht mit, damit du echte Preiserhöhungen siehst.</p>
         </>
       )}
+      <ProductsLink />
     </main>
   );
 }

@@ -95,11 +95,20 @@ export function CookModeScreen({ id, servings }: { id: string; servings?: number
   };
 
   const timerHere = timer && timer.step === step;
+  // Läuft ein Timer oder sind Mengen geändert, lieber nachfragen – beides wäre sonst weg
+  const leave = () => {
+    const running = !!timer && !done;
+    const changed = Object.keys(amounts).length > 0;
+    const why = running && changed ? 'Der Timer läuft noch und deine geänderten Mengen gehen verloren.'
+      : running ? 'Der Timer läuft noch.' : changed ? 'Deine geänderten Mengen gehen verloren.' : '';
+    if (why && !confirm(`Kochmodus beenden? ${why} Fertig gekocht? Dann lieber im letzten Schritt „Fertig“ tippen.`)) return;
+    goBack(`/rezept/${recipe.id}`);
+  };
 
   return (
     <main className={`cook${wide ? ' cook--wide' : ''}`}>
       <header className="cook__head">
-        <button className="iconbtn" onClick={() => goBack(`/rezept/${recipe.id}`)} aria-label="Kochmodus beenden"><Icon name="close" /></button>
+        <button className="iconbtn" onClick={leave} aria-label="Kochmodus beenden"><Icon name="close" /></button>
         <div className="cook__progress">
           <span>Schritt {step + 1} von {c.steps.length}</span>
           <div className="bar"><div style={{ width: `${((step + 1) / c.steps.length) * 100}%` }} /></div>

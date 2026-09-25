@@ -1,23 +1,27 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { resolveIngredient } from '../../domain/mealplan';
 import { withMyProducts } from '../../domain/nutrition/myProducts';
-import { recipesFromPantry, type PantryItem, type PantryUnit } from '../../domain/pantry';
+import { recipesFromPantry, type DishReservation, type PantryItem, type PantryUnit } from '../../domain/pantry';
 import { daysLabel, daysLeft, frozenSince, specialDays, useByOf } from '../../domain/shelfLife';
 import { formatAmount } from '../../domain/scaling';
 import {
   addPantryItem, answerPantryCheck, forgetReceiptRule, freezePantryItem, removePantryItem, thawPantryItem, updatePantryItem,
   usePantry, usePlan, useProducts, useRecipes,
 } from '../../data/store';
-import { navigate } from '../../router';
+import { navigate, useRoute } from '../../router';
 import { foodTable } from '../../services';
 import { Empty, Section } from '../components/Controls';
 import { Icon } from '../components/Icon';
-import { PlanTabs } from '../components/PlanTabs';
+import { PantryTabs, usePantrySwipe } from '../components/PlanTabs';
 import { IngredientNames } from '../components/IngredientNames';
 import { groupByKind } from '../foodGroups';
 import { useUseUp } from '../useUseUp';
 import { PantryMatchList, RecipeIdeaPanel } from '../components/PantryMatches';
+import { currentContent } from '../../domain/recipe';
 import { ShelfSettings } from '../components/ShelfSettings';
+import { ProductsLink } from '../components/ProductsLink';
+import { TileSummary } from '../components/TileSummary';
+import { StockLine } from '../components/StockLine';
 import { toast } from '../toast';
 
 const UNITS: PantryUnit[] = ['g', 'ml', 'Stück'];
@@ -33,18 +37,39 @@ export const parseAmount = (s: string): number | undefined => {
 };
 
 export function PantryScreen() {
+  const swipe = usePantrySwipe('pantry');
   const pantry = usePantry();
   const recipes = useRecipes();
   const products = useProducts();
   const plan = usePlan();
   const [adding, setAdding] = useState(false);
+  // Plus-Menü → „Vorrat eintragen“ öffnet das Formular – auch wenn du schon hier bist.
+  // Danach die Adresse zurücksetzen, damit ein zweites Antippen wieder wirkt.
+  const wantsNew = useRoute().query.get('neu') === '1';
+  useEffect(() => {
+    if (!wantsNew) return;
+    setAdding(true);
+    navigate('/speisekammer', { replace: true });
+  }, [wantsNew]);
   const [editing, setEditing] = useState<string | null>(null);
   const table = useMemo(() => withMyProducts(foodTable, products), [products]);
 
   const kindOf = (item: PantryItem) => resolveIngredient({ id: item.id, name: item.name }, 1, table)?.kind;
   const toCheck = pantry.items.filter((i) => i.check);
   // Nur was nach dem Wochenplan übrig bleibt – bald Ablaufendes zuerst; Eingeplantes nicht noch einmal vorschlagen
-  const { rest, keys, idea } = useUseUp();
+  const { rest, keys, idea, planned, dishes, plannedUseUp } = useUseUp();
+  // Oben nur, was frei ist – Verplantes steht in „Für den Wochenplan“ (abgezogen wird erst beim Kochen)
+  const freeOf = (item: PantryItem): PantryItem | null => {
+    const p = planned.get(item.id);
+    if (p === undefined) return item;
+    if (p === 'all' || item.amount === undefined) return null;
+    return { ...item, amount: Math.round((item.amount - p) * 10) / 10 };
+  };
+  const reservedLabel = (item: PantryItem) => {
+    const p = planned.get(item.id);
+    if (p === undefined) return undefined;
+    return p === 'all' ? 'Alles davon ist für den Wochenplan reserviert.' : `Davon ${quantityLabel({ amount: p, unit: item.unit })} für den Wochenplan reserviert.`;
+  };
   const matches = useMemo(() => {
     const planned = new Set(plan.items.map((i) => i.recipeId));
     return recipesFromPantry(rest, recipes.filter((r) => !planned.has(r.id)), table, 8, keys);
@@ -68,21 +93,19 @@ export function PantryScreen() {
   };
   const sorted = [...pantry.items].sort((a, b) => a.name.localeCompare(b.name, 'de'));
   // Gefrorenes als eigene Gruppe am Ende – es hält ganz anders als der Rest seiner Art
+  // Ganz Verplantes fällt oben weg; Bearbeiten zeigt aber immer den echten Vorrat
+  const shown = sorted.filter((i) => freeOf(i) !== null);
   const groups = [
-    ...groupByKind(sorted.filter((i) => !i.frozenAt), kindOf),
-    ...(sorted.some((i) => i.frozenAt) ? [{ title: 'Gefroren', items: sorted.filter((i) => i.frozenAt) }] : []),
+    ...groupByKind(shown.filter((i) => !i.frozenAt), kindOf),
+    ...(shown.some((i) => i.frozenAt) ? [{ title: 'Gefroren', items: shown.filter((i) => i.frozenAt) }] : []),
   ];
 
   return (
-    <main className="screen screen--tabbed">
+    <main className="screen screen--tabbed" {...swipe}>
       <header className="page-head"><h1>Speisekammer</h1></header>
-      <PlanTabs active="pantry" />
+      <PantryTabs active="pantry" />
       <IngredientNames />
 
-      <div className="row-2">
-        <button className="btn btn--primary" onClick={() => navigate('/speisekammer/bon')}><Icon name="camera" size={18} /> Kassenbon</button>
-        <button className="btn btn--soft" onClick={() => setAdding(!adding)}><Icon name="plus" size={18} /> Hinzufügen</button>
-      </div>
       {adding && <AddForm onDone={() => setAdding(false)} />}
 
       {toCheck.length > 0 && (
@@ -104,20 +127,21 @@ export function PantryScreen() {
       )}
 
       {pantry.items.length === 0 ? (
-        <Empty icon="archive">Noch leer. Importiere einen Kassenbon oder trag ein, was du da hast – Mashi zeigt dir dann, was du damit kochen kannst.</Empty>
+        <Empty icon="archive">Noch leer. Tippe unten auf ＋ – „Kassenbon importieren“ oder „Vorrat eintragen“. Mashi zeigt dir dann, was du damit kochen kannst.</Empty>
       ) : (
         groups.map(({ title, items }) => {
           return (
             <Section key={title} title={`${title} (${items.length})`}>
               <ul className="pantry">
                 {items.map((i) => editing === i.id
-                  ? <EditRow key={i.id} item={i} estimate={useByOf({ ...i, useBy: undefined }, table, pantry.shelfDays)} onDone={() => setEditing(null)} />
+                  ? <EditRow key={i.id} item={i} estimate={useByOf({ ...i, useBy: undefined }, table, pantry.shelfDays)} reserved={reservedLabel(i)} onDone={() => setEditing(null)} />
                   : (
                     <li key={i.id} className="pantry__item">
                       <button className="pantry__hit" onClick={() => setEditing(i.id)} aria-label={`${i.name} bearbeiten`}>
+                        {/* links nur der Name (groß), rechts die freie Menge mit dem Datum darunter */}
                         <span className="pantry__name">{i.name}{i.reduced && !i.frozenAt && <span className="badge tint-peach pantry__mhd">MHD</span>}</span>
-                        <span className="pantry__qty">
-                          {quantityLabel(i)}
+                        <span className="pantry__qty pantry__qty--stack">
+                          {quantityLabel(freeOf(i) ?? i)}
                           {shelfLabel(i) && <span className={`pantry__shelf${shelfLabel(i)!.urgent ? ' is-urgent' : ''}`}>{shelfLabel(i)!.text}</span>}
                         </span>
                       </button>
@@ -132,32 +156,38 @@ export function PantryScreen() {
         })
       )}
 
+      {dishes.some((d) => d.taken.length) && <PlannedGroup dishes={dishes.filter((d) => d.taken.length)} urgent={plannedUseUp} />}
+
       <RecipeIdeaPanel idea={idea} />
 
       {matches.length > 0 && (
         <Section icon="sparkles" title="Was kann ich kochen?">
-          <p className="muted small">Rezepte mit den meisten Zutaten aus deiner Speisekammer. Öl, Salz und Gewürze zählen nicht mit.</p>
           <PantryMatchList matches={matches} />
         </Section>
       )}
 
-      <ShelfSettings />
+      {/* Abgesetzt: das sind Einstellungen, keine Vorräte – eigener Kopf, zurückhaltender Stil */}
+      <section className="manage" aria-labelledby="manage-title">
+        <h2 className="manage__title" id="manage-title">Verwalten</h2>
+        <ProductsLink />
+        <ShelfSettings />
 
-      {pantry.rules.length > 0 && (
-        <details className="panel learned">
-          <summary>Gelernte Bon-Artikel ({pantry.rules.length})</summary>
-          <p className="muted small">So übersetzt Mashi deine Kassenbons. Falsch gelernt? Vergessen – beim nächsten Bon fragt Mashi wieder.</p>
-          <ul className="learned__list">
-            {[...pantry.rules].sort((a, b) => a.key.localeCompare(b.key, 'de')).map((r) => (
-              <li key={r.key}>
-                <span className="learned__bon">{r.key}</span>
-                <span className="small muted">{r.skip ? 'wird übersprungen' : `→ ${r.name}${r.amount ? ` · ${formatAmount(r.amount, 'g')} ${r.unit} je Stück` : ''}`}</span>
-                <button className="link link--muted" onClick={() => forgetReceiptRule(r.key)}>Vergessen</button>
-              </li>
-            ))}
-          </ul>
-        </details>
-      )}
+        {pantry.rules.length > 0 && (
+          <details className="panel fold learned">
+            <TileSummary icon="clipboard" title={`Gelernte Bon-Artikel (${pantry.rules.length})`} text="So übersetzt Mashi deine Kassenbons" />
+            <p className="muted small">Falsch gelernt? „Vergessen“ – beim nächsten Bon fragt Mashi wieder.</p>
+            <ul className="learned__list">
+              {[...pantry.rules].sort((a, b) => a.key.localeCompare(b.key, 'de')).map((r) => (
+                <li key={r.key}>
+                  <span className="learned__bon">{r.key}</span>
+                  <span className="small muted">{r.skip ? 'wird übersprungen' : `→ ${r.name}${r.amount ? ` · ${formatAmount(r.amount, 'g')} ${r.unit} je Stück` : ''}`}</span>
+                  <button className="link link--muted" onClick={() => forgetReceiptRule(r.key)}>Vergessen</button>
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
+      </section>
     </main>
   );
 }
@@ -204,7 +234,7 @@ function AddForm({ onDone }: { onDone: () => void }) {
 /** Datum für <input type="date"> (Ortszeit) */
 const dateField = (d?: Date) => (d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` : '');
 
-function EditRow({ item, estimate, onDone }: { item: PantryItem; estimate?: Date; onDone: () => void }) {
+function EditRow({ item, estimate, reserved, onDone }: { item: PantryItem; estimate?: Date; reserved?: string; onDone: () => void }) {
   const [name, setName] = useState(item.name);
   // Eigenes Datum oder die Schätzung vorausgefüllt – gespeichert wird nur, wenn du es änderst
   const initialDate = dateField(item.useBy ? new Date(item.useBy) : estimate);
@@ -241,6 +271,7 @@ function EditRow({ item, estimate, onDone }: { item: PantryItem; estimate?: Date
   return (
     <li className="pantry__item pantry__item--edit">
       <input value={name} onChange={(e) => setName(e.target.value)} list="ingredient-names" aria-label="Name" />
+      {reserved && <p className="small muted pantry-reserved">{reserved} Hier steht der ganze Vorrat.</p>}
       <AmountFields amount={amount} unit={unit} onAmount={setAmount} onUnit={setUnit} />
       {item.frozenAt ? (
         <p className="small muted pantry-frozen">Eingefroren am {new Date(item.frozenAt).toLocaleDateString('de-DE')}</p>
@@ -276,5 +307,46 @@ function EditRow({ item, estimate, onDone }: { item: PantryItem; estimate?: Date
         </div>
       )}
     </li>
+  );
+}
+
+/**
+ * „Für den Wochenplan“: je geplantem Gericht, was es aus der Speisekammer reserviert.
+ * Standardmäßig zu. Braucht ein Gericht etwas auf, das bald weg muss: Uhr auf der Kachel
+ * und rot im Kopf der Gruppe.
+ */
+function PlannedGroup({ dishes, urgent }: { dishes: DishReservation[]; urgent: Map<string, string[]> }) {
+  const recipes = useRecipes();
+  const anyUrgent = dishes.some((d) => urgent.has(d.recipeId));
+  return (
+    <details className="panel fold planned">
+      <TileSummary icon="calendar" title={`Für den Wochenplan (${dishes.length})`} text="Schon reserviert – wird beim Kochen abgezogen"
+        alert={anyUrgent ? 'Enthält etwas, das bald weg muss' : undefined} />
+      <ul className="planned__list">
+        {dishes.map((d) => {
+          const r = recipes.find((x) => x.id === d.recipeId);
+          if (!r) return null;
+          const soon = urgent.get(d.recipeId);
+          return (
+            <li key={d.recipeId}>
+              <button className="planned__dish" onClick={() => navigate(`/rezept/${d.recipeId}`)}>
+                <span className="planned__head">
+                  <strong>{currentContent(r).title}</strong>
+                  {soon && (
+                    <span className="planned__soon" title={`Braucht auf: ${soon.join(', ')}`}>
+                      <Icon name="clock" size={13} /> Bald verbrauchen
+                    </span>
+                  )}
+                </span>
+                <span className="small muted">
+                  {d.taken.map((t) => (t.amount !== undefined ? `${quantityLabel({ amount: t.amount, unit: t.item.unit })} ${t.item.name}` : t.item.name)).join(' · ')}
+                </span>
+                <StockLine content={currentContent(r)} stock={d.stock} />
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </details>
   );
 }

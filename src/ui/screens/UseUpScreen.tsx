@@ -45,14 +45,14 @@ export function UseUpScreen() {
               {expiring.map((e) => (
                 <li key={e.item.id} className="pantry__item">
                   <span className="pantry__hit">
+                    {/* wie in der Speisekammer: links der Name, rechts Menge mit Datum darunter */}
                     <span className="pantry__name">
                       {e.item.name}
                       {e.item.reduced && !e.item.frozenAt && <span className="badge tint-peach pantry__mhd">MHD</span>}
                     </span>
-                    <span className="pantry__qty">
+                    <span className="pantry__qty pantry__qty--stack">
                       {quantityLabel(e.item)}
-                      <span className="pantry__shelf is-urgent">{expiryLabel(e)}</span>
-                      {inPlan(e.item.name, e.item.id) && <span className="pantry__shelf">im Wochenplan</span>}
+                      <span className="pantry__shelf is-urgent">{expiryLabel(e)}{inPlan(e.item.name, e.item.id) ? ' · eingeplant' : ''}</span>
                     </span>
                   </span>
                 </li>

@@ -6,9 +6,9 @@ import { disconnect, leaveDemo, savedSyncConfig, uploadPending, useSyncState } f
 import { deleteRecipe, importProducts, importRecipes, isDemo, resetDemoData, restoreRecipe, useProducts, useRecipes } from '../../data/store';
 import type { Recipe } from '../../domain/types';
 import { Empty, Section, Switch } from '../components/Controls';
+import { TopBar } from '../components/TopBar';
 import { Icon } from '../components/Icon';
 import { RecipeImage } from '../components/RecipeImage';
-import { MyProductsPanel } from '../components/MyProductsPanel';
 import { updateSettings, useSettings } from '../settings';
 import { recipeCount } from '../format';
 import { toast } from '../toast';
@@ -18,8 +18,15 @@ export function MoreScreen() {
   const archived = all.filter((r) => r.archivedAt);
   const settings = useSettings();
   return (
-    <main className="screen screen--tabbed">
-      <header className="page-head"><h1>Mehr</h1></header>
+    <main className="screen">
+      <TopBar title="Einstellungen" backTo="/" />
+
+      <Section title="Über Mashi">
+        <div className="panel">
+          <p><span lang="ko">맛있다</span> <em>(mashitda)</em> heißt auf Koreanisch „es schmeckt“. Mashi ist dein persönliches Kochbuch – es wächst mit jedem Rezept, das du wirklich ausprobiert hast.</p>
+          <p className="muted small">Keine Werbung, kein Tracking, keine Weitergabe deiner Rezepte.</p>
+        </div>
+      </Section>
 
       <Section title={`Archiv (${archived.length})`}>
         {archived.length === 0 ? (
@@ -52,23 +59,12 @@ export function MoreScreen() {
         </div>
       </Section>
 
-      <Section title="Meine Produkte">
-        <MyProductsPanel />
-      </Section>
-
-      <Section title="Über Mashi">
-        <div className="panel">
-          <p><span lang="ko">맛있다</span> <em>(mashitda)</em> heißt auf Koreanisch „es schmeckt“. Mashi ist dein persönliches Kochbuch – es wächst mit jedem Rezept, das du wirklich ausprobiert hast.</p>
-          <p className="muted small">Keine Werbung, kein Tracking, keine Weitergabe deiner Rezepte.</p>
-        </div>
+      <Section title="Sicherung">
+        <BackupPanel recipes={all} />
       </Section>
 
       <Section title="Synchronisation">
         {isDemo() ? <DemoPanel /> : <SyncPanel />}
-      </Section>
-
-      <Section title="Sicherung">
-        <BackupPanel recipes={all} />
       </Section>
     </main>
   );

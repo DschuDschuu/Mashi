@@ -3,7 +3,7 @@ import { createMockRecipes } from '../data/mockRecipes';
 import { buildShoppingList, resolveIngredient } from './mealplan';
 import { localFoodTable } from './nutrition/localFoods';
 import {
-  alreadyImported, applyImport, bonKey, deductRecipe, emptyPantry, pantryAfterPlan, proposeImport, rememberReceipt, restock, takenBetween,
+  alreadyImported, applyImport, bonKey, deductRecipe, emptyPantry, pantryAfterPlan, plannedByDish, plannedUse, proposeImport, rememberReceipt, restock, stockSummary, takenBetween,
   type Pantry, type PantryItem,
 } from './pantry';
 import { parseIngredientLine } from './importText';
@@ -166,5 +166,55 @@ describe('Gekocht zurücknehmen', () => {
     const taken = [{ item: before.items[0], amount: 300 }];
     const meanwhile = pantry(item('b', 'Hähnchenbrust', 600, 'g')); // 100 g Rest + 500 g vom neuen Bon
     expect(restock(meanwhile, taken).items[0].amount).toBe(900);
+  });
+});
+
+describe('Verplant – Anzeige in der Speisekammer', () => {
+  it('„davon 400 g verplant“, „ganz verplant“ – die Speisekammer selbst bleibt unverändert', () => {
+    const r = recipe('b', [{ id: '1', name: 'Hähnchenbrust', amount: 400, unit: 'g' }, { id: '2', name: 'Paprika', amount: 1, unit: 'Stück' }]);
+    const plan = { items: [{ recipeId: 'b', servings: 2 }], checked: [], cooked: [], updatedAt: '' };
+    const p = pantry(item('h', 'Hähnchenbrust', 1000, 'g'), item('p', 'Paprika', 1, 'Stück'), item('q', 'Quark', 500, 'g'));
+    const planned = plannedUse(p, plan, [r], localFoodTable);
+    expect([...planned.entries()]).toEqual([['h', 400], ['p', 'all']]);
+    expect(p.items.map((i) => i.amount)).toEqual([1000, 1, 500]);
+    // gekocht → nichts mehr verplant
+    expect(plannedUse(p, { ...plan, cooked: ['b'] }, [r], localFoodTable).size).toBe(0);
+  });
+});
+
+describe('Für den Wochenplan – je Gericht', () => {
+  it('zwei Gerichte teilen sich den Vorrat in Plan-Reihenfolge; Summe = verplant', () => {
+    const a = recipe('a', [{ id: '1', name: 'Hähnchenbrust', amount: 400, unit: 'g' }]);
+    const b = recipe('b', [{ id: '1', name: 'Hähnchenbrust', amount: 300, unit: 'g' }, { id: '2', name: 'Salz' }, { id: '3', name: 'Paprika' }]);
+    const plan = { items: [{ recipeId: 'a', servings: 2 }, { recipeId: 'b', servings: 2 }], checked: [], cooked: [], updatedAt: '' };
+    const p = pantry(item('h', 'Hähnchenbrust', 500, 'g'), item('p', 'Paprika'));
+    const dishes = plannedByDish(p, plan, [a, b], localFoodTable);
+    expect(dishes.map((d) => [d.recipeId, d.taken.map((x) => [x.item.id, x.amount])])).toEqual([
+      ['a', [['h', 400]]], ['b', [['h', 100], ['p', undefined]]],
+    ]);
+    expect([...plannedUse(p, plan, [a, b], localFoodTable, dishes).entries()]).toEqual([['h', 'all'], ['p', 'all']]);
+  });
+});
+
+describe('Alles da? – je Zutat', () => {
+  const r = recipe('s', [
+    { id: '1', name: 'Hähnchenbrust', amount: 400, unit: 'g' },
+    { id: '2', name: 'Pasta', amount: 200, unit: 'g' },
+    { id: '3', name: 'Olivenöl', amount: 1, unit: 'EL' },
+    { id: '4', name: 'Paprika', amount: 2, unit: 'Stück' },
+    { id: '5', name: 'Mozzarella', amount: 125, unit: 'g', optional: true },
+  ]);
+  it('da, knapp, fehlt, Grundvorrat – optionale Zutaten zählen nicht', () => {
+    const d = deductRecipe(pantry(item('h', 'Hähnchenbrust', 500, 'g'), item('p', 'Paprika', 1, 'Stück')), r.versions[0].content, 2, localFoodTable);
+    // optionale Zutaten (5) bekommen gar keinen Status – sie fehlen nie
+    expect([...d.stock.entries()]).toEqual([['1', 'da'], ['2', 'fehlt'], ['3', 'basis'], ['4', 'knapp']]);
+    expect(stockSummary(r.versions[0].content, d.stock)).toEqual({ missing: ['Pasta'], short: ['Paprika'] });
+  });
+  it('zwei geplante Gerichte: das erste hat alles, beim zweiten reicht das Hähnchen nicht', () => {
+    const a = recipe('a', [{ id: '1', name: 'Hähnchenbrust', amount: 400, unit: 'g' }]);
+    const b = recipe('b', [{ id: '1', name: 'Hähnchenbrust', amount: 400, unit: 'g' }]);
+    const plan = { items: [{ recipeId: 'a', servings: 2 }, { recipeId: 'b', servings: 2 }], checked: [], cooked: [], updatedAt: '' };
+    const dishes = plannedByDish(pantry(item('h', 'Hähnchenbrust', 500, 'g')), plan, [a, b], localFoodTable);
+    expect(dishes.map((x) => x.stock.get('1'))).toEqual(['da', 'knapp']);
   });
 });

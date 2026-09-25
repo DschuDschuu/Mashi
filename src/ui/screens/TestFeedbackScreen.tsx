@@ -111,7 +111,7 @@ function Feedback({ recipe }: { recipe: Recipe }) {
           </button>
         )}
         <button className="btn btn--ghost btn--block" disabled={!rating} onClick={() => save('zum_testen')}>Speichern &amp; weiter testen</button>
-        <button className="link link--muted center" onClick={() => { archiveRecipe(recipe.id); toast('Archiviert'); navigate('/testen', { replace: true }); }}>
+        <button className="link link--muted center" onClick={() => { archiveRecipe(recipe.id); toast('Archiviert'); navigate('/kochbuch?segment=testen', { replace: true }); }}>
           Nicht mein Fall – archivieren
         </button>
       </div>

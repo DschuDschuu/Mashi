@@ -1,4 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useSheet } from '../useSheet';
+import { useRecipeStock } from '../useRecipeStock';
+import { StockLine } from '../components/StockLine';
+import type { Stock } from '../../domain/pantry';
 import { categoryInfo, deviceInfo, DIFFICULTY_LABEL, SOURCE_INFO, STATUS_INFO } from '../../domain/catalog';
 import { currentContent, currentVersion, originalVersion } from '../../domain/recipe';
 import { formatQuantity, scaleIngredients } from '../../domain/scaling';
@@ -23,9 +27,10 @@ import { useIsTablet } from '../useMediaQuery';
 import { useNutrition } from '../useNutrition';
 import { useSwipe } from '../useSwipe';
 
-const TABS = ['Zutaten', 'Zubereitung', 'Nährwerte', 'Notizen', 'Infos'] as const;
+// Vier kurze Tabs passen auch aufs schmale Handy (375 px) – die Infos stehen unter „Notizen“
+const TABS = ['Zutaten', 'Schritte', 'Nährwerte', 'Notizen'] as const;
 type Tab = (typeof TABS)[number];
-const TABLET_TABS: readonly Tab[] = ['Nährwerte', 'Notizen', 'Infos'];
+const TABLET_TABS: readonly Tab[] = ['Nährwerte', 'Notizen'];
 
 export function RecipeDetailScreen({ id }: { id: string }) {
   const recipe = useRecipe(id);
@@ -70,6 +75,7 @@ function Detail({ recipe }: { recipe: Recipe }) {
   }, [c.servings]);
 
   const ingredients = scaleIngredients(c, servings);
+  const { stock, soon } = useRecipeStock(recipe, servings);
   const rating = recipe.feedback.length
     ? { avg: recipe.feedback.reduce((s, f) => s + f.rating, 0) / recipe.feedback.length, count: recipe.feedback.length }
     : null;
@@ -96,13 +102,13 @@ function Detail({ recipe }: { recipe: Recipe }) {
       </div>
       {menu && <button className="menu-backdrop" onClick={() => setMenu(false)} aria-label="Menü schließen" />}
       {menu && (
-        <div className="menu" role="menu">
+        <MenuPanel onClose={() => setMenu(false)}>
           <button role="menuitem" onClick={() => navigate(`/rezept/${recipe.id}/bearbeiten`)}><Icon name="pencil" size={18} /> Bearbeiten</button>
           <button role="menuitem" onClick={onRegenerate}><Icon name="refresh" size={18} /> Bild neu generieren</button>
-          <button role="menuitem" onClick={() => { archiveRecipe(recipe.id); toast('Archiviert – unter „Mehr“ wiederherstellbar'); goBack('/kochbuch'); }}>
+          <button role="menuitem" onClick={() => { archiveRecipe(recipe.id); toast('Archiviert – unter Einstellungen → Archiv wiederherstellbar'); goBack('/kochbuch'); }}>
             <Icon name="archive" size={18} /> Archivieren
           </button>
-        </div>
+        </MenuPanel>
       )}
     </div>
 );
@@ -140,11 +146,13 @@ const header = (
         {isTablet ? <h2 className="h3">Zutaten</h2> : <span className="muted">Portionen</span>}
         <Stepper value={servings} onChange={setServings} label="Portionen" />
       </div>
-      <ul className="ingredients">
+      {stock && <p className="ingredients__stock"><StockLine content={c} stock={stock} max={4} /></p>}
+      <ul className={`ingredients${stock ? ' has-stock' : ''}`}>
         {ingredients.map((i) => (
           <li key={i.id} className={i.optional ? 'is-optional' : ''}>
             <span className="ingredients__qty">{formatQuantity(i)}</span>
-            <span>{i.name}{i.optional && <em> (optional)</em>}{i.note && <span className="muted">, {i.note}</span>}</span>
+            <span className="ingredients__name">{i.name}{i.optional && <em> (optional)</em>}{i.note && <span className="muted">, {i.note}</span>}</span>
+            {stock && <IngredientStock status={stock.get(i.id)} soon={soon.has(i.id)} />}
           </li>
         ))}
       </ul>
@@ -184,10 +192,9 @@ const header = (
       </div>
       <div className="tabpanel" role="tabpanel" {...swipe}>
         {activeTab === 'Zutaten' && ingredientsPanel}
-        {activeTab === 'Zubereitung' && stepsPanel}
+        {activeTab === 'Schritte' && stepsPanel}
         {activeTab === 'Nährwerte' && <><NutritionDetails n={n} servings={servings} /><UnknownIngredients n={n} /></>}
-        {activeTab === 'Notizen' && <Notes recipe={recipe} />}
-        {activeTab === 'Infos' && <Infos recipe={recipe} />}
+        {activeTab === 'Notizen' && <><Notes recipe={recipe} /><h3 className="h3">Über das Rezept</h3><Infos recipe={recipe} /></>}
       </div>
     </>
   );
@@ -353,5 +360,22 @@ function Infos({ recipe }: { recipe: Recipe }) {
         </ol>
       </details>
     </div>
+  );
+}
+
+/** Aktionsmenü oben rechts – Escape schließt, der Fokus springt hinein und zurück. */
+function MenuPanel({ onClose, children }: { onClose: () => void; children: ReactNode }) {
+  const ref = useSheet(onClose);
+  return <div className="menu" role="menu" ref={ref}>{children}</div>;
+}
+
+/** Rechts an der Zutat: ✓ da · „reicht nicht“ · „fehlt“ – und die Uhr, wenn sie bald weg muss. Grundvorrat: nichts. */
+function IngredientStock({ status, soon }: { status?: Stock; soon: boolean }) {
+  if (!status || status === 'basis') return <span />;
+  return (
+    <span className={`ing-stock ing-stock--${status}`}>
+      {soon && <span className="ing-stock__soon" role="img" aria-label="muss bald weg" title="muss bald weg"><Icon name="clock" size={13} /></span>}
+      {status === 'da' ? <span role="img" aria-label="da"><Icon name="check" size={14} /></span> : status === 'knapp' ? 'reicht nicht' : 'fehlt'}
+    </span>
   );
 }

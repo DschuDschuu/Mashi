@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useSheet } from '../useSheet';
 import { isValidEan } from '../../domain/nutrition/openFoodFacts';
 import { Icon } from './Icon';
 
@@ -55,10 +56,11 @@ export function BarcodeScanner({ onCode, onClose }: { onCode: (ean: string) => v
     };
   }, []);
 
+  const sheetRef = useSheet(onClose);
   const code = typed.replace(/\D/g, '');
   return (
     <div className="sheet-backdrop" onClick={onClose}>
-      <div className="sheet scanner" role="dialog" aria-modal="true" aria-label="Barcode scannen" onClick={(e) => e.stopPropagation()}>
+      <div className="sheet scanner" role="dialog" aria-modal="true" aria-label="Barcode scannen" onClick={(e) => e.stopPropagation()} ref={sheetRef}>
         <div className="sheet__grip" />
         <h2 className="sheet__title">Barcode scannen</h2>
         {DetectorImpl && <video ref={video} className="scanner__video" muted playsInline />}

@@ -310,9 +310,9 @@ p { margin: 0; }
 .status-card strong { color: var(--ink); display: inline-flex; align-items: center; gap: 6px; }
 .status-card strong svg { color: var(--art); }
 
-.tabs { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; border-bottom: 1px solid var(--line); margin: 6px calc(-1 * var(--gutter)) 0; padding: 0 var(--gutter); position: sticky; top: 0; background: var(--bg); z-index: 4; }
+.tabs { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; border-bottom: 1px solid var(--line); margin: 6px calc(-1 * var(--gutter)) 0; padding: 0 var(--gutter); position: sticky; top: 0; background: var(--bg); z-index: 4; }
 .tabs::-webkit-scrollbar { display: none; }
-.tab { padding: 12px 12px; font-weight: 700; color: var(--ink-3); white-space: nowrap; border-bottom: 2px solid transparent; margin-bottom: -1px; font-size: 0.95rem; }
+.tab { padding: 12px 10px; font-weight: 700; color: var(--ink-3); white-space: nowrap; border-bottom: 2px solid transparent; margin-bottom: -1px; font-size: 0.95rem; }
 .tab.is-on { color: var(--ink); border-color: var(--primary); }
 .tabpanel { padding-top: 6px; display: flex; flex-direction: column; gap: 14px; min-height: 240px; }
 
@@ -324,7 +324,15 @@ p { margin: 0; }
 .ingredients { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
 .ingredients li { display: grid; grid-template-columns: 76px 1fr; gap: 12px; padding: 5px 0; font-size: 0.95rem; }
 .ingredients__qty { font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
-.ingredients li > span:last-child { color: var(--ink-2); }
+.ingredients__name { color: var(--ink-2); }
+/* mit Speisekammer: dritte Spalte „da / fehlt“ */
+.ingredients.has-stock li { grid-template-columns: 76px 1fr auto; align-items: baseline; }
+.ingredients__stock { margin: 0; }
+.ing-stock { display: inline-flex; align-items: center; gap: 4px; font-size: 0.75rem; font-weight: 600; white-space: nowrap; }
+.ing-stock--da { color: var(--primary); }
+.ing-stock--knapp { color: #9a5a2f; }
+.ing-stock--fehlt { color: var(--ink-3); }
+.ing-stock__soon { color: #9a5a2f; display: inline-grid; }
 .ingredients em { font-style: normal; color: var(--ink-3); font-size: 0.85rem; }
 
 /* Schritte wie im Bild: gefüllte Petrol-Kreise, weiße Zahl */
@@ -458,7 +466,7 @@ p { margin: 0; }
    Breite muss zu TABLET_QUERY in ui/useMediaQuery.ts passen.
    ═════════════════════════════════════════════════════════════ */
 @media (min-width: 768px) {
-  :root { --gutter: 32px; --rail: 92px; }
+  :root { --gutter: 32px; --rail: 100px; } /* breit genug für „Speisekammer“ und „Einstellungen“ */
   body { background: var(--bg); }
   .app { max-width: none; box-shadow: none; }
   .app--nav { padding-left: var(--rail); }
@@ -585,7 +593,11 @@ p { margin: 0; }
 .backup-preview__list { margin: 0; padding-left: 18px; font-size: 0.9rem; }
 
 /* ── Meine Produkte ──────────────────────────────────────────── */
-.product { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); flex-wrap: wrap; }
+.product { display: flex; flex-direction: column; gap: 4px; padding: 10px 0; border-top: 1px solid var(--line); }
+.product__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.product__head > strong { flex: 1; min-width: 0; padding-top: 6px; }
+.product__actions { display: flex; gap: 2px; flex: none; margin: 0 -6px 0 0; }
+.product__kcal em { font-style: normal; color: var(--ink-3); font-size: 0.85rem; }
 .product:first-of-type { border-top: 0; }
 .product__main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .product__main em { font-style: normal; color: var(--ink-3); }
@@ -670,32 +682,39 @@ p { margin: 0; }
 
 /* ── Wochenplan: gekocht ─────────────────────────────────────── */
 .plan-cooked {
-  flex: none; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%;
-  border: 1.5px solid var(--line); color: transparent;
+  flex: none; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%;
+  border: 1.5px solid var(--line); color: var(--ink-3); opacity: 0.75; position: relative;
 }
+/* Tippfläche 44 px, auch wenn der Kreis kleiner aussieht */
+.plan-cooked::after { content: ''; position: absolute; inset: -4px; }
+.plan-cooked.is-on { opacity: 1; }
 .plan-cooked.is-on { background: var(--green); border-color: var(--green); color: #fff; }
 .plan-list .is-cooked .list__title { text-decoration: line-through; color: var(--ink-3); }
 .plan-list .is-cooked .rimg { opacity: 0.55; }
 
 /* ── Speisekammer ────────────────────────────────────────────── */
-.pantry { list-style: none; margin: 0; padding: 0; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); }
-.pantry__item { display: flex; align-items: center; gap: 8px; padding: 4px 6px 4px 14px; border-top: 1px solid var(--line); }
+/* Vorräte ohne weißen Kasten, nur Trennlinien – die weißen Kacheln darunter (Wochenplan, Verwalten) heben sich so ab */
+.pantry { list-style: none; margin: 0; padding: 0; }
+.pantry__item { display: flex; align-items: center; gap: 8px; padding: 4px 0 4px 2px; border-top: 1px solid var(--line); }
 .pantry__item:first-child { border-top: 0; }
 .pantry__hit { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; min-height: 44px; text-align: left; }
 .pantry__name { flex: 1; min-width: 0; font-weight: 600; overflow-wrap: anywhere; }
 .pantry__qty { color: var(--ink-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
-.pantry__item--edit { flex-wrap: wrap; padding: 10px 12px; background: var(--surface-2); }
+.pantry__item--edit { flex-wrap: wrap; padding: 10px 12px; background: var(--surface-2); border-radius: var(--r-sm); }
 .pantry__item--edit > input { flex: 1 1 160px; }
 .pantry-amount { display: flex; gap: 6px; }
 .pantry-amount input { width: 96px; }
 .pantry-amount select { width: auto; }
 .pantry-check { flex-wrap: wrap; }
 .pantry-check .list__title { flex: 1 1 120px; padding-left: 6px; }
-.learned summary { cursor: pointer; font-weight: 700; }
-.learned__list { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-.learned__list li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.learned__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+/* zweizeilig: oben der Bon-Name, darunter die Übersetzung – „Vergessen“ immer rechts */
+.learned__list li { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; align-items: center; padding: 6px 0; border-top: 1px solid var(--line); }
+.learned__list li:first-child { border-top: 0; }
+.learned__list li > .learned__bon { grid-column: 1; overflow-wrap: anywhere; }
+.learned__list li > .small { grid-column: 1; }
 .learned__bon { font-family: ui-monospace, Consolas, monospace; font-size: 0.85rem; }
-.learned__list .link { margin-left: auto; font-size: 0.82rem; }
+.learned__list .link { grid-column: 2; grid-row: 1 / span 2; font-size: 0.82rem; }
 
 /* ── Kassenbon prüfen ────────────────────────────────────────── */
 .bonrows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
@@ -725,15 +744,14 @@ p { margin: 0; }
 .plan-list__servings > span { display: none; }
 @container (max-width: 480px) {
   .plan-list .list__item {
-    display: grid; grid-template-columns: 30px minmax(0, 1fr) auto;
-    grid-template-areas: "check hit remove" ". servings servings";
-    column-gap: 10px; row-gap: 4px;
+    display: grid; grid-template-columns: 36px minmax(0, 1fr) auto;
+    grid-template-areas: "check hit remove" "check hit servings";
+    column-gap: 10px; row-gap: 2px; align-items: center;
   }
   .plan-list .plan-cooked { grid-area: check; }
   .plan-list .plan-list__hit { grid-area: hit; }
-  .plan-list .iconbtn { grid-area: remove; }
-  .plan-list__servings { grid-area: servings; }
-  .plan-list__servings > span { display: inline; }
+  .plan-list .iconbtn { grid-area: remove; justify-self: end; }
+  .plan-list__servings { grid-area: servings; justify-self: end; }
   .plan-list .list__title { overflow-wrap: normal; }
 }
 
@@ -758,12 +776,15 @@ p { margin: 0; }
   border-radius: var(--r-lg); box-shadow: var(--shadow); overflow: hidden;
 }
 .bigcard__media { display: block; width: 100%; }
-.bigcard__media .rimg { aspect-ratio: 4 / 3; }
+/* flacher als 4:3, damit die Kurzwege darunter auf den ersten Blick zu sehen sind */
+.bigcard__media .rimg { aspect-ratio: 16 / 9; }
 .bigcard__body { flex: 1; display: flex; flex-direction: column; gap: 6px; padding: 14px 16px 16px; }
 .bigcard__title { margin: 0; font-size: 1.12rem; line-height: 1.25; }
 .bigcard__body .row-gap { margin-top: auto; padding-top: 6px; }
-.swiper__dots { display: flex; justify-content: center; gap: 8px; }
-.swiper__dot { width: 8px; height: 8px; border-radius: 50%; background: var(--line); padding: 0; }
+.swiper__dots { display: flex; justify-content: center; gap: 14px; }
+.swiper__dot { width: 8px; height: 8px; border-radius: 50%; background: var(--line); padding: 0; position: relative; }
+/* sieht klein aus, lässt sich aber bequem antippen (ca. 24 × 24 px) */
+.swiper__dot::after { content: ''; position: absolute; inset: -8px -7px; }
 .swiper__dot.is-on { background: var(--primary); width: 20px; border-radius: 999px; }
 @media (min-width: 768px) {
   .swiper { grid-auto-columns: minmax(0, 420px); margin: 0; padding-inline: 0; }
@@ -869,24 +890,13 @@ p { margin: 0; }
 .useup-banner > svg:first-child { flex: none; color: var(--art); }
 .useup-banner > span { flex: 1; min-width: 0; }
 .useup-hint { margin: 0; font-size: 0.82rem; font-weight: 600; color: #9a5a2f; }
-.pantry__qty { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.25; }
+.pantry__qty--stack { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.25; padding: 4px 0; }
 .pantry__shelf { font-size: 0.75rem; color: var(--ink-3); }
 .pantry__shelf.is-urgent { color: #9a5a2f; font-weight: 700; }
 .pantry-date { display: flex; flex-direction: column; gap: 2px; }
 .pantry-date input { border: 1px solid var(--line); background: var(--surface); border-radius: var(--r-sm); padding: 8px 10px; font-size: 0.95rem; }
 
-/* ── Haltbarkeit einstellen ─────────────────────────────────── */
-.shelf__group { border-top: 1px solid var(--line); padding: 8px 0; }
-.shelf__group:first-of-type { margin-top: 8px; }
-.shelf__group > summary { cursor: pointer; display: flex; justify-content: space-between; gap: 10px; font-weight: 600; }
-.shelf__rows { display: grid; gap: 6px; padding: 8px 0 4px; }
-.shelf__row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.shelf__input { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-3); font-size: 0.9rem; }
-.shelf__input input { width: 4em; text-align: right; }
-.shelf__group > summary { list-style: none; }
-.shelf__group > summary::-webkit-details-marker { display: none; }
-.shelf__group > summary > span:first-child::before { content: '▸'; display: inline-block; width: 1.1em; color: var(--ink-3); }
-.shelf__group[open] > summary > span:first-child::before { content: '▾'; }
+
 
 /* ── MHD-Ware, Gefroren, Rezeptidee ─────────────────────────── */
 .savings__tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
@@ -904,3 +914,100 @@ p { margin: 0; }
 .shopping__row { display: flex; align-items: center; gap: 12px; min-height: 46px; }
 .shopping__item.is-have .shopping__name { color: var(--ink-2); }
 .shopping__undo { display: block; margin: -6px 0 8px 34px; font-size: 0.8rem; }
+.stepper--sm button { width: 32px; height: 32px; }
+.stepper--sm output { min-width: 22px; font-size: 0.95rem; }
+.sheet__title--sub { margin-top: 16px; }
+.link-row { display: flex; flex-direction: row; align-items: center; gap: 12px; width: 100%; text-align: left; }
+.link-row > svg:first-child { color: var(--art); flex: none; }
+.link-row__text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.link-row__text small { font-size: 0.8rem; }
+/* Zahnrad: dezent oben rechts auf der Startseite (Farbe wie das Logo); Tablet: unten in der Seitenleiste */
+.settings-btn { display: grid; place-items: center; width: 44px; height: 44px; color: var(--art); opacity: 0.7; }
+.settings-btn:active { opacity: 1; }
+.home-head__settings { position: absolute; right: -6px; top: 8px; }
+.nav__settings { display: none; }
+@media (min-width: 768px) {
+  .nav__settings { display: flex; margin-top: auto; }
+  .settings-btn { display: none; }
+}
+/* „Speisekammer“ ist das längste Wort in der Leiste – auf schmalen Handys (360 px) etwas enger setzen */
+@media (max-width: 380px) { .nav__item span { font-size: 0.64rem; letter-spacing: -0.01em; } }
+.home-rows { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
+.home-row {
+  display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+  padding: 12px 14px; border-radius: var(--r); background: var(--mint); color: var(--ink); font-size: 0.9rem;
+}
+.home-row > svg:first-child { flex: none; color: var(--art); }
+.home-row > span { flex: 1; min-width: 0; }
+/* Produktformular: Packungsgröße (Zahl + Einheit) und Preis brauchen auf dem Handy je eine eigene Zeile */
+@media (max-width: 520px) { .product-form__pack { grid-template-columns: 1fr; } }
+@media (max-width: 520px) { .product-form__pack .pantry-amount input { flex: 1; width: auto; min-width: 0; } }
+
+/* ── Aufklappbare Kacheln (Haltbarkeit, Gelernte Bon-Artikel) – Kopf wie „Meine Produkte“ ── */
+.fold { gap: 12px; }
+/* zugeklappt nimmt der unsichtbare Inhalt sonst noch einen Abstand ein – gleiche Höhe wie „Meine Produkte“ */
+.fold:not([open]) { gap: 0; }
+.fold__head { display: flex; align-items: center; gap: 12px; cursor: pointer; list-style: none; }
+.fold__head::-webkit-details-marker { display: none; }
+.fold__head > svg:first-child { color: var(--art); flex: none; }
+.fold__text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.fold__text small { font-size: 0.8rem; }
+.fold__chevron { flex: none; transition: transform 0.15s; }
+/* zu: Pfeil nach rechts (wie „Meine Produkte“), offen: nach unten */
+.fold[open] .fold__chevron { transform: rotate(90deg); }
+.fold > p { margin: 0; }
+
+/* ── Haltbarkeit einstellen ─────────────────────────────────── */
+.shelf__special { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.shelf__tile { display: flex; flex-direction: column; justify-content: space-between; gap: 8px; padding: 10px; border-radius: var(--r-sm); background: var(--bg); min-width: 0; }
+.shelf__tile-label { font-size: 0.78rem; font-weight: 600; color: var(--ink-2); line-height: 1.25; }
+.shelf__tile .days-field { align-self: flex-start; }
+.shelf__groups { display: flex; flex-direction: column; }
+.shelf__group { border-top: 1px solid var(--line); }
+.shelf__group > summary { display: flex; align-items: center; gap: 10px; padding: 11px 0; cursor: pointer; list-style: none; font-weight: 600; }
+.shelf__group > summary::-webkit-details-marker { display: none; }
+.shelf__group > summary > svg:first-child { color: var(--art); flex: none; }
+.shelf__group-name { flex: 1; min-width: 0; }
+.shelf__group-name small { font-weight: 500; }
+.shelf__pill { flex: none; font-size: 0.78rem; font-weight: 700; color: var(--primary-press); background: var(--primary-soft); padding: 3px 9px; border-radius: 999px; }
+.shelf__chevron { flex: none; color: var(--ink-3); transform: rotate(90deg); transition: transform 0.15s; }
+.shelf__group[open] .shelf__chevron { transform: rotate(-90deg); }
+.shelf__rows { display: grid; gap: 4px; padding: 0 0 12px 28px; }
+.shelf__row { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 40px; }
+/* Zahl + Einheit als ein Feld */
+.days-field { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); padding: 0 10px 0 4px; height: 34px; color: var(--ink-3); font-size: 0.82rem; }
+.days-field:focus-within { border-color: var(--primary); }
+.days-field input { width: 2.6em; border: 0; background: transparent; text-align: right; font-weight: 700; font-size: 0.95rem; padding: 0; color: var(--ink); outline: none; }
+.days-field input::placeholder { color: var(--ink-3); font-weight: 600; }
+.days-field.is-own { border-color: var(--primary); background: var(--primary-soft); }
+@media (prefers-reduced-motion: reduce) { .fold__chevron, .shelf__chevron { transition: none; } }
+.shelf__tile .days-field { align-self: stretch; justify-content: center; padding: 0 8px 0 2px; }
+.shelf__tile .days-field input { width: 2.1em; }
+.shelf__row { font-size: 0.92rem; }
+
+/* ── Badge „Bald verbrauchen“ auf geplanten Gerichten ─────────── */
+.bigcard__media { position: relative; }
+.img-badged { position: relative; flex: none; display: block; }
+.useup-badge {
+  position: absolute; top: 10px; right: 10px; display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 10px 4px 8px; border-radius: 999px; background: var(--peach); color: #9a5a2f;
+  font-size: 0.76rem; font-weight: 700; box-shadow: 0 1px 4px rgb(0 0 0 / 0.08);
+}
+.useup-badge--dot { top: -5px; right: -5px; width: 22px; height: 22px; padding: 0; justify-content: center; border: 2px solid var(--surface); }
+/* ── Für den Wochenplan (reserviert) ─────────────────────────── */
+.fold__alert { flex: none; color: #c0392b; display: grid; }
+.planned__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.planned__dish { display: flex; flex-direction: column; gap: 3px; width: 100%; text-align: left; padding: 10px 12px; border-radius: var(--r-sm); background: var(--bg); }
+.planned__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.planned__head strong { min-width: 0; }
+.planned__soon { flex: none; display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; background: var(--peach); color: #9a5a2f; font-size: 0.72rem; font-weight: 700; }
+.pantry-reserved { margin: 0; width: 100%; }
+/* ── Speisekammer: „Verwalten“ abgesetzt von den Vorräten ───── */
+.manage { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; padding-top: 18px; border-top: 1px solid var(--line); }
+.manage__title { margin: 0 0 2px; font-size: 0.78rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); }
+/* „Alles da“ / „Fehlt: …“ */
+.stock-line { display: inline-flex; align-items: center; gap: 4px; font-size: 0.8rem; color: #9a5a2f; line-height: 1.3; }
+.stock-line.is-ok { color: var(--primary-press); font-weight: 600; }
+.stock-line--list { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; }
+.card__meta--split { justify-content: space-between; gap: 8px; }
+.card__meta--split > span { display: inline-flex; align-items: center; gap: 4px; min-width: 0; }

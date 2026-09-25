@@ -6,12 +6,17 @@ import { addToPlan, usePlan, useRecipes } from '../../data/store';
 import { navigate } from '../../router';
 import { Empty } from '../components/Controls';
 import { Icon } from '../components/Icon';
+import { UseUpBadge } from '../components/UseUpBadge';
+import { StockLine } from '../components/StockLine';
+import type { Stock } from '../../domain/pantry';
+import { SettingsButton } from '../components/SettingsButton';
 import { RecipeImage } from '../components/RecipeImage';
 import { formatMinutes, kcalLabel, portionCount } from '../format';
 import { toast } from '../toast';
 import { recipeNutrition } from '../useNutrition';
 import { expiryLabel } from '../../domain/shelfLife';
 import { useUseUp } from '../useUseUp';
+import { useShoppingCount } from '../useShoppingCount';
 
 /**
  * Startseite: nur das, was heute ansteht. Geplantes als große Karten zum Wischen –
@@ -21,11 +26,13 @@ export function StartScreen() {
   const recipes = useRecipes().filter((r) => !r.archivedAt);
   const plan = usePlan();
 
+  const { expiring: all, usingUp, planned: reserved, plannedUseUp } = useUseUp();
+  // Was bald weg muss, zuerst kochen – sonst bleibt die Reihenfolge wie im Plan (sort ist stabil)
   const planned = plan.items
     .filter((i) => !plan.cooked.includes(i.recipeId)) // schon Gekochtes ist erledigt
     .map((i) => ({ recipe: recipes.find((r) => r.id === i.recipeId), servings: i.servings }))
-    .filter((i): i is { recipe: Recipe; servings: number } => !!i.recipe);
-  const { expiring: all, usingUp } = useUseUp();
+    .filter((i): i is { recipe: Recipe; servings: number } => !!i.recipe)
+    .sort((a, b) => Number(plannedUseUp.has(b.recipe.id)) - Number(plannedUseUp.has(a.recipe.id)));
   // Jeder Name nur einmal – die Liste ist nach Dringlichkeit sortiert, der dringendste Eintrag bleibt
   const expiring = all.filter((e, i) => all.findIndex((o) => o.item.name === e.item.name) === i);
   const daily = recipeOfTheDay(recipes, new Date(), new Set(usingUp.keys()));
@@ -37,13 +44,14 @@ export function StartScreen() {
         <Icon name="heart" size={18} className="logo-heart" />
         <Icon name="sparkles" size={20} className="home-head__spark home-head__spark--a" />
         <Icon name="sparkles" size={14} className="home-head__spark home-head__spark--b" />
+        <SettingsButton className="home-head__settings" />
       </header>
       {expiring.length > 0 && (
         <button className="useup-banner" onClick={() => navigate('/reste')}>
           <Icon name="clock" size={18} />
           <span>
             <strong>Bald verbrauchen:</strong>{' '}
-            {expiring.slice(0, 3).map((e) => `${e.item.name} (${expiryLabel(e)})`).join(', ')}
+            {expiring.slice(0, 3).map((e) => `${e.item.name} (${expiryLabel(e)}${reserved.has(e.item.id) ? ', eingeplant' : ''})`).join(', ')}
             {expiring.length > 3 ? ` und ${expiring.length - 3} mehr` : ''}
           </span>
           <Icon name="chevron" size={16} />
@@ -66,16 +74,47 @@ export function StartScreen() {
         </section>
       ) : (
         <Empty icon="book">
-          Noch keine Rezepte im Kochbuch. Leg über ＋ eins an oder spiel eine Sicherung ein (Mehr → Sicherung).
+          Noch keine Rezepte im Kochbuch. Leg über ＋ eins an oder spiel eine Sicherung ein (Zahnrad oben → Sicherung).
         </Empty>
       )}
+      <Shortcuts />
     </main>
+  );
+}
+
+/**
+ * Hinweise unten – nur, wenn sie gerade passen: noch etwas einzukaufen, oder die Woche ist durchgekocht.
+ * Sonst bleibt die Startseite bei Banner und Karte.
+ */
+function Shortcuts() {
+  const toBuy = useShoppingCount();
+  const plan = usePlan();
+  const allCooked = plan.items.length > 0 && plan.items.every((i) => plan.cooked.includes(i.recipeId));
+  if (!toBuy && !allCooked) return null;
+  return (
+    <div className="home-rows">
+      {toBuy > 0 && (
+        <button className="home-row" onClick={() => navigate('/einkauf')}>
+          <Icon name="cart" size={18} />
+          <span><strong>Einkaufsliste</strong> · {toBuy} offen</span>
+          <Icon name="chevron" size={16} />
+        </button>
+      )}
+      {allCooked && (
+        <button className="home-row" onClick={() => navigate('/plan')}>
+          <Icon name="calendar" size={18} />
+          <span><strong>Alles gekocht</strong> – neue Woche planen?</span>
+          <Icon name="chevron" size={16} />
+        </button>
+      )}
+    </div>
   );
 }
 
 /** Geplante Gerichte nebeneinander – wischen, oder über die Punkte springen. */
 function Swiper({ items }: { items: { recipe: Recipe; servings: number }[] }) {
   const track = useRef<HTMLUListElement>(null);
+  const { plannedUseUp, dishStock } = useUseUp();
   const [active, setActive] = useState(0);
 
   /** Abstand von einer Karte zur nächsten: Kartenbreite + Lücke (gap: 14px im CSS) */
@@ -104,14 +143,14 @@ function Swiper({ items }: { items: { recipe: Recipe; servings: number }[] }) {
       <ul className={`swiper${items.length === 1 ? ' swiper--single' : ''}`} ref={track} aria-label="Geplante Gerichte">
         {items.map(({ recipe, servings }) => (
           <li key={recipe.id} className="swiper__slide">
-            <BigCard recipe={recipe} servings={servings} />
+            <BigCard recipe={recipe} servings={servings} badge={plannedUseUp.get(recipe.id)} stock={dishStock.get(recipe.id)} />
           </li>
         ))}
       </ul>
       {items.length > 1 && (
-        <div className="swiper__dots" role="tablist" aria-label="Gericht wählen">
+        <div className="swiper__dots" role="group" aria-label="Gericht wählen">
           {items.map(({ recipe }, i) => (
-            <button key={recipe.id} role="tab" aria-selected={i === active} aria-label={currentContent(recipe).title}
+            <button key={recipe.id} aria-current={i === active ? 'true' : undefined} aria-label={`${i + 1} von ${items.length}: ${currentContent(recipe).title}`}
               className={`swiper__dot${i === active ? ' is-on' : ''}`} onClick={() => goTo(i)} />
           ))}
         </div>
@@ -121,13 +160,16 @@ function Swiper({ items }: { items: { recipe: Recipe; servings: number }[] }) {
 }
 
 /** Großes Bild, darunter Titel, Eckdaten und „Kochen“. Tippen aufs Bild öffnet das Rezept. */
-function BigCard({ recipe, servings, daily = false, hint }: { recipe: Recipe; servings: number; daily?: boolean; hint?: string[] }) {
+function BigCard({ recipe, servings, daily = false, hint, badge, stock }: {
+  recipe: Recipe; servings: number; daily?: boolean; hint?: string[]; badge?: string[]; stock?: Map<string, Stock>;
+}) {
   const c = currentContent(recipe);
   const kcal = kcalLabel(recipeNutrition(recipe));
   return (
     <article className="bigcard">
       <button className="bigcard__media" onClick={() => navigate(`/rezept/${recipe.id}`)} aria-label={`${c.title} öffnen`}>
         <RecipeImage image={recipe.image} size="lg" />
+        {badge && <UseUpBadge names={badge} />}
       </button>
       <div className="bigcard__body">
         <h3 className="bigcard__title">{c.title}</h3>
@@ -135,6 +177,7 @@ function BigCard({ recipe, servings, daily = false, hint }: { recipe: Recipe; se
         <p className="small muted">
           {[portionCount(servings), formatMinutes(totalMinutes(c)), kcal && `${kcal} pro Portion`].filter(Boolean).join(' · ')}
         </p>
+        <StockLine content={c} stock={stock} />
         <div className="row-gap">
           <button className="btn btn--primary btn--sm" onClick={() => navigate(`/rezept/${recipe.id}/kochen?p=${servings}`)}>
             <Icon name="play" size={16} filled /> Kochen

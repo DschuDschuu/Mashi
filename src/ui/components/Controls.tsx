@@ -4,9 +4,9 @@ import { DEVICES } from '../../domain/catalog';
 import { deviceIcon } from '../catalogIcons';
 import { Icon, type IconName } from './Icon';
 
-export function Stepper({ value, min = 1, max = 24, onChange, label }: { value: number; min?: number; max?: number; onChange: (v: number) => void; label: string }) {
+export function Stepper({ value, min = 1, max = 24, onChange, label, small = false }: { value: number; min?: number; max?: number; onChange: (v: number) => void; label: string; small?: boolean }) {
   return (
-    <div className="stepper" role="group" aria-label={label}>
+    <div className={`stepper${small ? ' stepper--sm' : ''}`} role="group" aria-label={label}>
       <button type="button" onClick={() => onChange(Math.max(min, value - 1))} disabled={value <= min} aria-label="Weniger">
         <Icon name="minus" size={18} />
       </button>
