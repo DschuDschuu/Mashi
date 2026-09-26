@@ -18,7 +18,6 @@ import { groupByKind } from '../foodGroups';
 import { useUseUp } from '../useUseUp';
 import { PantryMatchList, RecipeIdeaPanel } from '../components/PantryMatches';
 import { ShelfSettings } from '../components/ShelfSettings';
-import { BasicsSettings, NoNutritionSettings } from '../components/BasicsSettings';
 import { ProductsLink } from '../components/ProductsLink';
 import { TileSummary } from '../components/TileSummary';
 import { toast } from '../toast';
@@ -185,8 +184,6 @@ export function PantryScreen() {
             <h2 className="manage__title" id="manage-title">Verwalten</h2>
             <ProductsLink />
             <ShelfSettings />
-            <BasicsSettings />
-            <NoNutritionSettings />
 
             {pantry.rules.length > 0 && (
               <details className="panel fold learned">

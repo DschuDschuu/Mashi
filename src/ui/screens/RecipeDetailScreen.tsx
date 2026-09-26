@@ -6,11 +6,13 @@ import type { Stock } from '../../domain/pantry';
 import { categoryInfo, deviceInfo, DIFFICULTY_LABEL, SOURCE_INFO, STATUS_INFO } from '../../domain/catalog';
 import { currentContent, currentVersion, originalVersion } from '../../domain/recipe';
 import { formatQuantity, scaleIngredients } from '../../domain/scaling';
+import { orderByUse } from '../../domain/stepIngredients';
 import type { Recipe, RecipeContent } from '../../domain/types';
 import { describeChange, diffContent } from '../../domain/versions';
 import {
-  addToPlan, adoptToCookbook, archiveRecipe, deleteRecipe, regenerateImage, setStatus, toggleFavorite, updateNotes, usePlan, useRecipe,
+  addToPlan, adoptToCookbook, archiveRecipe, deleteRecipe, markCooked, regenerateImage, setStatus, toggleFavorite, togglePlanCooked, updateNotes, usePlan, useRecipe,
 } from '../../data/store';
+import { cookedToast } from '../cookedToast';
 import { goBack, navigate } from '../../router';
 import { Empty, Stars, Stepper } from '../components/Controls';
 import { Icon } from '../components/Icon';
@@ -76,7 +78,8 @@ function Detail({ recipe }: { recipe: Recipe }) {
     setServings(null);
   }, [c.servings]);
 
-  const ingredients = scaleIngredients(c, servings);
+  // Reihenfolge wie beim Kochen: was im ersten Schritt gebraucht wird, zuerst
+  const ingredients = orderByUse(scaleIngredients(c, servings), c.steps);
   const { stock, soon } = useRecipeStock(recipe, servings);
   const rating = recipe.feedback.length
     ? { avg: recipe.feedback.reduce((s, f) => s + f.rating, 0) / recipe.feedback.length, count: recipe.feedback.length }
@@ -122,7 +125,7 @@ const header = (
         {recipe.source === 'ki' && recipe.status === 'kochbuch' && <span className="muted small">Ursprünglich mit KI erstellt</span>}
       </div>
       <h1 className="detail__title">{c.title}</h1>
-      {c.tags.length > 0 && <p className="detail__tags">{c.tags.join(' · ')}</p>}
+      {(c.tags ?? []).length > 0 && <p className="detail__tags">{c.tags.join(' · ')}</p>}
       {c.description && <p className="detail__desc">{c.description}</p>}
 
       <div className="facts">
@@ -137,7 +140,12 @@ const header = (
       <NutritionTiles n={n} />
       <CostLine content={c} servings={servings} />
 
-      {!recipe.archivedAt && recipe.status !== 'ki_entwurf' && <PlanButton recipe={recipe} servings={servings} />}
+      {!recipe.archivedAt && recipe.status !== 'ki_entwurf' && (
+        <div className="plan-chips">
+          <PlanButton recipe={recipe} servings={servings} />
+          <CookedButton recipe={recipe} servings={servings} />
+        </div>
+      )}
       <StatusAction recipe={recipe} />
     </>
   );
@@ -260,6 +268,38 @@ function CostLine({ content, servings }: { content: RecipeContent; servings: num
   );
 }
 
+/**
+ * „Gekocht“ auch ohne Kochmodus: zieht die Zutaten aus dem Vorrat ab (mit „Rückgängig“) und merkt das Datum.
+ * Steht das Rezept im Plan, ist es derselbe Haken wie dort (auch zurücknehmbar).
+ * Sonst: nach dem Kochen „Heute gekocht“ – ein zweites Antippen zöge die Zutaten doppelt ab.
+ */
+function CookedButton({ recipe, servings }: { recipe: Recipe; servings: number }) {
+  const plan = usePlan();
+  const prompt = useVariantPrompt();
+  const planned = plan.items.some((i) => i.recipeId === recipe.id);
+  if (planned) {
+    const done = plan.cooked.includes(recipe.id);
+    return (
+      <button className={`plan-chip${done ? ' is-on' : ''}`} aria-pressed={done}
+        aria-label={done ? 'Gekocht – antippen, um es zurückzunehmen' : 'Als gekocht markieren'}
+        onClick={() => cookedToast(togglePlanCooked(recipe.id))}>
+        <Icon name={done ? 'check' : 'pot'} size={16} /> Gekocht
+      </button>
+    );
+  }
+  const today = !!recipe.lastCookedAt && new Date(recipe.lastCookedAt).toDateString() === new Date().toDateString();
+  if (today) return <span className="plan-chip is-on"><Icon name="check" size={16} /> Heute gekocht</span>;
+  return (
+    <>
+      <button className="plan-chip" aria-label="Als gekocht markieren"
+        onClick={() => prompt.ask(currentContent(recipe), undefined, (pick) => cookedToast(markCooked(recipe.id, servings, {}, pick)))}>
+        <Icon name="pot" size={16} /> Gekocht
+      </button>
+      {prompt.sheet}
+    </>
+  );
+}
+
 /** Für Meal Prep: mit der eingestellten Portionszahl in „Diese Woche“ aufnehmen. */
 function PlanButton({ recipe, servings }: { recipe: Recipe; servings: number }) {
   const inPlan = usePlan().items.find((i) => i.recipeId === recipe.id);
@@ -290,7 +330,8 @@ function StatusAction({ recipe }: { recipe: Recipe }) {
     case 'ki_entwurf':
       return (
         <div className="status-card tint-sky">
-          <p><strong><Icon name="sparkles" size={18} />Das ist eine KI-Idee.</strong> Sie ist noch nicht in deinem Kochbuch. Möchtest du sie ausprobieren?</p>
+          <p className="status-card__title"><Icon name="sparkles" size={18} />Das ist eine KI-Idee</p>
+          <p>Sie ist noch nicht in deinem Kochbuch. Möchtest du sie ausprobieren?</p>
           <div className="row-gap">
             <button className="btn btn--primary" onClick={() => { setStatus(recipe.id, 'zum_testen'); toast('Zum Testen vorgemerkt'); }}>Zum Testen vormerken</button>
             <button className="btn btn--ghost" onClick={() => { const undo = deleteRecipe(recipe.id); toast('Idee verworfen', { label: 'Rückgängig', run: undo }); goBack('/kochbuch'); }}>Verwerfen</button>
@@ -300,14 +341,16 @@ function StatusAction({ recipe }: { recipe: Recipe }) {
     case 'zum_testen':
       return (
         <div className="status-card tint-peach">
-          <p><strong><Icon name="flask" size={18} />Zum Testen.</strong> Koch es und sag danach, wie es war – Anpassungen inklusive.</p>
+          <p className="status-card__title"><Icon name="flask" size={18} />Zum Testen</p>
+          <p>Koch es und sag danach, wie es war – Anpassungen inklusive.</p>
           <button className="btn btn--primary" onClick={() => navigate(`/rezept/${recipe.id}/test`)}>Rezept testen</button>
         </div>
       );
     case 'bewaehrt':
       return (
         <div className="status-card tint-rose">
-          <p><strong><Icon name="heart" size={18} />Bewährt!</strong> Wenn alles passt, wird diese Fassung deine persönliche Kochbuch-Version.</p>
+          <p className="status-card__title"><Icon name="heart" size={18} />Bewährt!</p>
+          <p>Wenn alles passt, wird diese Fassung deine persönliche Kochbuch-Version.</p>
           <div className="row-gap">
             <button className="btn btn--primary" onClick={() => { adoptToCookbook(recipe.id); toast('Ins Kochbuch übernommen'); }}>Ins Kochbuch übernehmen</button>
             <button className="btn btn--ghost" onClick={() => navigate(`/rezept/${recipe.id}/test`)}>Nochmal testen</button>
@@ -351,9 +394,9 @@ function Infos({ recipe }: { recipe: Recipe }) {
   return (
     <div className="stack">
       <dl className="info">
-        <dt>Kategorien</dt><dd>{c.categories.map((x) => categoryInfo(x).label).join(', ') || '–'}</dd>
-        <dt>Geräte</dt><dd className="chips">{c.devices.length ? c.devices.map((d) => <span key={d} className="chip chip--xs"><Icon name={deviceIcon(d)} size={13} />{deviceInfo(d).label}</span>) : "–"}</dd>
-        <dt>Tags</dt><dd className="chips">{c.tags.length ? c.tags.map((t) => <span key={t} className="chip chip--xs">{t}</span>) : "–"}</dd>
+        <dt>Kategorien</dt><dd>{(c.categories ?? []).map((x) => categoryInfo(x).label).join(', ') || '–'}</dd>
+        <dt>Geräte</dt><dd className="chips">{c.devices?.length ? c.devices.map((d) => <span key={d} className="chip chip--xs"><Icon name={deviceIcon(d)} size={13} />{deviceInfo(d).label}</span>) : "–"}</dd>
+        <dt>Tags</dt><dd className="chips">{c.tags?.length ? c.tags.map((t) => <span key={t} className="chip chip--xs">{t}</span>) : "–"}</dd>
         <dt>Quelle</dt><dd>{SOURCE_INFO[recipe.source].label}</dd>
         <dt>Status</dt><dd>{STATUS_INFO[recipe.status].label}</dd>
       </dl>

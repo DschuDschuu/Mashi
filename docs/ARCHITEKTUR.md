@@ -72,15 +72,21 @@ aus den Zutaten berechnet (gecacht je Version).
 
 ```
  ┌──────── Bottom Navigation (Tabs) ─────────┐
- │  Start   Kochbuch   [ ＋ ]    Plan    Mehr │
+ │  Start   Kochbuch   [ ＋ ]  Plan  Speisekammer │
  └───────────────────────┬───────────────────┘
                          └─ Sheet: ✨ Mit KI · ✍️ Eigenes Rezept · 📷 Importieren
 
  #/                       Start
  #/kochbuch?device=…      Kochbuch (Filter als URL → Schnellfilter sind Links)
  #/testen                 KI-Ideen · Zum Testen · Bewährt (über Start erreichbar)
- #/plan                   Wochenplan „Diese Woche“, Vorschläge, Einkaufsliste
- #/mehr                   Archiv, Einstellungen, Meine Produkte, Sync, Sicherung
+ #/plan                   Wochenplan „Diese Woche“, Vorschläge
+ #/einkauf                Einkaufsliste (zieht den Vorrat ab)
+ #/speisekammer           Vorräte, Bald verbrauchen, Verwalten (Haltbarkeit, gelernte Bon-Artikel)
+ #/speisekammer/bon       Kassenbon importieren
+ #/produkte               Meine Lebensmittel: eigene Nährwerte/Produkte, Sorten + Favorit, Immer im Haus, Ohne Nährwerte
+ #/preise                 Preise und Ersparnis
+ #/reste                  Reste verwerten
+ #/mehr                   Einstellungen (Zahnrad): Über Mashi, Archiv, Makro-Ziel, Sicherung, Sync
  #/rezept/:id             Rezeptdetail
  #/rezept/:id/kochen?p=3  Kochmodus (ohne Navigation)
  #/rezept/:id/test        Testfeedback

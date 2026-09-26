@@ -1,12 +1,17 @@
-import { MyProductsPanel } from '../components/MyProductsPanel';
+import { FoodList } from '../components/FoodList';
+import { IngredientNames } from '../components/IngredientNames';
 import { TopBar } from '../components/TopBar';
 
-/** Was du immer in derselben Sorte kaufst – eigene Seite, erreichbar aus Speisekammer und Preisen. */
+/**
+ * „Meine Lebensmittel“: eigene Nährwerte und Produkte, Sorten mit Favorit, „Immer im Haus“ und
+ * „Ohne Nährwerte“ – eine Liste, eine Zeile je Zutat. Erreichbar aus der Speisekammer (Verwalten).
+ */
 export function ProductsScreen() {
   return (
     <main className="screen">
-      <TopBar title="Meine Produkte" backTo="/speisekammer" />
-      <MyProductsPanel />
+      <TopBar title="Meine Lebensmittel" backTo="/speisekammer" />
+      <FoodList />
+      <IngredientNames />
     </main>
   );
 }

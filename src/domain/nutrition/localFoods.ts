@@ -118,7 +118,8 @@ const ROWS: Row[] = [
   ['chiliflocken', ['chiliflocken', 'chili', 'gochugaru'], 280, 12, 50, 14, { negligible: true, portions: { TL: 2, Prise: 0.3 } }],
 ];
 
-const PROVIDER = 'mashi-lokal';
+/** Anbieter-Kennung der eingebauten Tabelle */
+export const PROVIDER = 'mashi-lokal';
 
 /** Art je Lebensmittel. Nicht aufgeführt = keine feste Art (Soßen, Pasten, Hülsenfrüchte, Nüsse …). */
 const KINDS: Record<FoodKind, string[]> = {

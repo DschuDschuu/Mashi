@@ -7,7 +7,6 @@ import { shelfDaysForFood } from '../../domain/shelfLife';
 import { saveProducts, usePantry, useProducts } from '../../data/store';
 import type { ScannedProduct } from '../../domain/nutrition/openFoodFacts';
 import { barcodeLookup } from '../../services';
-import { euro } from '../format';
 import { BarcodeScanner } from './BarcodeScanner';
 import { toast } from '../toast';
 import { Icon } from './Icon';
@@ -29,91 +28,6 @@ const fmt = (n: number) => n.toLocaleString('de-DE', { maximumFractionDigits: 1 
  * „Meine Produkte“: was du immer in einer bestimmten Sorte kaufst. Die Werte vom Etikett
  * ersetzen beim Rechnen die allgemeinen Richtwerte – in allen Rezepten.
  */
-export function MyProductsPanel() {
-  const products = useProducts();
-  const [editing, setEditing] = useState<MyProduct | 'neu' | null>(null);
-
-  const save = (p: MyProduct) => {
-    const exists = products.some((x) => x.id === p.id);
-    saveProducts(exists ? products.map((x) => (x.id === p.id ? p : x)) : [...products, p]);
-    setEditing(null);
-    toast('Gespeichert – alle Rezepte rechnen neu');
-  };
-
-  const remove = (p: MyProduct) => {
-    if (confirm(`„${p.name}“ entfernen? Die Rezepte rechnen dann wieder mit Richtwerten.`)) {
-      saveProducts(products.filter((x) => x.id !== p.id));
-    }
-  };
-
-  const own = products.filter((p) => !p.generic);
-  const generic = products.filter((p) => p.generic);
-  const row = (p: MyProduct) =>
-        editing !== 'neu' && editing?.id === p.id ? (
-          <ProductForm key={p.id} initial={p} onSave={save} onCancel={() => setEditing(null)} />
-        ) : (
-          <div key={p.id} className="product">
-            {/* Knöpfe klein und immer oben rechts – ein langer Name bricht in seiner Spalte um */}
-            <div className="product__head">
-              <strong>{p.name}</strong>
-              <div className="product__actions">
-                <button className="iconbtn iconbtn--sm" aria-label={`${p.name} bearbeiten`} onClick={() => setEditing(p)}>
-                  <Icon name="pencil" size={17} />
-                </button>
-                <button className="iconbtn iconbtn--sm" aria-label={`${p.name} entfernen`} onClick={() => remove(p)}>
-                  <Icon name="trash" size={17} />
-                </button>
-              </div>
-            </div>
-            <div className="product__main">
-              <span className="product__kcal"><strong>{fmt(p.per100g.kcal)} kcal</strong> <em>pro 100 g</em></span>
-              <span className="small muted">{fmt(p.per100g.carbs)} g KH · {fmt(p.per100g.protein)} g Eiweiß · {fmt(p.per100g.fat)} g Fett</span>
-              {p.packageAmount && (
-                <span className="small muted">
-                  Packung: {fmt(p.packageAmount)} {p.packageUnit ?? 'g'}{p.packagePrice !== undefined && <> · {euro(p.packagePrice)}</>}
-                </span>
-              )}
-              {p.shelfDays && <span className="small muted">hält {p.shelfDays === 1 ? '1 Tag' : `${p.shelfDays} Tage`} ab Kauf</span>}
-              {p.ean && <span className="small muted">Barcode: <span className="ean">{p.ean}</span></span>}
-              <span className="small">
-                {p.replaces.length > 0 && <>ersetzt: {p.replaces.map(foodName).join(', ')}</>}
-                {p.replaces.length > 0 && !!p.names?.length && ' · '}
-                {!!p.names?.length && <>gilt für: {p.names.join(', ')}</>}
-              </span>
-            </div>
-          </div>
-        );
-
-  return (
-    <>
-    <div className="panel stack">
-      <p className="muted small">
-        Was du immer in derselben Sorte kaufst. Mashi rechnet dann in allen Rezepten mit deinen Werten vom Etikett statt mit Richtwerten.
-      </p>
-      {own.length === 0 && !editing && <p className="small">Noch keine Produkte.</p>}
-      {own.map(row)}
-
-      {editing === 'neu' ? (
-        <ProductForm onSave={save} onCancel={() => setEditing(null)} />
-      ) : (
-        <button className="btn btn--soft" onClick={() => setEditing('neu')}>
-          <Icon name="plus" size={18} /> Produkt hinzufügen
-        </button>
-      )}
-    </div>
-    {generic.length > 0 && (
-      <div className="panel stack">
-        <h2 className="h3">Eigene Nährwerte</h2>
-        <p className="muted small">Werte für eine Zutat, egal welche Marke – angelegt im Nährwerte-Tab eines Rezepts. Mit Barcode oder Packungsgröße wird daraus ein Produkt.</p>
-        {generic.map(row)}
-      </div>
-    )}
-    </>
-  );
-}
-
-
-
 /**
  * Zutaten, die Mashi in diesem Rezept nicht kennt – mit der Möglichkeit, sie direkt
  * als eigenes Produkt anzulegen (Werte vom Etikett). Danach rechnen alle Rezepte damit.

@@ -23,6 +23,29 @@ export function totalMinutes(content: RecipeContent): number {
 }
 
 /** Tiefe Kopie, damit Versionen sich nie gegenseitig verändern. */
+/**
+ * Gleicher Inhalt? Verglichen wird, was man sieht – nicht, wie es gespeichert ist:
+ * Reihenfolge der Felder egal, fehlende Listen/Texte zählen wie leere, Leerzeichen am Rand zählen nicht.
+ * Sonst entstünde beim Speichern eine neue Version, obwohl sich nichts geändert hat
+ * (z. B. nur das Foto neu, aber im alten Rezept fehlte das Feld „tags“).
+ */
+export function sameContent(a: RecipeContent, b: RecipeContent): boolean {
+  return JSON.stringify(canonical(a)) === JSON.stringify(canonical(b));
+}
+
+function canonical(v: unknown): unknown {
+  if (Array.isArray(v)) return v.map(canonical);
+  if (typeof v === 'string') return v.trim();
+  if (v === null || typeof v !== 'object') return v;
+  const out: Record<string, unknown> = {};
+  for (const k of Object.keys(v).sort()) {
+    const x = canonical((v as Record<string, unknown>)[k]);
+    if (x === undefined || x === null || x === '' || (Array.isArray(x) && x.length === 0)) continue;
+    out[k] = x;
+  }
+  return out;
+}
+
 export function cloneContent(content: RecipeContent): RecipeContent {
   return structuredClone(content);
 }

@@ -3,6 +3,7 @@ import { withMyProducts } from '../../domain/nutrition/myProducts';
 import { leftoverSuggestions, pantryAfterPlan } from '../../domain/pantry';
 import { currentContent } from '../../domain/recipe';
 import { formatAmount, formatQuantity, formatUnitAmount, scaleIngredients } from '../../domain/scaling';
+import { orderByUse } from '../../domain/stepIngredients';
 import type { Ingredient } from '../../domain/types';
 import { markCooked, usePantry, usePlan, useProducts, useRecipe, useRecipes } from '../../data/store';
 import { foodTable } from '../../services';
@@ -45,7 +46,8 @@ export function CookModeScreen({ id, servings, variants }: { id: string; serving
   const base = useMemo(() => {
     if (!recipe) return [];
     const c = currentContent(recipe);
-    return scaleIngredients(c, servings ?? c.servings);
+    // Reihenfolge wie beim Kochen: was im ersten Schritt gebraucht wird, zuerst
+    return orderByUse(scaleIngredients(c, servings ?? c.servings), c.steps);
   }, [recipe, servings]);
   // Reste mitverbrauchen – aber nicht, was andere geplante Gerichte noch brauchen
   const leftovers = useMemo(() => {

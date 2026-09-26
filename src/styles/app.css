@@ -1044,13 +1044,6 @@ p { margin: 0; }
 .missing__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
 .missing__list li { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; border-top: 1px solid var(--line); font-size: 0.92rem; }
 .missing__list li:first-child { border-top: 0; }
-/* Namenslisten (Immer im Haus, Ohne Nährwerte) */
-.namelist__add { display: flex; gap: 8px; }
-.namelist__add input { flex: 1; min-width: 0; }
-.namechip { display: inline-flex; align-items: center; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line); font-size: 0.85rem; }
-.namechip.is-on { border-color: var(--primary); background: var(--primary-soft); }
-.namechip__name { padding: 5px 4px 5px 12px; }
-.namechip__x { display: grid; place-items: center; width: 28px; height: 28px; color: var(--ink-3); }
 .matchlist__toggle { grid-column: 2; justify-self: start; font-size: 0.78rem; }
 .auto-textarea { resize: none; overflow: hidden; }
 
@@ -1116,3 +1109,38 @@ label.btn.is-disabled { opacity: 0.6; pointer-events: none; }
 .matchlist__per strong { color: var(--ink); font-weight: 600; }
 /* Formulare mit fester Speichern-Leiste: unten Platz, damit nichts darunter verschwindet */
 .screen--cta { padding-bottom: calc(96px + var(--safe-b)); }
+
+/* Status-Karten: Titel mit Symbol als eigene Zeile – im Satz stand er höher als der Text */
+.status-card__title { display: flex; align-items: center; gap: 6px; font-weight: 700; color: var(--ink); margin-bottom: -8px; }
+.status-card__title svg { color: var(--art); flex: none; }
+
+/* Meine Lebensmittel – eine Zeile je Zutat, aufklappbar */
+.foods { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.foods__item { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-sm); }
+.foods__item.is-open { border-color: var(--primary-soft); box-shadow: 0 0 0 1px var(--primary-soft); }
+.foods__head { width: 100%; display: flex; align-items: center; gap: 10px; padding: 11px 12px; text-align: left; color: var(--ink); }
+.foods__head > svg:last-child { color: var(--ink-3); transition: transform 0.15s; flex: none; }
+.foods__item.is-open .foods__head > svg:last-child { transform: rotate(90deg); }
+.foods__name { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; column-gap: 6px; font-weight: 600; }
+.foods__name svg { color: var(--ink-3); }
+.foods__sub { flex-basis: 100%; font-size: 0.76rem; font-weight: 500; color: var(--ink-2); }
+.foods__kcal { flex: none; font-size: 0.84rem; color: var(--ink-2); white-space: nowrap; }
+.foods__kcal em { font-style: normal; font-size: 0.72rem; color: var(--ink-3); margin-left: 3px; }
+.foods__body { display: flex; flex-direction: column; gap: 10px; padding: 0 12px 12px; }
+.foods__sort { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; border-radius: var(--r-sm); background: var(--surface-2); }
+.foods__sorthead { display: flex; align-items: center; gap: 6px; }
+.foods__sorthead strong { flex: 1; min-width: 0; }
+.foods__sorthead .variants__star { width: 30px; height: 30px; }
+.foods__flags { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* Filter als Tabs (wie im Rezept) – vier gleich breite, Anzahl klein darunter */
+.foods__tabs { margin-top: -4px; }
+.foods__tabs .tab { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 8px 4px 9px; }
+.foods__tabs .tab small { font-size: 0.72rem; font-weight: 600; color: var(--ink-3); }
+.foods__tabs .tab.is-on small { color: var(--primary-press); }
+
+/* Rezeptansicht: Wochenplan und Gekocht nebeneinander */
+.plan-chips { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+/* Plan: gekochtes Gericht bleibt stehen – blass, mit „✓ Gekocht“ */
+.plan-list__done { display: inline-flex; align-items: center; gap: 4px; font-size: 0.78rem; font-weight: 700; color: var(--primary-press); }
+.plan-list .is-cooked .dishnut { opacity: 0.6; }

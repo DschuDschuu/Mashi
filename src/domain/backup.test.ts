@@ -68,3 +68,13 @@ describe('Sicherung – Meine Produkte', () => {
     expect(parseBackup({ app: 'mashi', recipes: [] }).products).toEqual([]);
   });
 });
+
+describe('Sicherung mit fehlenden Listen', () => {
+  it('ergänzt fehlende Tags, Kategorien und Geräte als leer', () => {
+    const [r] = createMockRecipes();
+    const raw = JSON.parse(JSON.stringify(r));
+    for (const v of raw.versions) { delete v.content.tags; delete v.content.categories; delete v.content.devices; }
+    const [back] = parseBackup([raw]).recipes;
+    for (const v of back.versions) expect([v.content.tags, v.content.categories, v.content.devices]).toEqual([[], [], []]);
+  });
+});

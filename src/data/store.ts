@@ -5,7 +5,7 @@ import { withMyProducts, type MyProduct } from '../domain/nutrition/myProducts';
 import {
   addItem, applyImport, bonKey, deductRecipe, emptyPantry, freezeItem, rememberReceipt, restock, takenBetween, thawItem, type Taken, type ImportRow, type Pantry, type PantryItem, type PantryUnit,
 } from '../domain/pantry';
-import { currentContent, currentVersion, newId, withNewVersion } from '../domain/recipe';
+import { currentContent, currentVersion, newId, sameContent, withNewVersion } from '../domain/recipe';
 import { recordSavings, type BonSavings } from '../domain/savings';
 import { specialDays, type ShelfDays } from '../domain/shelfLife';
 import { DEFAULT_NO_NUTRITION } from '../domain/nutrition/noNutrition';
@@ -98,7 +98,6 @@ function get(id: string): Recipe {
 const now = () => new Date().toISOString();
 
 /** Auch Beschreibung, Tags usw. zählen – diffContent listet nur die „sichtbaren“ Kochänderungen. */
-const sameContent = (a: RecipeContent, b: RecipeContent) => JSON.stringify(a) === JSON.stringify(b);
 
 export async function initStore(r: RecipeRepository) {
   repo = r;

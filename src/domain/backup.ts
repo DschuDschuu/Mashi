@@ -50,6 +50,17 @@ function isValidRecipe(v: unknown): v is Recipe {
   });
 }
 
+/** Fehlende Listen (Tags, Kategorien, Geräte) als leer ergänzen – sonst stürzt z. B. „Bearbeiten“ ab */
+function withLists(r: Recipe): Recipe {
+  return {
+    ...r,
+    versions: r.versions.map((v) => ({
+      ...v,
+      content: { ...v.content, tags: v.content.tags ?? [], categories: v.content.categories ?? [], devices: v.content.devices ?? [] },
+    })),
+  };
+}
+
 /**
  * Liest eine Sicherungsdatei. Akzeptiert auch eine reine Liste von Rezepten.
  * Wirft nur, wenn es gar keine Mashi-Datei ist – einzelne kaputte Rezepte werden gezählt.
@@ -60,7 +71,7 @@ export function parseBackup(input: unknown): ParsedBackup {
   const recipes = list.filter(isValidRecipe);
   // Doppelte IDs innerhalb der Datei: nur den ersten Eintrag nehmen
   const seen = new Set<string>();
-  const unique = recipes.filter((r) => !seen.has(r.id) && seen.add(r.id));
+  const unique = recipes.filter((r) => !seen.has(r.id) && seen.add(r.id)).map(withLists);
   const rawProducts = isObj(input) && Array.isArray(input.products) ? input.products : [];
   const products = rawProducts.filter(isValidProduct);
   return { recipes: unique, rejected: list.length - unique.length + rawProducts.length - products.length, products };

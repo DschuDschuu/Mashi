@@ -54,3 +54,19 @@ export function stepIngredients(step: Step, ingredients: Ingredient[]): Ingredie
   // Reihenfolge wie in der Zutatenliste; gelöschte Zutaten fallen still heraus.
   return ingredients.filter((i) => chosen.has(i.id));
 }
+
+/**
+ * Zutaten in der Reihenfolge, in der man sie braucht: was im ersten Schritt vorkommt, zuerst.
+ * Innerhalb eines Schritts bleibt die Reihenfolge der Zutatenliste. Was in keinem Schritt vorkommt
+ * („Salz zum Abschmecken“, Toppings), steht am Ende. Nur für die Anzeige – gespeichert bleibt die Liste, wie sie ist.
+ */
+export function orderByUse<I extends Ingredient>(ingredients: I[], steps: Step[]): I[] {
+  const first = new Map<string, number>();
+  steps.forEach((s, n) => {
+    for (const i of stepIngredients(s, ingredients)) if (!first.has(i.id)) first.set(i.id, n);
+  });
+  return ingredients
+    .map((i, pos) => ({ i, pos, step: first.get(i.id) ?? Infinity }))
+    .sort((a, b) => a.step - b.step || a.pos - b.pos)
+    .map((x) => x.i);
+}

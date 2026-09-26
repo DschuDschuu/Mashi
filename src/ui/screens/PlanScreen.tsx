@@ -85,6 +85,7 @@ export function PlanScreen() {
                 </button>
                 {/* eigene Zeile unter Bild und Titel – sonst bleibt neben dem Portionen-Regler nur ein schmaler Streifen */}
                 <div className="plan-list__meta">
+                  {cooked && <span className="plan-list__done"><Icon name="check" size={13} /> Gekocht</span>}
                   <DishNutrition content={currentContent(recipe)} own={variants} recipeId={cooked ? undefined : recipe.id} />
                   {costs.get(recipe.id) && <span className="small muted">ca. {euro(costs.get(recipe.id)!.total)}</span>}
                 </div>

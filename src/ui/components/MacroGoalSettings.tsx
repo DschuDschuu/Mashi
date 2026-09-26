@@ -3,7 +3,8 @@ import { DEFAULT_MACRO_GOAL, type MacroGoal } from '../../domain/nutrition/varia
 import { setMacroGoal, useMacroGoal } from '../../data/store';
 import { toast } from '../toast';
 
-const FIELDS: [keyof MacroGoal, string][] = [['carbs', 'Kohlenhydrate'], ['protein', 'Eiweiß'], ['fat', 'Fett']];
+// kurz wie sonst in Mashi („KH“) – „Kohlenhydrate %“ bricht auf dem Handy um und verschiebt die Felder
+const FIELDS: [keyof MacroGoal, string, string][] = [['carbs', 'KH', 'Kohlenhydrate'], ['protein', 'Eiweiß', 'Eiweiß'], ['fat', 'Fett', 'Fett']];
 
 /**
  * Dein Makro-Ziel als Anteil an den Kalorien. Liegen mehrere Sorten im Vorrat (zwei Pestos),
@@ -28,10 +29,10 @@ export function MacroGoalSettings() {
         <p className="small muted">Anteil an den Kalorien. Hast du mehrere Sorten derselben Zutat im Vorrat (z. B. zwei Pestos), schlägt Mashi beim Planen und Kochen die vor, die näher dran liegt. Gilt auf allen Geräten.</p>
       </div>
       <div className="macrogoal__fields">
-        {FIELDS.map(([k, label]) => (
+        {FIELDS.map(([k, label, full]) => (
           <label key={k} className="field">
             <span>{label} %</span>
-            <input inputMode="numeric" value={values[k]} onChange={(e) => setValues({ ...values, [k]: e.target.value.replace(/[^0-9]/g, '') })} />
+            <input inputMode="numeric" aria-label={`${full} in Prozent`} value={values[k]} onChange={(e) => setValues({ ...values, [k]: e.target.value.replace(/[^0-9]/g, '') })} />
           </label>
         ))}
       </div>

@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { CATEGORIES } from '../../domain/catalog';
-import { cloneContent, currentContent, newId } from '../../domain/recipe';
+import { cloneContent, currentContent, newId, sameContent } from '../../domain/recipe';
 import type { Difficulty, RecipeContent, RecipeImage, ImageCrop } from '../../domain/types';
 import type { TextImport } from '../../domain/importText';
 import { createRecipe, regenerateImage, saveContent, setImage as storeImage, useRecipe } from '../../data/store';
@@ -28,7 +28,7 @@ export function RecipeFormScreen({ editId, draft }: { editId?: string; draft?: T
   const existing = useRecipe(editId);
   const [c, setC] = useState<RecipeContent>(() =>
     existing ? cloneContent(currentContent(existing)) : cloneContent(draft?.content ?? EMPTY));
-  const [tagText, setTagText] = useState(c.tags.join(', '));
+  const [tagText, setTagText] = useState((c.tags ?? []).join(', '));
   const [notes, setNotes] = useState(draft?.notes ?? '');
   // Importiertes ist fremd – erst testen. Eigenes, das man kennt, darf direkt ins Kochbuch.
   const [tested, setTested] = useState<'ja' | 'nein'>(draft ? 'nein' : 'ja');
@@ -39,21 +39,29 @@ export function RecipeFormScreen({ editId, draft }: { editId?: string; draft?: T
   /** Bild, das gerade zugeschnitten wird: neu gewählte Datei oder das vorhandene Foto */
   const [cropping, setCropping] = useState<{ src: Blob | string; initial?: ImageCrop } | null>(null);
 
+  /** So wird gespeichert – dieselbe Fassung entscheidet auch, was der Knopf verspricht */
+  const toSave = (): RecipeContent => ({
+    ...c,
+    title: c.title.trim(),
+    tags: tagText.split(',').map((t) => t.trim()).filter(Boolean),
+    ingredients: c.ingredients.filter((i) => i.name.trim()),
+    steps: c.steps.filter((s) => s.text.trim()),
+  });
+  // Nur das Foto neu? Dann entsteht keine Version – der Knopf soll das auch sagen.
+  const contentChanged = !!existing && !sameContent(currentContent(existing), toSave());
+  const photoChanged = !!existing && image !== existing.image;
+  const saveLabel = !existing ? 'Rezept speichern'
+    : contentChanged ? 'Als neue Version speichern'
+      : photoChanged ? 'Änderungen speichern' : 'Speichern';
+
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    const content: RecipeContent = {
-      ...c,
-      title: c.title.trim(),
-      tags: tagText.split(',').map((t) => t.trim()).filter(Boolean),
-      ingredients: c.ingredients.filter((i) => i.name.trim()),
-      steps: c.steps.filter((s) => s.text.trim()),
-    };
+    const content = toSave();
     if (!content.title) return setError('Bitte gib dem Rezept einen Titel.');
     if (!content.ingredients.length) return setError('Mindestens eine Zutat, bitte.');
 
     if (existing) {
       // Das Foto gehört zum Rezept, nicht zur Version – ein neues Foto erzeugt keine neue Version.
-      const photoChanged = image !== existing.image;
       if (photoChanged) {
         if (image) storeImage(existing.id, image);
         else void regenerateImage(existing.id);
@@ -151,7 +159,7 @@ export function RecipeFormScreen({ editId, draft }: { editId?: string; draft?: T
         {error && <p className="error" role="alert">{error}</p>}
         {/* immer erreichbar – auch mitten in langen Zutatenlisten */}
         <div className="bottom-cta">
-          <button className="btn btn--primary btn--block btn--lg" type="submit">{existing ? 'Als neue Version speichern' : 'Rezept speichern'}</button>
+          <button className="btn btn--primary btn--block btn--lg" type="submit">{saveLabel}</button>
         </div>
       </form>
     </main>
