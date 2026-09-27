@@ -89,7 +89,7 @@ export function App({ mode }: { mode: Mode | null }) {
       {/* Einführung beim ersten Start (je Gerät) – nicht mitten im Kochen */}
       {!settings.onboarded && !cooking && <Onboarding onClose={() => undefined} />}
       {message && (
-        <div className="toast" role="status">
+        <div className={`toast${message.action ? ' toast--action' : ''}`} role="status">
           {message.text}
           {message.action && (
             <button className="toast__action" onClick={() => { message.action!.run(); dismissToast(); }}>{message.action.label}</button>

@@ -24,6 +24,9 @@
   --on-primary: #fff;
   /* Hintergrund neben der App auf Tablet/Desktop */
   --backdrop: #efebe3;
+  /* Meldungen (Toast): dunklere Stufe der Hauptfarbe – weiße Schrift gut lesbar (Salbei 5,8 : 1) */
+  --toast-bg: var(--primary-press);
+  --toast-ink: #ffffff;
 
   /* Pastellflächen (Kacheln, Badges, Hinweise) */
   --mint: #e3efe8;
@@ -451,7 +454,7 @@ p { margin: 0; }
 .cook__nav { display: flex; gap: 12px; }
 
 /* ── Toast ───────────────────────────────────────────────────── */
-.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(var(--nav-h) + var(--safe-b) + 16px); z-index: 40; background: var(--ink); color: #fff; padding: 12px 18px; border-radius: 999px; font-weight: 600; font-size: 0.9rem; box-shadow: var(--shadow-lift); max-width: calc(100% - 32px); text-align: center; animation: rise 0.2s ease-out; }
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(var(--nav-h) + var(--safe-b) + 16px); z-index: 40; background: var(--toast-bg); color: var(--toast-ink); padding: 12px 18px; border-radius: 999px; font-weight: 600; font-size: 0.9rem; box-shadow: var(--shadow-lift); max-width: calc(100% - 32px); text-align: center; animation: rise 0.2s ease-out; }
 
 /* ── Verbinden ───────────────────────────────────────────────── */
 .connect { padding-top: 28px; }
@@ -886,7 +889,7 @@ p { margin: 0; }
 
 /* ── Hinweis mit „Rückgängig“ ────────────────────────────────── */
 .toast { display: flex; align-items: center; gap: 12px; justify-content: center; }
-.toast__action { flex: none; color: #9fe3dc; font-weight: 700; padding: 4px 2px; text-decoration: underline; text-underline-offset: 3px; }
+.toast__action { flex: none; color: inherit; font-weight: 700; padding: 4px 2px; text-decoration: underline; text-underline-offset: 3px; }
 
 /* ── Bald verbrauchen ────────────────────────────────────────── */
 .useup-banner {
@@ -1171,6 +1174,8 @@ label.btn.is-disabled { opacity: 0.6; pointer-events: none; }
   --ink: #3b321c; --ink-2: #6f6446; --ink-3: #a69b7c;
   --primary: #f4cf1f; --primary-press: #766608; --primary-soft: #fcf4d2; --primary-text: #766608;
   --art: #766814; --on-primary: #2f2710;
+  /* Sonnengelb: gelbe Meldung mit dunkler Schrift (9,7 : 1) */
+  --toast-bg: var(--primary); --toast-ink: var(--on-primary);
 }
 :root[data-theme="nacht"] {
   --bg: #f4f6fa; --surface: #ffffff; --surface-2: #eaeef5; --line: #dde2ec; --backdrop: #e6eaf2;
@@ -1230,3 +1235,7 @@ label.btn.is-disabled { opacity: 0.6; pointer-events: none; }
 .perz__share { flex: none; width: 3.2em; text-align: right; font-size: 0.75rem; color: var(--ink-2); font-variant-numeric: tabular-nums; }
 .perz__item.is-rest .perz__name { font-weight: 500; color: var(--ink-2); }
 .perz .matchlist__toggle, .perz .matchlist__favs { align-self: flex-start; }
+/* Meldung mit „Rückgängig“: breit, Text oben, Knopf darunter – sonst wirkt beides gequetscht */
+.toast--action { flex-direction: column; align-items: stretch; gap: 8px; width: 90%; max-width: 420px; border-radius: 18px; padding: 12px 14px 10px; }
+.toast--action .toast__action { width: 100%; padding: 9px 12px; border-radius: 12px; background: rgb(255 255 255 / 0.18); text-decoration: none; font-size: 0.92rem; }
+.toast--action .toast__action:active { background: rgb(255 255 255 / 0.3); }
