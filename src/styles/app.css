@@ -337,7 +337,7 @@ p { margin: 0; }
 .ingredients__name { color: var(--ink-2); }
 /* mit Speisekammer: dritte Spalte „da / fehlt“ */
 .ingredients.has-stock li { grid-template-columns: 76px 1fr auto; align-items: baseline; }
-.ingredients__stock { margin: 0; }
+.ingredients__stock { margin: 6px 0 2px; }
 .ing-stock { display: inline-flex; align-items: center; gap: 4px; font-size: 0.75rem; font-weight: 600; white-space: nowrap; }
 .ing-stock--da { color: var(--primary-text); }
 .ing-stock--knapp { color: #9a5a2f; }
@@ -1210,7 +1210,7 @@ label.btn.is-disabled { opacity: 0.6; pointer-events: none; }
 /* Einheitliche Zutatennamen */
 .rename-hint { grid-column: 1 / -1; margin: -2px 0 4px; display: flex; flex-wrap: wrap; align-items: center; column-gap: 10px; color: var(--ink-2); }
 .rename-hint .link { padding: 2px 0; font-size: 0.8rem; }
-.rename-cta { display: inline-flex; align-items: center; gap: 6px; align-self: flex-start; padding: 5px 12px; border-radius: 999px; background: var(--primary-soft); color: var(--primary-press); font-size: 0.82rem; font-weight: 700; }
+.rename-cta { display: flex; align-items: center; justify-content: center; gap: 6px; margin: 0 auto; width: 90%; min-height: 40px; padding: 5px 12px; border-radius: 999px; background: var(--primary-soft); color: var(--primary-press); font-size: 0.82rem; font-weight: 700; }
 .renames { display: flex; flex-direction: column; gap: 12px; max-height: 88vh; overflow-y: auto; }
 .renames__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .renames__list li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 10px; padding: 10px 12px; border-radius: var(--r-sm); background: var(--surface); border: 1px solid var(--line); }
@@ -1241,3 +1241,8 @@ label.btn.is-disabled { opacity: 0.6; pointer-events: none; }
   align-self: center; min-height: 28px; padding: 2px 10px; background: none; border: 0;
   color: inherit; font-weight: 700; font-size: 0.9rem; text-decoration: underline; text-underline-offset: 3px;
 }
+
+/* Vorrat: Sorte wählen */
+.sortpick { display: flex; flex-direction: column; gap: 6px; }
+.pantry-offer { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: var(--r-sm); background: var(--primary-soft); }
+.pantry-offer p { margin: 0; }

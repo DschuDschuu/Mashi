@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createMockRecipes } from '../data/mockRecipes';
 import { localFoodTable } from './nutrition/localFoods';
-import { addItem, applyImport, deductRecipe, emptyPantry, pantryAfterPlan, proposeImport, recipesFromPantry, type Pantry } from './pantry';
+import { addItem, applyImport, deductRecipe, emptyPantry, pantryAfterPlan, proposeImport, recipesFromPantry, suggestPantryUnit, type Pantry } from './pantry';
 import { parseReceipt } from './receipt';
 import type { Ingredient, Recipe, RecipeContent } from './types';
 
@@ -129,5 +129,19 @@ describe('Was nach dem Wochenplan übrig bleibt', () => {
   it('schon Gekochtes ist schon abgezogen und wird nicht doppelt verplant', () => {
     const p = stock(['Hähnchenbrust', 300, 'g']);
     expect(pantryAfterPlan(p, plan(['geplant']), [planned], localFoodTable).items).toHaveLength(1);
+  });
+});
+
+describe('Einheit beim Eintragen', () => {
+  const unit = (name: string, product?: { packageUnit?: 'g' | 'ml' | 'Stück' }) => suggestPantryUnit(localFoodTable.matchName(name)?.food, product);
+  it('Pesto im Glas, Paprika als Stück, Milch in ml, Pasta in g', () => {
+    expect(unit('Grünes Pesto')).toBe('Glas');
+    expect(unit('Paprika')).toBe('Stück');
+    expect(unit('Milch')).toBe('ml');
+    expect(unit('Pasta')).toBe('g');
+    expect(unit('Unbekanntes Zeug')).toBe('g');
+  });
+  it('ein Produkt mit Packung „Stück“ geht vor', () => {
+    expect(unit('Pasta', { packageUnit: 'Stück' })).toBe('Stück');
   });
 });

@@ -10,7 +10,7 @@ import { orderByUse } from '../../domain/stepIngredients';
 import type { Recipe, RecipeContent } from '../../domain/types';
 import { describeChange, diffContent } from '../../domain/versions';
 import {
-  addToPlan, adoptToCookbook, archiveRecipe, deleteRecipe, markCooked, regenerateImage, setStatus, toggleFavorite, togglePlanCooked, updateNotes, usePlan, useRecipe,
+  addToPlan, adoptToCookbook, archiveRecipe, deleteRecipe, markCooked, regenerateImage, setPlanVariants, setStatus, toggleFavorite, togglePlanCooked, updateNotes, usePlan, useRecipe,
 } from '../../data/store';
 import { cookedToast } from '../cookedToast';
 import { goBack, navigate } from '../../router';
@@ -156,9 +156,9 @@ const header = (
     <>
       <div className="row-between">
         {isTablet ? <h2 className="h3">Zutaten</h2> : <span className="muted">Portionen</span>}
-        <Stepper value={servings} onChange={setServings} label="Portionen" />
+        <Stepper small value={servings} onChange={setServings} label="Portionen" />
       </div>
-      {stock && <p className="ingredients__stock"><StockLine content={c} stock={stock} max={4} /></p>}
+      {stock && <p className="ingredients__stock"><StockLine content={c} stock={stock} max={Infinity} /* in der Rezeptansicht alle aufzählen */ /></p>}
       <RenamePanel recipe={recipe} />
       <ul className={`ingredients${stock ? ' has-stock' : ''}`}>
         {ingredients.map((i) => (
@@ -217,7 +217,11 @@ const header = (
 
   // Mehrere Sorten im Vorrat (z. B. zwei Pestos)? Erst fragen, welche – geplant: die Wahl vom Plan
   const startCooking = () => {
-    if (planned) return navigate(`/rezept/${recipe.id}/kochen?p=${servings}`);
+    // geplant: Sorte vom Plan – ist dort noch keine gewählt und es gibt etwas zu entscheiden, jetzt fragen und merken
+    if (planned) return variantPrompt.ask(c, planned.variants, (pick) => {
+      if (Object.keys(pick).length) setPlanVariants(recipe.id, pick);
+      navigate(`/rezept/${recipe.id}/kochen?p=${servings}`);
+    });
     variantPrompt.ask(c, undefined, (pick) => navigate(`/rezept/${recipe.id}/kochen?p=${servings}${Object.keys(pick).length ? `&s=${encodeURIComponent(JSON.stringify(pick))}` : ''}`));
   };
   const cookButton = (

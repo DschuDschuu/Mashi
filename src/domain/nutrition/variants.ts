@@ -66,11 +66,17 @@ export interface VariantChoice {
   all: FoodVariant[];
   /** Favorit liegt im Vorrat → nicht nachfragen */
   favoriteInStock: boolean;
+  /**
+   * Vorräte dieser Zutat ohne bekannte Sorte (von Hand eingetragen) – nach der Wahl bekommen sie die Sorte,
+   * damit Mashi sie beim nächsten Mal kennt
+   */
+  unsortedItemIds: string[];
 }
 
 /**
  * Für Plan und Kochmodus: bei welchen Zutaten die Sorte zählt und welche vorgeschlagen ist.
- * Nichts im Vorrat → keine Auswahl, dann bleibt der Durchschnitt.
+ * Liegt die Zutat im Vorrat, aber ohne bekannte Sorte (von Hand eingetragen), stehen alle Sorten zur Wahl.
+ * Nichts im Vorrat → keine Auswahl, dann bleibt der Durchschnitt (oder dein Favorit).
  */
 export function variantChoices(content: RecipeContent, table: FoodTable, items: readonly PantryItem[], goal: MacroGoal): VariantChoice[] {
   const out: VariantChoice[] = [];
@@ -78,15 +84,23 @@ export function variantChoices(content: RecipeContent, table: FoodTable, items: 
     if (ing.optional) continue;
     const food = (ing.foodRef ? table.byRef(ing.foodRef) : undefined) ?? table.matchName(ing.name)?.food;
     if (!food?.variants?.length) continue;
-    const options = variantsInStock(food.variants, items);
+    const known = variantsInStock(food.variants, items);
+    const ids = new Set(food.variants.map((v) => v.id));
+    const unsorted = items.filter((it) => (!it.productId || !ids.has(it.productId)) && (it.amount === undefined || it.amount > 0)
+      && table.matchName(it.name)?.food.ref.foodId === food.ref.foodId);
+    const options = unsorted.length ? food.variants : known;
     if (!options.length) continue;
     const fav = options.find((o) => o.favorite);
-    out.push({ ingredientId: ing.id, name: ing.name, options, suggested: (fav ?? bestVariant(options, goal)).id, all: food.variants, favoriteInStock: !!fav });
+    const pool = known.length && !unsorted.length ? known : options;
+    out.push({
+      ingredientId: ing.id, name: ing.name, options, suggested: (fav ?? bestVariant(pool, goal)).id, all: food.variants,
+      favoriteInStock: !!fav, unsortedItemIds: unsorted.map((it) => it.id),
+    });
   }
   return out;
 }
 
-/** Nachfragen nur, wenn mehrere Sorten da sind und kein Favorit darunter ist */
+/** Nachfragen nur, wenn mehrere Sorten in Frage kommen (da oder unbekannt) und kein Favorit darunter ist */
 export function needsAsking(choices: VariantChoice[]): boolean {
   return choices.some((c) => c.options.length > 1 && !c.favoriteInStock);
 }

@@ -196,7 +196,6 @@ function FoodLine({ row, open, onToggle, products, basics, zero, onTouch }: {
               <span className="small"><strong>{fmt(p.per100g.kcal)} kcal</strong> · {macros(p.per100g)}</span>
               {p.packageAmount && <span className="small muted">Packung {fmt(p.packageAmount)} {p.packageUnit ?? 'g'}{p.packagePrice !== undefined && <> · {euro(p.packagePrice)}</>}</span>}
               {p.shelfDays && <span className="small muted">hält {p.shelfDays === 1 ? '1 Tag' : `${p.shelfDays} Tage`} ab Kauf</span>}
-              {p.ean && <span className="small muted">Barcode <span className="ean">{p.ean}</span></span>}
               {appliesTo(p).length > 0 && (
                 <span className="small muted">
                   gilt für: {appliesTo(p).join(', ')}

@@ -65,9 +65,6 @@ describe('Sorten: mehrere eigene Produkte für eine Zutat', () => {
     expect(pickFor(c, { 'i-pesto': 'p-weg' })).toEqual({ 'i-pesto': 'p-a' }); // gewählte Sorte ist aufgebraucht
   });
 
-  it('fragt nicht, wenn keine Sorte erkannt im Vorrat liegt (dann bleibt der Durchschnitt)', () => {
-    expect(variantChoices(dish(100), table, stockOf({}), DEFAULT_MACRO_GOAL)).toEqual([]);
-  });
 
   it('rechnet das Makro-Verhältnis als Anteil an den Kalorien', () => {
     const s = macroShares({ carbs: 40, protein: 30, fat: 13.33 });
@@ -137,5 +134,23 @@ describe('Einheit Glas', () => {
     const p = { ...emptyPantry(), items: stockOf({ productId: 'p-a', amount: 2, unit: 'Glas' }) };
     const d = deductRecipe(p, { ...dish(95), servings: 2 }, 2, withMyProducts(localFoodTable, [A190]));
     expect(d.pantry.items[0].amount).toBeCloseTo(1.5); // 95 g von 2 Gläsern à 190 g
+  });
+});
+
+describe('Vorrat ohne Sorte (von Hand eingetragen)', () => {
+  it('fragt mit allen Sorten zur Wahl und merkt sich, welche Vorräte die Sorte bekommen', () => {
+    const c = variantChoices(dish(100), table, stockOf({}), DEFAULT_MACRO_GOAL);
+    expect(c[0].options.map((o) => o.id)).toEqual(['p-a', 'p-b']);
+    expect(c[0].unsortedItemIds).toEqual(['v0']);
+    expect(needsAsking(c)).toBe(true);
+  });
+  it('mit Favorit: keine Frage, der Favorit gilt', () => {
+    const fav = withMyProducts(localFoodTable, withFavorite([A, B], [A, B], 'p-b'));
+    const c = variantChoices(dish(100), fav, stockOf({}), DEFAULT_MACRO_GOAL);
+    expect(c[0].suggested).toBe('p-b');
+    expect(needsAsking(c)).toBe(false);
+  });
+  it('liegt nichts im Vorrat, wird nicht gefragt', () => {
+    expect(variantChoices(dish(100), table, [], DEFAULT_MACRO_GOAL)).toEqual([]);
   });
 });

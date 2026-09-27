@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { resolveIngredient } from '../../domain/mealplan';
 import { withMyProducts } from '../../domain/nutrition/myProducts';
-import { recipesFromPantry, type PantryItem, type PantryUnit } from '../../domain/pantry';
+import { recipesFromPantry, suggestPantryUnit, type PantryItem, type PantryUnit } from '../../domain/pantry';
 import { daysLabel, daysLeft, frozenSince, specialDays, useByOf } from '../../domain/shelfLife';
 import { formatAmount } from '../../domain/scaling';
 import {
-  addPantryItem, answerPantryCheck, currentPantry, forgetReceiptRule, freezePantryItem, removePantryItem, thawPantryItem, updatePantryItem,
-  usePantry, usePlan, useProducts, useRecipes,
+  addPantryItem, answerPantryCheck, assignPantrySorts, currentPantry, currentProducts, forgetReceiptRule, freezePantryItem, removePantryItem, thawPantryItem, updatePantryItem,
+  saveProducts, usePantry, usePlan, useProducts, useRecipes,
 } from '../../data/store';
 import { navigate, useRoute } from '../../router';
 import { foodTable } from '../../services';
@@ -22,6 +22,11 @@ import { ProductsLink } from '../components/ProductsLink';
 import { TileSummary } from '../components/TileSummary';
 import { toast } from '../toast';
 import { BarcodeScanner } from '../components/BarcodeScanner';
+import { SortPicker, useSortOptions } from '../components/SortPicker';
+import { BrandNames } from '../components/BrandNames';
+import { NutritionQuickForm } from '../components/NutritionQuickForm';
+import type { FoodEntry } from '../../domain/nutrition/types';
+import { newId } from '../../domain/recipe';
 import { productLabel, type MyProduct } from '../../domain/nutrition/myProducts';
 import { FOOD_CHOICES, normalizeName } from '../../domain/nutrition/localFoods';
 
@@ -222,9 +227,24 @@ function AddForm({ onDone }: { onDone: () => void }) {
   const [name, setName] = useState('');
   const [amount, setAmount] = useState('');
   const [unit, setUnit] = useState<PantryUnit>('g');
+  /** Einheit selbst gewählt? Dann springt sie nicht mehr automatisch um */
+  const [unitTouched, setUnitTouched] = useState(false);
   const products = useProducts();
-  /** per Barcode erkannte Sorte („Mein Produkt“) – zählt dann beim Planen/Kochen */
-  const [product, setProduct] = useState<MyProduct | null>(null);
+  /** per Barcode erkannte oder angetippte Sorte („Mein Produkt“) – undefined = Vorschlag (bei nur einem: dieses) */
+  const [product, setProduct] = useState<MyProduct | null | undefined>(undefined);
+  const options = useSortOptions(name);
+  const chosen = product === undefined ? (options.length === 1 ? products.find((p) => p.id === options[0].id) ?? null : null) : product;
+  /** Marke für etwas, das noch nicht unter „Meine Lebensmittel“ steht */
+  const [brand, setBrand] = useState('');
+  const [otherBrand, setOtherBrand] = useState(false);
+  const askBrand = !chosen && (options.length === 0 || otherBrand);
+  // Einheit passend zur Zutat/Marke: Pesto → Glas, Eier → Stück, Milch → ml
+  const unitTable = useMemo(() => withMyProducts(foodTable, products), [products]);
+  const suggestedUnit = suggestPantryUnit(name.trim() ? unitTable.matchName(name)?.food : undefined, chosen ?? undefined);
+  useEffect(() => { if (!unitTouched) setUnit(suggestedUnit); }, [suggestedUnit, unitTouched]);
+  /** Nach dem Eintragen: „… zu Meine Lebensmittel hinzufügen?“ */
+  const [offer, setOffer] = useState<{ name: string; brand: string } | null>(null);
+  const [withValues, setWithValues] = useState(false);
   const [scanning, setScanning] = useState(false);
   const onCode = (code: string) => {
     setScanning(false);
@@ -239,27 +259,65 @@ function AddForm({ onDone }: { onDone: () => void }) {
     // Schreibweise wie beim vorhandenen Vorrat, sonst mit großem Anfangsbuchstaben
     const known = currentPantry().items.find((it) => normalizeName(it.name) === normalizeName(n))?.name;
     if (!name.trim()) setName(known ?? n.charAt(0).toLocaleUpperCase('de-DE') + n.slice(1));
-    if (!amount && p.packageAmount && p.packageUnit) { setAmount(String(p.packageAmount).replace('.', ',')); setUnit(p.packageUnit); }
+    // Packungsgröße vom Barcode („190 g“) – dann nicht mehr automatisch auf „Glas“ springen
+    if (!amount && p.packageAmount && p.packageUnit) { setAmount(String(p.packageAmount).replace('.', ',')); setUnit(p.packageUnit); setUnitTouched(true); }
+  };
+  // Richtwert der Tabelle fürs Angebot – kennt sie die Zutat nicht, geht nur „Mit Nährwerten“
+  const offerTable = offer ? foodTable.matchName(offer.name)?.food : undefined;
+  /** Produkt speichern und dem gerade eingetragenen Vorrat die Sorte geben */
+  const adopt = (p: MyProduct) => {
+    saveProducts([...currentProducts(), p]);
+    const ids = currentPantry().items.filter((it) => !it.productId && normalizeName(it.name) === normalizeName(offer!.name)).map((it) => it.id);
+    assignPantrySorts([{ itemIds: ids, productId: p.id }]);
+    toast(`„${offer!.name} · ${offer!.brand}“ steht jetzt unter „Meine Lebensmittel“`);
+    setOffer(null);
   };
   const submit = () => {
     if (!name.trim()) return;
     const a = parseAmount(amount);
-    addPantryItem(name, a, a === undefined ? undefined : unit, product?.id);
+    addPantryItem(name, a, a === undefined ? undefined : unit, chosen?.id);
     toast(`„${name.trim()}“ in der Speisekammer`);
+    // Marke eingetragen, aber noch kein Produkt → anbieten, es aufzunehmen
+    if (askBrand && brand.trim()) setOffer({ name: name.trim(), brand: brand.trim() });
     setName('');
     setAmount('');
-    setProduct(null);
+    setProduct(undefined);
+    setBrand('');
+    setOtherBrand(false);
+    setUnitTouched(false);
   };
+  if (offer && withValues) {
+    return (
+      <NutritionQuickForm ingredient={offer.name} initialBrand={offer.brand} onCancel={() => { setOffer(null); setWithValues(false); }}
+        onSave={(p) => { adopt(p); setWithValues(false); }} />
+    );
+  }
   return (
     <div className="panel stack">
+      {offer && (
+        <div className="pantry-offer" role="status">
+          <p className="small"><strong>„{offer.name} · {offer.brand}“</strong> zu „Meine Lebensmittel“ hinzufügen? Dann kennt Mashi die Marke beim nächsten Mal.</p>
+          <div className="row-gap">
+            <button type="button" className="btn btn--primary btn--sm" onClick={() => setWithValues(true)}>Mit Nährwerten</button>
+            {offerTable && <button type="button" className="btn btn--soft btn--sm" onClick={() => adopt(fromTable(offer, offerTable))}>Nur hinzufügen, Nährwerte später</button>}
+            <button type="button" className="btn btn--ghost btn--sm" onClick={() => setOffer(null)}>Nein</button>
+          </div>
+        </div>
+      )}
       <label className="field"><span>Was?</span>
         <input value={name} onChange={(e) => setName(e.target.value)} list="ingredient-names" placeholder="z. B. Hähnchenbrust" autoFocus
           onKeyDown={(e) => e.key === 'Enter' && submit()} />
       </label>
-      <AmountFields amount={amount} unit={unit} onAmount={setAmount} onUnit={setUnit} />
-      {product
-        ? <p className="scan-note" role="status">Sorte: <strong>{product.name}</strong> <button type="button" className="link" onClick={() => setProduct(null)}>entfernen</button></p>
-        : <p className="small muted">Menge leer lassen = einfach „vorhanden“.</p>}
+      <AmountFields amount={amount} unit={unit} onAmount={setAmount} onUnit={(u) => { setUnit(u); setUnitTouched(true); }} />
+      <SortPicker options={options} value={chosen?.id} onChange={(id) => setProduct(products.find((p) => p.id === id) ?? null)}
+        onOther={() => { setProduct(null); setOtherBrand(true); }} />
+      {askBrand && name.trim() && (
+        <label className="field"><span>Marke (optional)</span>
+          <input value={brand} onChange={(e) => setBrand(e.target.value)} list="brand-names" placeholder="z. B. K-Classic" />
+          <BrandNames />
+        </label>
+      )}
+      <p className="small muted">Menge leer lassen = einfach „vorhanden“.</p>
       <div className="row-gap">
         <button className="btn btn--primary" onClick={submit} disabled={!name.trim()}>Hinzufügen</button>
         <button type="button" className="btn btn--soft" onClick={() => setScanning(true)}><Icon name="camera" size={16} /> Barcode</button>
@@ -281,6 +339,9 @@ function EditRow({ item, estimate, reserved, onDone }: { item: PantryItem; estim
   const [amount, setAmount] = useState(item.amount === undefined ? '' : String(item.amount).replace('.', ','));
   const [unit, setUnit] = useState<PantryUnit>(item.unit ?? 'g');
   const [reduced, setReduced] = useState(!!item.reduced);
+  /** Sorte („Mein Produkt“) – nachträglich wählbar, z. B. für von Hand eingetragenes Pesto */
+  const [productId, setProductId] = useState(item.productId);
+  const editOptions = useSortOptions(name);
   /** Einfrieren: null = zu, sonst die Menge (vorausgefüllt: alles) */
   const [freezing, setFreezing] = useState<string | null>(null);
   const pantry = usePantry();
@@ -288,7 +349,7 @@ function EditRow({ item, estimate, reserved, onDone }: { item: PantryItem; estim
     const a = parseAmount(amount);
     const changedDate = useBy !== initialDate;
     updatePantryItem(item.id, {
-      name: name.trim() || item.name, amount: a, unit: a === undefined ? undefined : unit, reduced: reduced || undefined,
+      name: name.trim() || item.name, amount: a, unit: a === undefined ? undefined : unit, reduced: reduced || undefined, productId,
       ...(changedDate ? { useBy: useBy ? new Date(`${useBy}T12:00:00`).toISOString() : undefined } : {}),
     });
     onDone();
@@ -312,6 +373,7 @@ function EditRow({ item, estimate, reserved, onDone }: { item: PantryItem; estim
       <input value={name} onChange={(e) => setName(e.target.value)} list="ingredient-names" aria-label="Name" />
       {reserved && <p className="small muted pantry-reserved">{reserved} Hier steht der ganze Vorrat.</p>}
       <AmountFields amount={amount} unit={unit} onAmount={setAmount} onUnit={setUnit} />
+      <SortPicker options={editOptions} value={productId} onChange={setProductId} />
       {item.frozenAt ? (
         <p className="small muted pantry-frozen">Eingefroren am {new Date(item.frozenAt).toLocaleDateString('de-DE')}</p>
       ) : (
@@ -347,4 +409,9 @@ function EditRow({ item, estimate, reserved, onDone }: { item: PantryItem; estim
       )}
     </li>
   );
+}
+
+/** Neues Produkt mit Name + Marke und dem Richtwert der Tabelle – Nährwerte lassen sich später verfeinern */
+function fromTable(offer: { name: string; brand: string }, food: FoodEntry): MyProduct {
+  return { id: newId('p'), name: offer.name, brand: offer.brand, replaces: [], names: [normalizeName(offer.name)], per100g: food.per100g, updatedAt: new Date().toISOString() };
 }

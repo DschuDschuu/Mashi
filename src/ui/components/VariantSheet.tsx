@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { macroShares, needsAsking, pickFor, type VariantChoice } from '../../domain/nutrition/variants';
 import type { RecipeContent } from '../../domain/types';
-import { setFavoriteVariant, useMacroGoal } from '../../data/store';
+import { assignPantrySorts, setFavoriteVariant, useMacroGoal } from '../../data/store';
 import { toast } from '../toast';
 import { Icon } from './Icon';
 import { choicesFor } from '../useNutrition';
@@ -26,6 +26,7 @@ export function VariantSheet({ choices, pick, title = 'Welche Sorte nimmst du?',
   /** Favoriten im Blatt sofort sichtbar – gespeichert wird direkt (gilt für alle Rezepte) */
   const [favs, setFavs] = useState<Record<string, string | null>>(() => Object.fromEntries(choices.map((c) => [c.ingredientId, c.all.find((v) => v.favorite)?.id ?? null])));
   const asking = choices.filter((c) => c.options.length > 1);
+  const unsorted = asking.some((c) => c.unsortedItemIds.length);
   const toggleFavorite = (c: VariantChoice, id: string, name: string) => {
     const next = favs[c.ingredientId] === id ? null : id;
     setFavoriteVariant(c.all, next);
@@ -38,7 +39,7 @@ export function VariantSheet({ choices, pick, title = 'Welche Sorte nimmst du?',
       <div className="sheet variants" role="dialog" aria-modal="true" aria-label={title} onClick={(e) => e.stopPropagation()} ref={ref}>
         <div className="sheet__grip" />
         <h2 className="sheet__title">{title}</h2>
-        <p className="small muted">Beide liegen im Vorrat. Vorgeschlagen ist die Sorte, die näher an deinem Ziel liegt ({goal.carbs} / {goal.protein} / {goal.fat} – Kohlenhydrate / Eiweiß / Fett). Mit ★ machst du eine Sorte zum Favoriten: Dann rechnen alle Rezepte damit und Mashi fragt nicht mehr.</p>
+        <p className="small muted">{unsorted ? 'Im Vorrat steht die Zutat ohne Sorte – welche ist es? Mashi merkt es sich beim Vorrat.' : 'Beide liegen im Vorrat.'} Vorgeschlagen ist die Sorte, die näher an deinem Ziel liegt ({goal.carbs} / {goal.protein} / {goal.fat} – Kohlenhydrate / Eiweiß / Fett). Mit ★ machst du eine Sorte zum Favoriten: Dann rechnen alle Rezepte damit und Mashi fragt nicht mehr.</p>
         {asking.map((c) => (
           <fieldset key={c.ingredientId} className="variants__group">
             <legend>{c.name}</legend>
@@ -80,12 +81,20 @@ export function useVariantPrompt() {
   const ask = (content: RecipeContent, own: Record<string, string> | undefined, then: (pick: Record<string, string>) => void) => {
     const choices = choicesFor(content);
     const pick = pickFor(choices, own);
-    if (needsAsking(choices)) setOpen({ choices, pick, then });
+    // schon entschieden (z. B. beim Einplanen) – nicht noch einmal fragen
+    const open = choices.filter((c) => !c.options.some((o) => o.id === own?.[c.ingredientId]));
+    if (needsAsking(open)) setOpen({ choices, pick, then });
     else then(pick);
   };
   const sheet = open && (
     <VariantSheet choices={open.choices} pick={open.pick} onClose={() => setOpen(null)}
-      onDone={(p) => { setOpen(null); open.then(p); }} />
+      onDone={(p) => { rememberSorts(open.choices, p); setOpen(null); open.then(p); }} />
   );
   return { ask, sheet };
+}
+
+/** Die gewählte Sorte an Vorräte ohne Sorte hängen – so fragt Mashi beim nächsten Mal nicht erneut */
+function rememberSorts(choices: VariantChoice[], pick: Record<string, string>) {
+  assignPantrySorts(choices.filter((c) => c.unsortedItemIds.length && pick[c.ingredientId])
+    .map((c) => ({ itemIds: c.unsortedItemIds, productId: pick[c.ingredientId] })));
 }

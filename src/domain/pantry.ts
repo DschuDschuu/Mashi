@@ -1,4 +1,5 @@
 import type { PriceEntry } from './cost';
+import type { FoodEntry } from './nutrition/types';
 import type { MacroGoal } from './nutrition/variants';
 import { basicsKeys, needIn, resolveIngredient, type Resolved } from './mealplan';
 import type { FoodTable } from './nutrition/types';
@@ -560,4 +561,17 @@ export function plannedUse(pantry: Pantry, plan: MealPlan, recipes: Recipe[], ta
     if (v !== 'all' && item?.amount !== undefined && v >= item.amount - 1e-9) out.set(id, 'all');
   }
   return out;
+}
+
+/**
+ * Passende Einheit beim Eintragen: Pesto im Glas, Eier und Paprika als Stück, Milch in ml, sonst g.
+ * Ein Produkt mit Packung „Stück“ (10er-Eier) geht vor.
+ */
+export function suggestPantryUnit(food: FoodEntry | undefined, product?: { packageUnit?: 'g' | 'ml' | 'Stück' }): PantryUnit {
+  if (product?.packageUnit === 'Stück') return 'Stück';
+  if (!food) return 'g';
+  if (food.portions?.Glas) return 'Glas';
+  if (food.portions?.Stück) return 'Stück';
+  if (food.density !== undefined) return 'ml';
+  return 'g';
 }

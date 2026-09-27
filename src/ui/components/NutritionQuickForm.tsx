@@ -23,8 +23,10 @@ const LABEL: Record<(typeof CORE)[number], string> = { kcal: 'kcal', protein: 'E
  * Die Werte stehen immer zur Prüfung da. Gespeichert wird ein „Mein Produkt“ – Name und Marke
  * sind vorausgefüllt (aus Open Food Facts), Packung, Preis und Barcode lassen sich später ergänzen.
  */
-export function NutritionQuickForm({ ingredient, onSave, onCancel }: {
+export function NutritionQuickForm({ ingredient, initialBrand = '', onSave, onCancel }: {
   ingredient: string;
+  /** vorausgefüllte Marke (z. B. beim Vorrat eingetragen) */
+  initialBrand?: string;
   onSave: (p: MyProduct) => void;
   onCancel: () => void;
 }) {
@@ -42,7 +44,7 @@ export function NutritionQuickForm({ ingredient, onSave, onCancel }: {
   const [note, setNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [productName, setProductName] = useState(ingredient);
-  const [brand, setBrand] = useState('');
+  const [brand, setBrand] = useState(initialBrand);
 
   const take = (found: ScannedProduct, text: string) => {
     const { kcal, protein, carbs, fat, ...rest } = found.per100g;

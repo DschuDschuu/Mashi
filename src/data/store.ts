@@ -596,7 +596,14 @@ export function addPantryItem(name: string, amount?: number, unit?: PantryUnit, 
   commitPantry({ ...pantry, items: addItem(pantry.items, { name: name.trim(), amount, unit, productId }, now(), () => newId('v')) });
 }
 
-export function updatePantryItem(id: string, patch: Partial<Pick<PantryItem, 'name' | 'amount' | 'unit' | 'useBy' | 'reduced'>>) {
+/** Nach der Wahl beim Planen/Kochen: Vorräte ohne Sorte bekommen die gewählte Sorte (Zutat → Produkt) */
+export function assignPantrySorts(assign: readonly { itemIds: string[]; productId: string }[]) {
+  const to = new Map(assign.flatMap((a) => a.itemIds.map((id) => [id, a.productId] as const)));
+  if (!to.size) return;
+  commitPantry({ ...pantry, items: pantry.items.map((i) => (to.has(i.id) ? { ...i, productId: to.get(i.id) } : i)) });
+}
+
+export function updatePantryItem(id: string, patch: Partial<Pick<PantryItem, 'name' | 'amount' | 'unit' | 'useBy' | 'reduced' | 'productId'>>) {
   commitPantry({ ...pantry, items: pantry.items.map((i) => (i.id === id ? { ...i, ...patch, check: false } : i)) });
 }
 

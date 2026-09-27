@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { RecipeContent } from '../../domain/types';
-import { setPlanVariants } from '../../data/store';
+import { assignPantrySorts, setPlanVariants } from '../../data/store';
 import { gram } from '../format';
 import { useVariants } from '../useNutrition';
 import { Icon } from './Icon';
@@ -38,7 +38,7 @@ export function DishNutrition({ content, own, recipeId, className = '' }: {
       ))}
       {choosing && recipeId && (
         <VariantSheet choices={choices} pick={pick} onClose={() => setChoosing(false)}
-          onDone={(p) => { setPlanVariants(recipeId, p); setChoosing(false); }} />
+          onDone={(p) => { assignPantrySorts(choices.filter((c) => c.unsortedItemIds.length && p[c.ingredientId]).map((c) => ({ itemIds: c.unsortedItemIds, productId: p[c.ingredientId] }))); setPlanVariants(recipeId, p); setChoosing(false); }} />
       )}
     </span>
   );
