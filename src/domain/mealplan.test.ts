@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createMockRecipes } from '../data/mockRecipes';
-import { buildShoppingList, normalizePlan, suggestRecipes, toggleCooked, type MealPlan } from './mealplan';
+import { basicsKeys, buildShoppingList, normalizePlan, resolveIngredient, suggestRecipes, toggleCooked, type MealPlan } from './mealplan';
 import { localFoodTable } from './nutrition/localFoods';
 import { withMyProducts } from './nutrition/myProducts';
 import type { Recipe, RecipeContent } from './types';
@@ -163,6 +163,16 @@ describe('Einkaufsliste nach Art', () => {
       { id: '3', name: 'Joghurt', amount: 150, unit: 'g' }, { id: '4', name: 'Tortillas', amount: 4, unit: 'Stück' },
     ]);
     const kinds = Object.fromEntries(buildShoppingList(plan(['a', 2]), [a], localFoodTable).map((i) => [i.name, i.kind]));
-    expect(kinds).toEqual({ Hähnchenbrust: 'protein', Paprika: 'vegetable', 'Griechischer Joghurt': 'dairy', Tortillas: 'bread' });
+    expect(kinds).toEqual({ Hähnchenbrust: 'protein', Paprika: 'vegetable', 'Joghurt 3,5 %': 'dairy' /* früher fälschlich griechischer Joghurt */, Tortillas: 'bread' });
+  });
+});
+
+describe('Basics', () => {
+  it('„Ohne Nährwerte“ zählt automatisch als Basic – wie Salz', () => {
+    const key = (name: string) => resolveIngredient({ id: name, name }, 1, localFoodTable)!.key;
+    const keys = basicsKeys({ basics: ['Pasta'], noNutrition: ['Kreuzkümmel'] }, localFoodTable);
+    expect(keys.has(key('Pasta'))).toBe(true);
+    expect(keys.has(key('Kreuzkümmel'))).toBe(true);
+    expect(basicsKeys({ basics: ['Pasta'], noNutrition: [] }, localFoodTable).has(key('Kreuzkümmel'))).toBe(false);
   });
 });

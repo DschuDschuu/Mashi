@@ -22,7 +22,7 @@ import { ProductsLink } from '../components/ProductsLink';
 import { TileSummary } from '../components/TileSummary';
 import { toast } from '../toast';
 import { BarcodeScanner } from '../components/BarcodeScanner';
-import type { MyProduct } from '../../domain/nutrition/myProducts';
+import { productLabel, type MyProduct } from '../../domain/nutrition/myProducts';
 import { FOOD_CHOICES, normalizeName } from '../../domain/nutrition/localFoods';
 
 const UNITS: PantryUnit[] = ['g', 'ml', 'Stück', 'Glas'];
@@ -43,7 +43,7 @@ export function PantryScreen() {
   const recipes = useRecipes();
   const products = useProducts();
   /** Sorte eines Vorrats (vom Bon oder Barcode), z. B. „Pesto verde (K-Classic)“ */
-  const sortName = (id: string) => products.find((p) => p.id === id)?.name;
+  const sortName = (id: string) => { const p = products.find((x) => x.id === id); return p && productLabel(p); };
   const plan = usePlan();
   const [adding, setAdding] = useState(false);
   // Plus-Menü → „Vorrat eintragen“ öffnet das Formular – auch wenn du schon hier bist.

@@ -10,7 +10,7 @@ const p = (id: string, name: string, extra: Partial<MyProduct> = {}): MyProduct 
 const pestoA = p('a', 'Pesto A (Test)', { names: ['grünes pesto'] });
 const pestoB = p('b', 'Pesto B (Test)', { names: ['grünes pesto'] });
 const milk = p('m', 'Milch 0,1 % (Test)', { replaces: ['milch'] });
-const gochu = p('g', 'Gochujang', { replaces: ['gochujang'], generic: true });
+const gochu = p('g', 'Gochujang', { replaces: ['gochujang'] });
 
 describe('Meine Lebensmittel – eine Liste', () => {
   const rows = buildFoodList([pestoA, milk, pestoB, gochu], ['Gochujang', 'Pasta'], ['Kreuzkümmel'], localFoodTable);
@@ -25,8 +25,14 @@ describe('Meine Lebensmittel – eine Liste', () => {
     expect(spelled.map((r) => r.name)).toEqual(['Grünes Pesto']);
   });
 
+  it('ordnet nach der ersetzten Zutat, auch wenn ein freier Name dazukommt', () => {
+    const both = buildFoodList([{ ...milk, names: ['skyr-dessert'] }], ['Milch'], [], localFoodTable);
+    expect(both).toHaveLength(1);
+    expect([both[0].ingredient, both[0].basic]).toEqual(['Milch', 'Milch']);
+  });
+
   it('zeigt ein einzelnes Produkt unter seinem Namen', () => {
-    expect(by('Milch 0,1 % (Test)')?.products).toHaveLength(1);
+    expect(by('Milch 0,1 %')?.products).toHaveLength(1); // „(Test)“ gilt als Marke
   });
 
   it('hängt „Immer im Haus“ an das passende Produkt – oder legt eine eigene Zeile mit Tabellenwerten an', () => {
@@ -41,8 +47,13 @@ describe('Meine Lebensmittel – eine Liste', () => {
     expect(by('Kreuzkümmel')?.zero).toBe('Kreuzkümmel');
     expect(rows.filter((r) => matchesFilter(r, 'haus')).map((r) => r.name)).toEqual(['Gochujang', 'Pasta']);
     expect(rows.filter((r) => matchesFilter(r, 'ohne')).map((r) => r.name)).toEqual(['Kreuzkümmel']);
-    // Meine Produkte = alles mit eigenen Werten (Pasta ohne eigene Werte nicht)
-    expect(rows.filter((r) => matchesFilter(r, 'produkte')).map((r) => r.name)).toEqual(['Gochujang', 'Grünes pesto', 'Milch 0,1 % (Test)']);
+    // Produkte = alles außer „Ohne Nährwerte“ – auch Pasta (immer im Haus, Richtwert der Tabelle)
+    expect(rows.filter((r) => matchesFilter(r, 'produkte')).map((r) => r.name)).toEqual(['Gochujang', 'Grünes pesto', 'Milch 0,1 %', 'Pasta']);
+  });
+
+  it('„Ohne Nährwerte“ steht nur im eigenen Tab – auch wenn es immer im Haus ist', () => {
+    const both = buildFoodList([], ['Zimt'], ['Zimt'], localFoodTable);
+    expect((['produkte', 'haus', 'ohne'] as const).filter((f) => matchesFilter(both[0], f))).toEqual(['ohne']);
   });
 
   it('lässt eine gerade geleerte Zeile stehen, statt sie verschwinden zu lassen', () => {

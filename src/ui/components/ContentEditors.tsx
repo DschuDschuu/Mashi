@@ -4,12 +4,16 @@ import type { Ingredient, Step, Unit } from '../../domain/types';
 import { Icon } from './Icon';
 import { AutoTextarea } from './AutoTextarea';
 import { IngredientNames } from './IngredientNames';
+import { renameKey, renameSuggestion, type RenameOptions } from '../../domain/renames';
+import { dismissRename } from '../../data/store';
+import { useRenameOptions } from '../useRenames';
 
 const UNITS: Unit[] = ['g', 'kg', 'ml', 'l', 'EL', 'TL', 'Prise', 'Stück', 'Zehe', 'Dose', 'Glas', 'Bund', 'Handvoll', 'cm', 'Messlöffel'];
 
 /** Zutatenliste bearbeiten – geteilt von Testfeedback und Rezeptformular. */
 export function IngredientEditor({ items, onChange, newItem }: { items: Ingredient[]; onChange: (i: Ingredient[]) => void; newItem: () => Ingredient }) {
   const update = (idx: number, patch: Partial<Ingredient>) => onChange(items.map((it, i) => (i === idx ? { ...it, ...patch } : it)));
+  const renameOpts = useRenameOptions();
   return (
     <div className="editor">
       <h3 className="small muted">Zutaten</h3>
@@ -30,6 +34,7 @@ export function IngredientEditor({ items, onChange, newItem }: { items: Ingredie
           <button type="button" className="iconbtn iconbtn--sm" aria-label={`${it.name || 'Zutat'} entfernen`} onClick={() => onChange(items.filter((_, i) => i !== idx))}>
             <Icon name="close" size={16} />
           </button>
+          <RenameHint name={it.name} options={renameOpts} onApply={(to) => update(idx, { name: to })} />
         </div>
       ))}
       <button type="button" className="link" onClick={() => onChange([...items, newItem()])}><Icon name="plus" size={16} /> Zutat hinzufügen</button>
@@ -113,5 +118,18 @@ function StepIngredientPicker({ step, ingredients, onChange }: {
         <button type="button" className="link link--muted" onClick={() => onChange(undefined)}>Wieder automatisch erkennen</button>
       )}
     </details>
+  );
+}
+
+/** „→ Milch?“ unter einer Zutat, die einheitlich anders heißt – übernehmen oder nicht mehr vorschlagen */
+function RenameHint({ name, options, onApply }: { name: string; options: RenameOptions; onApply: (to: string) => void }) {
+  const to = renameSuggestion(name, options);
+  if (!to) return null;
+  return (
+    <p className="rename-hint small">
+      <span>Einheitlich: <strong>{to}</strong>?</span>
+      <button type="button" className="link" onClick={() => onApply(to)}>Übernehmen</button>
+      <button type="button" className="link link--muted" onClick={() => dismissRename(renameKey(name))}>Nicht mehr vorschlagen</button>
+    </p>
   );
 }

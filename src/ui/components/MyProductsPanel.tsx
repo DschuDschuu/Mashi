@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { FOOD_CHOICES } from '../../domain/nutrition/localFoods';
-import type { MyProduct } from '../../domain/nutrition/myProducts';
+import { aliasesOf, FOOD_CHOICES, normalizeName } from '../../domain/nutrition/localFoods';
+import { brandOf, nameOf, type MyProduct } from '../../domain/nutrition/myProducts';
 import type { NutritionResult } from '../../domain/nutrition/types';
 import { newId } from '../../domain/recipe';
 import { shelfDaysForFood } from '../../domain/shelfLife';
@@ -11,9 +11,11 @@ import { BarcodeScanner } from './BarcodeScanner';
 import { toast } from '../toast';
 import { Icon } from './Icon';
 import { NutritionQuickForm } from './NutritionQuickForm';
+import { BrandNames } from './BrandNames';
 import { parseNum, toField, type Values } from './productFields';
 
-const foodName = (id: string) => FOOD_CHOICES.find((f) => f.id === id)?.name ?? id;
+/** „fettarme milch“ → „Fettarme milch“ (gespeichert wird klein) */
+const cap = (s: string) => s.charAt(0).toLocaleUpperCase('de-DE') + s.slice(1);
 
 /** Was Mashi ohne Angabe schätzt – vom ersetzten Lebensmittel (Mozzarella 7 Tage) */
 function shelfEstimate(replaces: string[], custom: Parameters<typeof shelfDaysForFood>[2]): string {
@@ -41,7 +43,7 @@ export function UnknownIngredients({ n }: { n: NutritionResult }) {
   const save = (p: MyProduct) => {
     saveProducts([...products, p]);
     setOpen(null);
-    toast(p.generic ? `Nährwerte für „${p.name}“ gespeichert – alle Rezepte rechnen neu` : `„${p.name}“ angelegt – alle Rezepte rechnen neu`);
+    toast(`„${p.name}“ angelegt – alle Rezepte rechnen neu`);
   };
 
   return (
@@ -67,7 +69,9 @@ export function UnknownIngredients({ n }: { n: NutritionResult }) {
 /** Formular für ein eigenes Produkt – auch aus der Bon-Prüfung heraus nutzbar. Mit Barcode-Scan (Open Food Facts). */
 export function ProductForm({ initial, onSave, onCancel }: { initial?: Partial<MyProduct>; onSave: (p: MyProduct) => void; onCancel: () => void }) {
   const products = useProducts();
-  const [name, setName] = useState(initial?.name ?? '');
+  // Ältere Namen mit Marke in Klammern: getrennt anzeigen – gespeichert wird es beim Speichern
+  const [name, setName] = useState(initial?.name ? nameOf({ name: initial.name, brand: initial.brand }) : '');
+  const [brand, setBrand] = useState(initial?.name ? brandOf({ name: initial.name, brand: initial.brand }) ?? '' : '');
   const [ean, setEan] = useState(initial?.ean);
   const [scanning, setScanning] = useState(false);
   const [scanNote, setScanNote] = useState<string | null>(null);
@@ -83,6 +87,16 @@ export function ProductForm({ initial, onSave, onCancel }: { initial?: Partial<M
   });
   const [replaces, setReplaces] = useState<string[]>(initial?.replaces ?? []);
   const [names, setNames] = useState<string[]>(initial?.names ?? []);
+  const [excludes, setExcludes] = useState<string[]>(initial?.excludes ?? []);
+  /** Eine Schreibweise aus- oder wieder einschließen; sind alle aus, fällt der ganze Eintrag weg */
+  const toggleAlias = (id: string, alias: string) => {
+    const next = excludes.includes(alias) ? excludes.filter((x) => x !== alias) : [...excludes, alias];
+    const all = aliasesOf(id);
+    if (all.every((al) => next.includes(al))) {
+      setReplaces(replaces.filter((x) => x !== id));
+      setExcludes(next.filter((x) => !all.includes(x)));
+    } else setExcludes(next);
+  };
   const [packAmount, setPackAmount] = useState(toField(initial?.packageAmount));
   const [packUnit, setPackUnit] = useState<'g' | 'ml' | 'Stück'>(initial?.packageUnit ?? 'g');
   const [packPrice, setPackPrice] = useState(toField(initial?.packagePrice));
@@ -92,6 +106,8 @@ export function ProductForm({ initial, onSave, onCancel }: { initial?: Partial<M
   const [error, setError] = useState<string | null>(null);
 
   const q = search.trim().toLocaleLowerCase('de-DE');
+  // eigener Zutatenname – nur, wenn die Tabelle ihn nicht genau so kennt und er noch nicht dabei ist
+  const freeName = q && !FOOD_CHOICES.some((f) => normalizeName(f.name) === normalizeName(q)) && !names.includes(normalizeName(q)) ? normalizeName(q) : '';
   const hits = q
     ? FOOD_CHOICES.filter((f) => f.name.toLocaleLowerCase('de-DE').includes(q) && !replaces.includes(f.id)).slice(0, 10)
     : [];
@@ -113,15 +129,17 @@ export function ProductForm({ initial, onSave, onCancel }: { initial?: Partial<M
     onSave({
       id: initial?.id ?? newId('p'),
       name: name.trim(),
+      ...(brand.trim() ? { brand: brand.trim() } : {}),
       replaces,
       ...(names.length ? { names } : {}),
+      // nur Ausnahmen, die zu einem ersetzten Eintrag gehören
+      ...(() => { const ex = excludes.filter((x) => replaces.some((id) => aliasesOf(id).includes(x))); return ex.length ? { excludes: ex } : {}; })(),
       // Zusatzwerte vom Etikett (Zucker, Salz …) behalten – das Formular zeigt nur die vier Hauptwerte
       per100g: { ...initial?.per100g, ...extra, kcal, protein, carbs, fat },
       ...(ean ? { ean } : {}),
       ...(amount ? { packageAmount: amount, packageUnit: packUnit } : {}),
       ...(amount && price !== undefined ? { packagePrice: price } : {}),
       ...(shelfDays ? { shelfDays } : {}),
-      ...(initial?.generic && !ean && !amount ? { generic: true } : {}),
       updatedAt: new Date().toISOString(),
     });
   };
@@ -138,6 +156,7 @@ export function ProductForm({ initial, onSave, onCancel }: { initial?: Partial<M
   const applyScan = (found: ScannedProduct) => {
     const { kcal, protein, carbs, fat, ...rest } = found.per100g;
     setName(found.name);
+    if (found.brand) setBrand(found.brand);
     setValues({ kcal: toField(kcal), protein: toField(protein), carbs: toField(carbs), fat: toField(fat) });
     setExtra(rest);
     if (found.packageAmount) {
@@ -198,10 +217,17 @@ export function ProductForm({ initial, onSave, onCancel }: { initial?: Partial<M
         </div>
       )}
       {scanning && <BarcodeScanner onCode={onCode} onClose={() => setScanning(false)} />}
-      <label className="field">
-        <span>Name (wie auf der Packung)</span>
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="z. B. Milch 0,1 % (Hausmarke)" />
-      </label>
+      <div className="row-2">
+        <label className="field">
+          <span>Name</span>
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="z. B. Milch 0,1 %" />
+        </label>
+        <label className="field">
+          <span>Marke (optional)</span>
+          <input value={brand} onChange={(e) => setBrand(e.target.value)} list="brand-names" placeholder="z. B. Milbona" />
+        </label>
+      </div>
+      <BrandNames />
       <p className="small muted">Werte vom Etikett, pro 100 g bzw. 100 ml:</p>
       <div className="row-2">{numField('kcal', 'kcal')}{numField('carbs', 'Kohlenhydrate (g)')}</div>
       <div className="row-2">{numField('protein', 'Eiweiß (g)')}{numField('fat', 'Fett (g)')}</div>
@@ -224,46 +250,51 @@ export function ProductForm({ initial, onSave, onCancel }: { initial?: Partial<M
         <input inputMode="numeric" value={shelf} onChange={(e) => setShelf(e.target.value)} placeholder={shelfEstimate(replaces, shelfCustom)} />
       </label>
 
-      {names.length > 0 && (
-        <div className="stack">
-          <span className="small muted">Gilt für Zutaten namens:</span>
-          <div className="chips">
-            {names.map((x) => (
-              <button key={x} type="button" className="afilter" onClick={() => setNames(names.filter((y) => y !== x))} aria-label={`${x} entfernen`}>
-                {x} <Icon name="close" size={14} />
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
+      {/* EIN Feld: Tabellen-Einträge (mit allen Schreibweisen als Chips) und freie Namen */}
       <div className="stack">
-        <span className="small muted">{names.length ? 'Ersetzt außerdem (optional):' : 'Ersetzt in allen Rezepten (optional, z. B. „Milch“ für deine 0,1-%-Milch):'}</span>
-        {replaces.length > 0 && (
-          <div className="chips">
-            {replaces.map((id) => (
-              <button key={id} type="button" className="afilter" onClick={() => setReplaces(replaces.filter((x) => x !== id))} aria-label={`${foodName(id)} entfernen`}>
-                {foodName(id)} <Icon name="close" size={14} />
+        <span className="small muted">Gilt für diese Zutaten in deinen Rezepten:</span>
+        {(replaces.length > 0 || names.length > 0) && (
+          <div className="chips giltfuer">
+            {replaces.flatMap((id) => aliasesOf(id).map((al) => {
+              const off = excludes.includes(al);
+              return (
+                <button key={id + al} type="button" className={`afilter${off ? ' is-off' : ''}`}
+                  aria-label={off ? `${cap(al)} wieder einschließen` : `${cap(al)} ausnehmen`}
+                  onClick={() => toggleAlias(id, al)}>
+                  {cap(al)} <Icon name={off ? 'refresh' : 'close'} size={14} />
+                </button>
+              );
+            }))}
+            {names.map((x) => (
+              <button key={x} type="button" className="afilter" onClick={() => setNames(names.filter((y) => y !== x))} aria-label={`${cap(x)} entfernen`}>
+                {cap(x)} <Icon name="close" size={14} />
               </button>
             ))}
           </div>
         )}
+        {excludes.length > 0 && <p className="small muted">Durchgestrichen = ausgenommen: dort rechnet Mashi mit dem Richtwert. Antippen holt es zurück.</p>}
         <label className="search">
           <Icon name="search" size={18} />
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Lebensmittel suchen, z. B. Milch" aria-label="Lebensmittel suchen" />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Zutat hinzufügen, z. B. Milch" aria-label="Zutat hinzufügen" />
           {search && (
             <button type="button" className="iconbtn iconbtn--sm search__clear" onClick={() => setSearch('')} aria-label="Suche leeren">
               <Icon name="close" size={16} />
             </button>
           )}
         </label>
-        {hits.length > 0 && (
+        {(hits.length > 0 || freeName) && (
           <div className="chips">
             {hits.map((f) => (
               <button key={f.id} type="button" className="chip chip--sm" onClick={() => { setReplaces([...replaces, f.id]); setSearch(''); }}>
                 <Icon name="plus" size={14} /> {f.name}
               </button>
             ))}
+            {/* Kennt die Tabelle den Namen nicht genau: als eigene Zutat übernehmen („Kimchi-Paste“) */}
+            {freeName && (
+              <button type="button" className="chip chip--sm" onClick={() => { setNames([...names, freeName]); setSearch(''); }}>
+                <Icon name="plus" size={14} /> „{search.trim()}“ als Zutat
+              </button>
+            )}
           </div>
         )}
       </div>

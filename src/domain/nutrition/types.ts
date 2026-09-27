@@ -61,8 +61,12 @@ export interface FoodVariant {
  */
 export interface FoodTable {
   byRef(ref: FoodRef): FoodEntry | undefined;
-  /** Suche über den Zutatennamen. 'exact' = eindeutig, 'approx' = nur ungefähr passend. */
-  matchName(name: string): { food: FoodEntry; quality: 'exact' | 'approx' } | undefined;
+  /**
+   * Suche über den Zutatennamen. 'exact' = eindeutig, 'approx' = nur ungefähr passend.
+   * alias = die Schreibweise der Tabelle, die gepasst hat („vollmilch“) – für Ausnahmen bei eigenen Produkten.
+   * specific = im Namen steht ausdrücklich eine Fettstufe („Milch 3,5 %“) – dann nicht dein Standard-Produkt.
+   */
+  matchName(name: string): { food: FoodEntry; quality: 'exact' | 'approx'; alias?: string; specific?: boolean } | undefined;
 }
 
 /** Schnittstelle für externe Datenbanken – noch nicht implementiert (Phase 7). */

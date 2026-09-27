@@ -640,6 +640,12 @@ export function setFavoriteVariant(group: readonly { id: string }[], favoriteId:
   saveProducts(withFavorite(products, group, favoriteId).map((p) => (ids.has(p.id) ? { ...p, updatedAt: stamp } : p)));
 }
 
+/** Namensvorschlag ausblenden („Nicht mehr vorschlagen“) – oder mit restore wieder zeigen */
+export function dismissRename(key: string, restore = false) {
+  const list = pantry.renameDismissed ?? [];
+  commitPantry({ ...pantry, renameDismissed: restore ? list.filter((k) => k !== key) : [...new Set([...list, key])] });
+}
+
 export function setMacroGoal(goal: MacroGoal) {
   commitPantry({ ...pantry, macroGoal: goal });
 }

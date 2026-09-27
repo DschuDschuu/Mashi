@@ -1,5 +1,5 @@
-import { normalizeName, PROVIDER } from './localFoods';
-import type { MyProduct } from './myProducts';
+import { aliasesOf, normalizeName, PROVIDER } from './localFoods';
+import { nameOf, type MyProduct } from './myProducts';
 import type { FoodEntry, FoodTable } from './types';
 
 /**
@@ -25,15 +25,24 @@ export interface FoodRow {
 
 const cap = (s: string) => s.charAt(0).toLocaleUpperCase('de-DE') + s.slice(1);
 
-/** Zutat, für die ein Produkt gilt: sein erster Name – sonst das, was es ersetzt – sonst der eigene Name */
+/**
+ * Zutat, für die ein Produkt gilt: was es in der Tabelle ersetzt („Joghurt“) – sonst sein erster
+ * eigener Zutatenname („grünes pesto“) – sonst der eigene Name. Die Tabelle zuerst, weil ein
+ * zusätzlicher freier Name („Skyr-Dessert“) die Zeile sonst unter diesen Namen verschieben würde.
+ */
 function keyOf(p: MyProduct, table: FoodTable, spelled: ReadonlyMap<string, string>): { key: string; label: string } {
+  const replaced = p.replaces[0] ? table.byRef({ provider: PROVIDER, foodId: p.replaces[0] }) ?? table.matchName(p.replaces[0])?.food : undefined;
+  if (replaced) {
+    // Einträge mit Fettstufe („Milch 3,5 %“) haben meist auch den schlichten Namen („milch“) – den nehmen
+    const plain = /\d/.test(replaced.name) ? aliasesOf(replaced.ref.foodId).find((a) => !/\d/.test(a)) : undefined;
+    const label = plain ? plain.replace(/(^|\s)(\p{L})/gu, (_m, sp: string, ch: string) => sp + ch.toUpperCase()) : replaced.name;
+    return { key: normalizeName(label), label };
+  }
   if (p.names?.length) {
     const key = normalizeName(p.names[0]);
     // gespeichert ist der Name klein („grünes pesto“) – angezeigt wie in deinen Rezepten („Grünes Pesto“)
     return { key, label: spelled.get(key) ?? cap(p.names[0]) };
   }
-  const replaced = p.replaces[0] ? table.byRef({ provider: PROVIDER, foodId: p.replaces[0] }) ?? table.matchName(p.replaces[0])?.food : undefined;
-  if (replaced) return { key: normalizeName(replaced.name), label: replaced.name };
   return { key: normalizeName(p.name), label: p.name };
 }
 
@@ -71,15 +80,18 @@ export function buildFoodList(
   for (const k of keep) rowFor(k);
 
   return [...rows.values()]
-    .map(({ label, ...r }) => ({ ...r, ingredient: label, name: r.products.length === 1 ? r.products[0].name : label }))
+    .map(({ label, ...r }) => ({ ...r, ingredient: label, name: r.products.length === 1 ? nameOf(r.products[0]) : label }))
     .sort((a, b) => a.name.localeCompare(b.name, 'de'));
 }
 
 /** Filter oben auf der Seite */
-export type FoodFilter = 'alle' | 'produkte' | 'haus' | 'ohne';
+/**
+ * Produkte = alles, was du dauerhaft verwendest, mit Nährwerten (eigene oder Richtwert).
+ * Immer im Haus = Produkte mit diesem Zusatz. Ohne Nährwerte = nur der Name, steht nirgends sonst.
+ */
+export type FoodFilter = 'produkte' | 'haus' | 'ohne';
 export function matchesFilter(r: FoodRow, f: FoodFilter): boolean {
-  if (f === 'produkte') return r.products.length > 0; // eigene Werte – mit oder ohne Packung, auch Sorten
-  if (f === 'haus') return !!r.basic;
   if (f === 'ohne') return !!r.zero;
-  return true;
+  if (r.zero) return false;
+  return f === 'produkte' || !!r.basic;
 }

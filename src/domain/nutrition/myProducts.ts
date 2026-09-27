@@ -1,4 +1,5 @@
 import { normalizeName } from './localFoods';
+import { sameLevel } from './fatLevels';
 import { averageNutrients } from './variants';
 import type { FoodEntry, FoodTable, Nutrients } from './types';
 
@@ -35,11 +36,15 @@ export interface MyProduct {
   /** hält ab Kauf so viele Tage (von dir) – leer = Mashi schätzt */
   shelfDays?: number;
   /**
-   * „Eigene Nährwerte“ statt „Mein Produkt“: nur Werte für einen Zutatennamen, keine bestimmte
-   * Packung. Rechnet genauso; steht auf der Produkte-Seite in einer eigenen Gruppe. Bekommt es
-   * Barcode oder Packungsgröße, wird es zum richtigen Produkt.
+   * Marke („K-Classic“, „Milbona“) – optional. Früher stand sie in Klammern im Namen;
+   * solche Namen werden beim Anzeigen getrennt (siehe splitBrand), gespeichert erst beim nächsten Bearbeiten.
    */
-  generic?: boolean;
+  brand?: string;
+  /**
+   * Ausnahmen: Schreibweisen der ersetzten Einträge, für die dieses Produkt NICHT gilt
+   * (normalisiert, z. B. „vollmilch“ – deine 0,1-%-Milch soll nicht für Vollmilch rechnen).
+   */
+  excludes?: string[];
   /**
    * Favorit unter mehreren Sorten derselben Zutat (★): Rezepte rechnen dann mit dieser Sorte statt
    * mit dem Durchschnitt, und liegt sie im Vorrat, nimmt Mashi sie beim Planen ohne Nachfrage.
@@ -49,6 +54,29 @@ export interface MyProduct {
 }
 
 export const MY_PRODUCTS_PROVIDER = 'mashi-meine-produkte';
+
+/**
+ * „Pesto verde (K-Classic)“ → Name „Pesto verde“ + Marke „K-Classic“.
+ * Nur, wenn die Klammer nach einer Marke aussieht: großer Anfangsbuchstabe, keine Zahlen,
+ * kein „z. B.“ – „Joghurt (fettarm)“ oder „Milch (1,5 %)“ bleiben, wie sie sind.
+ */
+export function splitBrand(name: string): { name: string; brand?: string } {
+  const m = name.match(/^(.*\S)\s*\(([^()]+)\)\s*$/u);
+  if (!m) return { name };
+  const brand = m[2].trim();
+  if (!/^\p{Lu}/u.test(brand) || /[\d%]/.test(brand) || brand.length > 25 || /^(z\.\s?B|ca\.|bzw)/i.test(brand)) return { name };
+  return { name: m[1], brand };
+}
+
+/** Marke eines Produkts – eingetragen oder (bei älteren) aus dem Namen */
+export const brandOf = (p: Pick<MyProduct, 'name' | 'brand'>): string | undefined => p.brand || splitBrand(p.name).brand;
+/** Name ohne Marke */
+export const nameOf = (p: Pick<MyProduct, 'name' | 'brand'>): string => (p.brand ? p.name : splitBrand(p.name).name);
+/** Für Listen und Auswahl: „Pesto verde · K-Classic“ */
+export const productLabel = (p: Pick<MyProduct, 'name' | 'brand'>): string => {
+  const b = brandOf(p);
+  return b ? `${nameOf(p)} · ${b}` : nameOf(p);
+};
 
 /** 1 Glas = Packungsgröße des Produkts (in g; ml über die Dichte des ersetzten Eintrags) */
 function glassOf(p: MyProduct, replaced?: FoodEntry): number | undefined {
@@ -62,7 +90,7 @@ function glassOf(p: MyProduct, replaced?: FoodEntry): number | undefined {
 function asEntry(p: MyProduct, replaced?: FoodEntry): FoodEntry {
   return {
     ref: { provider: MY_PRODUCTS_PROVIDER, foodId: p.id },
-    name: p.name,
+    name: productLabel(p),
     per100g: p.per100g,
     ...(replaced?.density !== undefined ? { density: replaced.density } : {}),
     ...(replaced?.portions || glassOf(p, replaced) ? { portions: { ...replaced?.portions, ...(glassOf(p, replaced) ? { Glas: glassOf(p, replaced) } : {}) } } : {}),
@@ -88,7 +116,7 @@ function asGroup(ps: MyProduct[], key: string, replaced?: FoodEntry): FoodEntry 
     name: replaced?.name ?? key.charAt(0).toLocaleUpperCase('de-DE') + key.slice(1),
     per100g: fav ? fav.per100g : averageNutrients(ps.map((p) => p.per100g)),
     ...(days.length === ps.length ? { shelfDays: Math.min(...days) } : { shelfDays: undefined }),
-    variants: ps.map((p) => ({ id: p.id, name: p.name, per100g: p.per100g, ...(p.favorite ? { favorite: true } : {}) })),
+    variants: ps.map((p) => ({ id: p.id, name: productLabel(p), per100g: p.per100g, ...(p.favorite ? { favorite: true } : {}) })),
     ...(fav ? { favoriteId: fav.id } : {}),
   };
 }
@@ -108,10 +136,13 @@ export function withMyProducts(base: FoodTable, products: MyProduct[]): FoodTabl
   const byName = new Map<string, MyProduct[]>();
   for (const p of products) for (const n of new Set((p.names ?? []).map(normalizeName))) push(byName, n, p);
   // Ein Produkt passt immer auch auf seinen eigenen Namen („Frischkäse Balance“)
-  const byOwnName = new Map(products.map((p) => [normalizeName(p.name), p]));
-  const swap = (food: FoodEntry): FoodEntry => {
-    const ps = byReplaced.get(food.ref.foodId);
-    return ps ? asGroup(ps, food.ref.foodId, food) : food;
+  const byOwnName = new Map(products.flatMap((p) => [[normalizeName(p.name), p], [normalizeName(nameOf(p)), p]] as const));
+  /** Eigene Produkte statt des Tabelleneintrags – ohne die, die diese Schreibweise ausnehmen */
+  const swap = (food: FoodEntry, alias?: string, raw?: string, name?: string): FoodEntry => {
+    const ps = byReplaced.get(food.ref.foodId)?.filter((p) => !p.excludes?.some((x) => x === alias || x === raw)
+      // Fettstufen: „Milch 0,1 %“ ersetzt nicht „Milch 3,5 %“ (siehe fatLevels.ts)
+      && (name === undefined || sameLevel(nameOf(p), name, food.ref.foodId) !== false));
+    return ps?.length ? asGroup(ps, food.ref.foodId, food) : food;
   };
   return {
     byRef(ref) {
@@ -135,14 +166,16 @@ export function withMyProducts(base: FoodTable, products: MyProduct[]): FoodTabl
       const m = base.matchName(name);
       // Kennt die Tabelle den Namen genau (Pesto), übernimmt das Produkt deren Umrechnungen
       // (1 Glas, 1 EL, Dichte) – falls du selbst keine Packungsgröße eingetragen hast
-      if (own) return { food: asGroup(own, n, m?.quality === 'exact' ? m.food : undefined), quality: 'exact' };
-      const self = byOwnName.get(n);
+      // „Milch (1,5 %)“ normalisiert zu „milch“ – die Stufe entscheidet, nicht dein Standard-Produkt „Milch“
+      const otherLevel = !!m?.specific && m.alias !== n;
+      if (own && !otherLevel) return { food: asGroup(own, n, m?.quality === 'exact' ? m.food : undefined), quality: 'exact' };
+      const self = otherLevel ? undefined : byOwnName.get(n);
       if (self) {
         // Umrechnungen (Dichte, Stückgewicht) vom ersetzten Eintrag behalten, wenn der Name dorthin führt
         const replaced = m && self.replaces.includes(m.food.ref.foodId) ? m.food : undefined;
         return { food: asEntry(self, replaced), quality: 'exact' };
       }
-      return m && { food: swap(m.food), quality: m.quality };
+      return m && { food: swap(m.food, m.alias ?? n, n, name), quality: m.quality, ...(m.alias ? { alias: m.alias } : {}), ...(m.specific ? { specific: true } : {}) };
     },
   };
 }
@@ -163,5 +196,7 @@ export function isValidProduct(v: unknown): v is MyProduct {
     && (p.packageUnit === undefined || ['g', 'ml', 'Stück'].includes(p.packageUnit as string))
     && (p.ean === undefined || typeof p.ean === 'string')
     && (p.shelfDays === undefined || isNum(p.shelfDays))
+    && (p.brand === undefined || typeof p.brand === 'string')
+    && (p.excludes === undefined || (Array.isArray(p.excludes) && p.excludes.every((x) => typeof x === 'string')))
     && !!n && isNum(n.kcal) && isNum(n.protein) && isNum(n.carbs) && isNum(n.fat);
 }

@@ -9,8 +9,8 @@ import { useProducts } from '../../data/store';
 import { barcodeLookup } from '../../services';
 import { recognizeText } from '../ocr';
 import { BarcodeScanner } from './BarcodeScanner';
-import { ChipSelect } from './Controls';
 import { Icon } from './Icon';
+import { BrandNames } from './BrandNames';
 import { parseNum, toField, type Values } from './productFields';
 
 /** Reihenfolge wie überall in Mashi: kcal · Kohlenhydrate · Eiweiß · Fett */
@@ -20,8 +20,8 @@ const LABEL: Record<(typeof CORE)[number], string> = { kcal: 'kcal', protein: 'E
 /**
  * Nährwerte für eine Zutat hinterlegen – ohne das große Produktformular.
  * Drei Wege: Nährwerttabelle fotografieren, bei Open Food Facts suchen (Name oder Barcode), abtippen.
- * Die Werte stehen immer zur Prüfung da. Danach die Wahl: nur Nährwerte für diesen Namen
- * („Eigene Nährwerte“) oder ein richtiges „Mein Produkt“ (Barcode, Packung – wird beim Scan/Bon erkannt).
+ * Die Werte stehen immer zur Prüfung da. Gespeichert wird ein „Mein Produkt“ – Name und Marke
+ * sind vorausgefüllt (aus Open Food Facts), Packung, Preis und Barcode lassen sich später ergänzen.
  */
 export function NutritionQuickForm({ ingredient, onSave, onCancel }: {
   ingredient: string;
@@ -41,8 +41,8 @@ export function NutritionQuickForm({ ingredient, onSave, onCancel }: {
   const [scanning, setScanning] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [saveAs, setSaveAs] = useState<'werte' | 'produkt'>('werte');
   const [productName, setProductName] = useState(ingredient);
+  const [brand, setBrand] = useState('');
 
   const take = (found: ScannedProduct, text: string) => {
     const { kcal, protein, carbs, fat, ...rest } = found.per100g;
@@ -50,6 +50,7 @@ export function NutritionQuickForm({ ingredient, onSave, onCancel }: {
     setExtra(rest);
     setSource(found);
     setProductName(found.name);
+    setBrand(found.brand ?? '');
     setHits(null);
     setWay(null);
     setNote(text);
@@ -106,7 +107,6 @@ export function NutritionQuickForm({ ingredient, onSave, onCancel }: {
       const found = await barcodeLookup.find(code);
       if (found) {
         take(found, 'Werte von Open Food Facts (von der Community gepflegt) – bitte kurz mit dem Etikett vergleichen.');
-        setSaveAs('produkt'); // eine bestimmte Packung – als Produkt wiedererkennbar
       } else {
         setSource({ ean: code, name: ingredient, per100g: { kcal: 0, protein: 0, carbs: 0, fat: 0 } });
         setNote('Bei Open Food Facts nicht gefunden – bitte die Werte vom Etikett abtippen. Der Barcode wird gemerkt, wenn du es als Produkt speicherst.');
@@ -124,17 +124,17 @@ export function NutritionQuickForm({ ingredient, onSave, onCancel }: {
     if (kcal === undefined || protein === undefined || carbs === undefined || fat === undefined) {
       return setError('Bitte alle vier Werte eintragen (pro 100 g bzw. 100 ml).');
     }
-    const asProduct = saveAs === 'produkt';
-    const ean = asProduct && source?.ean && !products.some((p) => p.ean === source.ean) ? source.ean : undefined;
+    // Barcode nur, wenn du ihn nicht schon bei einem anderen Produkt hast
+    const ean = source?.ean && !products.some((p) => p.ean === source.ean) ? source.ean : undefined;
     onSave({
       id: newId('p'),
-      name: asProduct ? productName.trim() || ingredient : ingredient,
+      name: productName.trim() || ingredient,
+      ...(brand.trim() ? { brand: brand.trim() } : {}),
       replaces: [],
       names: [normalizeName(ingredient)],
       per100g: { ...extra, kcal, protein, carbs, fat },
-      ...(asProduct
-        ? { ...(ean ? { ean } : {}), ...(source?.packageAmount ? { packageAmount: source.packageAmount, packageUnit: source.packageUnit } : {}) }
-        : { generic: true }),
+      ...(ean ? { ean } : {}),
+      ...(source?.packageAmount ? { packageAmount: source.packageAmount, packageUnit: source.packageUnit } : {}),
       updatedAt: new Date().toISOString(),
     });
   };
@@ -190,23 +190,16 @@ export function NutritionQuickForm({ ingredient, onSave, onCancel }: {
         {CORE.slice(2).map((k) => field(k))}
       </div>
 
-      <div className="stack stack--tight">
-        <span className="small muted">Speichern als</span>
-        <ChipSelect single options={[
-          { value: 'werte', label: `Nur Nährwerte für „${ingredient}“` },
-          { value: 'produkt', label: 'Mein Produkt' },
-        ]} selected={[saveAs]} onChange={([v]) => v && setSaveAs(v as 'werte' | 'produkt')} />
-        <p className="small muted">
-          {saveAs === 'werte'
-            ? 'Gilt für jede Zutat namens „' + ingredient + '“, egal welche Marke.'
-            : 'Eine bestimmte Packung: wird beim Barcode-Scan und auf dem Kassenbon wiedererkannt. Packung und Preis kannst du später unter „Meine Produkte“ ergänzen.'}
-        </p>
-        {saveAs === 'produkt' && (
-          <label className="field"><span>Name (wie auf der Packung)</span>
-            <input value={productName} onChange={(e) => setProductName(e.target.value)} />
-          </label>
-        )}
+      <div className="row-2">
+        <label className="field"><span>Name</span>
+          <input value={productName} onChange={(e) => setProductName(e.target.value)} />
+        </label>
+        <label className="field"><span>Marke (optional)</span>
+          <input value={brand} onChange={(e) => setBrand(e.target.value)} list="brand-names" placeholder="z. B. K-Classic" />
+        </label>
       </div>
+      <BrandNames />
+      <p className="small muted">Gilt für jede Zutat „{ingredient}“. Packung, Preis und Barcode kannst du später unter „Meine Lebensmittel“ ergänzen.</p>
 
       {error && <p className="error" role="alert">{error}</p>}
       <div className="row-gap">

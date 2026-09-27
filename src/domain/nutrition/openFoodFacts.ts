@@ -7,7 +7,9 @@ import type { Nutrients } from './types';
  */
 export interface ScannedProduct {
   ean: string;
+  /** Produktname ohne Marke */
   name: string;
+  brand?: string;
   per100g: Nutrients;
   packageAmount?: number;
   packageUnit?: 'g' | 'ml';
@@ -75,7 +77,8 @@ export function fromOpenFoodFacts(ean: string, res: OffResponse): ScannedProduct
   const brand = p.brands?.split(',')[0]?.trim();
   return {
     ean,
-    name: [title, brand && !title.toLowerCase().includes(brand.toLowerCase()) ? `(${brand})` : ''].filter(Boolean).join(' ') || `Produkt ${ean}`,
+    name: title || `Produkt ${ean}`,
+    ...(brand ? { brand } : {}),
     per100g: { kcal, protein, carbs, fat, ...optional },
     ...(pack ? { packageAmount: pack.amount, packageUnit: pack.unit } : {}),
   };

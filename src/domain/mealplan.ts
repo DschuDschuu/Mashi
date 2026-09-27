@@ -1,4 +1,5 @@
 import type { FoodEntry, FoodKind, FoodTable } from './nutrition/types';
+import { DEFAULT_NO_NUTRITION } from './nutrition/noNutrition';
 import { toGrams } from './nutrition/units';
 import { normalizeName } from './nutrition/localFoods';
 import { MY_PRODUCTS_PROVIDER } from './nutrition/myProducts';
@@ -56,8 +57,12 @@ const PANTRY = new Set([
 export const DEFAULT_BASICS = ['Pasta', 'Reis', 'Gochujang', 'Miso', 'Sesam', 'Sojasauce'];
 
 /** Schlüssel der „Immer im Haus“-Zutaten (fehlt die Liste: die Vorbelegung). */
-export function basicsKeys(pantry: Pick<Pantry, 'basics'> | undefined, table: FoodTable): Set<string> {
-  const names = pantry?.basics ?? DEFAULT_BASICS;
+/**
+ * Was nie als „fehlt“ gilt und auf der Einkaufsliste unter „Basics“ steht:
+ * „Immer im Haus“ – und alles „Ohne Nährwerte“ (Gewürze & Co.), wie Salz und Pfeffer.
+ */
+export function basicsKeys(pantry: Pick<Pantry, 'basics' | 'noNutrition'> | undefined, table: FoodTable): Set<string> {
+  const names = [...(pantry?.basics ?? DEFAULT_BASICS), ...(pantry?.noNutrition ?? DEFAULT_NO_NUTRITION)];
   return new Set(names.map((name) => resolveIngredient({ id: name, name }, 1, table)?.key).filter((k): k is string => !!k));
 }
 

@@ -28,6 +28,8 @@ import { toast } from '../toast';
 import { useIsTablet } from '../useMediaQuery';
 import { useNutrition } from '../useNutrition';
 import { useSwipe } from '../useSwipe';
+import { useSlide } from '../useSlide';
+import { RenamePanel } from '../components/RenamePanel';
 import { useVariantPrompt } from '../components/VariantSheet';
 
 // Vier kurze Tabs passen auch aufs schmale Handy (375 px) – die Infos stehen unter „Notizen“
@@ -157,6 +159,7 @@ const header = (
         <Stepper value={servings} onChange={setServings} label="Portionen" />
       </div>
       {stock && <p className="ingredients__stock"><StockLine content={c} stock={stock} max={4} /></p>}
+      <RenamePanel recipe={recipe} />
       <ul className={`ingredients${stock ? ' has-stock' : ''}`}>
         {ingredients.map((i) => (
           <li key={i.id} className={i.optional ? 'is-optional' : ''}>
@@ -187,6 +190,7 @@ const header = (
   // Auf dem Tablet stehen Zutaten und Zubereitung dauerhaft da – dann braucht es dafür keine Tabs.
   const tabs = isTablet ? TABLET_TABS : TABS;
   const activeTab: Tab = tabs.includes(tab) ? tab : tabs[0];
+  const slide = useSlide(tabs.indexOf(activeTab));
   // Nach links wischen = nächster Tab, nach rechts = vorheriger
   const step = (dir: 1 | -1) => {
     const next = tabs[tabs.indexOf(activeTab) + dir];
@@ -201,10 +205,12 @@ const header = (
         ))}
       </div>
       <div className="tabpanel" role="tabpanel" {...swipe}>
-        {activeTab === 'Zutaten' && ingredientsPanel}
-        {activeTab === 'Schritte' && stepsPanel}
-        {activeTab === 'Nährwerte' && <><NutritionDetails n={n} servings={servings} /><UnknownIngredients n={n} /></>}
-        {activeTab === 'Notizen' && <><Notes recipe={recipe} /><h3 className="h3">Über das Rezept</h3><Infos recipe={recipe} /></>}
+        <div key={activeTab} className={slide}>
+          {activeTab === 'Zutaten' && ingredientsPanel}
+          {activeTab === 'Schritte' && stepsPanel}
+          {activeTab === 'Nährwerte' && <><NutritionDetails n={n} servings={servings} /><UnknownIngredients n={n} /></>}
+          {activeTab === 'Notizen' && <><Notes recipe={recipe} /><h3 className="h3">Über das Rezept</h3><Infos recipe={recipe} /></>}
+        </div>
       </div>
     </>
   );

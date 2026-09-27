@@ -46,7 +46,7 @@ describe('Sorten: mehrere eigene Produkte für eine Zutat', () => {
     const avg = computeNutrition(dish(100), table).total!.kcal;
     const withB = computeNutrition(dish(100), table, { 'i-pesto': 'p-b' });
     expect(withB.total!.kcal).toBeCloseTo(avg + 50);
-    expect(withB.items[0].food?.name).toBe('Pesto B (Test)');
+    expect(withB.items[0].food?.name).toBe('Pesto B · Test') // Anzeige: Name · Marke;
     expect(withB.range).toBeUndefined();
   });
 

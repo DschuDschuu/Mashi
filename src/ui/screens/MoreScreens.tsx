@@ -10,7 +10,8 @@ import { TopBar } from '../components/TopBar';
 import { MacroGoalSettings } from '../components/MacroGoalSettings';
 import { Icon } from '../components/Icon';
 import { RecipeImage } from '../components/RecipeImage';
-import { updateSettings, useSettings } from '../settings';
+import { THEMES, updateSettings, useSettings } from '../settings';
+import { Onboarding } from '../components/Onboarding';
 import { recipeCount } from '../format';
 import { toast } from '../toast';
 
@@ -18,6 +19,7 @@ export function MoreScreen() {
   const all = useRecipes();
   const archived = all.filter((r) => r.archivedAt);
   const settings = useSettings();
+  const [tour, setTour] = useState(false);
   return (
     <main className="screen">
       <TopBar title="Einstellungen" backTo="/" />
@@ -58,7 +60,31 @@ export function MoreScreen() {
             onChange={(showStepIngredients) => updateSettings({ showStepIngredients })}
           />
         </div>
+        <div className="panel stack">
+          <div>
+            <strong>Farbthema</strong>
+            <p className="small muted">Gilt nur für dieses Gerät.</p>
+          </div>
+          <div className="themes" role="radiogroup" aria-label="Farbthema">
+            {THEMES.map((t) => (
+              <button key={t.id} type="button" role="radio" aria-checked={settings.theme === t.id}
+                className={`theme-pick${settings.theme === t.id ? ' is-on' : ''}`} onClick={() => updateSettings({ theme: t.id })}>
+                <span className="theme-pick__dots" aria-hidden>{t.colors.map((c) => <span key={c} style={{ background: c }} />)}</span>
+                {t.label}
+              </button>
+            ))}
+          </div>
+        </div>
         <MacroGoalSettings />
+        <button type="button" className="panel link-row" onClick={() => setTour(true)}>
+          <Icon name="info" size={20} />
+          <span className="link-row__text">
+            <strong>Einführung ansehen</strong>
+            <small className="muted">Alle Funktionen in acht kurzen Karten</small>
+          </span>
+          <Icon name="chevron" size={18} />
+        </button>
+        {tour && <Onboarding onClose={() => setTour(false)} />}
       </Section>
 
       <Section title="Sicherung">

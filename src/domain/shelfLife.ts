@@ -44,7 +44,8 @@ const DAYS_BY_FOOD: Record<string, number | null> = {
   haehnchenhack: 1, rinderhack: 1, haehnchenbrust: 2, rindersteak: 3, doenerfleisch: 2, bacon: 10,
   fruehstuecksfleisch: null, // Konserve
   // Milchprodukte
-  parmesan: 28, gruyere: 21, cheddar: 21, 'griech-joghurt': 10, magerquark: 10, frischkaese: 14,
+  parmesan: 28, gruyere: 21, cheddar: 21, 'griech-joghurt': 10, magerquark: 10, 'quark-20': 10, 'quark-40': 10, frischkaese: 14,
+  'joghurt-01': 10, 'joghurt-15': 10, 'joghurt-35': 10,
   'frischkaese-light': 14, huettenkaese: 7, mozzarella: 7, milch: 7, 'milch-fettarm': 7, magermilch: 7,
   hafermilch: null, sahne: 7, kochsahne: 14, 'creme-fraiche': 14,
   // Gemüse & Obst

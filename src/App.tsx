@@ -1,4 +1,6 @@
 import { useEffect, type ReactElement } from 'react';
+import { Onboarding } from './ui/components/Onboarding';
+import { useSettings } from './ui/settings';
 import type { Mode } from './data/backend';
 import { useStoreReady } from './data/store';
 import { navigate, useRoute, type Route } from './router';
@@ -65,6 +67,7 @@ export function App({ mode }: { mode: Mode | null }) {
   const ready = useStoreReady();
   const route = useRoute();
   const message = useToast();
+  const settings = useSettings();
 
   // Geschweifte Klammern nötig: neuere Browser geben bei scrollTo ein Promise zurück,
   // das React sonst für eine Aufräumfunktion hält.
@@ -83,6 +86,8 @@ export function App({ mode }: { mode: Mode | null }) {
       <StatusBanner />
       {screen}
       {!cooking && <BottomNav active={tab} onlyTablet={!tab} />}
+      {/* Einführung beim ersten Start (je Gerät) – nicht mitten im Kochen */}
+      {!settings.onboarded && !cooking && <Onboarding onClose={() => undefined} />}
       {message && (
         <div className="toast" role="status">
           {message.text}

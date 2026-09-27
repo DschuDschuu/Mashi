@@ -1,25 +1,31 @@
 import { useMemo, useState } from 'react';
 import { DEFAULT_BASICS } from '../../domain/mealplan';
 import { buildFoodList, matchesFilter, type FoodFilter, type FoodRow } from '../../domain/nutrition/foodList';
-import { FOOD_CHOICES, normalizeName } from '../../domain/nutrition/localFoods';
-import type { MyProduct } from '../../domain/nutrition/myProducts';
+import { aliasesOf, normalizeName } from '../../domain/nutrition/localFoods';
+import { brandOf, nameOf, productLabel, type MyProduct } from '../../domain/nutrition/myProducts';
 import { DEFAULT_NO_NUTRITION } from '../../domain/nutrition/noNutrition';
 import { averageNutrients } from '../../domain/nutrition/variants';
 import type { Nutrients } from '../../domain/nutrition/types';
-import { saveProducts, setFavoriteVariant, setNoNutrition, setPantryBasics, usePantry, useProducts, useRecipes } from '../../data/store';
+import { dismissRename, saveProducts, setFavoriteVariant, setNoNutrition, setPantryBasics, usePantry, useProducts, useRecipes } from '../../data/store';
 import { currentContent } from '../../domain/recipe';
 import { foodTable } from '../../services';
 import { euro } from '../format';
 import { toast } from '../toast';
 import { useSwipe } from '../useSwipe';
+import { useSlide } from '../useSlide';
 import { Icon } from './Icon';
 import { ProductForm } from './MyProductsPanel';
 import { NutritionQuickForm } from './NutritionQuickForm';
 
 const fmt = (n: number) => n.toLocaleString('de-DE', { maximumFractionDigits: 1 });
-const foodName = (id: string) => FOOD_CHOICES.find((f) => f.id === id)?.name ?? id;
+const cap = (s: string) => s.charAt(0).toLocaleUpperCase('de-DE') + s.slice(1);
+/** Alle Schreibweisen, für die ein Produkt gilt – aus der Tabelle (ohne Ausnahmen) und freie Namen */
+const appliesTo = (p: MyProduct) => [...new Set([
+  ...p.replaces.flatMap(aliasesOf).filter((a) => !p.excludes?.includes(a)),
+  ...(p.names ?? []),
+])].map(cap);
 /** Tabs: Schlüssel, kurzer Name, voller Name (für Screenreader) – Reihenfolge = Wischrichtung */
-const TABS = [['alle', 'Alle', 'Alle'], ['produkte', 'Produkte', 'Meine Produkte'], ['haus', 'Im Haus', 'Immer im Haus'], ['ohne', 'Ohne', 'Ohne Nährwerte']] as const;
+const TABS = [['produkte', 'Produkte', 'Produkte'], ['haus', 'Immer im Haus', 'Immer im Haus'], ['ohne', 'Ohne Nährwerte', 'Ohne Nährwerte']] as const;
 
 const macros = (n: Nutrients) => `KH ${fmt(n.carbs)} · Eiweiß ${fmt(n.protein)} · Fett ${fmt(n.fat)} g`;
 
@@ -39,7 +45,7 @@ export function FoodList() {
   const [touched, setTouched] = useState<string[]>([]);
   const touch = (name: string) => setTouched((t) => (t.includes(name) ? t : [...t, name]));
   const rows = useMemo(() => buildFoodList(products, basics, zero, foodTable, known, touched), [products, basics, zero, known, touched]);
-  const [filter, setFilter] = useState<FoodFilter>('alle');
+  const [filter, setFilter] = useState<FoodFilter>('produkte');
   const [open, setOpen] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const shown = rows.filter((r) => matchesFilter(r, filter));
@@ -49,10 +55,11 @@ export function FoodList() {
     if (i >= 0 && i < TABS.length) setFilter(TABS[i][0]);
   };
   const swipe = useSwipe(() => step(1), () => step(-1));
+  const slide = useSlide(TABS.findIndex(([f]) => f === filter));
   const count = (f: FoodFilter) => rows.filter((r) => matchesFilter(r, f)).length;
 
   return (
-    <div className="stack">
+    <div className="stack foods-panel">
       {/* wie die Tabs im Rezept: eine Zeile auch auf dem Handy – kurze Namen, Anzahl darunter */}
       <div className="tabs foods__tabs" role="tablist" aria-label="Filter">
         {TABS.map(([f, label, full]) => (
@@ -63,12 +70,11 @@ export function FoodList() {
           </button>
         ))}
       </div>
-      <div className="stack" role="tabpanel" {...swipe}>
+      <div key={filter} className={`stack ${slide}`} role="tabpanel" {...swipe}>
       <p className="small muted">
-        {filter === 'produkte' ? 'Mit deinen eigenen Werten – vom Etikett, aus Open Food Facts oder abgetippt, mit oder ohne Packung.'
-          : filter === 'haus' ? 'Steht auf der Einkaufsliste unter „Basics“ und wird bei Rezepten nie als „fehlt“ gemeldet.'
-          : filter === 'ohne' ? 'Gewürze & Co., die in Rezepten wie Salz nicht mitzählen.'
-            : 'Alles, was du selbst über Zutaten festgelegt hast. Antippen für Details.'}
+        {filter === 'produkte' ? 'Alles, was du dauerhaft verwendest – mit deinen Werten oder vorerst dem Richtwert der Tabelle. Antippen für Details.'
+          : filter === 'haus' ? 'Produkte, die du immer da hast: auf der Einkaufsliste unter „Basics“, bei Rezepten nie „fehlt“.'
+            : 'Gewürze & Co.: zählen in Rezepten nicht mit und stehen auf der Einkaufsliste automatisch unter „Basics“.'}
       </p>
 
       {shown.length === 0 && <p className="small">Hier ist noch nichts.</p>}
@@ -81,9 +87,11 @@ export function FoodList() {
 
       </div>
 
-      {adding ? <AddFood onDone={() => setAdding(false)} basics={basics} zero={zero} /> : (
+      {filter === 'produkte' && <DismissedRenames keys={pantry.renameDismissed ?? []} />}
+
+      {adding ? <AddFood tab={filter} onDone={() => setAdding(false)} basics={basics} zero={zero} /> : (
         <button type="button" className="btn btn--soft" onClick={() => setAdding(true)}>
-          <Icon name="plus" size={18} /> Lebensmittel hinzufügen
+          <Icon name="plus" size={18} /> {filter === 'haus' ? 'Zu „Immer im Haus“ hinzufügen' : filter === 'ohne' ? 'Zu „Ohne Nährwerte“ hinzufügen' : 'Produkt hinzufügen'}
         </button>
       )}
     </div>
@@ -124,30 +132,42 @@ function FoodLine({ row, open, onToggle, products, basics, zero, onTouch }: {
     onTouch();
     const before = zero;
     setNoNutrition(row.zero ? zero.filter((z) => z !== row.zero) : [...zero, row.ingredient]);
-    toast(row.zero ? `„${row.ingredient}“ zählt wieder mit` : `„${row.ingredient}“ zählt in Rezepten nicht mehr mit`, { label: 'Rückgängig', run: () => setNoNutrition(before) });
+    toast(row.zero ? `„${row.ingredient}“ zählt wieder mit – jetzt unter „Produkte“` : `„${row.ingredient}“ steht jetzt unter „Ohne Nährwerte“`, { label: 'Rückgängig', run: () => setNoNutrition(before) });
   };
   const nothing = !ps.length && !row.basic && !row.zero;
+  const zeroRow = !!row.zero;
 
   return (
     <li className={`foods__item${open ? ' is-open' : ''}`}>
       <button type="button" className="foods__head" onClick={onToggle} aria-expanded={open}>
         <span className="foods__name">
           {row.name}
+          {ps.length === 1 && brandOf(ps[0]) && <span className="brand">{brandOf(ps[0])}</span>}
           {nothing && <span className="foods__sub">nichts festgelegt</span>}
-          {row.basic && <Icon name="home" size={14} />}
-          {row.zero && <Icon name="leaf" size={14} />}
-          {hasPack && <Icon name="bookmark" size={14} />}
-          {ps.length > 1 && <span className="foods__sub">{ps.length} Sorten{fav ? ` · ★ ${fav.name}` : ''}</span>}
+          {!zeroRow && row.basic && <Icon name="home" size={14} />}
+          {!zeroRow && hasPack && <Icon name="bookmark" size={14} />}
+          {ps.length > 1 && <span className="foods__sub">{ps.length} Sorten{fav ? ` · ★ ${productLabel(fav)}` : ''}</span>}
         </span>
         <span className="foods__kcal">
-          {row.zero && !ps.length ? 'ohne Nährwerte'
+          {zeroRow ? ''
             : values ? <>{ps.length > 1 && !fav ? 'Ø ' : ''}{Math.round(values.kcal)} kcal{!ps.length && <em> Tabelle</em>}</>
               : 'keine Werte'}
         </span>
         <Icon name="chevron" size={16} />
       </button>
 
-      {open && (
+      {open && zeroRow && (
+        <div className="foods__body">
+          <p className="small muted">
+            Zählt in Rezepten nicht mit und steht auf der Einkaufsliste unter „Basics“.
+            {ps.length > 0 && ' Deine eigenen Werte bleiben gespeichert und zählen wieder, wenn du es zurückholst.'}
+          </p>
+          <div className="row-gap">
+            <button type="button" className="btn btn--soft btn--sm" onClick={toggleZero}><Icon name="refresh" size={16} /> Wieder mitzählen</button>
+          </div>
+        </div>
+      )}
+      {open && !zeroRow && (
         <div className="foods__body">
           {nothing && <p className="small"><strong>Nichts mehr festgelegt.</strong> Die Zeile verschwindet, wenn du die Seite verlässt – oder schalte unten wieder etwas ein.</p>}
           {ps.length === 0 && (
@@ -163,11 +183,11 @@ function FoodLine({ row, open, onToggle, products, basics, zero, onTouch }: {
                 {ps.length > 1 && (
                   <button type="button" className={`variants__star${p.favorite ? ' is-on' : ''}`} aria-pressed={!!p.favorite}
                     aria-label={p.favorite ? `${p.name}: Favorit zurücknehmen` : `${p.name} als Favorit`}
-                    onClick={() => { setFavoriteVariant(ps, p.favorite ? null : p.id); toast(p.favorite ? 'Favorit zurückgenommen – Rezepte rechnen wieder mit dem Durchschnitt' : `★ „${p.name}“ ist dein Favorit`); }}>
+                    onClick={() => { setFavoriteVariant(ps, p.favorite ? null : p.id); toast(p.favorite ? 'Favorit zurückgenommen – Rezepte rechnen wieder mit dem Durchschnitt' : `★ „${productLabel(p)}“ ist dein Favorit`); }}>
                     <Icon name="star" size={18} filled={!!p.favorite} />
                   </button>
                 )}
-                <strong>{ps.length > 1 ? p.name : 'Pro 100 g'}</strong>
+                <strong>{ps.length > 1 ? <>{nameOf(p)}{brandOf(p) && <span className="brand">{brandOf(p)}</span>}</> : 'Pro 100 g'}</strong>
                 <span className="product__actions">
                   <button className="iconbtn iconbtn--sm" aria-label={`${p.name} bearbeiten`} onClick={() => setEditing(p.id)}><Icon name="pencil" size={16} /></button>
                   <button className="iconbtn iconbtn--sm" aria-label={`${p.name} entfernen`} onClick={() => remove(p)}><Icon name="trash" size={16} /></button>
@@ -177,11 +197,10 @@ function FoodLine({ row, open, onToggle, products, basics, zero, onTouch }: {
               {p.packageAmount && <span className="small muted">Packung {fmt(p.packageAmount)} {p.packageUnit ?? 'g'}{p.packagePrice !== undefined && <> · {euro(p.packagePrice)}</>}</span>}
               {p.shelfDays && <span className="small muted">hält {p.shelfDays === 1 ? '1 Tag' : `${p.shelfDays} Tage`} ab Kauf</span>}
               {p.ean && <span className="small muted">Barcode <span className="ean">{p.ean}</span></span>}
-              {(p.replaces.length > 0 || !!p.names?.length) && (
+              {appliesTo(p).length > 0 && (
                 <span className="small muted">
-                  {p.replaces.length > 0 && <>ersetzt: {p.replaces.map(foodName).join(', ')}</>}
-                  {p.replaces.length > 0 && !!p.names?.length && ' · '}
-                  {!!p.names?.length && <>gilt für: {p.names.join(', ')}</>}
+                  gilt für: {appliesTo(p).join(', ')}
+                  {!!p.excludes?.length && <> · nicht für: {p.excludes.map(cap).join(', ')}</>}
                 </span>
               )}
             </div>
@@ -191,7 +210,7 @@ function FoodLine({ row, open, onToggle, products, basics, zero, onTouch }: {
             ? <NutritionQuickForm ingredient={row.ingredient} onSave={save} onCancel={() => setAddingSort(false)} />
             : (
               <button type="button" className="btn btn--soft btn--sm" onClick={() => setAddingSort(true)}>
-                <Icon name="plus" size={16} /> {ps.length ? 'Weitere Sorte' : 'Eigene Nährwerte'}
+                <Icon name="plus" size={16} /> {ps.length ? 'Weitere Sorte' : 'Nährwerte hinzufügen'}
               </button>
             )}
 
@@ -199,8 +218,9 @@ function FoodLine({ row, open, onToggle, products, basics, zero, onTouch }: {
             <button type="button" className={`favchip${row.basic ? ' is-on' : ''}`} aria-pressed={!!row.basic} onClick={toggleBasic}>
               <Icon name="home" size={14} /> Immer im Haus
             </button>
-            <button type="button" className={`favchip${row.zero ? ' is-on' : ''}`} aria-pressed={!!row.zero} onClick={toggleZero}>
-              <Icon name="leaf" size={14} /> Ohne Nährwerte
+            {/* verschiebt die Zeile – die eigenen Werte bleiben gespeichert */}
+            <button type="button" className="favchip" onClick={toggleZero}>
+              <Icon name="leaf" size={14} /> Zu „Ohne Nährwerte“
             </button>
           </div>
         </div>
@@ -209,15 +229,28 @@ function FoodLine({ row, open, onToggle, products, basics, zero, onTouch }: {
   );
 }
 
-/** Neues Lebensmittel: erst der Name, dann was du festlegen willst */
-function AddFood({ onDone, basics, zero }: { onDone: () => void; basics: string[]; zero: string[] }) {
+/**
+ * Neues Lebensmittel – passend zum offenen Tab:
+ * Produkte → Name, dann Nährwerte (Foto, Open Food Facts, abtippen) oder Produkt mit Packung.
+ * Immer im Haus / Ohne Nährwerte → nur der Name.
+ */
+function AddFood({ tab, onDone, basics, zero }: { tab: FoodFilter; onDone: () => void; basics: string[]; zero: string[] }) {
   const products = useProducts();
   const [name, setName] = useState('');
   const [step, setStep] = useState<'name' | 'werte' | 'produkt'>('name');
+  /** gleich mit „Immer im Haus“ markieren – ohne dafür in den Tab wechseln zu müssen */
+  const [basic, setBasic] = useState(false);
   const n = name.trim();
   const save = (p: MyProduct) => {
     saveProducts([...products, p]);
-    toast(`„${p.name}“ gespeichert – alle Rezepte rechnen neu`);
+    if (basic && !basics.some((b) => normalizeName(b) === normalizeName(n))) setPantryBasics([...basics, n]);
+    toast(`„${p.name}“ gespeichert${basic ? ' – immer im Haus' : ''} – alle Rezepte rechnen neu`);
+    onDone();
+  };
+  const addName = () => {
+    if (!n) return;
+    if (tab === 'haus') { setPantryBasics([...basics, n]); toast(`„${n}“ ist jetzt immer im Haus`); }
+    else { setNoNutrition([...zero, n]); toast(`„${n}“ steht jetzt unter „Ohne Nährwerte“`); }
     onDone();
   };
   if (step === 'werte') return <NutritionQuickForm ingredient={n} onSave={save} onCancel={onDone} />;
@@ -225,21 +258,42 @@ function AddFood({ onDone, basics, zero }: { onDone: () => void; basics: string[
   return (
     <div className="panel stack">
       <label className="field"><span>Welche Zutat?</span>
-        <input value={name} onChange={(e) => setName(e.target.value)} list="ingredient-names" placeholder="z. B. Grünes Pesto" autoFocus />
+        <input value={name} onChange={(e) => setName(e.target.value)} list="ingredient-names" autoFocus
+          placeholder={tab === 'ohne' ? 'z. B. Sumach' : tab === 'haus' ? 'z. B. Haferflocken' : 'z. B. Grünes Pesto'}
+          onKeyDown={(e) => e.key === 'Enter' && tab !== 'produkte' && addName()} />
       </label>
-      <div className="row-gap">
-        <button type="button" className="btn btn--primary btn--sm" disabled={!n} onClick={() => setStep('werte')}>Nährwerte hinzufügen</button>
-        <button type="button" className="btn btn--soft btn--sm" disabled={!n} onClick={() => setStep('produkt')}>Produkt mit Packung</button>
-      </div>
-      <div className="row-gap">
-        <button type="button" className="favchip" disabled={!n} onClick={() => { setPantryBasics([...basics, n]); toast(`„${n}“ ist jetzt immer im Haus`); onDone(); }}>
-          <Icon name="home" size={14} /> Nur „Immer im Haus“
+      {tab === 'produkte' && (
+        <button type="button" className={`favchip${basic ? ' is-on' : ''}`} aria-pressed={basic} onClick={() => setBasic(!basic)}>
+          <Icon name="home" size={14} /> Immer im Haus
         </button>
-        <button type="button" className="favchip" disabled={!n} onClick={() => { setNoNutrition([...zero, n]); toast(`„${n}“ zählt in Rezepten nicht mehr mit`); onDone(); }}>
-          <Icon name="leaf" size={14} /> Nur „Ohne Nährwerte“
-        </button>
-      </div>
+      )}
+      {tab === 'produkte' ? (
+        <div className="row-gap">
+          <button type="button" className="btn btn--primary btn--sm" disabled={!n} onClick={() => setStep('werte')}>Nährwerte hinzufügen</button>
+          <button type="button" className="btn btn--soft btn--sm" disabled={!n} onClick={() => setStep('produkt')}>Produkt mit Packung</button>
+        </div>
+      ) : (
+        <button type="button" className="btn btn--primary btn--sm" disabled={!n} onClick={addName}>Hinzufügen</button>
+      )}
       <button type="button" className="btn btn--ghost btn--sm" onClick={onDone}>Abbrechen</button>
     </div>
+  );
+}
+
+/** Ausgeblendete Namensvorschläge – antippen, um sie wieder vorzuschlagen */
+function DismissedRenames({ keys }: { keys: string[] }) {
+  if (!keys.length) return null;
+  return (
+    <details className="panel fold">
+      <summary className="small"><strong>Ausgeblendete Namensvorschläge ({keys.length})</strong></summary>
+      <p className="small muted">Für diese Schreibweisen schlägt Mashi keinen einheitlichen Namen mehr vor. Antippen holt den Vorschlag zurück.</p>
+      <div className="chips">
+        {keys.map((k) => (
+          <button key={k} type="button" className="afilter" onClick={() => dismissRename(k, true)} aria-label={`${cap(k)} wieder vorschlagen`}>
+            {cap(k)} <Icon name="refresh" size={14} />
+          </button>
+        ))}
+      </div>
+    </details>
   );
 }

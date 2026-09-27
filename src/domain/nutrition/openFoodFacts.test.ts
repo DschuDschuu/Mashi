@@ -18,7 +18,8 @@ describe('Open Food Facts → Mein Produkt', () => {
   it('übernimmt Name, Marke, Werte je 100 g und Packungsgröße', () => {
     expect(fromOpenFoodFacts('4000000000000', RESPONSE)).toEqual({
       ean: '4000000000000',
-      name: 'Mozzarella light (Hausmarke)',
+      name: 'Mozzarella light',
+      brand: 'Hausmarke',
       per100g: { kcal: 165, protein: 20.5, carbs: 1.5, fat: 8.5, sugar: 1.5, salt: 0.5 },
       packageAmount: 125, packageUnit: 'g',
     });
@@ -60,7 +61,7 @@ describe('Open Food Facts – Suche nach Namen', () => {
         { product_name: 'Ohne Barcode', nutriments: RESPONSE.product.nutriments },
       ],
     });
-    expect(hits.map((h) => [h.ean, h.name, h.per100g.kcal])).toEqual([['4000000000017', 'Mozzarella light (Hausmarke)', 165]]);
+    expect(hits.map((h) => [h.ean, h.name, h.per100g.kcal])).toEqual([['4000000000017', 'Mozzarella light', 165]]);
   });
   it('verträgt eine leere Antwort', () => {
     expect(fromOpenFoodFactsSearch({})).toEqual([]);

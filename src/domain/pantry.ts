@@ -70,6 +70,8 @@ export interface Pantry {
   basics?: string[];
   /** „Ohne Nährwerte“ (Namen, z. B. Gewürze) – fehlt die Liste, gilt DEFAULT_NO_NUTRITION */
   noNutrition?: string[];
+  /** ausgeblendete Namensvorschläge („Nicht mehr vorschlagen“, normalisiert, z. B. „spaghetti“) – siehe renames.ts */
+  renameDismissed?: string[];
   /** Makro-Ziel (Anteil an den Kalorien) – schlägt beim Planen die passendere Sorte vor; fehlt es, gilt 40/30/30 */
   macroGoal?: MacroGoal;
   /** schon importierte Bons (Einkaufstag|Endbetrag) – warnt vor doppeltem Import */

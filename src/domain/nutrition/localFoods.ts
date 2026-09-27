@@ -1,4 +1,5 @@
 import type { FoodRef } from '../types';
+import { fatLevel } from './fatLevels';
 import type { FoodEntry, FoodKind, FoodTable, Nutrients } from './types';
 
 /**
@@ -34,8 +35,10 @@ const ROWS: Row[] = [
   ['ei', ['ei', 'eier'], 143, 12.6, 0.7, 9.5, { portions: { Stück: 55 } }],
   ['banane', ['banane'], 89, 1.1, 23, 0.3, { portions: { Stück: 120 } }],
   ['magerquark', ['magerquark', 'quark'], 67, 12, 4, 0.2],
+  ['quark-20', ['quark 20 %', 'halbfettquark', 'speisequark 20 %'], 109, 12, 3, 5.1],
+  ['quark-40', ['quark 40 %', 'sahnequark', 'speisequark 40 %'], 160, 11, 2.6, 11.4],
   ['proteinpulver', ['proteinpulver', 'whey', 'eiweißpulver'], 380, 75, 8, 5, { portions: { Messlöffel: 30, EL: 10 } }],
-  ['milch', ['milch', 'vollmilch'], 64, 3.4, 4.8, 3.5, { density: 1.03 }],
+  ['milch', ['milch 3,5 %', 'milch', 'vollmilch'], 64, 3.4, 4.8, 3.5, { density: 1.03 }],
   ['hafermilch', ['hafermilch', 'haferdrink'], 45, 1, 6.5, 1.5, { density: 1.03 }],
   ['heidelbeeren', ['heidelbeeren', 'blaubeeren', 'beeren'], 57, 0.7, 14, 0.3, { portions: { Handvoll: 60 } }],
   ['ahornsirup', ['ahornsirup'], 260, 0, 67, 0, { portions: { EL: 20, TL: 7 } }],
@@ -52,7 +55,11 @@ const ROWS: Row[] = [
   ['panko', ['panko', 'paniermehl', 'semmelbrösel'], 380, 12, 72, 4],
   ['mehl', ['mehl', 'weizenmehl'], 350, 10, 72, 1],
   ['paprikapulver', ['paprikapulver', 'geräuchertes paprikapulver'], 282, 14, 54, 13, { portions: { TL: 2.3, EL: 7 } }],
-  ['griech-joghurt', ['griechischer joghurt', 'joghurt'], 125, 4.5, 4, 10],
+  ['griech-joghurt', ['griechischer joghurt'], 125, 4.5, 4, 10],
+  // Richtwerte typischer Etiketten (Naturjoghurt je Fettstufe)
+  ['joghurt-01', ['joghurt 0,1 %', 'magerjoghurt'], 36, 4.3, 4.1, 0.1, { portions: { EL: 15 } }],
+  ['joghurt-15', ['joghurt 1,5 %', 'fettarmer joghurt'], 47, 3.8, 4.3, 1.5, { portions: { EL: 15 } }],
+  ['joghurt-35', ['joghurt 3,5 %', 'joghurt', 'naturjoghurt', 'vollmilchjoghurt'], 66, 3.7, 4.4, 3.6, { portions: { EL: 15 } }],
   ['mozzarella', ['mozzarella', 'geriebener mozzarella', 'mini-mozzarella', 'mozzarella-kugeln'], 254, 18, 1.5, 19],
   ['butter', ['butter'], 741, 0.7, 0.6, 83, { portions: { EL: 12, TL: 4 } }],
   ['karotte', ['karotte', 'karotten', 'möhre', 'möhren'], 36, 0.9, 7.5, 0.2, { portions: { Stück: 80 } }],
@@ -66,8 +73,8 @@ const ROWS: Row[] = [
   ['frischkaese-light', ['light-frischkäse', 'frischkäse light', 'light frischkäse'], 150, 7.5, 4.6, 11, { portions: { EL: 20, TL: 7 } }],
   ['frischkaese', ['frischkäse', 'doppelrahmfrischkäse'], 240, 5.5, 3.5, 23, { portions: { EL: 20, TL: 7 } }],
   ['cheddar', ['cheddar'], 403, 25, 1.3, 33],
-  ['magermilch', ['magermilch', 'entrahmte milch'], 35, 3.4, 4.9, 0.1, { density: 1.03 }],
-  ['milch-fettarm', ['fettarme milch', 'milch fettarm', 'teilentrahmte milch'], 47, 3.4, 4.9, 1.5, { density: 1.03 }],
+  ['magermilch', ['milch 0,1 %', 'magermilch', 'entrahmte milch'], 35, 3.4, 4.9, 0.1, { density: 1.03 }],
+  ['milch-fettarm', ['milch 1,5 %', 'fettarme milch', 'milch fettarm', 'teilentrahmte milch'], 47, 3.4, 4.9, 1.5, { density: 1.03 }],
   // Frisches Gemüse
   ['kirschtomaten', ['kirschtomaten', 'cherrytomaten', 'cocktailtomaten', 'tomaten', 'tomate'], 18, 0.9, 2.6, 0.2, { portions: { Stück: 15 } }],
   // Fleisch – roh gewogen; knusprig gebacken tropft ein Teil des Fetts ab
@@ -126,7 +133,8 @@ const KINDS: Record<FoodKind, string[]> = {
   protein: ['haehnchenhack', 'haehnchenbrust', 'rinderhack', 'bacon', 'rindersteak', 'fruehstuecksfleisch', 'doenerfleisch'],
   staple: ['reis', 'reis-gekocht', 'pasta', 'lasagneplatten', 'schupfnudeln', 'gnocchi', 'haferflocken', 'tteokbokki', 'spaetzle'],
   dairy: [
-    'parmesan', 'magerquark', 'milch', 'milch-fettarm', 'magermilch', 'hafermilch', 'griech-joghurt', 'mozzarella',
+    'parmesan', 'magerquark', 'quark-20', 'quark-40', 'milch', 'milch-fettarm', 'magermilch', 'hafermilch', 'griech-joghurt',
+    'joghurt-01', 'joghurt-15', 'joghurt-35', 'mozzarella',
     'huettenkaese', 'frischkaese', 'frischkaese-light', 'cheddar', 'sahne', 'creme-fraiche', 'kochsahne', 'gruyere',
   ],
   egg: ['ei'],
@@ -153,12 +161,17 @@ const FOODS: FoodEntry[] = ROWS.map(([id, aliases, kcal, protein, carbs, fat, ex
 export const FOOD_CHOICES: { id: string; name: string; kind?: FoodKind }[] = FOODS.filter((f) => !f.negligible)
   .map((f) => ({ id: f.ref.foodId, name: f.name, ...(f.kind ? { kind: f.kind } : {}) }));
 
+/** Alle Schreibweisen, unter denen die Tabelle einen Eintrag findet („milch“, „vollmilch“ …) */
+export function aliasesOf(foodId: string): string[] {
+  return ROWS.find(([id]) => id === foodId)?.[1] ?? [];
+}
+
 /** Klammern und Zusätze entfernen: „Paprika (rot oder bunt)“ → „paprika“ */
 export function normalizeName(name: string): string {
   return name
     .toLowerCase()
     .replace(/\(.*?\)/g, ' ')
-    .replace(/,.*$/, ' ')
+    .replace(/,(?!\d).*$/, ' ')
     .replace(/\b(frisch|frische|frischer|tk|bio|optional)\b/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
@@ -175,18 +188,21 @@ export const localFoodTable: FoodTable = {
     return FOODS.find((f) => f.ref.provider === ref.provider && f.ref.foodId === ref.foodId);
   },
   matchName(name: string) {
+    const level = fatLevel(name);
+    const byLevel = level && FOODS.find((f) => f.ref.foodId === level.id);
+    if (byLevel) return { food: byLevel, quality: 'exact', alias: normalizeName(level.label), specific: true };
     const n = normalizeName(name);
     const exact = byAlias.get(n);
-    if (exact) return { food: exact, quality: 'exact' };
+    if (exact) return { food: exact, quality: 'exact', alias: n };
     // Mehrzahl, wie sie auf Kassenbons steht: „Bananen“ → „Banane“, „Avocados“ → „Avocado“
     for (const singular of [n.replace(/n$/, ''), n.replace(/en$/, ''), n.replace(/s$/, ''), n.replace(/e$/, '')]) {
       const hit = singular !== n && byAlias.get(singular);
-      if (hit) return { food: hit, quality: 'exact' };
+      if (hit) return { food: hit, quality: 'exact', alias: singular };
     }
     // Alias als ganzes Wort im Namen: „kleine rote Zwiebel“ → Zwiebel (nur ungefähr)
     for (const alias of aliasesByLength) {
       const re = new RegExp(`(^|\\s)${alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\s|$)`);
-      if (re.test(n)) return { food: byAlias.get(alias)!, quality: 'approx' };
+      if (re.test(n)) return { food: byAlias.get(alias)!, quality: 'approx', alias };
     }
     return undefined;
   },

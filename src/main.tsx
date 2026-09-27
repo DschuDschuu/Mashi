@@ -9,6 +9,10 @@ import { StartError } from './ui/StartError';
 import { boot } from './data/backend';
 import { registerServiceWorker, startUpdateCheck } from './pwa';
 import './styles/app.css';
+import { applyTheme, currentSettings } from './ui/settings';
+
+// Farbthema vor dem ersten Bild – sonst blitzt beim Start kurz das Standardgrün auf
+applyTheme(currentSettings().theme);
 
 const root = createRoot(document.getElementById('root')!);
 
