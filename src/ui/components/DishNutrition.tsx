@@ -28,13 +28,13 @@ export function DishNutrition({ content, own, recipeId, className = '' }: {
   const ca = n.accuracy === 'geschaetzt' ? 'ca. ' : '';
   return (
     <span className={`dishnut small ${className}`.trim()}>
-      <span>{ca}{Math.round(n.perServing.kcal)} kcal · {gram(n.perServing.protein)} Eiweiß pro Portion</span>
+      <span className="dishnut__values" title="pro Portion">{ca}{Math.round(n.perServing.kcal)} kcal · {gram(n.perServing.protein)} Eiweiß<span className="dishnut__per"> pro Portion</span></span>
       {chosen.length > 0 && (canChoose ? (
         <button type="button" className="dishnut__variant" onClick={() => setChoosing(true)} aria-label="Sorte wählen">
-          mit {chosen.map((x) => x.name).join(', ')} <Icon name="chevron" size={12} />
+          <span className="dishnut__label">mit {chosen.map((x) => x.name).join(', ')}</span> <Icon name="chevron" size={12} />
         </button>
       ) : (
-        <span className="muted">mit {chosen.map((x) => x.name).join(', ')}</span>
+        <span className="muted dishnut__label">mit {chosen.map((x) => x.name).join(', ')}</span>
       ))}
       {choosing && recipeId && (
         <VariantSheet choices={choices} pick={pick} onClose={() => setChoosing(false)}

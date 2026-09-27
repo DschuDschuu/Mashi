@@ -1246,3 +1246,21 @@ label.btn.is-disabled { opacity: 0.6; pointer-events: none; }
 .sortpick { display: flex; flex-direction: column; gap: 6px; }
 .pantry-offer { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: var(--r-sm); background: var(--primary-soft); }
 .pantry-offer p { margin: 0; }
+
+/* Plan-Karte: Nährwerte in EINER Zeile, die Sorte/Marke als eigene Zeile darunter */
+.plan-list__meta .dishnut { flex-direction: column; align-items: flex-start; flex-wrap: nowrap; }
+/* neben dem Portionen-Regler ist „pro Portion“ klar – so passt es auch schmal in eine Zeile */
+.plan-list__meta .dishnut__values { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.plan-list__meta .dishnut__per { display: none; }
+/* auch die Marke bleibt eine Zeile – ein langer Name endet mit „…“ */
+.plan-list__meta .dishnut__variant { display: inline-flex; align-items: center; gap: 2px; max-width: 100%; }
+.plan-list__meta .dishnut__label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; max-width: 100%; }
+.shopping__restock { color: var(--primary-text); }
+.shopping__restock svg { vertical-align: -2px; margin-right: 2px; }
+.foods__restock { display: inline-flex; color: var(--primary-text); }
+.restock { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: var(--r-sm); background: var(--primary-soft); }
+.restock p { margin: 0; }
+.restock__row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+.restock .pantry-amount { max-width: 11rem; }
+/* alle Hinweise gleich breit wie der mit „Rückgängig“ – schmale wirkten gequetscht */
+.toast { width: 90%; max-width: 420px; }

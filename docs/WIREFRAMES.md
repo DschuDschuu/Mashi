@@ -1,5 +1,9 @@
 # Mashi – Wireframes
 
+> **Historisch:** Skizzen aus Phase 1. Die App hat sich seitdem weiterentwickelt (Navigation heute:
+> Start · Kochbuch · ＋ · Speisekammer · Plan, Einstellungen übers Zahnrad) – die aktuelle Struktur
+> steht in [ARCHITEKTUR.md](ARCHITEKTUR.md).
+
 Grobe Struktur der ersten acht Screens (Smartphone, ~384 px). Der klickbare Prototyp
 (`npm run dev`) setzt genau diese Struktur um – er ist die „lebende“ Fassung dieser Skizzen.
 

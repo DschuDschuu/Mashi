@@ -12,7 +12,7 @@ import {
 import { navigate } from '../../router';
 import { foodTable } from '../../services';
 import { Empty, Section, Stepper } from '../components/Controls';
-import { useMissing } from '../useShoppingCount';
+import { useMissing, useShoppingCount } from '../useShoppingCount';
 import { useSheet } from '../useSheet';
 import { UseUpBadge } from '../components/UseUpBadge';
 import { PlannedGroup } from '../components/PlannedGroup';
@@ -50,7 +50,7 @@ export function PlanScreen() {
   const suggestions = useMemo(() => suggestRecipes(plan, recipes.filter(plannable), table, 5, new Set(useUp.keys())), [plan, recipes, table, useUp]);
   // Für das Einkaufswagen-Symbol: wie viel noch zu kaufen ist (ohne Basics wie Öl und Gewürze)
   const missing = useMissing();
-  const toBuy = missing.length;
+  const toBuy = useShoppingCount();
   const portions = items.reduce((s, i) => s + i.servings, 0);
   const { prices } = usePricing();
   const costs = useMemo(() => new Map(items.map((i) => [i.recipeId, recipeCost(currentContent(i.recipe), i.servings, table, prices)])), [items, table, prices]);

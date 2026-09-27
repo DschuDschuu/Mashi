@@ -72,7 +72,7 @@ aus den Zutaten berechnet (gecacht je Version).
 
 ```
  ┌──────── Bottom Navigation (Tabs) ─────────┐
- │  Start   Kochbuch   [ ＋ ]  Plan  Speisekammer │
+ │  Start   Kochbuch   [ ＋ ]  Speisekammer  Plan │
  └───────────────────────┬───────────────────┘
                          └─ Sheet: ✨ Mit KI · ✍️ Eigenes Rezept · 📷 Importieren
 

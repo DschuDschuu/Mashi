@@ -1,10 +1,12 @@
 import { useMemo, useState } from 'react';
-import { buildShoppingList, type ShoppingItem } from '../../domain/mealplan';
+import type { ShoppingItem } from '../../domain/mealplan';
+import { shoppingList } from '../../domain/restock';
 import { withMyProducts } from '../../domain/nutrition/myProducts';
 import { toggleBuyAnyway, toggleShoppingItem, usePantry, usePlan, useProducts, useRecipes } from '../../data/store';
 import { navigate } from '../../router';
 import { foodTable } from '../../services';
 import { Empty, Section } from '../components/Controls';
+import { Icon } from '../components/Icon';
 import { TopBar } from '../components/TopBar';
 import { groupByKind } from '../foodGroups';
 
@@ -22,7 +24,7 @@ export function ShoppingScreen() {
   const pantry = usePantry();
   const [view, setView] = useState<View>('liste');
   const table = useMemo(() => withMyProducts(foodTable, products), [products]);
-  const all = useMemo(() => buildShoppingList(plan, recipes, table, pantry), [plan, recipes, table, pantry]);
+  const all = useMemo(() => shoppingList(plan, recipes, table, pantry, products), [plan, recipes, table, pantry, products]);
 
   const shown = all.filter((i) => (view === 'basics' ? i.pantry : !i.pantry));
   const isDone = (i: ShoppingItem) => plan.checked.includes(i.key);
@@ -69,14 +71,13 @@ export function ShoppingScreen() {
           )}
           {have.length > 0 && (
             <Section title={`Hast du schon (${have.length})`}>
-              <p className="muted small">Laut Speisekammer genug da. Stimmt nicht? „Doch kaufen“.</p>
               <ul className="shopping panel">
                 {have.map((i) => (
                   <li key={i.key} className="shopping__item is-have">
                     <div className="shopping__row">
                       <span className="shopping__text">
                         <span className="shopping__name">{i.name}</span>
-                        <span className="shopping__from">brauchst {i.quantity || 'etwas'} · hast {i.have}</span>
+                        <span className="shopping__from">Benötigt {i.quantity || 'etwas'} · Im Vorrat {i.have}</span>
                       </span>
                       <button className="link" onClick={() => toggleBuyAnyway(i.key)}>Doch kaufen</button>
                     </div>
@@ -87,7 +88,8 @@ export function ShoppingScreen() {
           )}
           {open.length > 0 && view === 'liste' && (
             <p className="muted small center">
-              <button className="link" onClick={() => navigate('/speisekammer/bon')}>Eingekauft? Kassenbon importieren</button> – hakt Gekauftes hier ab.
+              <button className="link" onClick={() => navigate('/speisekammer/bon')}>Eingekauft? Kassenbon importieren</button>
+              <br />Das hakt Gekauftes hier ab.
             </p>
           )}
         </>
@@ -105,7 +107,9 @@ function ShoppingRow({ item, checked }: { item: ShoppingItem; checked: boolean }
         <span className="shopping__text">
           <span className="shopping__name">{item.name}</span>
           {item.from.length > 1 && <span className="shopping__from">für {item.from.length} Rezepte</span>}
-          {item.have && !checked && <span className="shopping__from">vorrätig: {item.have}</span>}
+          {/* Nachkaufen: der Hinweis nennt den Vorrat schon selbst */}
+          {item.restock && !checked && <span className="shopping__from shopping__restock"><Icon name="refresh" size={12} /> {item.restock}</span>}
+          {item.have && !item.restock && !checked && <span className="shopping__from">Im Vorrat {item.have}</span>}
         </span>
         <span className="shopping__qty">{item.quantity}</span>
       </label>

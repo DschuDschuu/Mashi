@@ -3,35 +3,54 @@
 Dein persönliches Kochbuch – das mit jedem Rezept wächst, das du wirklich ausprobiert hast.
 (맛있다, *mashitda* – „es schmeckt“.)
 
-**Kernidee:** Eine KI-Rezeptidee ist noch kein Rezept. Erst testen, dann bewerten und anpassen,
-dann selbst entscheiden, ob es ins Kochbuch kommt.
+**Kernidee:** Eine Rezeptidee ist noch kein Rezept. Erst testen, dann bewerten und anpassen,
+dann selbst entscheiden, ob es ins Kochbuch kommt. Dazu: Wochenplan, Einkaufsliste und
+Speisekammer, die zusammenarbeiten – was da ist, muss nicht gekauft werden.
 
-## Stand: Phase 1 – klickbarer Prototyp
+Live: <https://dschudschuu.github.io/Mashi/> · installierbar als App (PWA), funktioniert offline.
 
-- Alle Screens mit Beispieldaten: Start, Kochbuch, Rezeptdetail, Zum Testen, Erstellen,
-  KI-Rezept (Mock), Testfeedback, Kochmodus, eigenes Rezept, Archiv
-- Kompletter Lebenszyklus KI-Idee → Zum Testen → Bewährt → Kochbuch mit Versionierung
-- Nährwertengine mit lokaler Lebensmitteltabelle (berechnet / geschätzt / nicht verfügbar)
-- Daten liegen **nur im Browser** (localStorage). Noch kein Login, keine echte KI, kein Offline.
+## Was Mashi kann
+
+- **Kochbuch** mit Versionen: eigene Rezepte, Import aus Text oder Foto (Texterkennung im Browser),
+  KI-Ideen erst testen, Bewertung, „Zutaten vereinheitlichen“ (eine Schreibweise je Zutat)
+- **Wochenplan** mit Vorschlägen (gemeinsame Zutaten), Nährwerten pro Portion, „Gekocht“-Haken
+- **Einkaufsliste** aus dem Plan, zieht den Vorrat ab, Basics, „Doch kaufen“, Kassenbon hakt ab,
+  „Nachkaufen“ bei Vorratsware unter dem Mindestbestand (z. B. passierte Tomaten unter 4 Dosen)
+- **Speisekammer**: Vorrat per Kassenbon oder von Hand (mit Marke/Sorte), Haltbarkeit,
+  „Bald verbrauchen“, Einfrieren, Reste verwerten
+- **Meine Lebensmittel**: eigene Produkte mit Marke, Nährwerte per Etikett-Foto, Open Food Facts
+  oder abgetippt; mehrere Sorten einer Zutat mit Favorit ★; „Immer im Haus“, „Ohne Nährwerte“;
+  Fettstufen bei Milch, Joghurt, Quark
+- **Nährwerte** rein rechnerisch aus Zutaten × Lebensmitteltabelle (nie von der KI), je Zutat
+  aufgeschlüsselt, Makro-Ziel für die Sortenwahl
+- **Kochmodus** Schritt für Schritt mit Timer, Mengen nur für dieses Mal
+- **Abgleich** zwischen Geräten über eine eigene CouchDB (siehe `server/couchdb/ANLEITUNG.md`),
+  Sicherung als Datei, Einführung beim ersten Start, vier Farbthemen
 
 ## Loslegen
 
 ```bash
 npm install
-npm run dev        # http://localhost:5173
-npm test           # Domänentests (Nährwerte, Portionen, Versionen, Filter)
-npm run build      # statischer Build nach dist/
+npm run dev        # http://localhost:5173/Mashi/ – ohne Server: „Erst mal ohne Server ausprobieren“ (Demo)
+npm test           # Domänentests (vitest)
+npm run build      # Typprüfung + statischer Build nach dist/
 ```
 
-„Mehr → Beispieldaten zurücksetzen“ stellt den Ausgangszustand wieder her.
+Die Demo hat Beispieldaten und bleibt im Browser; „Einstellungen → Synchronisation →
+Beispieldaten zurücksetzen“ stellt sie wieder her. Lokal testen mit echten Daten nur bewusst –
+Änderungen gingen dann in die echte Datenbank.
 
 ## Doku
 
-- [Architektur, Navigation, Phasenplan](docs/ARCHITEKTUR.md)
-- [Datenmodell + geplante Supabase-Tabellen](docs/DATENMODELL.md)
-- [Wireframes](docs/WIREFRAMES.md)
+- [Architektur, Navigation, Phasen](docs/ARCHITEKTUR.md)
+- [Datenmodell (Rezepte, Plan, Speisekammer, Meine Lebensmittel)](docs/DATENMODELL.md)
+- [Wireframes der ersten Phase](docs/WIREFRAMES.md) (historisch)
+- [Eigener Server (CouchDB)](server/couchdb/ANLEITUNG.md)
 
 ## Technik
 
-React 19 + TypeScript + Vite, eigenes CSS (keine UI-Bibliothek), Hash-Routing (läuft auf
-GitHub Pages ohne Umleitungen). Einzige Laufzeitabhängigkeit: React.
+React 19 + TypeScript + Vite, eigenes CSS mit Design-Tokens (keine UI-Bibliothek), Hash-Routing
+(GitHub Pages ohne Umleitungen). Daten lokal in PouchDB (IndexedDB), Abgleich mit CouchDB,
+Konflikte werden feldweise zusammengeführt. Texterkennung mit tesseract.js (lädt beim ersten
+Mal das deutsche Sprachmodell). Die Rechenlogik liegt getrennt in `src/domain/` und ist mit
+Tests abgesichert.

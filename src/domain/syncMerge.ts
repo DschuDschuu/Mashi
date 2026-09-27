@@ -1,6 +1,7 @@
 import type { MealPlan } from './mealplan';
 import type { MyProduct } from './nutrition/myProducts';
 import type { Pantry, PantryItem } from './pantry';
+import { normalizeName } from './nutrition/localFoods';
 import { mergeRecipes } from './merge';
 import type { Recipe } from './types';
 
@@ -88,6 +89,9 @@ export function merge3Pantry(base: Pantry, ours: Pantry, theirs: Pantry): Pantry
     shelfDays: merge3Value(base.shelfDays, ours.shelfDays, theirs.shelfDays),
     basics: merge3Value(base.basics, ours.basics, theirs.basics),
     noNutrition: merge3Value(base.noNutrition, ours.noNutrition, theirs.noNutrition),
+    // je Zutat: am Handy „Mais“, am Laptop „Tomatenmark“ eingestellt → beide bleiben
+    restock: base.restock || ours.restock || theirs.restock
+      ? merge3Keyed(base.restock ?? [], ours.restock ?? [], theirs.restock ?? [], (r) => normalizeName(r.name)) : undefined,
     macroGoal: merge3Value(base.macroGoal, ours.macroGoal, theirs.macroGoal),
     renameDismissed: merge3Set(base.renameDismissed, ours.renameDismissed, theirs.renameDismissed),
     cookLog: Object.keys(cookLog).length ? cookLog : undefined,
@@ -132,6 +136,7 @@ export function unionPantry(a: Pantry, b: Pantry): Pantry {
     history: unionKeyed(newer.history ?? [], older.history ?? [], byNameDay),
     savings: unionKeyed(newer.savings ?? [], older.savings ?? [], (s) => s.key),
     receipts: unionSet(newer.receipts, older.receipts),
+    restock: newer.restock || older.restock ? unionKeyed(newer.restock ?? [], older.restock ?? [], (r) => normalizeName(r.name)) : undefined,
     cookLog: Object.keys(cookLog).length ? cookLog : undefined,
   };
 }

@@ -87,3 +87,15 @@ describe('Offline-Konflikt ohne gemeinsamen Stand: vereinen', () => {
     expect(unionProducts([pa], [{ ...pa, name: 'A alt', updatedAt: '1' }, { ...pa, id: '2', name: 'B' }]).map((x) => x.name)).toEqual(['A', 'B']);
   });
 });
+
+describe('Nachkaufen-Grenzen zwischen Geräten', () => {
+  it('am Handy Mais, am Laptop Tomatenmark eingestellt → beide bleiben; eine gelöschte bleibt weg', () => {
+    const base = pantry([], { restock: [{ name: 'Joghurt', below: 2, unit: 'Stück' }] });
+    const handy = pantry([], { restock: [{ name: 'Joghurt', below: 2, unit: 'Stück' }, { name: 'Mais', below: 4, unit: 'Stück' }] });
+    const laptop = pantry([], { restock: [{ name: 'Tomatenmark', below: 1, unit: 'Stück' }] });
+    expect(merge3Pantry(base, handy, laptop).restock?.map((r) => r.name).sort()).toEqual(['Mais', 'Tomatenmark']);
+  });
+  it('ohne Grenzen bleibt das Feld leer', () => {
+    expect(merge3Pantry(pantry([]), pantry([]), pantry([])).restock).toBeUndefined();
+  });
+});

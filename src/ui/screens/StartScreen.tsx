@@ -179,7 +179,7 @@ function BigCard({ recipe, servings, daily = false, hint, badge, stock }: {
         <p className="small muted">
           {[portionCount(servings), formatMinutes(totalMinutes(c)), kcal && `${kcal} pro Portion`].filter(Boolean).join(' · ')}
         </p>
-        <StockLine content={c} stock={stock} />
+        <StockLine content={c} stock={stock} max={Infinity} />
         <div className="row-gap">
           <button className="btn btn--primary btn--sm" onClick={() => navigate(`/rezept/${recipe.id}/kochen?p=${servings}`)}>
             <Icon name="play" size={16} filled /> Kochen

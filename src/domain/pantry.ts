@@ -8,6 +8,7 @@ import type { ReceiptSavings } from './savings';
 import { useByOf, type ShelfDays } from './shelfLife';
 import { currentContent } from './recipe';
 import type { MealPlan } from './mealplan';
+import type { RestockRule } from './restock';
 import type { Ingredient, Recipe, RecipeContent, Unit } from './types';
 
 /**
@@ -69,6 +70,8 @@ export interface Pantry {
   cookLog?: Record<string, Taken[]>;
   /** „Immer im Haus“ (Namen) – fehlt die Liste, gilt DEFAULT_BASICS */
   basics?: string[];
+  /** Mindestbestand je Zutat: darunter steht sie von selbst auf der Einkaufsliste (restock.ts) */
+  restock?: RestockRule[];
   /** „Ohne Nährwerte“ (Namen, z. B. Gewürze) – fehlt die Liste, gilt DEFAULT_NO_NUTRITION */
   noNutrition?: string[];
   /** ausgeblendete Namensvorschläge („Nicht mehr vorschlagen“, normalisiert, z. B. „spaghetti“) – siehe renames.ts */

@@ -245,6 +245,8 @@ export interface ShoppingItem {
   have?: string;
   /** reicht der Vorrat ganz – dann „Hast du schon“ statt einkaufen */
   covered?: boolean;
+  /** unter dem Mindestbestand („Im Vorrat 3 Stück · Nachkaufen unter 4 Stück“) – siehe restock.ts */
+  restock?: string;
 }
 
 /**

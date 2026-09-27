@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react';
+import { RESTOCK_PREFIX, shoppingList, type RestockRule } from '../domain/restock';
 import { buildShoppingList, emptyPlan, normalizePlan, resolveIngredient, toggleCooked, type MealPlan } from '../domain/mealplan';
 import { mergeRecipes } from '../domain/merge';
 import { withMyProducts, type MyProduct } from '../domain/nutrition/myProducts';
@@ -561,6 +562,7 @@ function commitPantry(next: Omit<Pantry, 'updatedAt'>) {
   const saved = { ...next, updatedAt: now() };
   pantry = saved;
   emit();
+  tidyRestockChecks();
   pantryPending++;
   // base = der Stand, den wir geändert haben: kam inzwischen ein Bon vom Handy, bleibt er erhalten
   void tracked(repo.savePantry(saved, base))
@@ -661,6 +663,22 @@ export function setNoNutrition(names: string[]) {
   commitPantry({ ...pantry, noNutrition: names });
   recipes = [...recipes];
   emit();
+}
+
+/** Mindestbestand je Zutat („Nachkaufen unter 4 Stück“) – gilt auf allen Geräten. */
+export function setPantryRestock(restock: RestockRule[]) {
+  commitPantry({ ...pantry, restock });
+}
+
+/**
+ * Abgehaktes „Nachkaufen“ wieder freigeben, sobald es reicht (Bon, von Hand eingetragen) –
+ * sonst stünde es beim nächsten Mal gleich „Im Wagen“. Rezept-Zutaten bleiben bis zur neuen Woche.
+ */
+function tidyRestockChecks() {
+  if (!plan.checked.some((k) => k.startsWith(RESTOCK_PREFIX))) return;
+  const onList = new Set(shoppingList(plan, recipes, withMyProducts(foodTable, products), pantry, products).map((i) => i.key));
+  const checked = plan.checked.filter((k) => !k.startsWith(RESTOCK_PREFIX) || onList.has(k));
+  if (checked.length !== plan.checked.length) commitPlan({ ...plan, checked });
 }
 
 /** „Immer im Haus“ – gilt auf allen Geräten. */

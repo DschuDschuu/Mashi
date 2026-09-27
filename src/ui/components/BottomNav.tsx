@@ -6,8 +6,9 @@ import { Icon, type IconName } from './Icon';
 const TABS: { path: string; label: string; icon: IconName }[] = [
   { path: '/', label: 'Start', icon: 'home' },
   { path: '/kochbuch', label: 'Kochbuch', icon: 'book' },
-  { path: '/plan', label: 'Plan', icon: 'calendar' },
+  // Speisekammer vor Plan: das lange Wort nicht ganz am Rand, wo es in die Rundung des Displays ragt
   { path: '/speisekammer', label: 'Speisekammer', icon: 'archive' },
+  { path: '/plan', label: 'Plan', icon: 'calendar' },
 ];
 
 /**
