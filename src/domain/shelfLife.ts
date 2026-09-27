@@ -10,7 +10,7 @@ import type { Pantry, PantryItem } from './pantry';
  */
 
 /** Sonderfälle unabhängig von der Art: MHD-Ware, Gefrorenes, Aufgetautes (Tage) */
-export const SPECIAL_DAYS = { reduced: 1, frozen: 90, thawed: 1 } as const;
+export const SPECIAL_DAYS = { reduced: 1, frozen: 90, thawed: 1, opened: 3, openedJar: 14 } as const;
 export type Special = keyof typeof SPECIAL_DAYS;
 
 /** Deine Richtwerte „hält X Tage ab Kauf“: je Art (Gemüse …) und je Lebensmittel (Tomaten …) */
@@ -24,6 +24,10 @@ export interface ShelfDays {
   frozen?: number;
   /** Aufgetautes hält noch … Tage (Standard 1) */
   thawed?: number;
+  /** Angebrochenes (Milch, Joghurt, Dose) hält noch … Tage ab Öffnen (Standard 3) */
+  opened?: number;
+  /** Angebrochenes aus dem Glas (Pesto, Soßen) … Tage (Standard 14) */
+  openedJar?: number;
 }
 
 export const specialDays = (s: Special, custom: ShelfDays = {}): number => custom[s] ?? SPECIAL_DAYS[s];
@@ -140,6 +144,39 @@ export function setShelfDays(custom: ShelfDays = {}, target: { kind: FoodKind } 
 
 /** Bis wann sollte der Vorrat weg sein? Ein eigenes Datum am Vorrat geht immer vor. undefined = lange haltbar / unbekannt. */
 export function useByOf(item: PantryItem, table: FoodTable, custom: ShelfDays = {}): Date | undefined {
+  const closed = closedUseBy(item, table, custom);
+  if (!item.openedAt || item.frozenAt) return closed;
+  // Angebrochen: ab Öffnen gezählt – aber nie länger als das Datum der Packung
+  const r = resolveIngredient({ id: item.id, name: item.name }, 1, table);
+  const days = openedDaysOf(r?.food, r?.kind, custom);
+  if (days === undefined) return closed;
+  const opened = new Date(new Date(item.openedAt).getTime() + days * DAY);
+  return closed && closed < opened ? closed : opened;
+}
+
+/**
+ * Wie lange hält es OFFEN (ab Öffnen)? Eigene Liste zuerst (Tube, Konserven, Soßen), dann:
+ * Frisches (hat ohnehin eine Haltbarkeit) → „Angebrochen hält“ bzw. Glas-Wert; sonst lange
+ * Haltbares (Nudeln, Reis, Linsen) → auch offen keine Erinnerung. Lieber still als falsch.
+ */
+export function openedDaysOf(food: FoodEntry | undefined, kind: FoodKind | undefined, custom: ShelfDays = {}): number | undefined {
+  const id = food?.baseId ?? food?.ref.foodId;
+  if (id && id in OPENED_BY_FOOD) return OPENED_BY_FOOD[id] ?? undefined;
+  if (shelfDaysOf(food, kind, custom) === undefined) return undefined;
+  return specialDays(food?.portions?.Glas ? 'openedJar' : 'opened', custom);
+}
+
+/** Offen-Werte, die vom Standard abweichen (Tage ab Öffnen; null = hält auch offen lange) */
+const OPENED_BY_FOOD: Record<string, number | null> = {
+  // Pesto hält offen nur kurz
+  pesto: 7, 'pesto-rosso': 7,
+  // Konserven: offen wie Frisches
+  'passierte-tomaten': 3, 'gehackte-tomaten': 3, kokosmilch: 3, mais: 3, erbsen: 3,
+  // hält auch offen lange – keine Erinnerung (Tube, Würzpasten, Soßen)
+  tomatenmark: null, senf: null, mayo: null, gochujang: null, miso: null, sojasauce: null, honig: null, worcestershire: null,
+};
+
+function closedUseBy(item: PantryItem, table: FoodTable, custom: ShelfDays): Date | undefined {
   if (item.useBy) return new Date(item.useBy);
   // Eingefroren: die Uhr steht – erst nach Monaten ein sanfter Hinweis
   if (item.frozenAt) return new Date(new Date(item.frozenAt).getTime() + specialDays('frozen', custom) * DAY);

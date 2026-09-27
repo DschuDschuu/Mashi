@@ -1264,3 +1264,8 @@ label.btn.is-disabled { opacity: 0.6; pointer-events: none; }
 .restock .pantry-amount { max-width: 11rem; }
 /* alle Hinweise gleich breit wie der mit „Rückgängig“ – schmale wirkten gequetscht */
 .toast { width: 90%; max-width: 420px; }
+.restock__status { color: var(--ink-2); }
+.restock__status.is-unter { color: var(--primary-text); font-weight: 600; }
+.restock__status.is-unbekannt { color: var(--ink-2); font-style: italic; }
+.restock .link { align-self: flex-start; }
+.pantry-warn { color: var(--danger, #b3261e); margin: 0; }

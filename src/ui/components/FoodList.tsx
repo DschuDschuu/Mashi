@@ -6,8 +6,10 @@ import { brandOf, nameOf, productLabel, type MyProduct } from '../../domain/nutr
 import { DEFAULT_NO_NUTRITION } from '../../domain/nutrition/noNutrition';
 import { averageNutrients } from '../../domain/nutrition/variants';
 import type { Nutrients } from '../../domain/nutrition/types';
-import { dismissRename, saveProducts, setFavoriteVariant, setNoNutrition, setPantryBasics, setPantryRestock, usePantry, useProducts, useRecipes } from '../../data/store';
-import { sameRule, type RestockRule } from '../../domain/restock';
+import { currentPantry, dismissRename, saveProducts, setFavoriteVariant, setNoNutrition, setPantryBasics, setPantryRestock, usePantry, useProducts, useRecipes } from '../../data/store';
+import { ruleKey, type RestockRule, type RestockStatus } from '../../domain/restock';
+import { withMyProducts } from '../../domain/nutrition/myProducts';
+import { useRestockStatus } from '../useShoppingCount';
 import type { PantryUnit } from '../../domain/pantry';
 import { currentContent } from '../../domain/recipe';
 import { foodTable } from '../../services';
@@ -50,6 +52,7 @@ export function FoodList() {
   const touch = (name: string) => setTouched((t) => (t.includes(name) ? t : [...t, name]));
   const restock = useMemo(() => pantry.restock ?? [], [pantry.restock]);
   const keep = useMemo(() => [...touched, ...restock.map((r) => r.name)], [touched, restock]);
+  const statuses = useRestockStatus();
   const rows = useMemo(() => buildFoodList(products, basics, zero, foodTable, known, keep), [products, basics, zero, known, keep]);
   const [filter, setFilter] = useState<FoodFilter>('produkte');
   const [open, setOpen] = useState<string | null>(null);
@@ -87,7 +90,7 @@ export function FoodList() {
       <ul className="foods">
         {shown.map((r) => (
           <FoodLine key={r.key} row={r} open={open === r.key} onToggle={() => setOpen(open === r.key ? null : r.key)}
-            products={products} basics={basics} zero={zero} restock={restock} onTouch={() => touch(r.ingredient)} />
+            products={products} basics={basics} zero={zero} restock={restock} statuses={statuses} onTouch={() => touch(r.ingredient)} />
         ))}
       </ul>
 
@@ -104,8 +107,9 @@ export function FoodList() {
   );
 }
 
-function FoodLine({ row, open, onToggle, products, basics, zero, restock, onTouch }: {
+function FoodLine({ row, open, onToggle, products, basics, zero, restock, statuses, onTouch }: {
   row: FoodRow; open: boolean; onToggle: () => void; products: MyProduct[]; basics: string[]; zero: string[]; restock: RestockRule[];
+  statuses: Map<string, RestockStatus>;
   /** Zeile merken, damit sie nach dem Ausschalten nicht verschwindet */
   onTouch: () => void;
 }) {
@@ -139,15 +143,16 @@ function FoodLine({ row, open, onToggle, products, basics, zero, restock, onTouc
     setNoNutrition(row.zero ? zero.filter((z) => z !== row.zero) : [...zero, row.ingredient]);
     toast(row.zero ? `„${row.ingredient}“ zählt wieder mit – jetzt unter „Produkte“` : `„${row.ingredient}“ steht jetzt unter „Ohne Nährwerte“`, { label: 'Rückgängig', run: () => setNoNutrition(before) });
   };
-  const rule = restock.find((r) => sameRule(r, { name: row.ingredient }));
+  // über den Schlüssel: „Passata“ und „Passierte Tomaten“ sind dieselbe Regel
+  const table = withMyProducts(foodTable, products);
+  const key = ruleKey({ name: row.ingredient }, table);
+  const rule = key ? restock.find((r) => ruleKey(r, table) === key) : undefined;
+  const status = key ? statuses.get(key) : undefined;
   const [restockOpen, setRestockOpen] = useState(false);
   const toggleRestock = () => {
     onTouch();
-    if (!rule) { setRestockOpen(true); return; }
-    const before = restock;
-    setPantryRestock(restock.filter((r) => r !== rule));
-    setRestockOpen(false);
-    toast(`„${row.ingredient}“ kommt nicht mehr von selbst auf die Liste`, { label: 'Rückgängig', run: () => setPantryRestock(before) });
+    if (rule) removeRestock(rule, row.ingredient);
+    setRestockOpen(!rule && !restockOpen);
   };
   const nothing = !ps.length && !row.basic && !row.zero && !rule;
   const zeroRow = !!row.zero;
@@ -232,7 +237,9 @@ function FoodLine({ row, open, onToggle, products, basics, zero, restock, onTouc
             <button type="button" className={`favchip${row.basic ? ' is-on' : ''}`} aria-pressed={!!row.basic} onClick={toggleBasic}>
               <Icon name="home" size={14} /> Immer im Haus
             </button>
-            <button type="button" className={`favchip${rule ? ' is-on' : ''}`} aria-pressed={!!rule} aria-expanded={restockOpen || !!rule} onClick={toggleRestock}>
+            {/* onPointerDown: das Feld soll beim Antippen nicht erst „speichern“ (Blur) und dann gleich wieder löschen */}
+            <button type="button" className={`favchip${rule ? ' is-on' : ''}`} aria-pressed={!!rule || restockOpen} aria-expanded={restockOpen || !!rule}
+              onPointerDown={(e) => e.preventDefault()} onClick={toggleRestock}>
               <Icon name="refresh" size={14} /> Nachkaufen
             </button>
             {/* verschiebt die Zeile – die eigenen Werte bleiben gespeichert */}
@@ -241,7 +248,7 @@ function FoodLine({ row, open, onToggle, products, basics, zero, restock, onTouc
             </button>
           </div>
           {(rule || restockOpen) && (
-            <RestockField ingredient={row.ingredient} rule={rule} restock={restock} products={ps} onCancel={() => setRestockOpen(false)} onSaved={() => setRestockOpen(false)} />
+            <RestockField ingredient={row.ingredient} rule={rule} ruleKeyOf={(r) => ruleKey(r, table)} status={status} onClose={() => setRestockOpen(false)} />
           )}
         </div>
       )}
@@ -251,26 +258,39 @@ function FoodLine({ row, open, onToggle, products, basics, zero, restock, onTouc
 
 const RESTOCK_UNITS: PantryUnit[] = ['Stück', 'Glas', 'g', 'ml'];
 
+/** Regel entfernen – „Rückgängig“ holt genau diese eine zurück (nicht die ganze alte Liste) */
+function removeRestock(rule: RestockRule, ingredient: string) {
+  setPantryRestock((currentPantry().restock ?? []).filter((r) => r !== rule && r.name !== rule.name));
+  toast(`„${ingredient}“ kommt nicht mehr von selbst auf die Liste`, {
+    label: 'Rückgängig', run: () => setPantryRestock([...(currentPantry().restock ?? []).filter((r) => r.name !== rule.name), rule]),
+  });
+}
+
 /**
  * „Nachkaufen, wenn weniger als 4 Stück da sind“ – ein Hinweis auf der Einkaufsliste, keine Menge.
- * Gespeichert wird beim Verlassen des Felds bzw. sofort bei der Einheit.
+ * Gespeichert wird beim Verlassen des Felds bzw. sofort bei der Einheit. Zahl gelöscht = Regel weg.
+ * Darunter der Stand, damit „kein Hinweis“ nie rätselhaft ist (reicht / steht drauf / kann nicht zählen).
  */
-function RestockField({ ingredient, rule, restock, products, onCancel, onSaved }: {
-  ingredient: string; rule?: RestockRule; restock: RestockRule[]; products: MyProduct[]; onCancel: () => void; onSaved: () => void;
+function RestockField({ ingredient, rule, ruleKeyOf, status, onClose }: {
+  ingredient: string; rule?: RestockRule; ruleKeyOf: (r: RestockRule) => string | undefined; status?: RestockStatus; onClose: () => void;
 }) {
   const [below, setBelow] = useState(rule ? fmt(rule.below) : '');
   const [unit, setUnit] = useState<PantryUnit>(rule?.unit ?? 'Stück');
   const save = (b = below, u = unit) => {
     const n = Number(b.replace(',', '.'));
-    if (!(n > 0)) return;
+    if (!b.trim() || !(n > 0)) {
+      // leer (oder 0): bestehende Regel weg, sonst einfach zu
+      if (rule) removeRestock(rule, ingredient);
+      onClose();
+      return;
+    }
     if (rule && rule.below === n && rule.unit === u) return;
     const next: RestockRule = { name: rule?.name ?? ingredient, below: n, unit: u };
-    setPantryRestock([...restock.filter((r) => !sameRule(r, next)), next]);
+    const k = ruleKeyOf(next);
+    setPantryRestock([...(currentPantry().restock ?? []).filter((r) => (k ? ruleKeyOf(r) !== k : r.name !== next.name)), next]);
     if (!rule) toast(`„${ingredient}“ kommt unter ${fmt(n)} ${u} von selbst auf die Einkaufsliste`);
-    onSaved();
+    onClose();
   };
-  // Stück vom Bon kommen oft als Gramm – ohne Packungsgröße kann Mashi dann nicht zählen
-  const noPack = (unit === 'Stück' || unit === 'Glas') && !products.some((p) => p.packageAmount);
   return (
     <div className="restock">
       <label className="restock__row">
@@ -278,14 +298,18 @@ function RestockField({ ingredient, rule, restock, products, onCancel, onSaved }
         <span className="pantry-amount">
           <input inputMode="decimal" value={below} autoFocus={!rule} placeholder="z. B. 4" aria-label="Mindestbestand"
             onChange={(e) => setBelow(e.target.value)} onBlur={() => save()}
-            onKeyDown={(e) => { if (e.key === 'Enter') save(); if (e.key === 'Escape' && !rule) onCancel(); }} />
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') save();
+              if (e.key === 'Escape') { if (rule) setBelow(fmt(rule.below)); else onClose(); }
+            }} />
           <select value={unit} aria-label="Einheit" onChange={(e) => { const u = e.target.value as PantryUnit; setUnit(u); save(below, u); }}>
             {RESTOCK_UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
           </select>
         </span>
         <span className="small">da {below.trim() === '1' || below.trim() === '' ? 'ist' : 'sind'}.</span>
       </label>
-      {noPack && <p className="small muted">Kommt es vom Kassenbon in Gramm, zählt Mashi die Stück über die Packungsgröße (vom Bon gelernt oder am Produkt).</p>}
+      {rule && status && <p className={`small restock__status is-${status.state}`}>{status.text}</p>}
+      {!rule && <button type="button" className="link link--muted" onPointerDown={(e) => e.preventDefault()} onClick={onClose}>Abbrechen</button>}
     </div>
   );
 }

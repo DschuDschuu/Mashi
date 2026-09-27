@@ -8,6 +8,7 @@ import { Icon } from '../components/Icon';
 import { PantryTabs, usePantrySwipe } from '../components/PlanTabs';
 import { PriceChart } from '../components/PriceChart';
 import { euro } from '../format';
+import { CartButton } from '../components/CartButton';
 
 const percent = (n: number) => `${n > 0 ? '+' : n < 0 ? '−' : '±'}${Math.abs(n * 100).toLocaleString('de-DE', { maximumFractionDigits: 1 })} %`;
 
@@ -28,7 +29,7 @@ export function PricesScreen() {
 
   return (
     <main className="screen screen--tabbed" {...swipe}>
-      <header className="page-head"><h1>Preise</h1></header>
+      <header className="page-head"><h1>Preise</h1><CartButton /></header>
       <PantryTabs active="prices" />
       <div className="split split--prices">
         <div className="split__main">

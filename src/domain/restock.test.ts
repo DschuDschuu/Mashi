@@ -3,7 +3,7 @@ import type { MealPlan } from './mealplan';
 import type { MyProduct } from './nutrition/myProducts';
 import { localFoodTable } from './nutrition/localFoods';
 import { emptyPantry, type Pantry, type PantryItem } from './pantry';
-import { RESTOCK_PREFIX, restockNeeds, shoppingList, type RestockRule } from './restock';
+import { RESTOCK_PREFIX, restockNeeds, restockStatus, shoppingList, type RestockRule } from './restock';
 import type { Recipe } from './types';
 
 const T = localFoodTable;
@@ -79,5 +79,39 @@ describe('Einkaufsliste mit Nachkaufen', () => {
 
   it('ohne Regeln bleibt die Liste wie sie war', () => {
     expect(shoppingList(plan(), [], T, pantry([item('Passierte Tomaten', 1, 'Stück')], []))).toEqual([]);
+  });
+});
+
+describe('Stand im Einstellfeld', () => {
+  const status = (p: Pantry) => restockStatus(p, T)[0];
+  it('reicht / steht auf der Liste', () => {
+    expect(status(pantry([item('Passierte Tomaten', 5, 'Stück')], [TOMATEN]))).toMatchObject({ state: 'reicht', text: 'Gerade 5 Stück – reicht' });
+    expect(status(pantry([item('Passierte Tomaten', 2, 'Stück')], [TOMATEN]))).toMatchObject({ state: 'unter', text: 'Gerade 2 Stück – steht auf der Einkaufsliste' });
+    expect(status(pantry([], [TOMATEN]))).toMatchObject({ state: 'unter', text: 'Nichts im Vorrat – steht auf der Einkaufsliste' });
+  });
+  it('kann nicht zählen – mit Grund', () => {
+    expect(status(pantry([item('Passierte Tomaten')], [TOMATEN]))).toMatchObject({ state: 'unbekannt', why: 'ohne-menge' });
+    expect(status(pantry([item('Mais', 500, 'g')], [{ name: 'Mais', below: 4, unit: 'Stück' }]))).toMatchObject({ state: 'unbekannt', why: 'packung-fehlt' });
+  });
+});
+
+describe('Gleiche Zutat, zwei Namen', () => {
+  it('„Passata“ und „Passierte Tomaten“: ein Eintrag, die strengere Grenze gilt', () => {
+    const p = pantry([item('Passierte Tomaten', 3, 'Stück')], [TOMATEN, { name: 'Passata', below: 6, unit: 'Stück' }]);
+    const needs = restockNeeds(p, T);
+    expect(needs).toHaveLength(1);
+    expect(needs[0].label).toBe('Im Vorrat 3 Stück · Nachkaufen unter 6 Stück');
+  });
+});
+
+describe('Fettstufen: nach Stufe gezählt', () => {
+  it('Regel „Milch 1,5 %“ – Milch 3,5 % im Vorrat zählt nicht mit, der Name bleibt deiner', () => {
+    const p = pantry([item('Milch 3,5 %', 3, 'Stück')], [{ name: 'Milch 1,5 %', below: 2, unit: 'Stück' }]);
+    const [need] = restockNeeds(p, T);
+    expect(need).toMatchObject({ name: 'Milch 1,5 %', label: 'Nichts mehr im Vorrat · Nachkaufen unter 2 Stück' });
+  });
+  it('dieselbe Stufe unter anderem Namen zählt („fettarme Milch“ = 1,5 %)', () => {
+    const p = pantry([item('fettarme Milch', 3, 'Stück')], [{ name: 'Milch 1,5 %', below: 2, unit: 'Stück' }]);
+    expect(restockNeeds(p, T)).toEqual([]);
   });
 });

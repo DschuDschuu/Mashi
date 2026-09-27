@@ -246,18 +246,19 @@ Zu zahlen 22,16`;
     expect(proposeImport(parseReceipt(BON), []).every((r) => r.freeze === undefined)).toBe(true);
   });
 
-  it('3 von 4 Packungen einfrieren: 1.500 g gefroren, 500 g frisch – beide MHD-Ware', () => {
+  it('3 von 4 Packungen einfrieren: 3 × 500 g gefroren, 1 × 500 g frisch – beide MHD-Ware', () => {
     const [hack, pute] = rows();
     const p = applyImport(emptyPantry(), [{ ...hack, freeze: 3 }, pute], iso(25), (() => { let n = 0; return () => `id${n++}`; })(), iso(24));
     expect(p.items.map((i) => [i.name, i.amount, !!i.frozenAt, !!i.reduced])).toEqual([
-      ['Rinderhack 500g', 500, false, true], ['Rinderhack 500g', 1500, true, true], ['Putenbrust lose', 300, false, false],
+      ['Rinderhack 500g', 1, false, true], ['Rinderhack 500g', 3, true, true], ['Putenbrust lose', 300, false, false],
     ]);
+    expect(p.items.map((i) => i.pack)).toEqual([{ amount: 500, unit: 'g' }, { amount: 500, unit: 'g' }, undefined]);
     expect(p.items[1].frozenAt).toBe(iso(24)); // eingefroren am Einkaufstag
   });
 
   it('lose Ware oder alle Packungen: alles gefroren, nichts frisch', () => {
     const [hack, pute] = rows();
     const p = applyImport(emptyPantry(), [{ ...hack, freeze: 4 }, { ...pute, freeze: 1 }], iso(25));
-    expect(p.items.map((i) => [i.amount, !!i.frozenAt])).toEqual([[2000, true], [300, true]]);
+    expect(p.items.map((i) => [i.amount, !!i.frozenAt])).toEqual([[4, true], [300, true]]); // 4 Packungen, lose 300 g
   });
 });

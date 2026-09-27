@@ -17,6 +17,8 @@ const SPECIAL: { key: Special; label: string; unit: string }[] = [
   { key: 'reduced', label: 'MHD-Ware hält', unit: 'Tage' },
   { key: 'frozen', label: 'Gefroren: Hinweis nach', unit: 'Tagen' },
   { key: 'thawed', label: 'Aufgetaut hält', unit: 'Tage' },
+  { key: 'opened', label: 'Angebrochen hält', unit: 'Tage' },
+  { key: 'openedJar', label: 'Angebrochenes Glas hält', unit: 'Tage' },
 ];
 
 const days = (n: number | undefined) => (n === undefined ? 'hält lange' : n === 1 ? '1 Tag' : `${n} Tage`);

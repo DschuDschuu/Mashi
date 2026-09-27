@@ -12,7 +12,7 @@ import {
 import { navigate } from '../../router';
 import { foodTable } from '../../services';
 import { Empty, Section, Stepper } from '../components/Controls';
-import { useMissing, useShoppingCount } from '../useShoppingCount';
+import { useMissing } from '../useShoppingCount';
 import { useSheet } from '../useSheet';
 import { UseUpBadge } from '../components/UseUpBadge';
 import { PlannedGroup } from '../components/PlannedGroup';
@@ -48,9 +48,7 @@ export function PlanScreen() {
     .sort((a, b) => Number(a.cooked) - Number(b.cooked));
   const { keys: useUp, plannedUseUp, dishes } = useUseUp();
   const suggestions = useMemo(() => suggestRecipes(plan, recipes.filter(plannable), table, 5, new Set(useUp.keys())), [plan, recipes, table, useUp]);
-  // Für das Einkaufswagen-Symbol: wie viel noch zu kaufen ist (ohne Basics wie Öl und Gewürze)
   const missing = useMissing();
-  const toBuy = useShoppingCount();
   const portions = items.reduce((s, i) => s + i.servings, 0);
   const { prices } = usePricing();
   const costs = useMemo(() => new Map(items.map((i) => [i.recipeId, recipeCost(currentContent(i.recipe), i.servings, table, prices)])), [items, table, prices]);
@@ -140,14 +138,8 @@ export function PlanScreen() {
 
   return (
     <main className="screen screen--tabbed">
-      <header className="page-head">
-        <h1>Wochenplan</h1>
-        <button className="iconbtn iconbtn--box cart-btn" onClick={() => navigate('/einkauf')}
-          aria-label={toBuy ? `Einkaufsliste – noch ${toBuy} Artikel` : 'Einkaufsliste'}>
-          <Icon name="cart" size={22} />
-          {toBuy > 0 && <span className="iconbtn__count">{toBuy}</span>}
-        </button>
-      </header>
+      {/* die Einkaufsliste sitzt jetzt oben rechts in der Speisekammer; hier führt „Fehlt noch“ hin */}
+      <header className="page-head"><h1>Wochenplan</h1></header>
       <div className="plan-layout">
         <div className="plan-layout__main">{planList}</div>
         <div className="plan-layout__side">{sideList}</div>

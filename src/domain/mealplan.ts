@@ -7,6 +7,7 @@ import { currentContent } from './recipe';
 import { formatAmount, formatUnitAmount } from './scaling';
 import type { Ingredient, Recipe, Unit } from './types';
 import type { Pantry, PantryItem } from './pantry';
+import { amountLabel } from './pantryLabel';
 
 /** Der Wochenplan: eine Liste „Diese Woche“ – ohne feste Tage, passend zu Meal Prep. */
 export interface PlanItem {
@@ -153,8 +154,16 @@ function resolveRecipe(r: Recipe, servings: number, table: FoodTable): Resolved[
 }
 
 /** Wie viel von einem Vorrat eine Zutat braucht – in der Einheit des Vorrats. undefined = nicht umrechenbar. */
-export function needIn(item: Pick<PantryItem, 'unit'>, need: Resolved): number | undefined {
+export function needIn(item: Pick<PantryItem, 'unit' | 'pack'>, need: Resolved): number | undefined {
   if (need.amount === undefined) return undefined;
+  // Packungen mit bekannter Größe: 250 ml gegen „3 × 1 l“ → ¼ Packung; „1 Dose“ im Rezept = 1 Packung
+  if (item.pack && (item.unit === 'Stück' || item.unit === 'Glas')) {
+    // „1 Dose“/„1 Glas“ ist eine Packung – egal, was die Tabelle für eine Dose annimmt
+    if (need.unit === 'Dose' || need.unit === 'Glas') return need.amount;
+    const base = amountIn(need, item.pack.unit);
+    if (base !== undefined) return base / item.pack.amount;
+    return need.unit === 'Stück' || need.unit === undefined ? need.amount : undefined;
+  }
   if (item.unit === 'Glas') {
     if (need.unit === 'Glas') return need.amount;
     const glass = need.food?.portions?.Glas;
@@ -166,8 +175,18 @@ export function needIn(item: Pick<PantryItem, 'unit'>, need: Resolved): number |
     const piece = need.food?.portions?.Stück;
     return need.grams !== undefined && piece ? need.grams / piece : undefined;
   }
-  // g und ml: gleich behandelt (für Joghurt, Milch & Co. nah genug)
+  // ml-Vorrat gegen ml im Rezept genau (offene Milch), sonst g und ml gleich behandelt (für Joghurt & Co. nah genug)
+  if (item.unit === 'ml' && need.unit === 'ml') return need.amount;
   return need.grams ?? (need.unit === 'ml' ? need.amount : undefined);
+}
+
+/** Bedarf in g bzw. ml (ml über die Dichte) – undefined, wenn nicht umrechenbar */
+function amountIn(need: Resolved, unit: 'g' | 'ml'): number | undefined {
+  const density = need.food?.density ?? 1;
+  if (unit === 'ml' && need.unit === 'ml') return need.amount;
+  if (need.grams !== undefined) return unit === 'ml' ? need.grams / density : need.grams;
+  if (need.unit === 'ml' && need.amount !== undefined) return need.amount * density;
+  return undefined;
 }
 
 // ── Vorschläge ─────────────────────────────────────────────────────
@@ -326,9 +345,7 @@ const scaleParts = (parts: Resolved[], f: number): Resolved[] => parts.map((p) =
   ...p, ...(p.amount !== undefined ? { amount: p.amount * f } : {}), ...(p.grams !== undefined ? { grams: p.grams * f } : {}),
 }));
 
-const stockLabel = (it: PantryItem) => (it.amount === undefined
-  ? 'vorhanden'
-  : `${formatAmount(it.amount, it.unit === 'Stück' || it.unit === 'Glas' ? 'Stück' : 'g')} ${it.unit ?? ''}`.trim() + (it.frozenAt ? ' (gefroren)' : ''));
+const stockLabel = (it: PantryItem) => amountLabel(it) + (it.frozenAt && it.amount !== undefined ? ' (gefroren)' : '');
 
 function quantityOf(parts: Resolved[]): string {
   const withAmount = parts.filter((p) => p.amount !== undefined);

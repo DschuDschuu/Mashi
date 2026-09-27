@@ -1,0 +1,137 @@
+import { describe, expect, it } from 'vitest';
+import { createMockRecipes } from '../data/mockRecipes';
+import { localFoodTable as T } from './nutrition/localFoods';
+import { addItem, deductRecipe, emptyPantry, openItem, packSuggestions, restock, takenBetween, type Pantry, type PantryItem } from './pantry';
+import { amountLabel } from './pantryLabel';
+import { restockNeeds } from './restock';
+import { useByOf } from './shelfLife';
+import type { Ingredient, RecipeContent } from './types';
+
+const NOW = '2026-09-27T12:00:00.000Z';
+let n = 0;
+const id = () => `x${n++}`;
+const content = (ingredients: Ingredient[]): RecipeContent => ({ ...createMockRecipes()[0].versions[0].content, servings: 2, ingredients });
+const milch = (amount = 3): PantryItem => ({ id: 'm', name: 'Milch', amount, unit: 'Stück', pack: { amount: 1000, unit: 'ml' }, addedAt: NOW });
+const hack = (amount = 4): PantryItem => ({ id: 'h', name: 'Rinderhack', amount, unit: 'Stück', pack: { amount: 500, unit: 'g' }, addedAt: NOW });
+const pantry = (...items: PantryItem[]): Pantry => ({ ...emptyPantry(), items });
+const cook = (p: Pantry, ing: Ingredient) => deductRecipe(p, content([ing]), 2, T, {}, {}, NOW, id).pantry;
+const show = (p: Pantry) => p.items.map(amountLabel);
+
+describe('Packungen im Vorrat', () => {
+  it('Anzeige wie im Schrank', () => {
+    expect(amountLabel(hack())).toBe('4 × 500 g');
+    expect(amountLabel(milch(2))).toBe('2 × 1 l');
+    expect(amountLabel({ amount: 750, unit: 'ml', openedAt: NOW })).toBe('750 ml offen');
+    expect(amountLabel({ amount: 2, unit: 'Stück' })).toBe('2 Stück');
+  });
+
+  it('Kochen bricht eine Packung an: 3 × 1 l, 250 ml gebraucht → 2 × 1 l + 750 ml offen', () => {
+    const after = cook(pantry(milch()), { id: 'a', name: 'Milch', amount: 250, unit: 'ml' });
+    expect(show(after)).toEqual(['2 × 1 l', '750 ml offen']);
+    expect(after.items[1].openedAt).toBe(NOW);
+  });
+
+  it('beim nächsten Mal zuerst die offene Packung', () => {
+    const once = cook(pantry(milch()), { id: 'a', name: 'Milch', amount: 250, unit: 'ml' });
+    expect(show(cook(once, { id: 'a', name: 'Milch', amount: 250, unit: 'ml' }))).toEqual(['2 × 1 l', '500 ml offen']);
+  });
+
+  it('Hack: 600 g aus 4 × 500 g → 2 × 500 g + 400 g offen', () => {
+    expect(show(cook(pantry(hack()), { id: 'a', name: 'Rinderhack', amount: 600, unit: 'g' }))).toEqual(['2 × 500 g', '400 g offen']);
+  });
+
+  it('genau aufgehend: 1000 g aus 4 × 500 g → 2 × 500 g, nichts offen', () => {
+    expect(show(cook(pantry(hack()), { id: 'a', name: 'Rinderhack', amount: 1000, unit: 'g' }))).toEqual(['2 × 500 g']);
+  });
+
+  it('„1 Dose“ im Rezept = 1 Packung', () => {
+    const tomaten: PantryItem = { id: 't', name: 'Passierte Tomaten', amount: 3, unit: 'Stück', pack: { amount: 500, unit: 'g' }, addedAt: NOW };
+    expect(show(cook(pantry(tomaten), { id: 'a', name: 'Passierte Tomaten', amount: 1, unit: 'Dose' }))).toEqual(['2 × 500 g']);
+  });
+
+  it('„Gekocht“ zurücknehmen: die Packung kommt zurück, der offene Rest verschwindet', () => {
+    const before = pantry(hack());
+    const after = cook(before, { id: 'a', name: 'Rinderhack', amount: 600, unit: 'g' });
+    expect(show(restock(after, takenBetween(before, after)))).toEqual(['4 × 500 g']);
+  });
+
+  it('von Hand angebrochen: eine Packung wird zum offenen Rest', () => {
+    const joghurt: PantryItem = { id: 'j', name: 'Joghurt', amount: 3, unit: 'Stück', pack: { amount: 500, unit: 'g' }, addedAt: NOW };
+    expect(openItem([joghurt], 'j', NOW, id).map(amountLabel)).toEqual(['2 × 500 g', '500 g offen']);
+  });
+
+  it('anbrechen und gleich 150 g herausnehmen → 350 g offen; alles herausnehmen → eine Packung weniger', () => {
+    const joghurt: PantryItem = { id: 'j', name: 'Joghurt', amount: 3, unit: 'Stück', pack: { amount: 500, unit: 'g' }, addedAt: NOW };
+    expect(openItem([joghurt], 'j', NOW, id, 150).map(amountLabel)).toEqual(['2 × 500 g', '350 g offen']);
+    expect(openItem([joghurt], 'j', NOW, id, 500).map(amountLabel)).toEqual(['2 × 500 g']);
+  });
+
+  it('Stück ohne Packungsgröße: ein Becher wird offen, die anderen bleiben zu (keine Mengenfrage)', () => {
+    const becher: PantryItem = { id: 'b', name: 'Joghurt', amount: 3, unit: 'Stück', addedAt: NOW };
+    const after = openItem([becher], 'b', NOW, id, 150); // eine versehentliche Menge wird ignoriert – nichts verschwindet
+    expect(after.map(amountLabel)).toEqual(['2 Stück', '1 Stück offen']);
+    expect(after.map((i) => !!i.openedAt)).toEqual([false, true]);
+  });
+
+  it('ohne Packungsgröße: der Eintrag selbst wird offen und kleiner', () => {
+    const lose: PantryItem = { id: 'l', name: 'Joghurt', amount: 500, unit: 'g', addedAt: NOW };
+    expect(openItem([lose], 'l', NOW, id, 100).map(amountLabel)).toEqual(['400 g offen']);
+  });
+
+  it('Angebrochenes und andere Packungsgrößen werden nicht zusammengelegt', () => {
+    let items = cook(pantry(hack()), { id: 'a', name: 'Rinderhack', amount: 600, unit: 'g' }).items;
+    items = addItem(items, { name: 'Rinderhack', amount: 2, unit: 'Stück', pack: { amount: 500, unit: 'g' } }, NOW, id);
+    items = addItem(items, { name: 'Rinderhack', amount: 1, unit: 'Stück', pack: { amount: 250, unit: 'g' } }, NOW, id);
+    expect(items.map(amountLabel)).toEqual(['4 × 500 g', '400 g offen', '1 × 250 g']);
+  });
+});
+
+describe('Offen hält kürzer', () => {
+  const opened: PantryItem = { id: 'o', name: 'Milch', amount: 750, unit: 'ml', addedAt: NOW, boughtAt: NOW, openedAt: NOW };
+  const day = (d: Date) => d.toISOString().slice(0, 10);
+
+  it('ab Öffnen 3 Tage (Milch geschlossen hielte 7)', () => {
+    expect(day(useByOf(opened, T)!)).toBe('2026-09-30');
+  });
+  it('aber nie länger als das Datum der Packung', () => {
+    expect(day(useByOf({ ...opened, useBy: '2026-09-28T12:00:00.000Z' }, T)!)).toBe('2026-09-28');
+  });
+  it('Tube, Konserve, Nudeln: je nach Lebensmittel', () => {
+    const open = (name: string): PantryItem => ({ ...opened, name });
+    expect(useByOf(open('Tomatenmark'), T)).toBeUndefined(); // Tube – keine Erinnerung
+    expect(useByOf(open('Gochujang'), T)).toBeUndefined();
+    expect(day(useByOf(open('Pesto'), T)!)).toBe('2026-10-04'); // 1 Woche
+    expect(day(useByOf(open('Passierte Tomaten'), T)!)).toBe('2026-09-30'); // wie Frisches
+    expect(useByOf(open('Pasta'), T)).toBeUndefined(); // trocken – auch offen keine Erinnerung
+    expect(useByOf(open('Sojasauce'), T)).toBeUndefined();
+  });
+  it('eigener Wert für „offen“', () => {
+    expect(day(useByOf(opened, T, { opened: 5 })!)).toBe('2026-10-02');
+  });
+});
+
+describe('Nachkaufen zählt nur Geschlossenes', () => {
+  it('1 geschlossene Packung + offene → unter 2', () => {
+    const p: Pantry = { ...pantry(milch(1), { id: 'o', name: 'Milch', amount: 750, unit: 'ml', addedAt: NOW, openedAt: NOW }), restock: [{ name: 'Milch', below: 2, unit: 'Stück' }] };
+    expect(restockNeeds(p, T)[0].label).toBe('Im Vorrat 1 Stück · Nachkaufen unter 2 Stück');
+  });
+});
+
+describe('Ganze Packung verwenden?', () => {
+  const ask = (amount: number) => packSuggestions(pantry(hack()), [{ id: 'a', name: 'Rinderhack', amount, unit: 'g' }], T);
+
+  it('600 g, Packung 500 g → „nur 500 g?“ (sonst 400 g offen)', () => {
+    expect(ask(600)).toEqual([expect.objectContaining({ amount: 500, planned: 600, packs: 1, wouldOpen: 400 })]);
+  });
+  it('450 g → „die ganze Packung?“', () => {
+    expect(ask(450)).toEqual([expect.objectContaining({ amount: 500, packs: 1, wouldOpen: 50 })]);
+  });
+  it('geht auf (1000 g) oder zu weit weg (700 g) → keine Frage', () => {
+    expect(ask(1000)).toEqual([]);
+    expect(ask(700)).toEqual([]);
+  });
+  it('schon etwas offen → keine Frage (das Offene kommt zuerst dran)', () => {
+    const p = pantry(hack(), { id: 'o', name: 'Rinderhack', amount: 100, unit: 'g', addedAt: NOW, openedAt: NOW });
+    expect(packSuggestions(p, [{ id: 'a', name: 'Rinderhack', amount: 600, unit: 'g' }], T)).toEqual([]);
+  });
+});

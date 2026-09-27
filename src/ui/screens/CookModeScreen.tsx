@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { withMyProducts } from '../../domain/nutrition/myProducts';
-import { leftoverSuggestions, pantryAfterPlan } from '../../domain/pantry';
+import { leftoverSuggestions, packSuggestions, pantryAfterPlan } from '../../domain/pantry';
+import { packLabel } from '../../domain/pantryLabel';
 import { currentContent } from '../../domain/recipe';
 import { formatAmount, formatQuantity, formatUnitAmount, scaleIngredients } from '../../domain/scaling';
 import { orderByUse } from '../../domain/stepIngredients';
@@ -38,6 +39,7 @@ export function CookModeScreen({ id, servings, variants }: { id: string; serving
   const [amounts, setAmounts] = useState<Record<string, number>>({});
   const [editing, setEditing] = useState<string | null>(null);
   const [noLeftovers, setNoLeftovers] = useState(false);
+  const [noPacks, setNoPacks] = useState(false);
   const pantry = usePantry();
   const plan = usePlan();
   const recipes = useRecipes();
@@ -50,11 +52,15 @@ export function CookModeScreen({ id, servings, variants }: { id: string; serving
     return orderByUse(scaleIngredients(c, servings ?? c.servings), c.steps);
   }, [recipe, servings]);
   // Reste mitverbrauchen – aber nicht, was andere geplante Gerichte noch brauchen
-  const leftovers = useMemo(() => {
-    if (!recipe) return [];
+  const { leftovers, packs } = useMemo(() => {
+    if (!recipe) return { leftovers: [], packs: [] };
     const table = withMyProducts(foodTable, products);
     const others = { ...plan, items: plan.items.filter((i) => i.recipeId !== recipe.id) };
-    return leftoverSuggestions(pantryAfterPlan(pantry, others, recipes, table), base, table);
+    const rest = pantryAfterPlan(pantry, others, recipes, table);
+    // „Ganze Packung?“ – 600 g Hack bei Packungen à 500 g. Die Rest-Frage („alle 3 Tomaten?“) geht vor.
+    const leftovers = leftoverSuggestions(rest, base, table);
+    const packs = packSuggestions(rest, base, table).filter((p) => !leftovers.some((l) => l.ingredientId === p.ingredientId));
+    return { leftovers, packs };
   }, [recipe, base, pantry, plan, recipes, products]);
 
   // Läuft ein Timer, 4× pro Sekunde neu zeichnen
@@ -83,6 +89,7 @@ export function CookModeScreen({ id, servings, variants }: { id: string; serving
   const last = step === c.steps.length - 1;
   const ingredients = base.map((i) => (i.id in amounts ? { ...i, amount: amounts[i.id] } : i));
   const openLeftovers = noLeftovers ? [] : leftovers.filter((l) => !(l.ingredientId in amounts));
+  const openPacks = noPacks ? [] : packs.filter((p) => !(p.ingredientId in amounts));
   const setAmount = (ing: Ingredient, amount: number | undefined) => {
     const { [ing.id]: _old, ...rest } = amounts;
     const original = base.find((b) => b.id === ing.id)?.amount;
@@ -167,6 +174,26 @@ export function CookModeScreen({ id, servings, variants }: { id: string; serving
             ))}
           </div>
           <button className="link link--muted" onClick={() => setNoLeftovers(true)}>Nein danke</button>
+        </div>
+      )}
+
+      {openPacks.length > 0 && (
+        <div className="cook__leftovers" role="status">
+          <p><Icon name="archive" size={16} /> <strong>Ganze Packung verwenden?</strong> Nur für dieses Mal – das Rezept bleibt.</p>
+          <div className="cook__leftover-list">
+            {openPacks.map((p) => (
+              <button key={p.ingredientId} className="btn btn--soft btn--sm" onClick={() => {
+                setAmounts({ ...amounts, [p.ingredientId]: p.amount });
+                toast(`${formatUnitAmount(p.amount, p.unit)} ${p.name} – nur dieses Mal`);
+              }}>
+                {formatUnitAmount(p.amount, p.unit)} {p.name} statt {formatAmount(p.planned, p.unit)}
+              </button>
+            ))}
+          </div>
+          <p className="small muted">
+            {openPacks.map((p) => `Packung à ${packLabel(p.pack)}${p.wouldOpen > 0 ? ` – sonst bleiben ${packLabel({ amount: p.wouldOpen, unit: p.pack.unit })} offen` : ''}`).join(' · ')}
+          </p>
+          <button className="link link--muted" onClick={() => setNoPacks(true)}>Nein danke</button>
         </div>
       )}
 

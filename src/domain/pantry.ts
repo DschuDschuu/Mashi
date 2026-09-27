@@ -9,6 +9,7 @@ import { useByOf, type ShelfDays } from './shelfLife';
 import { currentContent } from './recipe';
 import type { MealPlan } from './mealplan';
 import type { RestockRule } from './restock';
+import type { Pack } from './pantryLabel';
 import type { Ingredient, Recipe, RecipeContent, Unit } from './types';
 
 /**
@@ -36,6 +37,10 @@ export interface PantryItem {
   check?: boolean;
   /** welche Sorte („Mein Produkt“) – vom Kassenbon oder Barcode; zählt beim Planen/Kochen */
   productId?: string;
+  /** Größe EINER Packung – dann zählt amount die geschlossenen Packungen („4 × 500 g“, unit 'Stück') */
+  pack?: Pack;
+  /** angebrochen am … – der Rest einer Packung (in g/ml); hält kürzer, siehe shelfLife */
+  openedAt?: string;
 }
 
 /**
@@ -124,6 +129,19 @@ export function frozenShare(row: Pick<ImportRow, 'freeze' | 'line'>): number {
   return Math.min(row.freeze, packs) / packs;
 }
 
+/** Zahl + Einheit als eigenes Wort – „3,5%“ oder „10er“ zählen nicht */
+const SIZE_RE = /(?:^|\s)(\d+(?:[.,]\d+)?)\s?(kg|g|ml|l)(?=\s|$)/i;
+
+/** Packungsgröße aus dem Bon-Namen: „Rinderhack 500g“, „Mehl 1kg“, „Cola 1,5L“ → je Stück */
+export function sizeFromName(name: string): { amount: number; unit: PantryUnit } | undefined {
+  const m = name.match(SIZE_RE);
+  if (!m) return undefined;
+  const n = Number(m[1].replace(',', '.'));
+  if (!(n > 0)) return undefined;
+  const u = m[2].toLowerCase();
+  return u === 'kg' ? { amount: n * 1000, unit: 'g' } : u === 'l' ? { amount: n * 1000, unit: 'ml' } : { amount: n, unit: u === 'ml' ? 'ml' : 'g' };
+}
+
 export function proposeImport(lines: ReceiptLine[], rules: ReceiptRule[], packageFor?: PackageLookup): ImportRow[] {
   return lines.map((line) => {
     const key = receiptKey(line.name);
@@ -145,16 +163,13 @@ export function proposeImport(lines: ReceiptLine[], rules: ReceiptRule[], packag
     } else if (rule?.amount !== undefined) {
       row.amount = rule.amount * line.count;
       row.unit = rule.unit;
-    } else if (rule?.unit === 'Stück') {
-      row.amount = line.count;
-      row.unit = 'Stück';
-    } else if (!rule) {
+    } else {
       // Noch nie auf einem Bon gesehen – aber vielleicht ein eigenes Produkt mit Packungsgröße
-      const pack = packageFor?.(line.name);
-      if (pack) {
-        row.amount = pack.amount * line.count; // 2 × 125 g = 250 g · 3 × 1 Stück = 3 Stück
-        row.unit = pack.unit;
-      }
+      const pack = (rule ? undefined : packageFor?.(line.name)) ?? sizeFromName(line.name);
+      // Sonst die Stückzahl vom Bon: „12 × Passierte Tomaten“ = 12 Stück statt nur „vorhanden“ –
+      // so kann Mashi zählen (Nachkaufen) und 12 neue kommen zu 3 alten dazu
+      row.amount = pack ? pack.amount * line.count : line.count; // 2 × 125 g = 250 g
+      row.unit = pack ? pack.unit : 'Stück';
     }
     return row;
   });
@@ -186,12 +201,17 @@ export function applyImport(pantry: Pantry, rows: ImportRow[], now = new Date().
     });
     const name = row.name.trim();
     const share = frozenShare(row);
-    const part = (f: number) => (row.amount === undefined ? undefined : Math.round(row.amount * f * 10) / 10);
+    // Packungsware (nicht lose, Menge in g/ml): „4 × 500 g“ statt 2000 g – dann weiß man, wie viel eine Packung ist
+    const pack: Pack | undefined = row.line.weightKg === undefined && row.amount !== undefined && row.line.count > 0 && (row.unit === 'g' || row.unit === 'ml')
+      ? { amount: Math.round((row.amount / row.line.count) * 10) / 10, unit: row.unit } : undefined;
+    const total = pack ? row.line.count : row.amount;
+    const unit = pack ? 'Stück' as const : row.unit;
+    const part = (f: number) => (total === undefined ? undefined : Math.round(total * f * 10) / 10);
     // Der frische Teil wie gewohnt – Gefrorenes als eigener Eintrag, eingefroren am Einkaufstag
-    if (share < 1) items = addItem(items, { name, amount: part(1 - share), unit: row.unit, boughtAt: paidAt, reduced: row.reduced, productId: row.productId }, now, newId);
+    if (share < 1) items = addItem(items, { name, amount: part(1 - share), unit, pack, boughtAt: paidAt, reduced: row.reduced, productId: row.productId }, now, newId);
     if (share > 0) {
       items = [...items, {
-        id: newId(), name, ...(row.amount !== undefined ? { amount: part(share), unit: row.unit } : {}),
+        id: newId(), name, ...(total !== undefined ? { amount: part(share), unit, ...(pack ? { pack } : {}) } : {}),
         addedAt: now, boughtAt: paidAt, frozenAt: paidAt, ...(row.reduced ? { reduced: true } : {}), ...(row.productId ? { productId: row.productId } : {}),
       }];
     }
@@ -222,20 +242,25 @@ function priceOf(row: ImportRow, date: string): PriceEntry | undefined {
   return { name, perUnit: paid / pieces, unit: 'Stück', date };
 }
 
+const samePack = (a?: Pack, b?: Pack) => a?.amount === b?.amount && a?.unit === b?.unit;
+const isCount = (u?: PantryUnit) => u === 'Stück' || u === 'Glas';
+
 /**
  * Gleicher Name + gleiche Einheit → Mengen zusammenzählen statt doppelt führen.
  * Gefrorenes und MHD-Ware bleiben eigene Einträge – sie halten ganz anders als frische Ware.
  */
 export function addItem(
-  items: PantryItem[], add: { name: string; amount?: number; unit?: PantryUnit; boughtAt?: string; reduced?: boolean; productId?: string }, now: string, newId = defaultId,
+  items: PantryItem[], add: { name: string; amount?: number; unit?: PantryUnit; pack?: Pack; boughtAt?: string; reduced?: boolean; productId?: string }, now: string, newId = defaultId,
 ): PantryItem[] {
-  // verschiedene Sorten bleiben getrennt – sonst wüsste Mashi nicht mehr, welches Pesto da ist
-  const i = items.findIndex((x) => sameName(x.name, add.name) && !x.frozenAt && !!x.reduced === !!add.reduced && x.productId === add.productId
+  // verschiedene Sorten bleiben getrennt – sonst wüsste Mashi nicht mehr, welches Pesto da ist;
+  // ebenso Angebrochenes und andere Packungsgrößen (4 × 500 g und 2 × 250 g sind zweierlei)
+  const i = items.findIndex((x) => sameName(x.name, add.name) && !x.frozenAt && !x.openedAt && !!x.reduced === !!add.reduced && x.productId === add.productId
+    && samePack(x.pack, add.amount === undefined ? x.pack : add.pack)
     && (x.unit === add.unit || x.amount === undefined || add.amount === undefined));
   const bought = add.boughtAt ?? now;
   if (i < 0) {
     return [...items, {
-      id: newId(), name: add.name, ...(add.amount !== undefined ? { amount: add.amount, unit: add.unit } : {}),
+      id: newId(), name: add.name, ...(add.amount !== undefined ? { amount: add.amount, unit: add.unit, ...(add.pack ? { pack: add.pack } : {}) } : {}),
       addedAt: now, boughtAt: bought, ...(add.reduced ? { reduced: true } : {}), ...(add.productId ? { productId: add.productId } : {}),
     }];
   }
@@ -311,11 +336,14 @@ export function deductRecipe(
   pantry: Pantry, content: RecipeContent, servings: number, table: FoodTable, amounts: Readonly<Record<string, number>> = {},
   /** gewählte Sorte je Zutat (Plan/Kochmodus) – deren Packung wird zuerst genommen */
   prefer: Readonly<Record<string, string>> = {},
+  now = new Date().toISOString(),
+  newId = defaultId,
 ): Deduction {
   const factor = servings / content.servings;
   const keyOf = new Map(pantry.items.map((it) => [it.id, itemAsIngredient(it, table)?.key]));
   // Gibt es etwas doppelt (MHD-Ware + frische Packung, oder gefroren), zuerst das, was eher weg muss
-  const rank = (it: PantryItem) => (it.frozenAt ? Infinity : useByOf(it, table, pantry.shelfDays)?.getTime() ?? Number.MAX_SAFE_INTEGER);
+  // Angebrochenes vor allem anderen – erst die offene Milch, dann eine neue
+  const rank = (it: PantryItem) => (it.openedAt ? -Infinity : it.frozenAt ? Infinity : useByOf(it, table, pantry.shelfDays)?.getTime() ?? Number.MAX_SAFE_INTEGER);
   const items = pantry.items.map((it) => ({ ...it }));
   const byUrgency = [...items].sort((a, b) => rank(a) - rank(b));
   const used: string[] = [];
@@ -349,7 +377,22 @@ export function deductRecipe(
         break;
       }
       const take = Math.min(item.amount, full * open);
-      item.amount = Math.max(0, Math.round((item.amount - take) * 10) / 10);
+      if (item.pack && isCount(item.unit) && !item.frozenAt) {
+        // 3 Packungen à 1 l, 250 ml gebraucht → 2 geschlossene + 750 ml offen
+        const left = item.amount - take;
+        const closed = Math.floor(left + 1e-6);
+        const rest = left - closed;
+        item.amount = closed;
+        if (rest > 0.02) {
+          const { id: _id, check: _c, pack, amount: _a, unit: _u, ...keep } = item;
+          const opened: PantryItem = { ...keep, id: newId(), amount: Math.round(rest * pack.amount), unit: pack.unit, addedAt: now, boughtAt: item.boughtAt ?? item.addedAt, openedAt: now };
+          items.push(opened);
+          byUrgency.unshift(opened);
+          keyOf.set(opened.id, keyOf.get(item.id));
+        }
+      } else {
+        item.amount = Math.max(0, Math.round((item.amount - take) * 10) / 10);
+      }
       open = full > 0 ? open - take / full : 0;
       if (!used.includes(item.name)) used.push(item.name);
     }
@@ -476,6 +519,8 @@ export function rememberReceipt(pantry: Pantry, key?: string): Pantry {
 export interface Taken {
   item: PantryItem;
   amount?: number;
+  /** beim Kochen neu angebrochen – beim Zurücklegen wieder entfernen (die Packung kommt ja zurück) */
+  created?: boolean;
 }
 
 /** Was sich zwischen vorher und nachher geändert hat – für „Rückgängig“. */
@@ -487,6 +532,7 @@ export function takenBetween(before: Pantry, after: Pantry): Taken[] {
     else if (b.amount !== undefined && a.amount !== undefined && a.amount < b.amount) out.push({ item: b, amount: Math.round((b.amount - a.amount) * 10) / 10 });
     else if (a.check && !b.check) out.push({ item: b });
   }
+  for (const a of after.items) if (a.openedAt && !before.items.some((b) => b.id === a.id)) out.push({ item: a, created: true });
   return out;
 }
 
@@ -498,6 +544,10 @@ export function restock(pantry: Pantry, taken: Taken[]): Pantry {
   const items = [...pantry.items];
   for (const t of taken) {
     const i = items.findIndex((x) => x.id === t.item.id);
+    if (t.created) {
+      if (i >= 0) items.splice(i, 1);
+      continue;
+    }
     if (i < 0) {
       items.push({ ...t.item });
       continue;
@@ -554,6 +604,7 @@ export function plannedUse(pantry: Pantry, plan: MealPlan, recipes: Recipe[], ta
   const out: PlannedUse = new Map();
   for (const d of dishes) {
     for (const t of d.taken) {
+      if (t.created) continue;
       const prev = out.get(t.item.id);
       if (t.amount === undefined || prev === 'all') out.set(t.item.id, 'all');
       else out.set(t.item.id, Math.round(((prev ?? 0) + t.amount) * 10) / 10);
@@ -577,4 +628,82 @@ export function suggestPantryUnit(food: FoodEntry | undefined, product?: { packa
   if (food.portions?.Stück) return 'Stück';
   if (food.density !== undefined) return 'ml';
   return 'g';
+}
+
+/**
+ * Von Hand angebrochen (Joghurt zum Frühstück): eine Packung wird zum offenen Rest.
+ * @param take so viel nimmst du gleich heraus (g/ml der Packung, sonst in der Einheit des Vorrats) –
+ *   leer = nur geöffnet. Alles herausgenommen → einfach eine Packung weniger.
+ * Ohne Packungsgröße wird der Eintrag selbst „offen“ (und um take kleiner).
+ */
+export function openItem(items: PantryItem[], id: string, now: string, newId = defaultId, take = 0): PantryItem[] {
+  const item = items.find((x) => x.id === id);
+  if (!item || item.openedAt || item.frozenAt) return items;
+  const t = Math.max(0, take);
+  if (item.pack && isCount(item.unit) && (item.amount ?? 0) >= 1) {
+    const { id: _id, check: _c, pack, amount: _a, unit: _u, ...keep } = item;
+    const rest = Math.round(pack.amount - t);
+    const opened: PantryItem = { ...keep, id: newId(), amount: rest, unit: pack.unit, addedAt: now, boughtAt: item.boughtAt ?? item.addedAt, openedAt: now };
+    const closed = Math.round((item.amount! - 1) * 10) / 10;
+    return [...items.flatMap((x) => (x.id !== id ? [x] : closed > 0 ? [{ ...x, amount: closed }] : [])), ...(rest > 0 ? [opened] : [])];
+  }
+  if (item.amount === undefined) return items.map((x) => (x.id === id ? { ...x, openedAt: now } : x));
+  if (isCount(item.unit)) {
+    // „3 Stück Joghurt“ ohne Packungsgröße: EIN Becher wird offen, die anderen bleiben zu – ohne Mengenfrage
+    if (item.amount <= 1) return items.map((x) => (x.id === id ? { ...x, openedAt: now } : x));
+    const { id: _id, check: _c, ...keep } = item;
+    const opened: PantryItem = { ...keep, id: newId(), amount: 1, addedAt: now, boughtAt: item.boughtAt ?? item.addedAt, openedAt: now };
+    return [...items.map((x) => (x.id === id ? { ...x, amount: Math.round((item.amount! - 1) * 10) / 10 } : x)), opened];
+  }
+  const left = Math.round((item.amount - t) * 10) / 10;
+  return left > 0 ? items.map((x) => (x.id === id ? { ...x, amount: left, openedAt: now } : x)) : items.filter((x) => x.id !== id);
+}
+
+/** „Ganze Packung verwenden?“ – für dieses Mal, das Rezept bleibt. */
+export interface PackSuggestion {
+  ingredientId: string;
+  name: string;
+  /** in der Einheit der Zutat, schon für diese Portionen */
+  amount: number;
+  planned: number;
+  unit?: Unit;
+  /** so viele Packungen */
+  packs: number;
+  /** „500 g“ */
+  pack: Pack;
+  /** so viel bliebe mit der Rezeptmenge offen (in g/ml der Packung) */
+  wouldOpen: number;
+}
+
+/**
+ * Das Rezept will 600 g Hack, eine Packung hat 500 g → „nur 500 g?“ (sonst bleiben 400 g offen).
+ * Oder 450 g → „die ganze Packung?“. Nur bis 25 % Abweichung, nur mit geschlossenen Packungen
+ * und wenn nichts Angebrochenes da ist (das wird ohnehin zuerst verbraucht).
+ * @param ingredients schon auf die Portionen umgerechnet
+ */
+export function packSuggestions(pantry: Pantry, ingredients: Ingredient[], table: FoodTable): PackSuggestion[] {
+  const resolved = ingredients.map((ing) => ({ ing, need: resolveIngredient(ing, 1, table) }));
+  const keyOf = (it: PantryItem) => itemAsIngredient(it, table)?.key;
+  const out: PackSuggestion[] = [];
+  for (const { ing, need } of resolved) {
+    if (!need || need.pantry || need.food?.negligible || ing.amount === undefined) continue;
+    if (resolved.filter((r) => r.need?.key === need.key).length > 1) continue;
+    const mine = pantry.items.filter((it) => (it.amount ?? 0) > 0 && keyOf(it) === need.key);
+    if (mine.some((it) => it.openedAt)) continue;
+    const item = mine.find((it) => it.pack && isCount(it.unit) && !it.frozenAt);
+    if (!item?.pack) continue;
+    const packs = needIn(item, need);
+    if (packs === undefined || packs <= 0) continue;
+    const frac = packs - Math.floor(packs);
+    if (frac < 0.02 || frac > 0.98) continue; // geht schon auf
+    const down = Math.floor(packs);
+    const up = Math.ceil(packs);
+    const k = down >= 1 && (packs - down) / packs <= 0.25 ? down : up <= item.amount! && (up - packs) / packs <= 0.25 ? up : undefined;
+    if (k === undefined) continue;
+    out.push({
+      ingredientId: ing.id, name: ing.name, amount: ing.amount * (k / packs), planned: ing.amount, unit: ing.unit,
+      packs: k, pack: item.pack, wouldOpen: Math.round((up - packs) * item.pack.amount),
+    });
+  }
+  return out;
 }

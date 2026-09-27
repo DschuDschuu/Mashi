@@ -3,6 +3,9 @@ import { createMockRecipes } from '../data/mockRecipes';
 import { localFoodTable } from './nutrition/localFoods';
 import { addItem, applyImport, deductRecipe, emptyPantry, pantryAfterPlan, proposeImport, recipesFromPantry, suggestPantryUnit, type Pantry } from './pantry';
 import { parseReceipt } from './receipt';
+import { buildShoppingList, type MealPlan } from './mealplan';
+import { withMyProducts, type MyProduct } from './nutrition/myProducts';
+import { currentContent } from './recipe';
 import type { Ingredient, Recipe, RecipeContent } from './types';
 
 const NOW = '2026-09-24T12:00:00.000Z';
@@ -30,13 +33,22 @@ const stock = (...items: [string, number | undefined, 'g' | 'ml' | 'Stück' | un
 });
 
 describe('Kassenbon in die Speisekammer', () => {
-  it('erster Bon: nichts bekannt – nur das Gewicht loser Ware ist schon ausgefüllt', () => {
+  it('erster Bon: nichts bekannt – loses Gewicht in g, sonst die Stückzahl vom Bon', () => {
     const rows = proposeImport(BON, []);
     expect(rows.map((r) => [r.name, r.known, r.amount, r.unit])).toEqual([
       ['Bananen', false, 982, 'g'],
-      ['Speisequark mager', false, undefined, undefined],
-      ['Cola Zero', false, undefined, undefined],
+      ['Speisequark mager', false, 3, 'Stück'],
+      ['Cola Zero', false, 6, 'Stück'],
     ]);
+  });
+
+  it('Größe im Bon-Namen: „500g“, „1kg“, „1,5L“ – je Stück, mal Anzahl', () => {
+    const rows = proposeImport(parseReceipt(`EUR
+Rinderhack 500g 4,49 x 4 17,96 A
+Cola 1,5L 0,99 x 2 1,98 B
+Milch 3,5% 1,19 A
+Zu zahlen 21,13`), []);
+    expect(rows.map((r) => [r.amount, r.unit])).toEqual([[2000, 'g'], [3000, 'ml'], [1, 'Stück']]);
   });
 
   it('merkt sich Name, Packungsgröße und „Überspringen“ – der nächste Bon ist fertig ausgefüllt', () => {
@@ -44,7 +56,8 @@ describe('Kassenbon in die Speisekammer', () => {
     rows[1] = { ...rows[1], name: 'Magerquark', amount: 750, unit: 'g' }; // 3 × 250 g
     rows[2] = { ...rows[2], skip: true };
     const after = applyImport(emptyPantry(), rows, NOW, id);
-    expect(after.items.map((i) => [i.name, i.amount, i.unit])).toEqual([['Bananen', 982, 'g'], ['Magerquark', 750, 'g']]);
+    // lose Ware in g, Packungsware als „3 × 250 g“
+    expect(after.items.map((i) => [i.name, i.amount, i.unit, i.pack])).toEqual([['Bananen', 982, 'g', undefined], ['Magerquark', 3, 'Stück', { amount: 250, unit: 'g' }]]);
 
     const next = proposeImport(parseReceipt('EUR\nSpeisequark mager 0,79 x 2 1,58 A\nCola Zero 0,69 x 2 1,38 B\nZu zahlen'), after.rules);
     expect(next.map((r) => [r.name, r.known, r.skip, r.amount])).toEqual([
@@ -143,5 +156,35 @@ describe('Einheit beim Eintragen', () => {
   });
   it('ein Produkt mit Packung „Stück“ geht vor', () => {
     expect(unit('Pasta', { packageUnit: 'Stück' })).toBe('Stück');
+  });
+});
+
+describe('1 Stück = 1 Packung (Produkt mit Packungsgröße)', () => {
+  const T0 = '2026-09-27T12:00:00.000Z';
+  const milch: MyProduct = { id: 'pm', name: 'Milch', replaces: ['milch'], per100g: { kcal: 35, protein: 3.4, carbs: 4.9, fat: 0.1 }, packageAmount: 1000, packageUnit: 'ml', updatedAt: T0 };
+  const table = withMyProducts(localFoodTable, [milch]);
+  const pantry: Pantry = { ...emptyPantry(), items: [{ id: 'm1', name: 'Milch', amount: 3, unit: 'Stück', addedAt: T0, productId: 'pm' }] };
+  const pfannkuchen = recipe('pf', [{ id: 'a', name: 'Milch', amount: 250, unit: 'ml' }]);
+  const plan: MealPlan = { items: [{ recipeId: 'pf', servings: 2 }], checked: [], cooked: [], updatedAt: T0 };
+
+  it('3 Stück Milch à 1000 ml gegen 250 ml im Rezept: nur ¼ verplant, der Rest bleibt frei', () => {
+    const rest = pantryAfterPlan(pantry, plan, [pfannkuchen], table).items;
+    expect(rest).toHaveLength(1);
+    expect(rest[0].amount).toBeCloseTo(2.8, 2); // Vorrat wird auf eine Stelle gerundet (2,75 → 2,8)
+  });
+
+  it('Einkaufsliste: Milch reicht („Hast du schon“)', () => {
+    const [m] = buildShoppingList(plan, [pfannkuchen], table, pantry);
+    expect(m).toMatchObject({ name: 'Milch', covered: true, have: '3 Stück' });
+  });
+
+  it('Kochen zieht ¼ Packung ab', () => {
+    const r = deductRecipe(pantry, currentContent(pfannkuchen), 2, table);
+    expect(r.pantry.items[0].amount).toBeCloseTo(2.8, 2);
+  });
+
+  it('eigenes Stückgewicht der Tabelle bleibt: 500-g-Netz Paprika ≠ eine Paprika mit 500 g', () => {
+    const netz: MyProduct = { id: 'pp', name: 'Paprika', replaces: ['paprika'], per100g: { kcal: 30, protein: 1, carbs: 6, fat: 0.3 }, packageAmount: 500, packageUnit: 'g', updatedAt: T0 };
+    expect(withMyProducts(localFoodTable, [netz]).matchName('Paprika')?.food.portions?.Stück).toBe(150);
   });
 });

@@ -35,7 +35,7 @@ export function ShoppingScreen() {
 
   return (
     <main className="screen screen--tabbed">
-      <TopBar title="Einkaufsliste" backTo="/plan" />
+      <TopBar title="Einkaufsliste" backTo="/speisekammer" />
       {all.length === 0 ? (
         <Empty icon="cart">
           <span>

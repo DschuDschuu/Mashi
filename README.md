@@ -16,7 +16,8 @@ Live: <https://dschudschuu.github.io/Mashi/> · installierbar als App (PWA), fun
 - **Wochenplan** mit Vorschlägen (gemeinsame Zutaten), Nährwerten pro Portion, „Gekocht“-Haken
 - **Einkaufsliste** aus dem Plan, zieht den Vorrat ab, Basics, „Doch kaufen“, Kassenbon hakt ab,
   „Nachkaufen“ bei Vorratsware unter dem Mindestbestand (z. B. passierte Tomaten unter 4 Dosen)
-- **Speisekammer**: Vorrat per Kassenbon oder von Hand (mit Marke/Sorte), Haltbarkeit,
+- **Speisekammer**: Vorrat per Kassenbon oder von Hand (mit Marke/Sorte), Packungen („4 × 500 g“,
+  „750 ml offen“ – Angebrochenes hält kürzer), „Ganze Packung verwenden?“ beim Kochen, Haltbarkeit,
   „Bald verbrauchen“, Einfrieren, Reste verwerten
 - **Meine Lebensmittel**: eigene Produkte mit Marke, Nährwerte per Etikett-Foto, Open Food Facts
   oder abgetippt; mehrere Sorten einer Zutat mit Favorit ★; „Immer im Haus“, „Ohne Nährwerte“;

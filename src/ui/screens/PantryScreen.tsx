@@ -5,6 +5,7 @@ import { recipesFromPantry, suggestPantryUnit, type PantryItem, type PantryUnit 
 import { daysLabel, daysLeft, frozenSince, specialDays, useByOf } from '../../domain/shelfLife';
 import { formatAmount } from '../../domain/scaling';
 import {
+  openPantryItem,
   addPantryItem, answerPantryCheck, assignPantrySorts, currentPantry, currentProducts, forgetReceiptRule, freezePantryItem, removePantryItem, thawPantryItem, updatePantryItem,
   saveProducts, usePantry, usePlan, useProducts, useRecipes,
 } from '../../data/store';
@@ -12,6 +13,7 @@ import { navigate, useRoute } from '../../router';
 import { foodTable } from '../../services';
 import { Empty, Section } from '../components/Controls';
 import { Icon } from '../components/Icon';
+import { CartButton } from '../components/CartButton';
 import { PantryTabs, usePantrySwipe } from '../components/PlanTabs';
 import { IngredientNames } from '../components/IngredientNames';
 import { groupByKind } from '../foodGroups';
@@ -34,6 +36,7 @@ const UNITS: PantryUnit[] = ['g', 'ml', 'Stück', 'Glas'];
 
 
 import { quantityLabel } from '../format';
+import { packLabel } from '../../domain/pantryLabel';
 export { quantityLabel }; // auch von hier erreichbar (Reste-Ansicht)
 
 /** Zahl aus einem Eingabefeld: „0,5“ und „0.5“, leer = keine Menge. */
@@ -76,7 +79,7 @@ export function PantryScreen() {
   const reservedLabel = (item: PantryItem) => {
     const p = planned.get(item.id);
     if (p === undefined) return undefined;
-    return p === 'all' ? 'Alles davon ist für den Wochenplan reserviert.' : `Davon ${quantityLabel({ amount: p, unit: item.unit })} für den Wochenplan reserviert.`;
+    return p === 'all' ? 'Alles davon ist für den Wochenplan reserviert.' : `Davon ${quantityLabel({ amount: p, unit: item.unit, pack: item.pack })} für den Wochenplan reserviert.`;
   };
   const matches = useMemo(() => {
     const planned = new Set(plan.items.map((i) => i.recipeId));
@@ -100,7 +103,8 @@ export function PantryScreen() {
     const undo = removePantryItem(item.id);
     toast(`„${item.name}“ entfernt`, { label: 'Rückgängig', run: undo });
   };
-  const sorted = [...pantry.items].sort((a, b) => a.name.localeCompare(b.name, 'de'));
+  // gleicher Name: das Angebrochene zuerst – „Joghurt 200 g offen“ direkt über „Joghurt 3 × 500 g“
+  const sorted = [...pantry.items].sort((a, b) => a.name.localeCompare(b.name, 'de') || Number(!a.openedAt) - Number(!b.openedAt));
   // Gefrorenes als eigene Gruppe am Ende – es hält ganz anders als der Rest seiner Art
   // Ganz Verplantes fällt oben weg; Bearbeiten zeigt aber immer den echten Vorrat
   const shown = sorted.filter((i) => freeOf(i) !== null);
@@ -111,7 +115,7 @@ export function PantryScreen() {
 
   return (
     <main className="screen screen--tabbed" {...swipe}>
-      <header className="page-head"><h1>Speisekammer</h1></header>
+      <header className="page-head"><h1>Speisekammer</h1><CartButton /></header>
       <PantryTabs active="pantry" />
       <IngredientNames />
 
@@ -155,7 +159,8 @@ export function PantryScreen() {
                               {i.name}
                               {shelfLabel(i)?.alarm && <span className="pantry__alarm" role="img" aria-label="läuft heute oder morgen ab"><Icon name="clock" size={14} /></span>}
                               {i.reduced && !i.frozenAt && <span className="badge tint-peach pantry__mhd">MHD</span>}
-                              {i.productId && sortName(i.productId) && <span className="pantry__sort">{sortName(i.productId)}</span>}
+                              {/* nur, wenn es etwas Neues sagt (Marke, Sorte) – nicht „Milch“ unter „Milch“ */}
+                              {i.productId && sortName(i.productId) && normalizeName(sortName(i.productId)!) !== normalizeName(i.name) && <span className="pantry__sort">{sortName(i.productId)}</span>}
                             </span>
                             <span className="pantry__qty pantry__qty--stack">
                               {quantityLabel(freeOf(i) ?? i)}
@@ -362,6 +367,23 @@ function EditRow({ item, estimate, reserved, onDone }: { item: PantryItem; estim
       : `„${item.name}“ eingefroren`);
     onDone();
   };
+  /** Anbrechen: null = zu, sonst wie viel du gleich herausnimmst (leer = nur öffnen) */
+  const [opening, setOpening] = useState<string | null>(null);
+  const openUnit = item.pack && (item.unit === 'Stück' || item.unit === 'Glas') ? item.pack.unit : item.unit;
+  // Mengenfrage nur, wo sie eindeutig ist: Packung mit Größe oder Vorrat in g/ml
+  const canTake = !!item.pack || item.unit === 'g' || item.unit === 'ml';
+  /** höchstens so viel, wie da ist: eine Packung bzw. der ganze Eintrag */
+  const maxTake = item.pack ? item.pack.amount : item.amount;
+  const takeValue = opening ? parseAmount(opening) : undefined;
+  const tooMuch = takeValue !== undefined && maxTake !== undefined && takeValue > maxTake;
+  const open = () => {
+    const take = canTake ? takeValue : undefined;
+    if (tooMuch) return;
+    openPantryItem(item.id, take);
+    const what = item.pack ? `${packLabel(item.pack)} ${item.name}` : `„${item.name}“`;
+    toast(take ? `${formatAmount(take, 'g')} ${openUnit} ${item.name} herausgenommen – der Rest ist offen` : `${what} angebrochen – hält offen kürzer`);
+    onDone();
+  };
   const thaw = () => {
     thawPantryItem(item.id);
     const d = specialDays('thawed', pantry.shelfDays);
@@ -373,6 +395,8 @@ function EditRow({ item, estimate, reserved, onDone }: { item: PantryItem; estim
       <input value={name} onChange={(e) => setName(e.target.value)} list="ingredient-names" aria-label="Name" />
       {reserved && <p className="small muted pantry-reserved">{reserved} Hier steht der ganze Vorrat.</p>}
       <AmountFields amount={amount} unit={unit} onAmount={setAmount} onUnit={setUnit} />
+      {item.pack && (unit === 'Stück' || unit === 'Glas') && <p className="small muted">Packungen à {packLabel(item.pack)}</p>}
+      {item.openedAt && <p className="small muted">Angebrochen am {new Date(item.openedAt).toLocaleDateString('de-DE')} – hält offen kürzer.</p>}
       <SortPicker options={editOptions} value={productId} onChange={setProductId} />
       {item.frozenAt ? (
         <p className="small muted pantry-frozen">Eingefroren am {new Date(item.frozenAt).toLocaleDateString('de-DE')}</p>
@@ -395,7 +419,22 @@ function EditRow({ item, estimate, reserved, onDone }: { item: PantryItem; estim
           : freezing === null && (
             <button className="btn btn--soft btn--sm" onClick={() => setFreezing(item.amount === undefined ? '' : String(item.amount).replace('.', ','))}>Einfrieren</button>
           )}
+        {!item.frozenAt && !item.openedAt && freezing === null && opening === null && (
+          <button className="btn btn--soft btn--sm" onClick={() => (canTake ? setOpening('') : open())}>{(item.pack || !canTake) && (item.amount ?? 0) > 1 ? 'Eine anbrechen' : 'Angebrochen'}</button>
+        )}
       </div>
+      {opening !== null && (
+        <div className="pantry-freeze">
+          <label className="small">Wie viel nimmst du raus?
+            <input inputMode="decimal" value={opening} onChange={(e) => setOpening(e.target.value)} placeholder={item.pack ? `von ${packLabel(item.pack)}` : 'nichts'} aria-label="Menge, die du herausnimmst" autoFocus /> {openUnit}
+          </label>
+          <button className="btn btn--primary btn--sm" onClick={open} disabled={tooMuch}>Anbrechen</button>
+          <button className="link link--muted" onClick={() => setOpening(null)}>Abbrechen</button>
+          {tooMuch
+            ? <p className="small pantry-warn" role="alert">{item.pack ? `Eine Packung hat nur ${packLabel(item.pack)}.` : `Es sind nur ${quantityLabel(item)} da.`}</p>
+            : <p className="small muted">Leer lassen = nur geöffnet.</p>}
+        </div>
+      )}
       {freezing !== null && (
         <div className="pantry-freeze">
           {item.amount !== undefined && (

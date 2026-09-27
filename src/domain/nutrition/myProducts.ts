@@ -86,14 +86,25 @@ function glassOf(p: MyProduct, replaced?: FoodEntry): number | undefined {
   return undefined;
 }
 
+/**
+ * 1 Stück = eine Packung (Milch 1000 ml, Mozzarella 125 g, Joghurt 500 g) – damit „3 Stück“ im Vorrat
+ * gegen „250 ml“ im Rezept rechnet. Kennt die Tabelle ein eigenes Stückgewicht (Paprika 150 g), bleibt das:
+ * ein 500-g-Netz Paprika heißt nicht, dass eine Paprika 500 g wiegt.
+ */
+function pieceOf(p: MyProduct, replaced?: FoodEntry): number | undefined {
+  return replaced?.portions?.Stück ? undefined : glassOf(p, replaced);
+}
+
 /** Ein Produkt als Tabelleneintrag. Umrechnungen (Dichte, Stückgewicht) erbt es vom ersetzten Eintrag. */
 function asEntry(p: MyProduct, replaced?: FoodEntry): FoodEntry {
+  const glass = glassOf(p, replaced);
+  const piece = pieceOf(p, replaced);
   return {
     ref: { provider: MY_PRODUCTS_PROVIDER, foodId: p.id },
     name: productLabel(p),
     per100g: p.per100g,
     ...(replaced?.density !== undefined ? { density: replaced.density } : {}),
-    ...(replaced?.portions || glassOf(p, replaced) ? { portions: { ...replaced?.portions, ...(glassOf(p, replaced) ? { Glas: glassOf(p, replaced) } : {}) } } : {}),
+    ...(replaced?.portions || glass ? { portions: { ...replaced?.portions, ...(glass ? { Glas: glass } : {}), ...(piece ? { Stück: piece } : {}) } } : {}),
     ...(replaced?.kind ? { kind: replaced.kind } : {}),
     ...(replaced ? { baseId: replaced.ref.foodId } : {}),
     ...(p.shelfDays ? { shelfDays: p.shelfDays } : {}),
@@ -111,7 +122,7 @@ function asGroup(ps: MyProduct[], key: string, replaced?: FoodEntry): FoodEntry 
   // Favorit: dessen Werte statt des Durchschnitts (Schlüssel bleibt – Vorrat und Rezept finden sich weiter)
   const fav = ps.find((p) => p.favorite);
   return {
-    ...asEntry(ps[0], replaced),
+    ...asEntry(fav ?? ps[0], replaced),
     ref: { provider: MY_PRODUCTS_PROVIDER, foodId: `sorten:${key}` },
     name: replaced?.name ?? key.charAt(0).toLocaleUpperCase('de-DE') + key.slice(1),
     per100g: fav ? fav.per100g : averageNutrients(ps.map((p) => p.per100g)),
@@ -128,7 +139,36 @@ const push = <K, V>(m: Map<K, V[]>, k: K, v: V) => m.set(k, [...(m.get(k) ?? [])
  * bleibt die der allgemeinen Tabelle – nur die Werte kommen dann von deinem Produkt.
  * So bleibt die Genauigkeit (berechnet/geschätzt) dieselbe wie vorher.
  */
+let lastTable: { base: FoodTable; products: readonly MyProduct[]; table: FoodTable } | undefined;
+
+/**
+ * Wie buildTable – aber gleiche Eingaben liefern dieselbe Tabelle, und jede Tabelle merkt sich ihre
+ * Namenssuche. Liste, Wagen-Zahl, Speisekammer und Nachkaufen fragen tausendfach „was ist Passata?“ –
+ * die Antwort hängt nur an Tabelle und Produkten, also darf sie zwischengespeichert werden.
+ */
 export function withMyProducts(base: FoodTable, products: MyProduct[]): FoodTable {
+  if (!products.length) return base; // ohne Produkte genau die alte Tabelle
+  if (lastTable && lastTable.base === base && lastTable.products === products) return lastTable.table;
+  const table = memoMatch(buildTable(base, products));
+  lastTable = { base, products, table };
+  return table;
+}
+
+type Match = ReturnType<FoodTable['matchName']>;
+
+function memoMatch(t: FoodTable): FoodTable {
+  const seen = new Map<string, Match>();
+  return {
+    ...t,
+    byRef: (ref) => t.byRef(ref),
+    matchName(name) {
+      if (!seen.has(name)) seen.set(name, t.matchName(name));
+      return seen.get(name);
+    },
+  };
+}
+
+function buildTable(base: FoodTable, products: MyProduct[]): FoodTable {
   if (!products.length) return base;
   // Mehrere Produkte für dasselbe = Sorten (siehe asGroup)
   const byReplaced = new Map<string, MyProduct[]>();

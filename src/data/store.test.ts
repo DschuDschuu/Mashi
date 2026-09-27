@@ -3,7 +3,7 @@ import PouchDB from 'pouchdb-core';
 import memory from 'pouchdb-adapter-memory';
 import { describe, expect, it } from 'vitest';
 import { PouchRecipeRepository, type RecipeDb } from './pouchRepository';
-import { addPantryItem, currentPantry, initStore, removePantryItem, setPantryRestock, toggleShoppingItem, updatePantryItem } from './store';
+import { addPantryItem, addToPlan, createRecipe, currentPantry, initStore, removeFromPlan, removePantryItem, setPantryRestock, toggleShoppingItem, updatePantryItem } from './store';
 import { resolveIngredient } from '../domain/mealplan';
 import { RESTOCK_PREFIX } from '../domain/restock';
 import { foodTable } from '../services';
@@ -61,5 +61,29 @@ describe('Store: Nachkaufen – Haken', () => {
     // aufgebraucht → wieder auf der Liste, aber NICHT „Im Wagen“
     removePantryItem(id);
     expect(await checked()).toBe(false);
+  });
+});
+
+describe('Store: Nachkaufen – Haken wandert mit dem Plan', () => {
+  it('im Wagen, dann kommt ein Rezept dazu und wieder weg: der Haken bleibt erhalten', async () => {
+    const repo = new PouchRecipeRepository(new PouchDB(`restock-plan-${Date.now()}`, { adapter: 'memory' }) as unknown as RecipeDb);
+    await initStore(repo);
+    const k = resolveIngredient({ id: 'x', name: 'Passierte Tomaten' }, 1, foodTable)!.key;
+    const checked = async () => { await settle(); return (await repo.loadPlan()).checked; };
+
+    setPantryRestock([{ name: 'Passierte Tomaten', below: 4, unit: 'Stück' }]);
+    addPantryItem('Passierte Tomaten', 3, 'Stück');
+    toggleShoppingItem(RESTOCK_PREFIX + k);
+    expect(await checked()).toEqual([RESTOCK_PREFIX + k]);
+
+    const rid = createRecipe({
+      title: 'Soße', description: '', servings: 2, prepMinutes: 0, cookMinutes: 0, difficulty: 1,
+      ingredients: [{ id: 'a', name: 'Passierte Tomaten', amount: 1, unit: 'Dose' }], steps: [], categories: [], tags: [], devices: [],
+    }, { source: 'selbst', status: 'kochbuch' });
+    addToPlan(rid, 2);
+    expect(await checked()).toEqual([k]); // jetzt auch fürs Rezept – liegt schon im Wagen
+
+    removeFromPlan(rid);
+    expect(await checked()).toEqual([RESTOCK_PREFIX + k]); // wieder nur Nachkaufen – weiter im Wagen
   });
 });

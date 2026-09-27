@@ -1,10 +1,10 @@
 import { useSyncExternalStore } from 'react';
 import { RESTOCK_PREFIX, shoppingList, type RestockRule } from '../domain/restock';
-import { buildShoppingList, emptyPlan, normalizePlan, resolveIngredient, toggleCooked, type MealPlan } from '../domain/mealplan';
+import { emptyPlan, normalizePlan, resolveIngredient, toggleCooked, type MealPlan } from '../domain/mealplan';
 import { mergeRecipes } from '../domain/merge';
 import { withMyProducts, type MyProduct } from '../domain/nutrition/myProducts';
 import {
-  addItem, applyImport, bonKey, deductRecipe, emptyPantry, freezeItem, rememberReceipt, restock, takenBetween, thawItem, type Taken, type ImportRow, type Pantry, type PantryItem, type PantryUnit,
+  addItem, applyImport, bonKey, deductRecipe, emptyPantry, freezeItem, openItem, rememberReceipt, restock, takenBetween, thawItem, type Taken, type ImportRow, type Pantry, type PantryItem, type PantryUnit,
 } from '../domain/pantry';
 import { currentContent, currentVersion, newId, sameContent, withNewVersion } from '../domain/recipe';
 import { recordSavings, type BonSavings } from '../domain/savings';
@@ -133,6 +133,7 @@ function scheduleReload() {
     recipes = fresh.map((r) => (pending.has(r.id) ? inMemory.get(r.id) ?? r : r));
     for (const id of pending.keys()) if (!fresh.some((r) => r.id === id) && inMemory.has(id)) recipes.unshift(inMemory.get(id)!);
     emit();
+    if (!planPending) tidyRestockChecks();
   }, 300);
 }
 
@@ -454,6 +455,7 @@ function commitPlan(next: Omit<MealPlan, 'updatedAt'>) {
   const saved = { ...next, updatedAt: now() };
   plan = saved;
   emit();
+  tidyRestockChecks();
   planPending++;
   void tracked(repo.savePlan(saved, base))
     .then((stored) => {
@@ -587,7 +589,8 @@ export function importReceipt(rows: ImportRow[], paidAt?: string, savings?: BonS
 
   const table = withMyProducts(foodTable, products);
   const bought = new Set(rows.filter((r) => !r.skip).map((r) => resolveIngredient({ id: r.key, name: r.name }, 1, table)?.key));
-  const list = buildShoppingList(plan, recipes, table, pantry).filter((i) => bought.has(i.key) && !plan.checked.includes(i.key));
+  // mit Nachkaufen: was darunter bleibt, zählt nicht als „erledigt“
+  const list = shoppingList(plan, recipes, table, pantry, products).filter((i) => bought.has(i.key) && !plan.checked.includes(i.key));
   const tick = list.filter((i) => !i.covered && i.have === 'vorhanden').map((i) => i.key);
   if (tick.length) commitPlan({ ...plan, checked: [...plan.checked, ...tick] });
   return { count: rows.filter((r) => !r.skip).length, onList: list.filter((i) => i.covered).length + tick.length };
@@ -595,7 +598,16 @@ export function importReceipt(rows: ImportRow[], paidAt?: string, savings?: BonS
 
 export function addPantryItem(name: string, amount?: number, unit?: PantryUnit, productId?: string) {
   if (!name.trim()) return;
-  commitPantry({ ...pantry, items: addItem(pantry.items, { name: name.trim(), amount, unit, productId }, now(), () => newId('v')) });
+  // „3 Stück“ von einem Produkt mit Packungsgröße → „3 × 500 g“
+  const p = productId ? products.find((x) => x.id === productId) : undefined;
+  const pack = unit === 'Stück' && p?.packageAmount && (p.packageUnit === 'g' || p.packageUnit === 'ml' || p.packageUnit === undefined)
+    ? { amount: p.packageAmount, unit: p.packageUnit ?? 'g' as const } : undefined;
+  commitPantry({ ...pantry, items: addItem(pantry.items, { name: name.trim(), amount, unit, productId, pack }, now(), () => newId('v')) });
+}
+
+/** Von Hand angebrochen: eine Packung wird zum offenen Rest (hält dann kürzer); take = gleich herausgenommen. */
+export function openPantryItem(id: string, take?: number) {
+  commitPantry({ ...pantry, items: openItem(pantry.items, id, now(), () => newId('v'), take) });
 }
 
 /** Nach der Wahl beim Planen/Kochen: Vorräte ohne Sorte bekommen die gewählte Sorte (Zutat → Produkt) */
@@ -606,7 +618,9 @@ export function assignPantrySorts(assign: readonly { itemIds: string[]; productI
 }
 
 export function updatePantryItem(id: string, patch: Partial<Pick<PantryItem, 'name' | 'amount' | 'unit' | 'useBy' | 'reduced' | 'productId'>>) {
-  commitPantry({ ...pantry, items: pantry.items.map((i) => (i.id === id ? { ...i, ...patch, check: false } : i)) });
+  // Einheit weg von Stück/Glas (z. B. auf g) → die Packungsgröße passt nicht mehr
+  const dropPack = (i: PantryItem) => 'unit' in patch && patch.unit !== 'Stück' && patch.unit !== 'Glas' && i.pack;
+  commitPantry({ ...pantry, items: pantry.items.map((i) => (i.id === id ? { ...i, ...patch, check: false, ...(dropPack(i) ? { pack: undefined } : {}) } : i)) });
 }
 
 /** Einfrieren – ganz oder nur einen Teil (amount in der Einheit des Vorrats). */
@@ -674,11 +688,29 @@ export function setPantryRestock(restock: RestockRule[]) {
  * Abgehaktes „Nachkaufen“ wieder freigeben, sobald es reicht (Bon, von Hand eingetragen) –
  * sonst stünde es beim nächsten Mal gleich „Im Wagen“. Rezept-Zutaten bleiben bis zur neuen Woche.
  */
+let tidying = false;
 function tidyRestockChecks() {
-  if (!plan.checked.some((k) => k.startsWith(RESTOCK_PREFIX))) return;
-  const onList = new Set(shoppingList(plan, recipes, withMyProducts(foodTable, products), pantry, products).map((i) => i.key));
-  const checked = plan.checked.filter((k) => !k.startsWith(RESTOCK_PREFIX) || onList.has(k));
-  if (checked.length !== plan.checked.length) commitPlan({ ...plan, checked });
+  if (tidying || !plan.checked.length) return;
+  if (!pantry.restock?.length && !plan.checked.some((k) => k.startsWith(RESTOCK_PREFIX))) return;
+  tidying = true;
+  try {
+    const onList = new Set(shoppingList(plan, recipes, withMyProducts(foodTable, products), pantry, products).map((i) => i.key));
+    const next: string[] = [];
+    for (const k of plan.checked) {
+      if (onList.has(k)) next.push(k);
+      else if (k.startsWith(RESTOCK_PREFIX)) {
+        // Nachkaufen, und jetzt braucht es auch ein Rezept → der Haken wandert mit (liegt ja schon im Wagen);
+        // sonst reicht es wieder → Haken weg
+        const plain = k.slice(RESTOCK_PREFIX.length);
+        if (onList.has(plain)) next.push(plain);
+      } else if (onList.has(RESTOCK_PREFIX + k)) next.push(RESTOCK_PREFIX + k); // Gericht raus, bleibt als Nachkaufen: Haken mitnehmen
+      else next.push(k); // Rezept-Zutaten bleiben bis zur neuen Woche
+    }
+    const checked = [...new Set(next)];
+    if (checked.length !== plan.checked.length || checked.some((k, i) => k !== plan.checked[i])) commitPlan({ ...plan, checked });
+  } finally {
+    tidying = false;
+  }
 }
 
 /** „Immer im Haus“ – gilt auf allen Geräten. */
