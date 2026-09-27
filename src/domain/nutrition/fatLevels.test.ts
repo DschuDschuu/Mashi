@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { computeNutrition } from './engine';
 import { fatLevel } from './fatLevels';
-import { localFoodTable, normalizeName } from './localFoods';
+import { appliesAliases, localFoodTable, normalizeName } from './localFoods';
 import { withMyProducts, type MyProduct } from './myProducts';
 import type { RecipeContent } from '../types';
 
@@ -57,5 +57,22 @@ describe('Ältere Produkte, die den Eintrag „Milch“ ersetzen', () => {
     expect(kcal('fettarme Milch', [legacy])).toBeCloseTo(47);
     expect(kcal('Milch 3,5 %', [legacy, rich])).toBeCloseTo(66); // dein 3,5-%-Produkt
     expect(kcal('Milch', [legacy, rich])).toBeCloseTo(35);
+  });
+});
+
+describe('Ein Milch-Produkt gilt für seine ganze Stufe', () => {
+  // wie in echten Daten: ersetzt nur den Eintrag „Milch“, heißt ohne Stufe → Standard 0,1 %
+  const mine: MyProduct = { id: 'p-x', name: 'Milch', brand: 'Test', replaces: ['milch'], per100g: { kcal: 34, protein: 3.4, carbs: 4.8, fat: 0.1 }, updatedAt: '2026-09-27T00:00:00Z' };
+  it('greift bei Milch, Milch 0,1 % und Magermilch – nicht bei 1,5 % oder 3,5 %', () => {
+    expect(kcal('Milch', [mine])).toBeCloseTo(34);
+    expect(kcal('Milch 0,1 %', [mine])).toBeCloseTo(34);
+    expect(kcal('Magermilch', [mine])).toBeCloseTo(34);
+    expect(kcal('Milch 1,5 %', [mine])).toBeCloseTo(47);
+    expect(kcal('Vollmilch', [mine])).toBeCloseTo(64);
+  });
+  it('„Gilt für“ zeigt genau diese Schreibweisen', () => {
+    expect(appliesAliases('Milch', 'milch')).toEqual(['milch', 'milch 0,1 %', 'magermilch', 'entrahmte milch']);
+    expect(appliesAliases('Weidemilch 3,5 %', 'milch')).toEqual(['milch 3,5 %', 'vollmilch']);
+    expect(appliesAliases('Pesto', 'pesto')).toContain('grünes pesto'); // ohne Fettstufen: alles wie bisher
   });
 });

@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { aliasesOf, FOOD_CHOICES, normalizeName } from '../../domain/nutrition/localFoods';
+import { appliesAliases, FOOD_CHOICES, normalizeName } from '../../domain/nutrition/localFoods';
+import { fatGroupOf, fatLevel } from '../../domain/nutrition/fatLevels';
 import { brandOf, nameOf, type MyProduct } from '../../domain/nutrition/myProducts';
 import type { NutritionResult } from '../../domain/nutrition/types';
 import { newId } from '../../domain/recipe';
@@ -14,8 +15,8 @@ import { NutritionQuickForm } from './NutritionQuickForm';
 import { BrandNames } from './BrandNames';
 import { parseNum, toField, type Values } from './productFields';
 
-/** „fettarme milch“ → „Fettarme milch“ (gespeichert wird klein) */
-const cap = (s: string) => s.charAt(0).toLocaleUpperCase('de-DE') + s.slice(1);
+/** „entrahmte milch“ → „Entrahmte Milch“ (gespeichert wird klein) – wie die Namen der Tabelle */
+const cap = (s: string) => s.replace(/(^|[\s-])(\p{L})/gu, (_m, sep: string, ch: string) => sep + ch.toLocaleUpperCase('de-DE'));
 
 /** Was Mashi ohne Angabe schätzt – vom ersetzten Lebensmittel (Mozzarella 7 Tage) */
 function shelfEstimate(replaces: string[], custom: Parameters<typeof shelfDaysForFood>[2]): string {
@@ -88,10 +89,15 @@ export function ProductForm({ initial, onSave, onCancel }: { initial?: Partial<M
   const [replaces, setReplaces] = useState<string[]>(initial?.replaces ?? []);
   const [names, setNames] = useState<string[]>(initial?.names ?? []);
   const [excludes, setExcludes] = useState<string[]>(initial?.excludes ?? []);
+  // Milch/Joghurt/Quark: welche anderen Stufen rechnen mit der Tabelle? („Milch 1,5 % und Milch 3,5 %“)
+  const group = replaces.map(fatGroupOf).find(Boolean);
+  const mine = fatLevel(name)?.label ?? group?.plain;
+  const otherLevels = group ? group.ids.map((id) => FOOD_CHOICES.find((c) => c.id === id)).filter(Boolean)
+    .map((c) => fatLevel(c!.name)?.label ?? group.plain).filter((l) => l !== mine).join(' und ') : '';
   /** Eine Schreibweise aus- oder wieder einschließen; sind alle aus, fällt der ganze Eintrag weg */
   const toggleAlias = (id: string, alias: string) => {
     const next = excludes.includes(alias) ? excludes.filter((x) => x !== alias) : [...excludes, alias];
-    const all = aliasesOf(id);
+    const all = appliesAliases(name || initial?.name || '', id);
     if (all.every((al) => next.includes(al))) {
       setReplaces(replaces.filter((x) => x !== id));
       setExcludes(next.filter((x) => !all.includes(x)));
@@ -133,7 +139,8 @@ export function ProductForm({ initial, onSave, onCancel }: { initial?: Partial<M
       replaces,
       ...(names.length ? { names } : {}),
       // nur Ausnahmen, die zu einem ersetzten Eintrag gehören
-      ...(() => { const ex = excludes.filter((x) => replaces.some((id) => aliasesOf(id).includes(x))); return ex.length ? { excludes: ex } : {}; })(),
+      // nur Ausnahmen, die sichtbar sind – überflüssige (z. B. „Vollmilch“ beim 0,1-%-Produkt) fallen still weg
+      ...(() => { const ex = excludes.filter((x) => replaces.some((id) => appliesAliases(name, id).includes(x))); return ex.length ? { excludes: ex } : {}; })(),
       // Zusatzwerte vom Etikett (Zucker, Salz …) behalten – das Formular zeigt nur die vier Hauptwerte
       per100g: { ...initial?.per100g, ...extra, kcal, protein, carbs, fat },
       ...(ean ? { ean } : {}),
@@ -255,7 +262,7 @@ export function ProductForm({ initial, onSave, onCancel }: { initial?: Partial<M
         <span className="small muted">Gilt für diese Zutaten in deinen Rezepten:</span>
         {(replaces.length > 0 || names.length > 0) && (
           <div className="chips giltfuer">
-            {replaces.flatMap((id) => aliasesOf(id).map((al) => {
+            {replaces.flatMap((id) => appliesAliases(name || initial?.name || '', id).map((al) => {
               const off = excludes.includes(al);
               return (
                 <button key={id + al} type="button" className={`afilter${off ? ' is-off' : ''}`}
@@ -272,7 +279,8 @@ export function ProductForm({ initial, onSave, onCancel }: { initial?: Partial<M
             ))}
           </div>
         )}
-        {excludes.length > 0 && <p className="small muted">Durchgestrichen = ausgenommen: dort rechnet Mashi mit dem Richtwert. Antippen holt es zurück.</p>}
+        {replaces.some((id) => appliesAliases(name, id).some((a) => excludes.includes(a))) && <p className="small muted">Durchgestrichen = ausgenommen: dort rechnet Mashi mit dem Richtwert. Antippen holt es zurück.</p>}
+        {otherLevels && <p className="small muted">{otherLevels} rechnen mit der Tabelle – für eigene Werte leg dafür ein eigenes Produkt an (z. B. „{otherLevels.split(' und ')[0]}“).</p>}
         <label className="search">
           <Icon name="search" size={18} />
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Zutat hinzufügen, z. B. Milch" aria-label="Zutat hinzufügen" />

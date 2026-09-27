@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { DEFAULT_BASICS } from '../../domain/mealplan';
 import { buildFoodList, matchesFilter, type FoodFilter, type FoodRow } from '../../domain/nutrition/foodList';
-import { aliasesOf, normalizeName } from '../../domain/nutrition/localFoods';
+import { appliesAliases, normalizeName } from '../../domain/nutrition/localFoods';
 import { brandOf, nameOf, productLabel, type MyProduct } from '../../domain/nutrition/myProducts';
 import { DEFAULT_NO_NUTRITION } from '../../domain/nutrition/noNutrition';
 import { averageNutrients } from '../../domain/nutrition/variants';
@@ -18,10 +18,12 @@ import { ProductForm } from './MyProductsPanel';
 import { NutritionQuickForm } from './NutritionQuickForm';
 
 const fmt = (n: number) => n.toLocaleString('de-DE', { maximumFractionDigits: 1 });
-const cap = (s: string) => s.charAt(0).toLocaleUpperCase('de-DE') + s.slice(1);
+const cap = (s: string) => s.replace(/(^|[\s-])(\p{L})/gu, (_m, sep: string, ch: string) => sep + ch.toLocaleUpperCase('de-DE'));
+/** Ausnahmen, die wirklich etwas bewirken (überflüssige alte, z. B. „Vollmilch“ beim 0,1-%-Produkt, nicht) */
+const shownExcludes = (p: MyProduct) => (p.excludes ?? []).filter((x) => p.replaces.some((id) => appliesAliases(nameOf(p), id).includes(x)));
 /** Alle Schreibweisen, für die ein Produkt gilt – aus der Tabelle (ohne Ausnahmen) und freie Namen */
 const appliesTo = (p: MyProduct) => [...new Set([
-  ...p.replaces.flatMap(aliasesOf).filter((a) => !p.excludes?.includes(a)),
+  ...p.replaces.flatMap((id) => appliesAliases(nameOf(p), id)).filter((a) => !p.excludes?.includes(a)),
   ...(p.names ?? []),
 ])].map(cap);
 /** Tabs: Schlüssel, kurzer Name, voller Name (für Screenreader) – Reihenfolge = Wischrichtung */
@@ -108,7 +110,6 @@ function FoodLine({ row, open, onToggle, products, basics, zero, onTouch }: {
   const ps = row.products;
   const fav = ps.find((p) => p.favorite);
   const values = ps.length === 1 ? ps[0].per100g : fav ? fav.per100g : ps.length ? averageNutrients(ps.map((p) => p.per100g)) : row.table?.per100g;
-  const hasPack = ps.some((p) => p.ean || p.packageAmount);
 
   const save = (p: MyProduct) => {
     saveProducts(products.some((x) => x.id === p.id) ? products.map((x) => (x.id === p.id ? p : x)) : [...products, p]);
@@ -145,7 +146,6 @@ function FoodLine({ row, open, onToggle, products, basics, zero, onTouch }: {
           {ps.length === 1 && brandOf(ps[0]) && <span className="brand">{brandOf(ps[0])}</span>}
           {nothing && <span className="foods__sub">nichts festgelegt</span>}
           {!zeroRow && row.basic && <Icon name="home" size={14} />}
-          {!zeroRow && hasPack && <Icon name="bookmark" size={14} />}
           {ps.length > 1 && <span className="foods__sub">{ps.length} Sorten{fav ? ` · ★ ${productLabel(fav)}` : ''}</span>}
         </span>
         <span className="foods__kcal">
@@ -200,7 +200,7 @@ function FoodLine({ row, open, onToggle, products, basics, zero, onTouch }: {
               {appliesTo(p).length > 0 && (
                 <span className="small muted">
                   gilt für: {appliesTo(p).join(', ')}
-                  {!!p.excludes?.length && <> · nicht für: {p.excludes.map(cap).join(', ')}</>}
+                  {shownExcludes(p).length > 0 && <> · nicht für: {shownExcludes(p).map(cap).join(', ')}</>}
                 </span>
               )}
             </div>

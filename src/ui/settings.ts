@@ -19,7 +19,7 @@ export type Theme = 'salbei' | 'bordeaux' | 'sonne' | 'nacht';
 export const THEMES: { id: Theme; label: string; colors: [string, string, string] }[] = [
   { id: 'salbei', label: 'Salbei', colors: ['#f8f6f1', '#4f8482', '#2d4748'] },
   { id: 'bordeaux', label: 'Bordeaux', colors: ['#faf6f5', '#7d2a3a', '#3d1f25'] },
-  { id: 'sonne', label: 'Sonnengelb', colors: ['#fcf9f0', '#e9b10e', '#3b321c'] },
+  { id: 'sonne', label: 'Sonnengelb', colors: ['#fcf9f0', '#f4cf1f', '#3b321c'] },
   { id: 'nacht', label: 'Nachtblau', colors: ['#f4f6fa', '#2b3d6b', '#1d2842'] },
 ];
 

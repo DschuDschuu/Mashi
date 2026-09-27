@@ -1,5 +1,5 @@
 import { normalizeName } from './localFoods';
-import { sameLevel } from './fatLevels';
+import { fatGroupOf, fatLevel, sameLevel } from './fatLevels';
 import { averageNutrients } from './variants';
 import type { FoodEntry, FoodTable, Nutrients } from './types';
 
@@ -164,6 +164,21 @@ export function withMyProducts(base: FoodTable, products: MyProduct[]): FoodTabl
       const n = normalizeName(name);
       const own = byName.get(n);
       const m = base.matchName(name);
+      // Milch, Joghurt, Quark: Ein Produkt gilt für ALLE Einträge seiner Fettstufe – dein „Milch“ also auch für
+      // „Milch 0,1 %“ und „Magermilch“, aber nie für „Milch 3,5 %“ (siehe fatLevels.ts)
+      const group = m && fatGroupOf(m.food.ref.foodId);
+      if (m && group) {
+        const linked = [...new Set([
+          ...group.ids.flatMap((id) => byReplaced.get(id) ?? []),
+          ...(byName.get(normalizeName(group.plain)) ?? []),
+          ...(own ?? []),
+        ])];
+        const fit = linked.filter((p) => !p.excludes?.some((x) => x === m.alias || x === n)
+          && sameLevel(nameOf(p), name, m.food.ref.foodId) !== false);
+        const level = normalizeName(fatLevel(name)?.label ?? group.plain);
+        const extra = { ...(m.alias ? { alias: m.alias } : {}), ...(m.specific ? { specific: true } : {}) };
+        return fit.length ? { food: asGroup(fit, level, m.food), quality: m.quality, ...extra } : { ...m, ...extra };
+      }
       // Kennt die Tabelle den Namen genau (Pesto), übernimmt das Produkt deren Umrechnungen
       // (1 Glas, 1 EL, Dichte) – falls du selbst keine Packungsgröße eingetragen hast
       // „Milch (1,5 %)“ normalisiert zu „milch“ – die Stufe entscheidet, nicht dein Standard-Produkt „Milch“

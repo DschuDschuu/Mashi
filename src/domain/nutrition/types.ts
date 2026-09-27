@@ -94,6 +94,8 @@ export interface IngredientNutrition {
   grams?: number;
   /** Anteil dieser Zutat pro Portion – nur wenn sie mitgerechnet wird */
   perServing?: Nutrients;
+  /** Menge dieser Zutat pro Portion in Gramm */
+  gramsPerServing?: number;
 }
 
 export interface NutritionResult {

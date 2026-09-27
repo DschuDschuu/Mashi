@@ -79,3 +79,17 @@ export function sameLevel(productName: string, ingredientName: string, foodId: s
   if (!std) return undefined;
   return (fatLevel(productName)?.label ?? std) === (fatLevel(ingredientName)?.label ?? std);
 }
+
+/** Alle Einträge derselben Gruppe (Milch: 0,1 / 1,5 / 3,5 %) und der schlichte Name („Milch“) */
+export function fatGroupOf(foodId: string): { ids: string[]; plain: string } | undefined {
+  const g = LEVELS.find((x) => x.levels.some((l) => l.id === foodId));
+  return g && { ids: g.levels.map((l) => l.id), plain: g.levels[0].label };
+}
+
+/** Für welche Einträge gilt ein Produkt dieser Stufe? Nur für den Eintrag seiner Stufe (Milch 0,1 % → Magermilch-Eintrag). */
+export function levelEntryOf(productName: string, foodId: string): string | undefined {
+  const g = LEVELS.find((x) => x.levels.some((l) => l.id === foodId));
+  if (!g) return undefined;
+  const label = fatLevel(productName)?.label ?? g.levels[0].label;
+  return g.levels.find((l) => l.label === label)?.id;
+}

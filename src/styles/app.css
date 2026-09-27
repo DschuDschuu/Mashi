@@ -353,11 +353,7 @@ p { margin: 0; }
 .ntable th { text-align: left; font-weight: 600; }
 .ntable td { width: 30%; font-weight: 700; }
 .ntable td.muted { font-weight: 500; }
-.matchlist summary, .versions summary { cursor: pointer; font-weight: 700; color: var(--primary-text); padding: 6px 0; }
-.matchlist ul { list-style: none; padding: 0; margin: 8px 0 0; display: flex; flex-direction: column; gap: 8px; }
-.matchlist li { display: grid; grid-template-columns: 12px 1fr; column-gap: 8px; align-items: center; }
-.matchlist li .muted { grid-column: 2; }
-.matchlist__name { font-weight: 600; }
+.versions summary { cursor: pointer; font-weight: 700; color: var(--primary-text); padding: 6px 0; }
 
 .info { display: grid; grid-template-columns: 110px 1fr; gap: 10px 12px; margin: 0; }
 .info dt { color: var(--ink-3); font-weight: 600; }
@@ -945,7 +941,7 @@ p { margin: 0; }
 .home-rows { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
 .home-row {
   display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
-  padding: 12px 14px; border-radius: var(--r); background: var(--mint); color: var(--ink); font-size: 0.9rem;
+  padding: 12px 14px; border-radius: var(--r); background: var(--primary-soft); color: var(--ink); font-size: 0.9rem;
 }
 .home-row > svg:first-child { flex: none; color: var(--art); }
 .home-row > span { flex: 1; min-width: 0; }
@@ -1111,8 +1107,6 @@ label.btn.is-disabled { opacity: 0.6; pointer-events: none; }
 .plan-list__meta .dishnut { row-gap: 0; }
 
 /* Anteil je Zutat unter „Wie wurde gerechnet?“ */
-.matchlist__per { grid-column: 2; color: var(--ink-2); }
-.matchlist__per strong { color: var(--ink); font-weight: 600; }
 /* Formulare mit fester Speichern-Leiste: unten Platz, damit nichts darunter verschwindet */
 .screen--cta { padding-bottom: calc(96px + var(--safe-b)); }
 
@@ -1175,8 +1169,8 @@ label.btn.is-disabled { opacity: 0.6; pointer-events: none; }
 :root[data-theme="sonne"] {
   --bg: #fcf9f0; --surface: #ffffff; --surface-2: #f6f0dc; --line: #ede4c8; --backdrop: #f1ead3;
   --ink: #3b321c; --ink-2: #6f6446; --ink-3: #a69b7c;
-  --primary: #e9b10e; --primary-press: #8a6508; --primary-soft: #fbf1cf; --primary-text: #8a6508;
-  --art: #8a6a14; --on-primary: #2f2710;
+  --primary: #f4cf1f; --primary-press: #766608; --primary-soft: #fcf4d2; --primary-text: #766608;
+  --art: #766814; --on-primary: #2f2710;
 }
 :root[data-theme="nacht"] {
   --bg: #f4f6fa; --surface: #ffffff; --surface-2: #eaeef5; --line: #dde2ec; --backdrop: #e6eaf2;
@@ -1220,3 +1214,19 @@ label.btn.is-disabled { opacity: 0.6; pointer-events: none; }
 .renames__list input { accent-color: var(--primary); width: 18px; height: 18px; }
 .renames__list s { color: var(--ink-3); }
 .foods-panel .panel > .favchip { align-self: flex-start; }
+
+/* Nährwerte je Zutat – immer offen, mit Anteil-Balken */
+.perz { display: flex; flex-direction: column; gap: 10px; margin-top: 6px; }
+.perz__title { font-size: 1rem; margin: 0; }
+.perz ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.perz__item { display: flex; flex-direction: column; gap: 3px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+.perz__item:last-child { border-bottom: 0; }
+.perz__head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.perz__name { font-weight: 600; min-width: 0; }
+.perz__kcal { flex: none; font-weight: 700; font-variant-numeric: tabular-nums; }
+.perz__barrow { display: flex; align-items: center; gap: 8px; }
+.perz__bar { flex: 1; height: 6px; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
+.perz__bar > span { display: block; height: 100%; border-radius: 3px; background: var(--primary); }
+.perz__share { flex: none; width: 3.2em; text-align: right; font-size: 0.75rem; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.perz__item.is-rest .perz__name { font-weight: 500; color: var(--ink-2); }
+.perz .matchlist__toggle, .perz .matchlist__favs { align-self: flex-start; }

@@ -1,5 +1,5 @@
 import type { FoodRef } from '../types';
-import { fatLevel } from './fatLevels';
+import { fatGroupOf, fatLevel, levelEntryOf } from './fatLevels';
 import type { FoodEntry, FoodKind, FoodTable, Nutrients } from './types';
 
 /**
@@ -164,6 +164,20 @@ export const FOOD_CHOICES: { id: string; name: string; kind?: FoodKind }[] = FOO
 /** Alle Schreibweisen, unter denen die Tabelle einen Eintrag findet („milch“, „vollmilch“ …) */
 export function aliasesOf(foodId: string): string[] {
   return ROWS.find(([id]) => id === foodId)?.[1] ?? [];
+}
+
+/**
+ * Schreibweisen, für die ein Produkt über diesen Eintrag wirklich gilt. Bei Milch, Joghurt, Quark nur
+ * die seiner Fettstufe: dein „Milch“ (0,1 %) → „Milch“, „Milch 0,1 %“, „Magermilch“ … – nicht „Vollmilch“.
+ */
+export function appliesAliases(productName: string, foodId: string): string[] {
+  const group = fatGroupOf(foodId);
+  if (!group) return aliasesOf(foodId);
+  const entry = levelEntryOf(productName, foodId);
+  const plain = normalizeName(group.plain);
+  const own = entry ? aliasesOf(entry).filter((a) => fatLevel(a) || a !== plain || entry === group.ids[0]) : [];
+  // der schlichte Name („milch“) gehört zur Standard-Stufe – egal, bei welchem Eintrag er in der Tabelle steht
+  return [...new Set(entry === group.ids[0] ? [plain, ...own] : own.filter((a) => a !== plain))];
 }
 
 /** Klammern und Zusätze entfernen: „Paprika (rot oder bunt)“ → „paprika“ */

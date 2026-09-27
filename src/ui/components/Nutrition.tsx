@@ -87,28 +87,7 @@ export function NutritionDetails({ n, servings }: { n: NutritionResult; servings
         <p className="muted">Zu viele Zutaten konnten nicht zugeordnet werden. Wir zeigen lieber keine Werte als erfundene.</p>
       )}
 
-      <details className="matchlist">
-        <summary>Wie wurde gerechnet?</summary>
-        <ul>
-          {n.items.map((i) => (
-            <li key={i.ingredientId}>
-              <span className={`dot dot--${i.status === 'exact' ? 'green' : i.status === 'ignored' ? 'grey' : 'yellow'}`} />
-              <span className="matchlist__name">{i.name}</span>
-              <span className="muted small">
-                {i.food && i.status !== 'unmatched' ? `${i.food.variants?.length ? (i.food.favoriteId ? `★ ${i.food.variants.find((v) => v.id === i.food!.favoriteId)?.name} (Favorit)` : `Ø ${i.food.variants.length} Sorten`) : i.food.name}${i.grams !== undefined ? ` · ${Math.round(i.grams)} g` : ''} · ` : ''}
-                {i.food?.userZero ? 'ohne Nährwerte (von dir)' : MATCH_LABEL[i.status]}
-              </span>
-              {i.perServing && (
-                <span className="matchlist__per small">
-                  pro Portion: <strong>{Math.round(i.perServing.kcal)} kcal</strong> · {gram(i.perServing.carbs)} KH · {gram(i.perServing.protein)} Eiweiß · {gram(i.perServing.fat)} Fett
-                </span>
-              )}
-              <ZeroToggle item={i} />
-              {i.food?.variants && i.food.variants.length > 1 && <FavoriteChips item={i} />}
-            </li>
-          ))}
-        </ul>
-      </details>
+      <PerIngredient n={n} />
 
       <p className="hint small">Nährwerte sind abhängig von den verwendeten Produkten und können abweichen.</p>
     </div>
@@ -151,4 +130,62 @@ function FavoriteChips({ item }: { item: NutritionResult['items'][number] }) {
       })}
     </span>
   );
+}
+
+/**
+ * „Je Zutat · pro Portion“ – immer offen: was jede Zutat beiträgt, größte zuerst, mit Anteil an den kcal.
+ * Darunter, womit gerechnet wurde (Tabelle, dein Produkt, Sorten) und die Schalter (nicht mitzählen, Favorit).
+ * Was nicht mitzählt (Salz, nicht gefunden …), steht am Ende.
+ */
+function PerIngredient({ n }: { n: NutritionResult }) {
+  const counted = n.items.filter((i) => i.perServing).sort((a, b) => b.perServing!.kcal - a.perServing!.kcal);
+  const rest = n.items.filter((i) => !i.perServing);
+  const total = counted.reduce((s, i) => s + i.perServing!.kcal, 0);
+  return (
+    <section className="perz" aria-labelledby="perz-title">
+      <h3 className="perz__title" id="perz-title">Je Zutat <span className="muted small">· pro Portion</span></h3>
+      <ul>
+        {counted.map((i) => {
+          const share = total > 0 ? Math.round((i.perServing!.kcal / total) * 100) : 0;
+          return (
+            <li key={i.ingredientId} className="perz__item">
+              <div className="perz__head">
+                <span className="perz__name">{i.name}{i.gramsPerServing !== undefined && <span className="muted"> · {Math.round(i.gramsPerServing)} g</span>}</span>
+                <span className="perz__kcal">{Math.round(i.perServing!.kcal)} kcal</span>
+              </div>
+              <div className="perz__barrow" aria-label={`${share} % der Kalorien`}>
+                <span className="perz__bar"><span style={{ width: `${share}%` }} /></span>
+                <span className="perz__share">{share} %</span>
+              </div>
+              <span className="small">KH {gram(i.perServing!.carbs)} · Eiweiß {gram(i.perServing!.protein)} · Fett {gram(i.perServing!.fat)}</span>
+              {sourceOf(i) && <span className="small muted">{sourceOf(i)}</span>}
+              <ZeroToggle item={i} />
+              {i.food?.variants && i.food.variants.length > 1 && <FavoriteChips item={i} />}
+            </li>
+          );
+        })}
+        {rest.map((i) => (
+          <li key={i.ingredientId} className="perz__item is-rest">
+            <div className="perz__head">
+              <span className="perz__name">{i.name}</span>
+              <span className="perz__kcal muted small">{i.food?.userZero ? 'ohne Nährwerte (von dir)' : MATCH_LABEL[i.status]}</span>
+            </div>
+            <ZeroToggle item={i} />
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/** Womit gerechnet wurde: Sorten, Favorit, dein Produkt oder die Tabelle – „ungefähr“, wenn nur ähnlich */
+function sourceOf(i: NutritionResult['items'][number]): string {
+  const f = i.food;
+  if (!f) return '';
+  const what = f.variants?.length
+    ? (f.favoriteId ? `★ ${f.variants.find((v) => v.id === f.favoriteId)?.name} (Favorit)` : `Ø ${f.variants.length} Sorten`)
+    : f.name;
+  // nur zeigen, wenn es etwas Neues sagt – nicht „Hähnchenhack“ unter „Hähnchenhack“
+  if (i.status !== 'approx' && normalizeName(what) === normalizeName(i.name)) return '';
+  return i.status === 'approx' ? `${what} · ungefähr` : what;
 }
