@@ -92,7 +92,9 @@ export function App({ mode }: { mode: Mode | null }) {
         <div className={`toast${message.action ? ' toast--action' : ''}`} role="status">
           {message.text}
           {message.action && (
-            <button className="toast__action" onClick={() => { message.action!.run(); dismissToast(); }}>{message.action.label}</button>
+            <button className="toast__action" onClick={() => { message.action!.run(); dismissToast(); }}>
+              {message.action.label}
+            </button>
           )}
         </div>
       )}

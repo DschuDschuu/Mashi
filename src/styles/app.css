@@ -24,9 +24,10 @@
   --on-primary: #fff;
   /* Hintergrund neben der App auf Tablet/Desktop */
   --backdrop: #efebe3;
-  /* Meldungen (Toast): dunklere Stufe der Hauptfarbe – weiße Schrift gut lesbar (Salbei 5,8 : 1) */
-  --toast-bg: var(--primary-press);
-  --toast-ink: #ffffff;
+  /* Meldungen (Toast): wie „1 Zutat vereinheitlichen“ – helle Themenfläche, dunkle Themenschrift
+     (Salbei 4,9 : 1, Bordeaux 9,6, Nachtblau 10,8, Sonnengelb 5,2) */
+  --toast-bg: var(--primary-soft);
+  --toast-ink: var(--primary-press);
 
   /* Pastellflächen (Kacheln, Badges, Hinweise) */
   --mint: #e3efe8;
@@ -1174,8 +1175,6 @@ label.btn.is-disabled { opacity: 0.6; pointer-events: none; }
   --ink: #3b321c; --ink-2: #6f6446; --ink-3: #a69b7c;
   --primary: #f4cf1f; --primary-press: #766608; --primary-soft: #fcf4d2; --primary-text: #766608;
   --art: #766814; --on-primary: #2f2710;
-  /* Sonnengelb: gelbe Meldung mit dunkler Schrift (9,7 : 1) */
-  --toast-bg: var(--primary); --toast-ink: var(--on-primary);
 }
 :root[data-theme="nacht"] {
   --bg: #f4f6fa; --surface: #ffffff; --surface-2: #eaeef5; --line: #dde2ec; --backdrop: #e6eaf2;
@@ -1236,6 +1235,9 @@ label.btn.is-disabled { opacity: 0.6; pointer-events: none; }
 .perz__item.is-rest .perz__name { font-weight: 500; color: var(--ink-2); }
 .perz .matchlist__toggle, .perz .matchlist__favs { align-self: flex-start; }
 /* Meldung mit „Rückgängig“: breit, Text oben, Knopf darunter – sonst wirkt beides gequetscht */
-.toast--action { flex-direction: column; align-items: stretch; gap: 8px; width: 90%; max-width: 420px; border-radius: 18px; padding: 12px 14px 10px; }
-.toast--action .toast__action { width: 100%; padding: 9px 12px; border-radius: 12px; background: rgb(255 255 255 / 0.18); text-decoration: none; font-size: 0.92rem; }
-.toast--action .toast__action:active { background: rgb(255 255 255 / 0.3); }
+.toast--action { flex-direction: column; align-items: stretch; gap: 0; width: 90%; max-width: 420px; border-radius: 999px; padding: 10px 24px 6px; }
+/* „Rückgängig“ in eigener Zeile, einfach als unterstrichener Link in der Schriftfarbe */
+.toast--action .toast__action {
+  align-self: center; min-height: 28px; padding: 2px 10px; background: none; border: 0;
+  color: inherit; font-weight: 700; font-size: 0.9rem; text-decoration: underline; text-underline-offset: 3px;
+}
