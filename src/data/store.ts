@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import { RESTOCK_PREFIX, shoppingList, type RestockRule } from '../domain/restock';
+import { exclusiveStages, stageOf, withStage, type FoodStage } from '../domain/stage';
 import { emptyPlan, normalizePlan, resolveIngredient, toggleCooked, type MealPlan } from '../domain/mealplan';
 import { mergeRecipes } from '../domain/merge';
 import { withMyProducts, type MyProduct } from '../domain/nutrition/myProducts';
@@ -42,6 +43,14 @@ let reloadMissed = false;
 let saveError: string | null = null;
 /** Nach „Gekocht“: „Wie viele Portionen sind übrig?“ – null = keine Frage offen */
 let leftoverAsk: LeftoverAsk | null = null;
+/** zuletzt angelegte Reste je Rezept – „Rückgängig“ nach dem Kochen nimmt sie wieder weg */
+const leftoverOf = new Map<string, string>();
+
+function dropLeftover(recipeId: string) {
+  const id = leftoverOf.get(recipeId);
+  leftoverOf.delete(recipeId);
+  if (id && pantry.items.some((x) => x.id === id)) commitPantry({ ...pantry, items: pantry.items.filter((x) => x.id !== id) });
+}
 let ready = false;
 const listeners = new Set<() => void>();
 
@@ -110,6 +119,7 @@ export async function initStore(r: RecipeRepository) {
   ready = true;
   emit();
   normalizePacks();
+  normalizeStages();
   repo.onExternalChange?.(scheduleReload);
 }
 
@@ -229,6 +239,7 @@ export function answerLeftover(portions: number) {
   emit();
   if (!ask || !(portions > 0)) return;
   const { items, item } = addPrepared(pantry.items, { id: ask.recipeId, title: ask.title }, portions, now(), () => newId('v'));
+  if (item) leftoverOf.set(ask.recipeId, item.id);
   // im Plan gekocht: beim Zurücknehmen von „Gekocht“ verschwinden die Reste wieder (wie Angebrochenes)
   const log = ask.planned && plan.cooked.includes(ask.recipeId) && item
     ? { cookLog: { ...pruneCookLog(pantry.cookLog), [ask.recipeId]: [...(pantry.cookLog?.[ask.recipeId] ?? []), { item, created: true }] } }
@@ -303,6 +314,7 @@ export function markCooked(id: string, servings?: number, amounts: Record<string
     ...result,
     undo: () => {
       result.undo?.();
+      dropLeftover(id);
       if (planned && plan.cooked.includes(id)) commitPlan({ ...plan, cooked: plan.cooked.filter((x) => x !== id) });
       commit({ ...get(id), lastCookedAt: r.lastCookedAt });
     },
@@ -588,13 +600,13 @@ export function togglePlanCooked(recipeId: string): CookedResult | null {
     ...result,
     undo: () => {
       result.undo?.();
+      dropLeftover(recipeId);
       if (plan.cooked.includes(recipeId)) commitPlan({ ...plan, cooked: plan.cooked.filter((x) => x !== recipeId) });
       commit({ ...get(recipeId), lastCookedAt: r.lastCookedAt });
     },
   };
 }
 
-/** Plan, Haken und „Gekocht“ ganz leeren (Demo zurücksetzen, Tests) – in der App gibt es dafür „Gekochtes aufräumen“. */
 /**
  * Gekochte Gerichte aus dem Plan nehmen – Geplantes bleibt, Vorgekochtes bleibt in der Speisekammer.
  * (Ersetzt „Neue Woche beginnen“: der Plan läuft einfach weiter, auch übers Wochenende hinaus.)
@@ -608,12 +620,6 @@ export function clearCooked() {
     const rest = Object.fromEntries(Object.entries(pantry.cookLog).filter(([id]) => !cooked.has(id)));
     commitPantry(Object.keys(rest).length ? { ...pantry, cookLog: rest } : withoutCookLog(pantry));
   }
-}
-
-export function clearPlan() {
-  commitPlan({ items: [], checked: [], cooked: [] });
-  // das Zurücklegen alter Gerichte ist erledigt
-  if (pantry.cookLog) commitPantry(withoutCookLog(pantry));
 }
 
 export function isDemo(): boolean {
@@ -674,6 +680,8 @@ export function addPantryItem(name: string, amount?: number, unit?: PantryUnit, 
   const pack = (unit === 'Stück' || unit === 'Glas') && p?.packageAmount && (p.packageUnit === 'g' || p.packageUnit === 'ml' || p.packageUnit === undefined)
     ? { amount: p.packageAmount, unit: p.packageUnit ?? 'g' as const } : undefined;
   commitPantry({ ...pantry, items: addItem(pantry.items, { name: name.trim(), amount, unit, productId, pack }, now(), () => newId('v')) });
+  // „700 g“ von etwas mit Packungsgröße → gleich in Packungen (nicht erst beim nächsten Start)
+  normalizePacks();
 }
 
 /** Vorräte ohne Packungsgröße, deren Produkt eine hat: einmal umstellen („2⅔ Stück“ → „2 × 500 g“ + „333 g offen“) */
@@ -760,8 +768,34 @@ export function setNoNutrition(names: string[]) {
 }
 
 /** Mindestbestand je Zutat („Nachkaufen unter 4 Stück“) – gilt auf allen Geräten. */
-export function setPantryRestock(restock: RestockRule[]) {
-  commitPantry({ ...pantry, restock });
+/**
+ * Stufe eines Lebensmittels: normal · immer im Haus · nachkaufen unter X – die andere fällt weg.
+ * Gibt „Rückgängig“ zurück (stellt genau die vorige Stufe dieses Lebensmittels wieder her).
+ */
+export function setFoodStage(name: string, stage: FoodStage, rule?: Omit<RestockRule, 'name'>): () => void {
+  const table = withMyProducts(foodTable, products);
+  const before = stageOf(name, pantry, table);
+  commitStages(withStage(pantry, name, stage, table, rule));
+  return () => {
+    const t = withMyProducts(foodTable, products);
+    commitStages(withStage(pantry, before.basic ?? before.zero ?? before.rule?.name ?? name, before.stage, t, before.rule && { below: before.rule.below, unit: before.rule.unit }));
+  };
+}
+
+/** Stufen speichern – ändert sich „Ohne Nährwerte“, rechnen alle Rezepte neu (wie setNoNutrition) */
+function commitStages(next: Partial<Pick<Pantry, 'basics' | 'restock' | 'noNutrition'>>) {
+  const zeroChanged = next.noNutrition !== undefined && next.noNutrition.join('|') !== (pantry.noNutrition ?? DEFAULT_NO_NUTRITION).join('|');
+  commitPantry({ ...pantry, ...next });
+  if (zeroChanged) {
+    recipes = [...recipes];
+    emit();
+  }
+}
+
+/** Einmal beim Start: wo zwei Stufen zugleich galten, gilt die genauere (siehe exclusiveStages). */
+function normalizeStages() {
+  const fix = exclusiveStages(pantry, withMyProducts(foodTable, products));
+  if (fix) commitStages(fix);
 }
 
 /**

@@ -47,8 +47,8 @@ describe('Meine Lebensmittel – eine Liste', () => {
     expect(by('Kreuzkümmel')?.zero).toBe('Kreuzkümmel');
     expect(rows.filter((r) => matchesFilter(r, 'haus')).map((r) => r.name)).toEqual(['Gochujang', 'Pasta']);
     expect(rows.filter((r) => matchesFilter(r, 'ohne')).map((r) => r.name)).toEqual(['Kreuzkümmel']);
-    // Produkte = alles außer „Ohne Nährwerte“ – auch Pasta (immer im Haus, Richtwert der Tabelle)
-    expect(rows.filter((r) => matchesFilter(r, 'produkte')).map((r) => r.name)).toEqual(['Gochujang', 'Grünes pesto', 'Milch 0,1 %', 'Pasta']);
+    // Produkte = was du pflegst – ohne Grundvorrat (immer im Haus, ohne Nährwerte)
+    expect(rows.filter((r) => matchesFilter(r, 'produkte')).map((r) => r.name)).toEqual(['Grünes pesto', 'Milch 0,1 %']);
   });
 
   it('„Ohne Nährwerte“ steht nur im eigenen Tab – auch wenn es immer im Haus ist', () => {

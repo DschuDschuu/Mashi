@@ -12,7 +12,7 @@ const CARDS: { icon: IconName; title: string; text: string }[] = [
   { icon: 'calendar', title: 'Wochenplan', text: 'Gerichte für die Woche planen. Mashi schlägt Rezepte mit gemeinsamen Zutaten vor, zeigt, was noch fehlt, und rechnet Nährwerte pro Portion.' },
   { icon: 'cart', title: 'Einkaufsliste', text: 'Entsteht aus dem Plan und zieht ab, was schon im Vorrat ist. „Immer im Haus“ steht unter Basics. Abhaken im Laden – oder der Kassenbon hakt ab.' },
   { icon: 'archive', title: 'Speisekammer', text: 'Deinen Vorrat pflegst du über den Kassenbon oder von Hand. „Bald verbrauchen“ zeigt, was weg muss – und welche Rezepte es aufbrauchen.' },
-  { icon: 'bookmark', title: 'Meine Lebensmittel', text: 'Deine Produkte mit Nährwerten – per Etikett-Foto, Open Food Facts oder abgetippt, gern mit Marke. Mehrere Sorten einer Zutat mit Favorit ★, dazu „Immer im Haus“ und „Ohne Nährwerte“.' },
+  { icon: 'bookmark', title: 'Meine Lebensmittel', text: 'Deine Produkte mit Nährwerten – per Etikett-Foto, Open Food Facts oder abgetippt, gern mit Marke. Mehrere Sorten einer Zutat mit Favorit ★, dazu „Nachkaufen“, „Immer im Haus“ und „Gewürze“.' },
   { icon: 'play', title: 'Kochmodus', text: 'Schritt für Schritt mit Timer, der Bildschirm bleibt an. Mengen nur für dieses Mal ändern – und am Ende „Fertig“: Die Zutaten gehen aus dem Vorrat.' },
   { icon: 'gear', title: 'Einstellungen', text: 'Übers Zahnrad: Farbthema, Makro-Ziel, Sicherung und Abgleich mit deinen Geräten. Diese Einführung findest du dort auch wieder.' },
 ];

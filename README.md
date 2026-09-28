@@ -21,7 +21,8 @@ Live: <https://dschudschuu.github.io/Mashi/> · installierbar als App (PWA), fun
   „750 ml offen“ – Angebrochenes hält kürzer), „Ganze Packung verwenden?“ beim Kochen, Haltbarkeit,
   „Bald verbrauchen“, Einfrieren, Reste verwerten
 - **Meine Lebensmittel**: eigene Produkte mit Marke, Nährwerte per Etikett-Foto, Open Food Facts
-  oder abgetippt; mehrere Sorten einer Zutat mit Favorit ★; „Immer im Haus“, „Ohne Nährwerte“;
+  oder abgetippt; mehrere Sorten einer Zutat mit Favorit ★; je Lebensmittel eine Stufe: normal · Nachkaufen ·
+  Immer im Haus · Gewürze (ohne Nährwerte) – je ein Tab;
   Fettstufen bei Milch, Joghurt, Quark
 - **Nährwerte** rein rechnerisch aus Zutaten × Lebensmitteltabelle (nie von der KI), je Zutat
   aufgeschlüsselt, Makro-Ziel für die Sortenwahl

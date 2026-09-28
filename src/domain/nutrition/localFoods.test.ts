@@ -56,3 +56,12 @@ describe('Lebensmitteltabelle', () => {
     expect(food('Brioche')?.food.kind).toBe('bread');
   });
 });
+
+describe('Ketchup und Tahini', () => {
+  it('werden erkannt – auch als Tahin und Curryketchup', () => {
+    expect(localFoodTable.matchName('Ketchup')?.food.ref.foodId).toBe('ketchup');
+    expect(localFoodTable.matchName('Curryketchup')?.food.ref.foodId).toBe('ketchup');
+    expect(localFoodTable.matchName('Tahin')?.food.ref.foodId).toBe('tahini');
+    expect(localFoodTable.matchName('Sesam')?.food.ref.foodId).toBe('sesam'); // Sesam bleibt Sesam
+  });
+});

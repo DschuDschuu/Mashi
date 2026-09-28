@@ -733,20 +733,23 @@ export function attachPacks(items: PantryItem[], table: FoodTable, products: rea
   let changed = false;
   const out: PantryItem[] = [];
   for (const it of items) {
-    const product = it.pack || it.openedAt || isPrepared(it) || !isCount(it.unit) || it.amount === undefined ? undefined : productFor(it, table, products);
-    if (!product) {
+    const loose = it.unit === 'g' || it.unit === 'ml';
+    const product = it.pack || it.openedAt || isPrepared(it) || !(isCount(it.unit) || loose) || it.amount === undefined ? undefined : productFor(it, table, products);
+    const pack: Pack | undefined = product && { amount: product.packageAmount!, unit: product.packageUnit === 'ml' ? 'ml' : 'g' };
+    // in g/ml: so viele Packungen – Gefrorenes nur, wenn es genau aufgeht (sonst weiß Mashi nicht, was davon offen ist)
+    const count = pack && (loose ? it.amount! / pack.amount : it.amount!);
+    if (!product || !pack || count === undefined || (loose && it.frozenAt && Math.abs(count - Math.round(count)) > 0.02)) {
       out.push(it);
       continue;
     }
     changed = true;
-    const pack: Pack = { amount: product.packageAmount!, unit: product.packageUnit === 'ml' ? 'ml' : 'g' };
-    const closed = it.frozenAt ? it.amount! : Math.floor(it.amount! + 1e-6);
-    const rest = it.amount! - closed;
+    const closed = it.frozenAt ? Math.round(count) : Math.floor(count + 1e-6);
+    const rest = it.frozenAt ? 0 : count - closed;
     const openRest = rest > 0.02 ? Math.round(rest * pack.amount) : 0;
     const { check: _c, ...keep } = it;
     // Produkt mitmerken – sonst hielte addItem die nächsten Becher für eine andere Sorte
     const productId = it.productId ?? product.id;
-    if (closed > 0) out.push({ ...it, amount: closed, pack, productId });
+    if (closed > 0) out.push({ ...it, amount: closed, unit: 'Stück', pack, productId });
     if (openRest > 0) {
       // ohne geschlossene Packung behält der offene Rest die ID (Verweise wie „für den Wochenplan“ bleiben)
       out.push({ ...keep, productId, id: closed > 0 ? newId() : it.id, amount: openRest, unit: pack.unit, openedAt: now, boughtAt: it.boughtAt ?? it.addedAt, ...(closed > 0 ? { addedAt: now } : {}) });

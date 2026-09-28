@@ -15,7 +15,7 @@ export function ProductsLink() {
       <Icon name="bookmark" size={20} />
       <span className="link-row__text">
         <strong>Meine Lebensmittel</strong>
-        <small className="muted">{n} eigene · {basics} immer im Haus · {zero} ohne Nährwerte</small>
+        <small className="muted">{n} eigene · {basics} immer im Haus · {zero} Gewürze</small>
       </span>
       <Icon name="chevron" size={18} />
     </button>

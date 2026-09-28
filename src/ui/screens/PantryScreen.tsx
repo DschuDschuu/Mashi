@@ -15,6 +15,7 @@ import { foodTable } from '../../services';
 import { Empty, Section } from '../components/Controls';
 import { Icon } from '../components/Icon';
 import { CartButton } from '../components/CartButton';
+import { StagePicker } from '../components/StagePicker';
 import { PantryTabs, usePantrySwipe } from '../components/PlanTabs';
 import { IngredientNames } from '../components/IngredientNames';
 import { groupByKind } from '../foodGroups';
@@ -166,8 +167,10 @@ export function PantryScreen() {
             {parts.some((p) => shelfLabel(p)?.alarm) && <span className="pantry__alarm" role="img" aria-label="läuft heute oder morgen ab"><Icon name="clock" size={14} /></span>}
           </span>
           <span className="pantry__qty pantry__qty--stack">
-            {/* Geschlossenes zuerst: „3 × 500 g + 400 g offen“ */}
-            {[...parts].sort((a, b) => Number(!!a.openedAt) - Number(!!b.openedAt)).map((p) => quantityLabel(freeOf(p) ?? p)).join(' + ')}
+            {/* Offenes vorne und zusammengefasst („1,2 l offen + 7 × 1 l“) – aufgeklappt stehen die Teile einzeln */}
+            <span className="pantry__parts">
+              {clusterLabels(parts.map((p) => freeOf(p) ?? p)).map((l, n) => <span key={n} className="pantry__part">{n ? `+ ${l}` : l}</span>)}
+            </span>
             {shelf && <span className={`pantry__shelf${shelf.urgent ? ' is-urgent' : ''}`}>{shelf.text}</span>}
           </span>
         </button>
@@ -461,6 +464,8 @@ function EditRow({ item, estimate, reserved, onDone }: { item: PantryItem; estim
       {item.pack && (unit === 'Stück' || unit === 'Glas') && <p className="small muted">Packungen à {packLabel(item.pack)}</p>}
       {item.openedAt && <p className="small muted">Angebrochen am {new Date(item.openedAt).toLocaleDateString('de-DE')} – hält offen kürzer.</p>}
       {!prep && <SortPicker options={editOptions} value={productId} onChange={setProductId} />}
+      {/* wie unter „Meine Lebensmittel“: normal · immer im Haus · nachkaufen unter X */}
+      {!prep && <StagePicker name={item.name} />}
       {item.frozenAt ? (
         <p className="small muted pantry-frozen">Eingefroren am {new Date(item.frozenAt).toLocaleDateString('de-DE')}</p>
       ) : (
@@ -519,4 +524,12 @@ function EditRow({ item, estimate, reserved, onDone }: { item: PantryItem; estim
 /** Neues Produkt mit Name + Marke und dem Richtwert der Tabelle – Nährwerte lassen sich später verfeinern */
 function fromTable(offer: { name: string; brand: string }, food: FoodEntry): MyProduct {
   return { id: newId('p'), name: offer.name, brand: offer.brand, replaces: [], names: [normalizeName(offer.name)], per100g: food.per100g, updatedAt: new Date().toISOString() };
+}
+
+/** Teile einer Zeile: erst das Offene (je Einheit zusammengezählt), dann die Packungen und der Rest */
+function clusterLabels(parts: PantryItem[]): string[] {
+  const opened = parts.filter((p) => p.openedAt && p.amount !== undefined && (p.unit === 'g' || p.unit === 'ml'));
+  const units = [...new Set(opened.map((p) => p.unit))];
+  const openLabels = units.map((u) => quantityLabel({ amount: opened.filter((p) => p.unit === u).reduce((n, p) => n + p.amount!, 0), unit: u, openedAt: 'offen' }));
+  return [...openLabels, ...parts.filter((p) => !opened.includes(p)).map((p) => quantityLabel(p))];
 }

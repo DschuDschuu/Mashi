@@ -175,7 +175,7 @@ const OPENED_BY_FOOD: Record<string, number | null> = {
   // Konserven: offen wie Frisches
   'passierte-tomaten': 3, 'gehackte-tomaten': 3, kokosmilch: 3, mais: 3, erbsen: 3,
   // hält auch offen lange – keine Erinnerung (Tube, Würzpasten, Soßen)
-  tomatenmark: null, senf: null, mayo: null, gochujang: null, miso: null, sojasauce: null, honig: null, worcestershire: null,
+  tomatenmark: null, senf: null, mayo: null, ketchup: null, tahini: null, gochujang: null, miso: null, sojasauce: null, honig: null, worcestershire: null,
 };
 
 function closedUseBy(item: PantryItem, table: FoodTable, custom: ShelfDays): Date | undefined {

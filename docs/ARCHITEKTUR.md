@@ -83,7 +83,7 @@ aus den Zutaten berechnet (gecacht je Version).
  #/einkauf                Einkaufsliste (zieht den Vorrat ab) – Wagen oben rechts in der Speisekammer
  #/speisekammer           Vorräte, Bald verbrauchen, Verwalten (Haltbarkeit, gelernte Bon-Artikel)
  #/speisekammer/bon       Kassenbon importieren
- #/produkte               Meine Lebensmittel: eigene Nährwerte/Produkte, Sorten + Favorit, Immer im Haus, Ohne Nährwerte
+ #/produkte               Meine Lebensmittel: Tabs „Produkte“ (pflegen: Werte, Sorten + Favorit, Nachkaufen) · „Im Haus“ · „Gewürze“ (= ohne Nährwerte)
  #/preise                 Preise und Ersparnis
  #/reste                  Reste verwerten
  #/mehr                   Einstellungen (Zahnrad): Über Mashi, Archiv, Makro-Ziel, Sicherung, Sync

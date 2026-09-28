@@ -25,5 +25,6 @@ export function amountLabel(item: Labelled): string {
   const count = item.unit === 'Stück' || item.unit === 'Glas';
   const n = formatAmount(item.amount, count ? 'Stück' : 'g');
   if (item.pack && count) return `${n} × ${packLabel(item.pack)}`;
-  return `${n} ${item.unit ?? ''}`.trim() + (item.openedAt ? ' offen' : '');
+  const big = (item.unit === 'g' || item.unit === 'ml') && item.amount >= 1000 ? packLabel({ amount: item.amount, unit: item.unit }) : undefined;
+  return (big ?? `${n} ${item.unit ?? ''}`.trim()) + (item.openedAt ? ' offen' : '');
 }

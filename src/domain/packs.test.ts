@@ -183,3 +183,23 @@ describe('Doppelte Zeilen zusammenlegen', () => {
     expect(mergeSamePacks([{ id: 'a', name: 'Joghurt', amount: 2, unit: 'Stück', addedAt: NOW }])).toBeUndefined();
   });
 });
+
+describe('Alte Einträge in ml/g werden Packungen', () => {
+  const milch = { id: 'pm', packageAmount: 1000, packageUnit: 'ml' as const };
+  const table = { ...T, matchName: (n: string) => (n === 'Milch' ? { food: { ref: { provider: 'mine', foodId: 'pm' }, name: 'Milch', per100g: { kcal: 47, protein: 3.4, carbs: 4.9, fat: 1.5 } }, quality: 'exact' as const } : T.matchName(n)) };
+  const ml = (id: string, amount: number, extra: Partial<PantryItem> = {}): PantryItem => ({ id, name: 'Milch', amount, unit: 'ml', addedAt: NOW, ...extra });
+
+  it('„3000 ml“ → „3 × 1 l“, „400 ml“ → „400 ml offen“, „2500 ml“ → „2 × 1 l“ + „500 ml offen“', () => {
+    expect(attachPacks([ml('a', 3000)], table, [milch], NOW, id)!.map(amountLabel)).toEqual(['3 × 1 l']);
+    expect(attachPacks([ml('b', 400)], table, [milch], NOW, id)!.map(amountLabel)).toEqual(['400 ml offen']);
+    expect(attachPacks([ml('c', 2500)], table, [milch], NOW, id)!.map(amountLabel)).toEqual(['2 × 1 l', '500 ml offen']);
+  });
+  it('schon offen oder gefroren und nicht aufgehend → bleibt, wie es ist', () => {
+    expect(attachPacks([ml('d', 800, { openedAt: NOW }), ml('e', 1500, { frozenAt: NOW })], table, [milch], NOW, id)).toBeUndefined();
+  });
+  it('große Mengen lesbar: „1500 g“ → „1,5 kg“, „1200 ml offen“ → „1,2 l offen“', () => {
+    expect(amountLabel({ amount: 1500, unit: 'g' })).toBe('1,5 kg');
+    expect(amountLabel({ amount: 1200, unit: 'ml', openedAt: NOW })).toBe('1,2 l offen');
+    expect(amountLabel({ amount: 400, unit: 'ml' })).toBe('400 ml');
+  });
+});

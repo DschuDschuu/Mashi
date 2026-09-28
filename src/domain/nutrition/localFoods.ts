@@ -103,6 +103,8 @@ const ROWS: Row[] = [
   ['eisbergsalat', ['eisbergsalat', 'eisberg'], 14, 0.9, 2, 0.2],
   ['salat', ['salat', 'blattsalat', 'römersalat', 'romanasalat', 'salatmix', 'kopfsalat', 'feldsalat', 'rucola'], 15, 1.3, 1.8, 0.2],
   ['mayo', ['mayonnaise', 'mayo', 'salatmayonnaise'], 680, 1.1, 1.5, 75, { portions: { EL: 14, TL: 5 } }],
+  ['ketchup', ['ketchup', 'tomatenketchup', 'curry ketchup', 'curryketchup'], 102, 1.2, 23, 0.1, { portions: { EL: 17, TL: 6 } }],
+  ['tahini', ['tahini', 'tahin', 'tahina', 'sesampaste', 'sesammus'], 600, 18, 12, 54, { portions: { EL: 15, TL: 5 } }],
   ['senf', ['senf', 'mittelscharfer senf', 'dijonsenf', 'dijon-senf'], 100, 6, 4, 5, { portions: { EL: 15, TL: 5, Glas: 250 } }],
   ['pesto', ['pesto', 'grünes pesto', 'pesto genovese', 'pesto alla genovese', 'basilikumpesto', 'basilikum-pesto'], 470, 5, 6, 47, { portions: { EL: 15, TL: 5, Glas: 190 } }],
   ['pesto-rosso', ['rotes pesto', 'pesto rosso', 'tomatenpesto'], 360, 4, 9, 34, { portions: { EL: 15, TL: 5, Glas: 190 } }],

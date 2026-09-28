@@ -3,7 +3,7 @@ import PouchDB from 'pouchdb-core';
 import memory from 'pouchdb-adapter-memory';
 import { describe, expect, it } from 'vitest';
 import { PouchRecipeRepository, type RecipeDb } from './pouchRepository';
-import { addPantryItem, addToPlan, answerLeftover, clearCooked, createRecipe, currentLeftoverAsk, currentPantry, eatPreparedPortions, initStore, togglePlanCooked, removeFromPlan, removePantryItem, setPantryRestock, toggleShoppingItem, updatePantryItem } from './store';
+import { addPantryItem, addToPlan, answerLeftover, clearCooked, createRecipe, currentLeftoverAsk, currentPantry, eatPreparedPortions, initStore, togglePlanCooked, removeFromPlan, removePantryItem, setFoodStage, toggleShoppingItem, updatePantryItem } from './store';
 import { resolveIngredient } from '../domain/mealplan';
 import { RESTOCK_PREFIX } from '../domain/restock';
 import { foodTable } from '../services';
@@ -44,7 +44,7 @@ describe('Store: Nachkaufen – Haken', () => {
     const key = RESTOCK_PREFIX + resolveIngredient({ id: 'x', name: 'Passierte Tomaten' }, 1, foodTable)!.key;
     const checked = async () => { await settle(); return (await repo.loadPlan()).checked.includes(key); };
 
-    setPantryRestock([{ name: 'Passierte Tomaten', below: 4, unit: 'Stück' }]);
+    setFoodStage('Passierte Tomaten', 'nachkaufen', { below: 4, unit: 'Stück' });
     addPantryItem('Passierte Tomaten', 3, 'Stück');
     toggleShoppingItem(key);
     expect(await checked()).toBe(true);
@@ -71,7 +71,7 @@ describe('Store: Nachkaufen – Haken wandert mit dem Plan', () => {
     const k = resolveIngredient({ id: 'x', name: 'Passierte Tomaten' }, 1, foodTable)!.key;
     const checked = async () => { await settle(); return (await repo.loadPlan()).checked; };
 
-    setPantryRestock([{ name: 'Passierte Tomaten', below: 4, unit: 'Stück' }]);
+    setFoodStage('Passierte Tomaten', 'nachkaufen', { below: 4, unit: 'Stück' });
     addPantryItem('Passierte Tomaten', 3, 'Stück');
     toggleShoppingItem(RESTOCK_PREFIX + k);
     expect(await checked()).toEqual([RESTOCK_PREFIX + k]);

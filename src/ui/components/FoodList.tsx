@@ -6,11 +6,10 @@ import { brandOf, nameOf, productLabel, type MyProduct } from '../../domain/nutr
 import { DEFAULT_NO_NUTRITION } from '../../domain/nutrition/noNutrition';
 import { averageNutrients } from '../../domain/nutrition/variants';
 import type { Nutrients } from '../../domain/nutrition/types';
-import { currentPantry, dismissRename, saveProducts, setFavoriteVariant, setNoNutrition, setPantryBasics, setPantryRestock, usePantry, useProducts, useRecipes } from '../../data/store';
-import { ruleKey, type RestockRule, type RestockStatus } from '../../domain/restock';
+import { dismissRename, saveProducts, setFavoriteVariant, setFoodStage, usePantry, useProducts, useRecipes } from '../../data/store';
+import { stageOf } from '../../domain/stage';
 import { withMyProducts } from '../../domain/nutrition/myProducts';
-import { useRestockStatus } from '../useShoppingCount';
-import type { PantryUnit } from '../../domain/pantry';
+import { StagePicker } from './StagePicker';
 import { currentContent } from '../../domain/recipe';
 import { foodTable } from '../../services';
 import { euro } from '../format';
@@ -31,13 +30,15 @@ const appliesTo = (p: MyProduct) => [...new Set([
   ...(p.names ?? []),
 ])].map(cap);
 /** Tabs: Schlüssel, kurzer Name, voller Name (für Screenreader) – Reihenfolge = Wischrichtung */
-const TABS = [['produkte', 'Produkte', 'Produkte'], ['haus', 'Immer im Haus', 'Immer im Haus'], ['ohne', 'Ohne Nährwerte', 'Ohne Nährwerte']] as const;
+// Ein Tab je Stufen-Knopf (gleiches Symbol, gleicher Name): Produkte = was du pflegst (normal, 🔄 nachkaufen),
+// dahinter, was du einmal einstellst: 🏠 immer im Haus, 🍃 Gewürze (zählen in Rezepten nicht mit)
+const TABS = [['produkte', 'Produkte', 'Produkte', 'grid'], ['haus', 'Im Haus', 'Immer im Haus', 'home'], ['ohne', 'Gewürze', 'Gewürze', 'leaf']] as const;
 
 const macros = (n: Nutrients) => `KH ${fmt(n.carbs)} · Eiweiß ${fmt(n.protein)} · Fett ${fmt(n.fat)} g`;
 
 /**
  * „Meine Lebensmittel“ – eine Zeile je Zutat, aufklappbar: eigene Nährwerte und Produkte (auch
- * mehrere Sorten mit Favorit), „Immer im Haus“ und „Ohne Nährwerte“ als Markierung an der Zeile.
+ * mehrere Sorten mit Favorit), die Stufe (Nachkaufen, Immer im Haus, Gewürze) als Symbol an der Zeile.
  */
 export function FoodList() {
   const products = useProducts();
@@ -52,12 +53,12 @@ export function FoodList() {
   const touch = (name: string) => setTouched((t) => (t.includes(name) ? t : [...t, name]));
   const restock = useMemo(() => pantry.restock ?? [], [pantry.restock]);
   const keep = useMemo(() => [...touched, ...restock.map((r) => r.name)], [touched, restock]);
-  const statuses = useRestockStatus();
   const rows = useMemo(() => buildFoodList(products, basics, zero, foodTable, known, keep), [products, basics, zero, known, keep]);
   const [filter, setFilter] = useState<FoodFilter>('produkte');
   const [open, setOpen] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
-  const shown = rows.filter((r) => matchesFilter(r, filter));
+  const matches = matchesFilter;
+  const shown = rows.filter((r) => matches(r, filter));
   // Wischen wie im Rezept: nach links = nächster Tab, nach rechts = vorheriger (am Rand bleibt es stehen)
   const step = (dir: 1 | -1) => {
     const i = TABS.findIndex(([f]) => f === filter) + dir;
@@ -65,51 +66,52 @@ export function FoodList() {
   };
   const swipe = useSwipe(() => step(1), () => step(-1));
   const slide = useSlide(TABS.findIndex(([f]) => f === filter));
-  const count = (f: FoodFilter) => rows.filter((r) => matchesFilter(r, f)).length;
+  const count = (f: FoodFilter) => rows.filter((r) => matches(r, f)).length;
+  const line = (r: FoodRow) => (
+    <FoodLine key={r.key} row={r} open={open === r.key} onToggle={() => setOpen(open === r.key ? null : r.key)}
+      products={products} onTouch={() => touch(r.ingredient)} />
+  );
 
   return (
     <div className="stack foods-panel">
       {/* wie die Tabs im Rezept: eine Zeile auch auf dem Handy – kurze Namen, Anzahl darunter */}
       <div className="tabs foods__tabs" role="tablist" aria-label="Filter">
-        {TABS.map(([f, label, full]) => (
+        {TABS.map(([f, label, full, icon]) => (
           <button key={f} type="button" role="tab" aria-selected={filter === f} aria-label={`${full} (${count(f)})`}
             className={`tab${filter === f ? ' is-on' : ''}`} onClick={() => setFilter(f)}>
-            <span>{label}</span>
-            <small>{count(f)}</small>
+            {/* Anzahl in Klammern dahinter – eine Zeile statt zwei */}
+            <span className="foods__tablabel"><Icon name={icon} size={14} /> {label} <span className="foods__count">({count(f)})</span></span>
           </button>
         ))}
       </div>
       <div key={filter} className={`stack ${slide}`} role="tabpanel" {...swipe}>
       <p className="small muted">
-        {filter === 'produkte' ? 'Alles, was du dauerhaft verwendest – mit deinen Werten oder vorerst dem Richtwert der Tabelle. Antippen für Details.'
-          : filter === 'haus' ? 'Produkte, die du immer da hast: auf der Einkaufsliste unter „Basics“, bei Rezepten nie „fehlt“.'
-            : 'Gewürze & Co.: zählen in Rezepten nicht mit und stehen auf der Einkaufsliste automatisch unter „Basics“.'}
+        {/* dieselben Linien-Symbole wie an den Karten, keine bunten Emojis */}
+        {filter === 'produkte'
+          ? <>Was du pflegst: Sorten, Marken, Nährwerte – und <Icon name="refresh" size={13} /> Nachkaufen mit Grenze. Antippen für Details.</>
+          : filter === 'haus'
+            ? <>Was du immer da hast: wird nicht gezählt, bei Rezepten nie „fehlt“, auf der Einkaufsliste unter „Basics“.</>
+            : <>Gewürze & Co.: immer da und zählen in Rezepten nicht mit (keine Nährwerte). Auf der Einkaufsliste unter „Basics“.</>}
       </p>
 
       {shown.length === 0 && <p className="small">Hier ist noch nichts.</p>}
-      <ul className="foods">
-        {shown.map((r) => (
-          <FoodLine key={r.key} row={r} open={open === r.key} onToggle={() => setOpen(open === r.key ? null : r.key)}
-            products={products} basics={basics} zero={zero} restock={restock} statuses={statuses} onTouch={() => touch(r.ingredient)} />
-        ))}
-      </ul>
+      <ul className="foods">{shown.map(line)}</ul>
 
       </div>
 
       {filter === 'produkte' && <DismissedRenames keys={pantry.renameDismissed ?? []} />}
 
-      {adding ? <AddFood tab={filter} onDone={() => setAdding(false)} basics={basics} zero={zero} /> : (
+      {adding ? <AddFood tab={filter} onDone={() => setAdding(false)} /> : (
         <button type="button" className="btn btn--soft" onClick={() => setAdding(true)}>
-          <Icon name="plus" size={18} /> {filter === 'haus' ? 'Zu „Immer im Haus“ hinzufügen' : filter === 'ohne' ? 'Zu „Ohne Nährwerte“ hinzufügen' : 'Produkt hinzufügen'}
+          <Icon name="plus" size={18} /> {filter === 'haus' ? 'Zu „Immer im Haus“ hinzufügen' : filter === 'ohne' ? 'Gewürz hinzufügen' : 'Produkt hinzufügen'}
         </button>
       )}
     </div>
   );
 }
 
-function FoodLine({ row, open, onToggle, products, basics, zero, restock, statuses, onTouch }: {
-  row: FoodRow; open: boolean; onToggle: () => void; products: MyProduct[]; basics: string[]; zero: string[]; restock: RestockRule[];
-  statuses: Map<string, RestockStatus>;
+function FoodLine({ row, open, onToggle, products, onTouch }: {
+  row: FoodRow; open: boolean; onToggle: () => void; products: MyProduct[];
   /** Zeile merken, damit sie nach dem Ausschalten nicht verschwindet */
   onTouch: () => void;
 }) {
@@ -130,31 +132,10 @@ function FoodLine({ row, open, onToggle, products, basics, zero, restock, status
     onTouch();
     saveProducts(products.filter((x) => x.id !== p.id));
   };
-  // Umschalten mit „Rückgängig“ – die alte Liste zurück
-  const toggleBasic = () => {
-    onTouch();
-    const before = basics;
-    setPantryBasics(row.basic ? basics.filter((b) => b !== row.basic) : [...basics, row.ingredient]);
-    toast(row.basic ? `„${row.ingredient}“ nicht mehr immer im Haus` : `„${row.ingredient}“ ist jetzt immer im Haus`, { label: 'Rückgängig', run: () => setPantryBasics(before) });
-  };
-  const toggleZero = () => {
-    onTouch();
-    const before = zero;
-    setNoNutrition(row.zero ? zero.filter((z) => z !== row.zero) : [...zero, row.ingredient]);
-    toast(row.zero ? `„${row.ingredient}“ zählt wieder mit – jetzt unter „Produkte“` : `„${row.ingredient}“ steht jetzt unter „Ohne Nährwerte“`, { label: 'Rückgängig', run: () => setNoNutrition(before) });
-  };
-  // über den Schlüssel: „Passata“ und „Passierte Tomaten“ sind dieselbe Regel
-  const table = withMyProducts(foodTable, products);
-  const key = ruleKey({ name: row.ingredient }, table);
-  const rule = key ? restock.find((r) => ruleKey(r, table) === key) : undefined;
-  const status = key ? statuses.get(key) : undefined;
-  const [restockOpen, setRestockOpen] = useState(false);
-  const toggleRestock = () => {
-    onTouch();
-    if (rule) removeRestock(rule, row.ingredient);
-    setRestockOpen(!rule && !restockOpen);
-  };
-  const nothing = !ps.length && !row.basic && !row.zero && !rule;
+  // Stufe über den Schlüssel: „Passata“ und „Passierte Tomaten“ sind dasselbe
+  const pantry = usePantry();
+  const { stage, rule } = stageOf(row.ingredient, pantry, withMyProducts(foodTable, products));
+  const nothing = !ps.length && stage === 'normal' && !row.zero;
   const zeroRow = !!row.zero;
 
   return (
@@ -164,8 +145,9 @@ function FoodLine({ row, open, onToggle, products, basics, zero, restock, status
           {row.name}
           {ps.length === 1 && brandOf(ps[0]) && <span className="brand">{brandOf(ps[0])}</span>}
           {nothing && <span className="foods__sub">nichts festgelegt</span>}
-          {!zeroRow && row.basic && <Icon name="home" size={14} />}
-          {!zeroRow && rule && <span className="foods__restock" title={`Nachkaufen unter ${fmt(rule.below)} ${rule.unit}`}><Icon name="refresh" size={13} /></span>}
+          {stage === 'haus' && <span className="foods__mark" title="Immer im Haus"><Icon name="home" size={14} /></span>}
+          {rule && <span className="foods__restock" title={`Nachkaufen unter ${fmt(rule.below)} ${rule.unit}`}><Icon name="refresh" size={13} /></span>}
+          {stage === 'ohne' && <span className="foods__mark" title="Gewürz – zählt nicht mit"><Icon name="leaf" size={14} /></span>}
           {ps.length > 1 && <span className="foods__sub">{ps.length} Sorten{fav ? ` · ★ ${productLabel(fav)}` : ''}</span>}
         </span>
         <span className="foods__kcal">
@@ -178,13 +160,8 @@ function FoodLine({ row, open, onToggle, products, basics, zero, restock, status
 
       {open && zeroRow && (
         <div className="foods__body">
-          <p className="small muted">
-            Zählt in Rezepten nicht mit und steht auf der Einkaufsliste unter „Basics“.
-            {ps.length > 0 && ' Deine eigenen Werte bleiben gespeichert und zählen wieder, wenn du es zurückholst.'}
-          </p>
-          <div className="row-gap">
-            <button type="button" className="btn btn--soft btn--sm" onClick={toggleZero}><Icon name="refresh" size={16} /> Wieder mitzählen</button>
-          </div>
+          {ps.length > 0 && <p className="small muted">Deine eigenen Werte bleiben gespeichert und zählen wieder, sobald du eine andere Stufe wählst.</p>}
+          <StagePicker name={row.ingredient} onTouch={onTouch} />
         </div>
       )}
       {open && !zeroRow && (
@@ -233,84 +210,10 @@ function FoodLine({ row, open, onToggle, products, basics, zero, restock, status
               </button>
             )}
 
-          <div className="foods__flags">
-            <button type="button" className={`favchip${row.basic ? ' is-on' : ''}`} aria-pressed={!!row.basic} onClick={toggleBasic}>
-              <Icon name="home" size={14} /> Immer im Haus
-            </button>
-            {/* onPointerDown: das Feld soll beim Antippen nicht erst „speichern“ (Blur) und dann gleich wieder löschen */}
-            <button type="button" className={`favchip${rule ? ' is-on' : ''}`} aria-pressed={!!rule || restockOpen} aria-expanded={restockOpen || !!rule}
-              onPointerDown={(e) => e.preventDefault()} onClick={toggleRestock}>
-              <Icon name="refresh" size={14} /> Nachkaufen
-            </button>
-            {/* verschiebt die Zeile – die eigenen Werte bleiben gespeichert */}
-            <button type="button" className="favchip" onClick={toggleZero}>
-              <Icon name="leaf" size={14} /> Zu „Ohne Nährwerte“
-            </button>
-          </div>
-          {(rule || restockOpen) && (
-            <RestockField ingredient={row.ingredient} rule={rule} ruleKeyOf={(r) => ruleKey(r, table)} status={status} onClose={() => setRestockOpen(false)} />
-          )}
+          <StagePicker name={row.ingredient} onTouch={onTouch} />
         </div>
       )}
     </li>
-  );
-}
-
-const RESTOCK_UNITS: PantryUnit[] = ['Stück', 'Glas', 'g', 'ml'];
-
-/** Regel entfernen – „Rückgängig“ holt genau diese eine zurück (nicht die ganze alte Liste) */
-function removeRestock(rule: RestockRule, ingredient: string) {
-  setPantryRestock((currentPantry().restock ?? []).filter((r) => r !== rule && r.name !== rule.name));
-  toast(`„${ingredient}“ kommt nicht mehr von selbst auf die Liste`, {
-    label: 'Rückgängig', run: () => setPantryRestock([...(currentPantry().restock ?? []).filter((r) => r.name !== rule.name), rule]),
-  });
-}
-
-/**
- * „Nachkaufen, wenn weniger als 4 Stück da sind“ – ein Hinweis auf der Einkaufsliste, keine Menge.
- * Gespeichert wird beim Verlassen des Felds bzw. sofort bei der Einheit. Zahl gelöscht = Regel weg.
- * Darunter der Stand, damit „kein Hinweis“ nie rätselhaft ist (reicht / steht drauf / kann nicht zählen).
- */
-function RestockField({ ingredient, rule, ruleKeyOf, status, onClose }: {
-  ingredient: string; rule?: RestockRule; ruleKeyOf: (r: RestockRule) => string | undefined; status?: RestockStatus; onClose: () => void;
-}) {
-  const [below, setBelow] = useState(rule ? fmt(rule.below) : '');
-  const [unit, setUnit] = useState<PantryUnit>(rule?.unit ?? 'Stück');
-  const save = (b = below, u = unit) => {
-    const n = Number(b.replace(',', '.'));
-    if (!b.trim() || !(n > 0)) {
-      // leer (oder 0): bestehende Regel weg, sonst einfach zu
-      if (rule) removeRestock(rule, ingredient);
-      onClose();
-      return;
-    }
-    if (rule && rule.below === n && rule.unit === u) return;
-    const next: RestockRule = { name: rule?.name ?? ingredient, below: n, unit: u };
-    const k = ruleKeyOf(next);
-    setPantryRestock([...(currentPantry().restock ?? []).filter((r) => (k ? ruleKeyOf(r) !== k : r.name !== next.name)), next]);
-    if (!rule) toast(`„${ingredient}“ kommt unter ${fmt(n)} ${u} von selbst auf die Einkaufsliste`);
-    onClose();
-  };
-  return (
-    <div className="restock">
-      <label className="restock__row">
-        <span className="small">Auf die Einkaufsliste, wenn weniger als</span>
-        <span className="pantry-amount">
-          <input inputMode="decimal" value={below} autoFocus={!rule} placeholder="z. B. 4" aria-label="Mindestbestand"
-            onChange={(e) => setBelow(e.target.value)} onBlur={() => save()}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') save();
-              if (e.key === 'Escape') { if (rule) setBelow(fmt(rule.below)); else onClose(); }
-            }} />
-          <select value={unit} aria-label="Einheit" onChange={(e) => { const u = e.target.value as PantryUnit; setUnit(u); save(below, u); }}>
-            {RESTOCK_UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
-          </select>
-        </span>
-        <span className="small">da {below.trim() === '1' || below.trim() === '' ? 'ist' : 'sind'}.</span>
-      </label>
-      {rule && status && <p className={`small restock__status is-${status.state}`}>{status.text}</p>}
-      {!rule && <button type="button" className="link link--muted" onPointerDown={(e) => e.preventDefault()} onClick={onClose}>Abbrechen</button>}
-    </div>
   );
 }
 
@@ -319,23 +222,26 @@ function RestockField({ ingredient, rule, ruleKeyOf, status, onClose }: {
  * Produkte → Name, dann Nährwerte (Foto, Open Food Facts, abtippen) oder Produkt mit Packung.
  * Immer im Haus / Ohne Nährwerte → nur der Name.
  */
-function AddFood({ tab, onDone, basics, zero }: { tab: FoodFilter; onDone: () => void; basics: string[]; zero: string[] }) {
+function AddFood({ tab, onDone }: { tab: FoodFilter; onDone: () => void }) {
   const products = useProducts();
   const [name, setName] = useState('');
   const [step, setStep] = useState<'name' | 'werte' | 'produkt'>('name');
   /** gleich mit „Immer im Haus“ markieren – ohne dafür in den Tab wechseln zu müssen */
   const [basic, setBasic] = useState(false);
+  /** der Tab entscheidet: immer im Haus oder Gewürz */
+  const ground = tab === 'ohne' ? 'ohne' : 'haus';
   const n = name.trim();
   const save = (p: MyProduct) => {
     saveProducts([...products, p]);
-    if (basic && !basics.some((b) => normalizeName(b) === normalizeName(n))) setPantryBasics([...basics, n]);
+    if (basic) setFoodStage(n, 'haus');
     toast(`„${p.name}“ gespeichert${basic ? ' – immer im Haus' : ''} – alle Rezepte rechnen neu`);
     onDone();
   };
   const addName = () => {
     if (!n) return;
-    if (tab === 'haus') { setPantryBasics([...basics, n]); toast(`„${n}“ ist jetzt immer im Haus`); }
-    else { setNoNutrition([...zero, n]); toast(`„${n}“ steht jetzt unter „Ohne Nährwerte“`); }
+    // über die Stufe – so steht es nie zugleich unter „Nachkaufen“ und hier
+    setFoodStage(n, ground);
+    toast(ground === 'haus' ? `„${n}“ ist jetzt immer im Haus` : `„${n}“ steht jetzt unter „Gewürze“`);
     onDone();
   };
   if (step === 'werte') return <NutritionQuickForm ingredient={n} onSave={save} onCancel={onDone} />;

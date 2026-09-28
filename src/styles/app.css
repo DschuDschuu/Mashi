@@ -1135,7 +1135,6 @@ label.btn.is-disabled { opacity: 0.6; pointer-events: none; }
 .foods__sorthead { display: flex; align-items: center; gap: 6px; }
 .foods__sorthead strong { flex: 1; min-width: 0; }
 .foods__sorthead .variants__star { width: 30px; height: 30px; }
-.foods__flags { display: flex; flex-wrap: wrap; gap: 6px; }
 
 /* Filter als Tabs (wie im Rezept) – vier gleich breite, Anzahl klein darunter */
 .foods__tabs { margin-top: -4px; }
@@ -1261,7 +1260,10 @@ label.btn.is-disabled { opacity: 0.6; pointer-events: none; }
 .restock { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: var(--r-sm); background: var(--primary-soft); }
 .restock p { margin: 0; }
 .restock__row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
-.restock .pantry-amount { max-width: 11rem; }
+.restock .pantry-amount { flex: 0 0 auto; }
+/* kompakt: Zahl und Einheit direkt hinter „Nachkaufen, wenn weniger als“ */
+.restock .pantry-amount input { width: 3.2rem; padding-left: 8px; padding-right: 8px; text-align: center; }
+.restock .pantry-amount select { padding-left: 8px; padding-right: 24px; }
 /* alle Hinweise gleich breit wie der mit „Rückgängig“ – schmale wirkten gequetscht */
 .toast { width: 90%; max-width: 420px; }
 .restock__status { color: var(--ink-2); }
@@ -1297,3 +1299,24 @@ label.btn.is-disabled { opacity: 0.6; pointer-events: none; }
 }
 .useup-banner__line { display: block; }
 .home-q--title { margin-bottom: 0; }
+/* Stufe: normal · immer im Haus · nachkaufen */
+.stage { display: flex; flex-direction: column; gap: 6px; }
+.stage__options { display: flex; flex-wrap: wrap; gap: 6px; }
+.stage__hint { margin: 0; }
+.foods__tablabel { display: inline-flex; align-items: center; gap: 4px; }
+.foods__mark { display: inline-flex; color: var(--ink-2); }
+.pantry__item--edit .stage { flex: 1 1 100%; }
+/* lange Mengen („1,2 l offen + 7 × 1 l“) brechen an den „+“ um – der Name nie mitten im Wort („Milc|h“) */
+.pantry__name { min-width: auto; overflow-wrap: break-word; }
+.pantry__qty--stack { min-width: 0; flex: 0 1 auto; white-space: normal; }
+.pantry__parts { display: flex; flex-wrap: wrap; justify-content: flex-end; column-gap: 4px; }
+.pantry__part { white-space: nowrap; }
+.foods__count { font-weight: 400; color: var(--ink-3); }
+/* Nachkaufen-Felder so flach wie der kleine Portionen-Regler (34 px, Pille) */
+.restock .pantry-amount input, .restock .pantry-amount select {
+  height: 34px; padding-top: 0; padding-bottom: 0; font-size: 0.95rem; border-radius: 999px;
+}
+/* drei Stufen-Knöpfe in einer Zeile, auch auf dem Handy */
+.stage__options { flex-wrap: nowrap; gap: 6px; }
+.stage__options { gap: 4px; }
+.stage__options .chip { padding: 4px 8px; font-size: 0.76rem; gap: 3px; white-space: nowrap; flex: 0 1 auto; min-width: 0; }

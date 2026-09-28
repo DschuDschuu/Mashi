@@ -84,14 +84,13 @@ export function buildFoodList(
     .sort((a, b) => a.name.localeCompare(b.name, 'de'));
 }
 
-/** Filter oben auf der Seite */
 /**
- * Produkte = alles, was du dauerhaft verwendest, mit Nährwerten (eigene oder Richtwert).
- * Immer im Haus = Produkte mit diesem Zusatz. Ohne Nährwerte = nur der Name, steht nirgends sonst.
+ * Tabs: Produkte = was du pflegst (normal und nachkaufen – Sorten, Werte, Grenzen).
+ * Im Haus und Gewürze (= ohne Nährwerte) = was du einmal einstellst.
  */
 export type FoodFilter = 'produkte' | 'haus' | 'ohne';
 export function matchesFilter(r: FoodRow, f: FoodFilter): boolean {
   if (f === 'ohne') return !!r.zero;
-  if (r.zero) return false;
-  return f === 'produkte' || !!r.basic;
+  if (f === 'haus') return !r.zero && !!r.basic;
+  return !r.zero && !r.basic;
 }
