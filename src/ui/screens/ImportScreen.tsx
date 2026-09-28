@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { cleanOcrText, parseRecipeText, type TextImport } from '../../domain/importText';
 import { navigate } from '../../router';
+import { FileButton } from '../components/Controls';
 import { Icon } from '../components/Icon';
 import { TopBar } from '../components/TopBar';
 import { recognizeText } from '../ocr';
@@ -37,7 +38,8 @@ export function ImportScreen() {
     }
   };
 
-  if (draft) return <RecipeFormScreen draft={draft} />;
+  // „Zurück“ in der Prüfung führt zum eingefügten Text – der bleibt erhalten
+  if (draft) return <RecipeFormScreen draft={draft} onBack={() => setDraft(null)} />;
 
   const recognize = () => {
     const result = parseRecipeText(text);
@@ -59,13 +61,12 @@ export function ImportScreen() {
 
   return (
     <main className="screen">
-      <TopBar title="Rezept importieren" />
+      <TopBar title="Rezept importieren" confirmBack={text.trim() ? 'Import abbrechen? Der eingefügte Text geht verloren.' : undefined} />
       <div className="stack">
         <p className="muted">Fotografiere ein Rezept (Kochbuch, Zettel, Screenshot) – oder kopiere es von einer Webseite, aus einem Chat oder einer Notiz. Mashi erkennt Zutaten, Schritte, Portionen und Zeiten.</p>
-        <label className={`btn btn--primary btn--block${reading !== null ? ' is-disabled' : ''}`}>
+        <FileButton className="btn btn--primary btn--block" disabled={reading !== null} onFile={(f) => void readPhoto(f)}>
           <Icon name="camera" size={18} /> {reading !== null ? `Lese Foto … ${Math.round(reading * 100)} %` : 'Rezept fotografieren oder Bild wählen'}
-          <input type="file" accept="image/*" hidden disabled={reading !== null} onChange={(e) => { void readPhoto(e.target.files?.[0]); e.target.value = ''; }} />
-        </label>
+        </FileButton>
         {fromPhoto && <p className="scan-note" role="status">Text aus dem Foto erkannt. Prüf ihn kurz – Texterkennung verliest sich gern bei Brüchen (½) und Einheiten – und tippe dann auf „Erkennen“.</p>}
         <label className="field"><span>Rezepttext</span>
           <textarea className="import-text" rows={12} value={text} onChange={(e) => { setText(e.target.value); setError(null); }}

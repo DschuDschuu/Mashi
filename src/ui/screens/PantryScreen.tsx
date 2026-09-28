@@ -1,15 +1,17 @@
 import { useEffect, useMemo, useState } from 'react';
-import { resolveIngredient } from '../../domain/mealplan';
-import { withMyProducts } from '../../domain/nutrition/myProducts';
-import { recipesFromPantry, suggestPantryUnit, type PantryItem, type PantryUnit } from '../../domain/pantry';
+import { resolveName } from '../../domain/mealplan';
+import { recipesFromPantry, type PantryItem, type PantryUnit } from '../../domain/pantry';
+import { suggestPantryUnit } from '../../domain/packs';
 import { daysLabel, daysLeft, frozenSince, specialDays, useByOf } from '../../domain/shelfLife';
 import { formatAmount } from '../../domain/scaling';
 import {
   eatPreparedPortions,
   openPantryItem,
   addPantryItem, answerPantryCheck, assignPantrySorts, currentPantry, currentProducts, forgetReceiptRule, freezePantryItem, removePantryItem, thawPantryItem, updatePantryItem,
-  saveProducts, usePantry, usePlan, useProducts, useRecipes,
+  saveProducts, useFoodTable, usePantry, usePlan, useProducts, useRecipe, useRecipes,
 } from '../../data/store';
+import { currentContent } from '../../domain/recipe';
+import { DishNutrition } from '../components/DishNutrition';
 import { navigate, useRoute } from '../../router';
 import { foodTable } from '../../services';
 import { Empty, Section } from '../components/Controls';
@@ -65,9 +67,9 @@ export function PantryScreen() {
     navigate('/speisekammer', { replace: true });
   }, [wantsNew]);
   const [editing, setEditing] = useState<string | null>(null);
-  const table = useMemo(() => withMyProducts(foodTable, products), [products]);
+  const table = useFoodTable();
 
-  const kindOf = (item: PantryItem) => resolveIngredient({ id: item.id, name: item.name }, 1, table)?.kind;
+  const kindOf = (item: PantryItem) => resolveName(item.name, table)?.kind;
   const toCheck = pantry.items.filter((i) => i.check);
   // Nur was nach dem Wochenplan übrig bleibt – bald Ablaufendes zuerst; Eingeplantes nicht noch einmal vorschlagen
   const { rest, keys, idea, planned } = useUseUp();
@@ -210,7 +212,7 @@ export function PantryScreen() {
           )}
 
           {pantry.items.length === 0 ? (
-            <Empty icon="archive">Noch leer. Tippe unten auf ＋ – „Kassenbon importieren“ oder „Vorrat eintragen“. Mashi zeigt dir dann, was du damit kochen kannst.</Empty>
+            <Empty icon="archive">Noch leer. Tippe auf ＋ – „Kassenbon importieren“ oder „Vorrat eintragen“. Mashi zeigt dir dann, was du damit kochen kannst.</Empty>
           ) : (
             groups.map(({ title, items }) => {
               return (
@@ -298,7 +300,7 @@ function AddForm({ onDone }: { onDone: () => void }) {
   const [otherBrand, setOtherBrand] = useState(false);
   const askBrand = !chosen && (options.length === 0 || otherBrand);
   // Einheit passend zur Zutat/Marke: Pesto → Glas, Eier → Stück, Milch → ml
-  const unitTable = useMemo(() => withMyProducts(foodTable, products), [products]);
+  const unitTable = useFoodTable();
   const suggestedUnit = suggestPantryUnit(name.trim() ? unitTable.matchName(name)?.food : undefined, chosen ?? undefined, name.trim() ? foodTable.matchName(name)?.food : undefined);
   /** Packungsgröße des Produkts – bei Stück/Glas hängt Mashi sie im Hintergrund an */
   const packHint = chosen?.packageAmount && chosen.packageUnit !== 'Stück' && (unit === 'Stück' || unit === 'Glas')
@@ -312,7 +314,7 @@ function AddForm({ onDone }: { onDone: () => void }) {
     setScanning(false);
     const p = products.find((x) => x.ean === code);
     if (!p) {
-      toast('Diesen Barcode kennt Mashi noch nicht – leg das Produkt unter „Meine Produkte“ an, dann klappt es beim nächsten Mal.');
+      toast('Diesen Barcode kennt Mashi noch nicht – leg das Produkt unter „Meine Lebensmittel“ an, dann klappt es beim nächsten Mal.');
       return;
     }
     setProduct(p);
@@ -447,6 +449,7 @@ function EditRow({ item, estimate, reserved, onDone }: { item: PantryItem; estim
     onDone();
   };
   const prep = !!item.recipeId;
+  const recipe = useRecipe(item.recipeId);
   const eat = () => {
     const undo = eatPreparedPortions(item.id, 1);
     const left = (item.amount ?? 0) - 1;
@@ -469,7 +472,8 @@ function EditRow({ item, estimate, reserved, onDone }: { item: PantryItem; estim
           <span className="small">Portionen</span>
         </label>
       ) : <AmountFields amount={amount} unit={unit} onAmount={setAmount} onUnit={setUnit} />}
-      {prep && <button className="link small" onClick={() => navigate(`/rezept/${item.recipeId}`)}>Zum Rezept</button>}
+      {/* was eine Portion bringt – dieselbe Zeile wie im Plan */}
+      {recipe && <DishNutrition content={currentContent(recipe)} own={undefined} full className="pantry-nutri" />}
       {item.pack && (unit === 'Stück' || unit === 'Glas') && <p className="small muted">Packungen à {packLabel(item.pack)}</p>}
       {item.openedAt && <p className="small muted">Angebrochen am {new Date(item.openedAt).toLocaleDateString('de-DE')} – hält offen kürzer.</p>}
       {!prep && <SortPicker options={editOptions} value={productId} onChange={setProductId} />}
@@ -493,7 +497,7 @@ function EditRow({ item, estimate, reserved, onDone }: { item: PantryItem; estim
       )}
       <div className="pantry-actions">
         <button className="btn btn--primary btn--sm" onClick={save}>OK</button>
-        {prep && !item.frozenAt && <button className="btn btn--soft btn--sm" onClick={eat}>1 gegessen</button>}
+        {prep && !item.frozenAt && <button className="eat-pill" onClick={eat}>1 gegessen</button>}
         {item.frozenAt
           ? <button className="btn btn--soft btn--sm" onClick={thaw}>Auftauen</button>
           : freezing === null && (

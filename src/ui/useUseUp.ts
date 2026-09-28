@@ -1,11 +1,9 @@
 import { useMemo } from 'react';
-import { withMyProducts } from '../domain/nutrition/myProducts';
 import type { FoodTable } from '../domain/nutrition/types';
 import { pantryAfterPlan, plannedByDish, plannedUse, recipesFromPantry, type DishReservation, type Pantry, type PlannedUse, type Stock } from '../domain/pantry';
 import { expiringSoon, useUpKeys, type Expiring } from '../domain/shelfLife';
-import { usePantry, usePlan, useProducts, useRecipes } from '../data/store';
+import { useFoodTable, usePantry, usePlan, useRecipes } from '../data/store';
 import { navigate } from '../router';
-import { foodTable } from '../services';
 
 /**
  * Was bald weg sollte – einmal berechnet für Startseite, Speisekammer und Wochenplan.
@@ -27,9 +25,8 @@ export function useUseUp(): {
   const pantry = usePantry();
   const plan = usePlan();
   const recipes = useRecipes();
-  const products = useProducts();
+  const table = useFoodTable();
   return useMemo(() => {
-    const table = withMyProducts(foodTable, products);
     const now = new Date();
     const rest = pantryAfterPlan(pantry, plan, recipes, table);
     const keys = useUpKeys(rest, table, now);
@@ -50,7 +47,7 @@ export function useUseUp(): {
     // Leere Speisekammer: Mashi weiß nichts – dann lieber gar kein „Fehlt: …“ anzeigen
     const dishStock = new Map(pantry.items.length ? dishes.map((d) => [d.recipeId, d.stock]) : []);
     return { expiring: expiringSoon(pantry, table, now), keys, rest, table, usingUp, idea, plannedUseUp, planned, dishes, dishStock };
-  }, [pantry, plan, recipes, products]);
+  }, [pantry, plan, recipes, table]);
 }
 
 /** Zum KI-Formular – der Text ist vorausgefüllt, erzeugt wird erst auf Tipp. */

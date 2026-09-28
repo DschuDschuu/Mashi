@@ -2,9 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { currentContent, totalMinutes } from '../../domain/recipe';
 import { recipeOfTheDay } from '../../domain/recipeOfTheDay';
 import type { Recipe } from '../../domain/types';
-import { addToPlan, usePantry, usePlan, useProducts, useRecipes } from '../../data/store';
-import { withMyProducts } from '../../domain/nutrition/myProducts';
-import { foodTable } from '../../services';
+import { addToPlan, useFoodTable, usePantry, usePlan, useRecipes } from '../../data/store';
 import { navigate } from '../../router';
 import { Empty } from '../components/Controls';
 import { Icon } from '../components/Icon';
@@ -204,8 +202,7 @@ function BigCard({ recipe, servings, daily = false, hint, badge, stock }: {
  */
 function PreparedRow() {
   const pantry = usePantry();
-  const products = useProducts();
-  const table = withMyProducts(foodTable, products);
+  const table = useFoodTable();
   const now = new Date();
   const fresh = pantry.items
     .filter((i) => i.recipeId && !i.frozenAt && (i.amount ?? 0) > 0)

@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { resolveIngredient } from '../../domain/mealplan';
+import { keyOfName } from '../../domain/mealplan';
 import { recipesFromPantry } from '../../domain/pantry';
 import { expiryLabel } from '../../domain/shelfLife';
 import { usePlan, useRecipes } from '../../data/store';
@@ -12,7 +12,7 @@ import { useUseUp } from '../useUseUp';
 import { quantityLabel } from './PantryScreen';
 
 /**
- * „Reste verwerten“ – Ziel des Bald-verbrauchen-Banners auf der Startseite: was weg muss,
+ * „Bald verbrauchen“ – Ziel des gleichnamigen Banners auf der Startseite: was weg muss,
  * welche Rezepte das aufbrauchen, und sonst ein passendes Rezept generieren.
  * Nur Rezepte, die wirklich etwas davon aufbrauchen – alles andere steht in der Speisekammer.
  */
@@ -29,14 +29,14 @@ export function UseUpScreen() {
   }, [rest, keys, plan, recipes, table]);
 
   // Nicht mehr im Rest nach dem Wochenplan = ein geplantes Gericht braucht es schon auf
-  const inPlan = (name: string, id: string) => {
-    const key = resolveIngredient({ id, name }, 1, table)?.key;
+  const inPlan = (name: string) => {
+    const key = keyOfName(name, table);
     return !!key && !keys.has(key);
   };
 
   return (
     <main className="screen">
-      <TopBar title="Reste verwerten" backTo="/" />
+      <TopBar title="Bald verbrauchen" backTo="/" />
       {expiring.length === 0 ? (
         <Empty icon="check">Gerade muss nichts dringend weg.</Empty>
       ) : (
@@ -54,7 +54,7 @@ export function UseUpScreen() {
                     </span>
                     <span className="pantry__qty pantry__qty--stack">
                       {quantityLabel(e.item)}
-                      <span className="pantry__shelf is-urgent">{expiryLabel(e)}{inPlan(e.item.name, e.item.id) ? ' · eingeplant' : ''}</span>
+                      <span className="pantry__shelf is-urgent">{expiryLabel(e)}{inPlan(e.item.name) ? ' · eingeplant' : ''}</span>
                     </span>
                   </span>
                 </li>

@@ -15,8 +15,9 @@ export function toast(text: string, action?: ToastMessage['action']) {
   message = { text, action };
   emit();
   clearTimeout(timer);
-  // Mit Knopf etwas länger stehen lassen – man muss ihn ja noch treffen
-  timer = setTimeout(dismissToast, action ? 5000 : 2600);
+  // so lange, wie man zum Lesen braucht (≈ 15 Zeichen je Sekunde), mit Knopf länger – man muss ihn ja noch treffen
+  const read = 1800 + text.length * 65;
+  timer = setTimeout(dismissToast, Math.min(10000, Math.max(action ? 7000 : 2600, read)));
 }
 
 export function dismissToast() {

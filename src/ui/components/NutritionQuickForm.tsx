@@ -9,6 +9,7 @@ import { useProducts } from '../../data/store';
 import { barcodeLookup } from '../../services';
 import { recognizeText } from '../ocr';
 import { BarcodeScanner } from './BarcodeScanner';
+import { FileButton } from './Controls';
 import { Icon } from './Icon';
 import { BrandNames } from './BrandNames';
 import { parseNum, toField, type Values } from './productFields';
@@ -145,10 +146,9 @@ export function NutritionQuickForm({ ingredient, initialBrand = '', onSave, onCa
     <div className="product-form stack quicknut">
       <strong>Nährwerte für „{ingredient}“</strong>
       <div className="quicknut__ways">
-        <label className={`btn btn--soft btn--sm${busy ? ' is-disabled' : ''}`}>
+        <FileButton className="btn btn--soft btn--sm" disabled={!!busy} onFile={(f) => void readLabel(f)}>
           <Icon name="camera" size={16} /> Etikett fotografieren
-          <input type="file" accept="image/*" hidden disabled={!!busy} onChange={(e) => { void readLabel(e.target.files?.[0]); e.target.value = ''; }} />
-        </label>
+        </FileButton>
         <button type="button" className={`btn btn--soft btn--sm${way === 'suche' ? ' is-on' : ''}`} disabled={!!busy} onClick={() => setWay(way === 'suche' ? null : 'suche')}>
           <Icon name="search" size={16} /> Open Food Facts
         </button>

@@ -3,7 +3,9 @@ import { createBackup, parseBackup, type ParsedBackup } from '../../domain/backu
 import type { MyProduct } from '../../domain/nutrition/myProducts';
 import { currentContent } from '../../domain/recipe';
 import { disconnect, leaveDemo, savedSyncConfig, uploadPending, useSyncState } from '../../data/backend';
-import { deleteRecipe, importProducts, importRecipes, isDemo, resetDemoData, restoreRecipe, useProducts, useRecipes } from '../../data/store';
+import { deleteRecipe, importPantry, importPlan, importProducts, importRecipes, isDemo, resetDemoData, restoreRecipe, usePantry, usePlan, useProducts, useRecipes } from '../../data/store';
+import type { MealPlan } from '../../domain/mealplan';
+import type { Pantry } from '../../domain/pantry';
 import type { Recipe } from '../../domain/types';
 import { Empty, Section, Switch } from '../components/Controls';
 import { TopBar } from '../components/TopBar';
@@ -120,7 +122,7 @@ function SyncPanel() {
         setLeaving(true);
         // Erst hochladen, was noch nicht abgeglichen ist – sonst wäre es mit der lokalen Kopie weg
         if (!(await uploadPending())) {
-          const anyway = confirm("Nicht alles ist beim Server angekommen (offline oder Anmeldung abgelaufen). Trotzdem abmelden? Änderungen, die nur auf diesem Gerät sind, gehen dann verloren. Tipp: vorher unten „Sicherung herunterladen“.");
+          const anyway = confirm("Nicht alles ist beim Server angekommen (offline oder Anmeldung abgelaufen). Trotzdem abmelden? Änderungen, die nur auf diesem Gerät sind, gehen dann verloren. Tipp: vorher unter „Sicherung“ auf „Herunterladen“ tippen.");
           if (!anyway) return setLeaving(false);
         }
         await disconnect();
@@ -141,9 +143,9 @@ function DemoPanel() {
   );
 }
 
-/** Alle Rezepte als JSON-Datei – eine Sicherung, die unabhängig vom Server ist. */
-function downloadBackup(recipes: Recipe[], products: MyProduct[]) {
-  const blob = new Blob([JSON.stringify(createBackup(recipes, products), null, 2)], { type: "application/json" });
+/** Alles als JSON-Datei – Rezepte, Lebensmittel, Speisekammer, Plan: eine Sicherung, die unabhängig vom Server ist. */
+function downloadBackup(recipes: Recipe[], products: MyProduct[], pantry: Pantry, plan: MealPlan) {
+  const blob = new Blob([JSON.stringify(createBackup(recipes, products, undefined, pantry, plan), null, 2)], { type: "application/json" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
   a.download = `mashi-sicherung-${new Date().toISOString().slice(0, 10)}.json`;
@@ -157,6 +159,8 @@ function downloadBackup(recipes: Recipe[], products: MyProduct[]) {
  */
 function BackupPanel({ recipes }: { recipes: Recipe[] }) {
   const products = useProducts();
+  const pantry = usePantry();
+  const plan = usePlan();
   const input = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<(ParsedBackup & { fileName: string }) | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -180,15 +184,17 @@ function BackupPanel({ recipes }: { recipes: Recipe[] }) {
     if (!preview) return;
     const { added, merged } = importRecipes(preview.recipes);
     const prods = importProducts(preview.products);
-    toast(`${recipeCount(added)} neu${merged ? `, ${merged} zusammengeführt` : ''}${prods ? ` · ${prods} Produkt${prods === 1 ? '' : 'e'}` : ''}`);
+    if (preview.pantry) importPantry(preview.pantry);
+    if (preview.plan) importPlan(preview.plan);
+    toast(`${recipeCount(added)} neu${merged ? `, ${merged} zusammengeführt` : ''}${prods ? ` · ${prods} Produkt${prods === 1 ? '' : 'e'}` : ''}${preview.pantry ? ' · Speisekammer' : ''}${preview.plan ? ' · Plan' : ''}`);
     setPreview(null);
   };
 
   return (
     <div className="panel stack">
-      <p className="muted small">Alle Rezepte als Datei auf diesem Gerät speichern – oder eine solche Datei wieder einspielen.</p>
+      <p className="muted small">Alles als Datei auf diesem Gerät speichern – Rezepte, Meine Lebensmittel, Speisekammer (mit Preisen und gelernten Bon-Artikeln) und Plan. Beim Einspielen wird zusammengeführt, nichts geht verloren.</p>
       <div className="row-2">
-        <button className="btn btn--ghost" onClick={() => downloadBackup(recipes, products)}>Herunterladen</button>
+        <button className="btn btn--ghost" onClick={() => downloadBackup(recipes, products, pantry, plan)}>Herunterladen</button>
         <button className="btn btn--ghost" onClick={() => input.current?.click()}>Einspielen …</button>
       </div>
       <input ref={input} type="file" accept="application/json,.json" hidden onChange={(e) => onFile(e.target.files?.[0])} />
@@ -200,7 +206,9 @@ function BackupPanel({ recipes }: { recipes: Recipe[] }) {
           <p className="small">
             {recipeCount(preview.recipes.length)} gefunden
             {known > 0 && <> · davon {known} schon vorhanden (werden zusammengeführt, nichts geht verloren)</>}
-            {preview.products.length > 0 && <> · dazu {preview.products.length} von „Meine Produkte“</>}
+            {preview.products.length > 0 && <> · dazu {preview.products.length} von „Meine Lebensmittel“</>}
+            {preview.pantry && <> · Speisekammer mit {preview.pantry.items.length} Vorräten</>}
+            {preview.plan && <> · Plan mit {preview.plan.items.length} Gerichten</>}
             {preview.rejected > 0 && <> · {preview.rejected} unvollständig, werden übersprungen</>}
           </p>
           <ul className="backup-preview__list">
@@ -208,7 +216,7 @@ function BackupPanel({ recipes }: { recipes: Recipe[] }) {
             {preview.recipes.length > 8 && <li className="muted">… und {preview.recipes.length - 8} weitere</li>}
           </ul>
           <div className="row-gap">
-            <button className="btn btn--primary" disabled={!preview.recipes.length && !preview.products.length} onClick={apply}>Einspielen</button>
+            <button className="btn btn--primary" disabled={!preview.recipes.length && !preview.products.length && !preview.pantry && !preview.plan} onClick={apply}>Einspielen</button>
             <button className="btn btn--ghost" onClick={() => setPreview(null)}>Abbrechen</button>
           </div>
         </div>

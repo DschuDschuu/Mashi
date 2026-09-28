@@ -3,7 +3,7 @@ import { createMockRecipes } from '../data/mockRecipes';
 import { buildShoppingList, resolveIngredient } from './mealplan';
 import { localFoodTable } from './nutrition/localFoods';
 import {
-  alreadyImported, applyImport, bonKey, deductRecipe, emptyPantry, pantryAfterPlan, plannedByDish, plannedUse, proposeImport, rememberReceipt, restock, stockSummary, takenBetween,
+  alreadyImported, applyImport, bonKey, deductRecipe, emptyPantry, pantryAfterPlan, plannedByDish, plannedUse, proposeImport, rememberReceipt, returnTaken, stockSummary, takenBetween,
   type Pantry, type PantryItem,
 } from './pantry';
 import { parseIngredientLine } from './importText';
@@ -155,7 +155,7 @@ describe('Gekocht zurücknehmen', () => {
     const after = deductRecipe(before, r.versions[0].content, 2, localFoodTable).pantry;
     const taken = takenBetween(before, after);
     expect(taken.map((t) => [t.item.id, t.amount])).toEqual([['a', 300], ['b', 300], ['c', undefined]]);
-    const back = restock(after, taken);
+    const back = returnTaken(after, taken);
     expect(back.items.map((i) => [i.id, i.amount, !!i.check, !!i.reduced]).sort()).toEqual([
       ['a', 300, false, true], ['b', 400, false, false], ['c', undefined, false, false],
     ]);
@@ -165,7 +165,7 @@ describe('Gekocht zurücknehmen', () => {
     const before = pantry(item('b', 'Hähnchenbrust', 400, 'g'));
     const taken = [{ item: before.items[0], amount: 300 }];
     const meanwhile = pantry(item('b', 'Hähnchenbrust', 600, 'g')); // 100 g Rest + 500 g vom neuen Bon
-    expect(restock(meanwhile, taken).items[0].amount).toBe(900);
+    expect(returnTaken(meanwhile, taken).items[0].amount).toBe(900);
   });
 });
 

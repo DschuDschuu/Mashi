@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { newId } from '../../domain/recipe';
 import { stepIngredients } from '../../domain/stepIngredients';
 import type { Ingredient, Step, Unit } from '../../domain/types';
@@ -21,11 +22,7 @@ export function IngredientEditor({ items, onChange, newItem }: { items: Ingredie
       <IngredientNames />
       {items.map((it, idx) => (
         <div key={it.id} className="editor__row">
-          <input
-            className="editor__amount" type="number" inputMode="decimal" min={0} step="any" aria-label="Menge"
-            value={it.amount === undefined ? '' : Math.round(it.amount * 100) / 100}
-            onChange={(e) => update(idx, { amount: e.target.value === '' ? undefined : Number(e.target.value) })}
-          />
+          <AmountInput value={it.amount} onChange={(amount) => update(idx, { amount })} />
           <select className="editor__unit" aria-label="Einheit" value={it.unit ?? ''} onChange={(e) => update(idx, { unit: (e.target.value || undefined) as Unit | undefined })}>
             <option value="">–</option>
             {UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
@@ -131,5 +128,25 @@ function RenameHint({ name, options, onApply }: { name: string; options: RenameO
       <button type="button" className="link" onClick={() => onApply(to)}>Übernehmen</button>
       <button type="button" className="link link--muted" onClick={() => dismissRename(renameKey(name))}>Nicht mehr vorschlagen</button>
     </p>
+  );
+}
+
+const toText = (n: number | undefined) => (n === undefined ? '' : String(Math.round(n * 100) / 100).replace('.', ','));
+const toNumber = (s: string) => {
+  const n = Number(s.trim().replace(',', '.'));
+  return s.trim() === '' || !Number.isFinite(n) || n < 0 ? undefined : n;
+};
+
+/**
+ * Menge mit Komma („1,5“) wie überall in Mashi – ein Zahlenfeld (type="number") versteht das auf
+ * manchen Handys nicht. Der Text bleibt beim Tippen stehen („1,“ springt nicht um).
+ */
+function AmountInput({ value, onChange }: { value: number | undefined; onChange: (v: number | undefined) => void }) {
+  const [text, setText] = useState(toText(value));
+  // von außen geändert (z. B. Portionen umgerechnet) → übernehmen, eigenes Tippen aber nicht überschreiben
+  useEffect(() => { if (toNumber(text) !== value) setText(toText(value)); }, [value]); // eslint-disable-line react-hooks/exhaustive-deps
+  return (
+    <input className="editor__amount" inputMode="decimal" aria-label="Menge" value={text}
+      onChange={(e) => { setText(e.target.value); onChange(toNumber(e.target.value)); }} />
   );
 }

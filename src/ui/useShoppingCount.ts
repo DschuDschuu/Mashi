@@ -1,10 +1,8 @@
 import { useMemo } from 'react';
 import { buildShoppingList, type ShoppingItem } from '../domain/mealplan';
-import { withMyProducts } from '../domain/nutrition/myProducts';
 import { restockStatus, shoppingList, type RestockStatus } from '../domain/restock';
 import { pantryAfterPlan } from '../domain/pantry';
-import { usePantry, usePlan, useProducts, useRecipes } from '../data/store';
-import { foodTable } from '../services';
+import { useFoodTable, usePantry, usePlan, useProducts, useRecipes } from '../data/store';
 
 const open = (plan: { checked: string[] }) => (i: ShoppingItem) => !i.pantry && !i.covered && !plan.checked.includes(i.key);
 
@@ -12,12 +10,11 @@ const open = (plan: { checked: string[] }) => (i: ShoppingItem) => !i.pantry && 
 export function useMissing(): ShoppingItem[] {
   const plan = usePlan();
   const recipes = useRecipes();
-  const products = useProducts();
   const pantry = usePantry();
+  const table = useFoodTable();
   return useMemo(() => {
-    const table = withMyProducts(foodTable, products);
     return buildShoppingList(plan, recipes, table, pantry).filter(open(plan));
-  }, [plan, recipes, products, pantry]);
+  }, [plan, recipes, table, pantry]);
 }
 
 /** Noch einzukaufen – Zahl am Wagen und auf der Startseite, „Nachkaufen“ mitgezählt (wie auf der Liste). */
@@ -26,10 +23,10 @@ export function useShoppingCount(): number {
   const recipes = useRecipes();
   const products = useProducts();
   const pantry = usePantry();
+  const table = useFoodTable();
   return useMemo(() => {
-    const table = withMyProducts(foodTable, products);
     return shoppingList(plan, recipes, table, pantry, products).filter(open(plan)).length;
-  }, [plan, recipes, products, pantry]);
+  }, [plan, recipes, products, pantry, table]);
 }
 
 /** Stand jeder Nachkauf-Regel je Schlüssel – fürs Einstellfeld unter „Meine Lebensmittel“ */
@@ -38,9 +35,9 @@ export function useRestockStatus(): Map<string, RestockStatus> {
   const recipes = useRecipes();
   const products = useProducts();
   const pantry = usePantry();
+  const table = useFoodTable();
   return useMemo(() => {
     if (!pantry.restock?.length) return new Map();
-    const table = withMyProducts(foodTable, products);
     return new Map(restockStatus(pantry, table, products, pantryAfterPlan(pantry, plan, recipes, table)).map((s) => [s.key, s]));
-  }, [plan, recipes, products, pantry]);
+  }, [plan, recipes, products, pantry, table]);
 }

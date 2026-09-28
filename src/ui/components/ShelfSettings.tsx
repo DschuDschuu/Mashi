@@ -41,7 +41,7 @@ export function ShelfSettings() {
     <details className="panel fold shelf">
       <TileSummary icon="clock" title="Haltbarkeit"
         text={own ? `Wie lange Frisches hält · ${own} eigene ${own === 1 ? 'Wert' : 'Werte'}` : 'Wie lange Frisches hält – für „Bald verbrauchen“'} />
-      <p className="muted small">Gilt ab dem Kauf, wenn am Vorrat kein Datum steht. Leer lassen = Mashis Richtwert (grau). Einzelne Produkte stellst du unter „Meine Produkte“ ein.</p>
+      <p className="muted small">Gilt ab dem Kauf, wenn am Vorrat kein Datum steht. Leer lassen = Mashis Richtwert (grau). Einzelne Produkte stellst du unter „Meine Lebensmittel“ ein.</p>
 
       <div className="shelf__special">
         {SPECIAL.map((s) => (

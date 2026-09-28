@@ -69,13 +69,6 @@ export interface FoodTable {
   matchName(name: string): { food: FoodEntry; quality: 'exact' | 'approx'; alias?: string; specific?: boolean } | undefined;
 }
 
-/** Schnittstelle für externe Datenbanken – noch nicht implementiert (Phase 7). */
-export interface NutritionProvider {
-  id: string;
-  search(query: string): Promise<FoodEntry[]>;
-  byBarcode?(ean: string): Promise<FoodEntry | undefined>;
-}
-
 export type NutritionAccuracy = 'berechnet' | 'geschaetzt' | 'nicht_verfuegbar';
 
 export type MatchStatus =

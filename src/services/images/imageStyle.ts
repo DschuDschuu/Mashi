@@ -2,8 +2,6 @@
  * Einheitlicher Bildstil für alle KI-Rezeptbilder – damit sie wie aus EINEM Kochbuch wirken.
  * Zentral an einer Stelle, damit Rezepte nur das Gericht beschreiben müssen.
  */
-export const IMAGE_SIZE = { width: 1024, height: 1024 } as const;
-
 export const IMAGE_STYLE_PROMPT = [
   'realistic food photography',
   'soft natural daylight',

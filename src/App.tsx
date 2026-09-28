@@ -33,8 +33,11 @@ function Redirect({ to }: { to: string }) {
   return null;
 }
 
-/** Routen-Tabelle. Tabs zeigen die untere Navigation, Unterseiten nicht. */
-function resolve(route: Route): { screen: ReactElement; tab?: string } {
+/**
+ * Routen-Tabelle. Tabs zeigen die untere Navigation, Unterseiten nicht.
+ * section: zu welchem Reiter eine Unterseite gehört – auf dem Tablet bleibt er in der Seitenleiste markiert.
+ */
+function resolve(route: Route): { screen: ReactElement; tab?: string; section?: string } {
   const [a, b, c] = route.segments;
   switch (a) {
     case undefined: return { screen: <StartScreen />, tab: '/' };
@@ -42,26 +45,26 @@ function resolve(route: Route): { screen: ReactElement; tab?: string } {
     // „Zum Testen“ lebt im Kochbuch (KI-Ideen + Rezepte zum Testen) – alte Links landen dort
     case 'testen': return { screen: <Redirect to="/kochbuch?segment=testen" /> };
     case 'plan': return { screen: <PlanScreen />, tab: '/plan' };
-    case 'reste': return { screen: <UseUpScreen /> };
+    case 'reste': return { screen: <UseUpScreen />, section: '/' };
     case 'preise': return { screen: <PricesScreen />, tab: '/speisekammer' };
     // die Einkaufsliste hängt am Wagen in der Speisekammer
     case 'einkauf': return { screen: <ShoppingScreen />, tab: '/speisekammer' };
     case 'speisekammer':
-      if (b === 'bon') return { screen: <ReceiptImportScreen shared={route.query.has('geteilt')} /> };
-      if (b === 'inventur') return { screen: <InventoryScreen /> };
+      if (b === 'bon') return { screen: <ReceiptImportScreen shared={route.query.has('geteilt')} />, section: '/speisekammer' };
+      if (b === 'inventur') return { screen: <InventoryScreen />, section: '/speisekammer' };
       return { screen: <PantryScreen />, tab: '/speisekammer' };
     // „Einstellungen“ (früher Tab „Mehr“) – übers Zahnrad auf Start und Kochbuch, auf dem Tablet in der Seitenleiste
-    case 'mehr': return { screen: <MoreScreen /> };
-    case 'produkte': return { screen: <ProductsScreen /> };
+    case 'mehr': return { screen: <MoreScreen />, section: '/mehr' };
+    case 'produkte': return { screen: <ProductsScreen />, section: '/speisekammer' };
     case 'neu':
       if (b === 'ki') return { screen: <AiCreateScreen initialPrompt={route.query.get('text') ?? ''} /> };
       if (b === 'import') return { screen: <ImportScreen /> };
       return { screen: <RecipeFormScreen key="neu" /> };
     case 'rezept':
       if (c === 'kochen') return { screen: <CookModeScreen id={b} servings={Number(route.query.get('p')) || undefined} variants={parseVariants(route.query.get('s'))} /> };
-      if (c === 'test') return { screen: <TestFeedbackScreen key={b} id={b} /> };
-      if (c === 'bearbeiten') return { screen: <RecipeFormScreen key={b} editId={b} /> };
-      return { screen: <RecipeDetailScreen key={b} id={b} /> };
+      if (c === 'test') return { screen: <TestFeedbackScreen key={b} id={b} />, section: '/kochbuch' };
+      if (c === 'bearbeiten') return { screen: <RecipeFormScreen key={b} editId={b} />, section: '/kochbuch' };
+      return { screen: <RecipeDetailScreen key={b} id={b} />, section: '/kochbuch' };
   }
   return { screen: <StartScreen />, tab: '/' };
 }
@@ -83,14 +86,14 @@ export function App({ mode }: { mode: Mode | null }) {
   if (mode === null) return <div className="app"><ConnectScreen /></div>;
   if (!ready) return <div className="boot"><span className="logo">Mashi</span></div>;
 
-  const { screen, tab } = resolve(route);
+  const { screen, tab, section } = resolve(route);
   // Kochmodus: bewusst ohne Navigation, auch auf dem Tablet – ein Schritt, nichts sonst.
   const cooking = route.segments[0] === 'rezept' && route.segments[2] === 'kochen';
   return (
     <div className={`app${cooking ? '' : ' app--nav'}`}>
       <StatusBanner />
       {screen}
-      {!cooking && <BottomNav active={tab} onlyTablet={!tab} />}
+      {!cooking && <BottomNav active={tab ?? section} onlyTablet={!tab} />}
       {/* Einführung beim ersten Start (je Gerät) – nicht mitten im Kochen */}
       {!settings.onboarded && !cooking && <Onboarding onClose={() => undefined} />}
       {/* nach „Gekocht“ – überall, auch nach dem Kochmodus */}

@@ -52,7 +52,7 @@ export function AiCreateScreen({ initialPrompt = '' }: { initialPrompt?: string 
 
   return (
     <main className="screen">
-      <TopBar title="Rezept mit KI erstellen" />
+      <TopBar title="Rezept mit KI erstellen" confirmBack={servings || devices.length || wishes.length || time.length ? 'Verwerfen? Deine Auswahl geht verloren.' : undefined} />
 
       <label className="field">
         <span className="field__label-lg">Beschreibe deine Zutaten oder deinen Wunsch</span>

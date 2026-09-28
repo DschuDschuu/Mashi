@@ -1,4 +1,4 @@
-import { resolveIngredient } from './mealplan';
+import { keyOfName, resolveIngredient } from './mealplan';
 import type { MyProduct } from './nutrition/myProducts';
 import type { FoodTable } from './nutrition/types';
 import type { RecipeContent } from './types';
@@ -41,7 +41,7 @@ export function recipeCost(content: RecipeContent, servings: number, table: Food
   // Gleiche Zutat, mehrere Preise (z. B. zwei Bons) → der neueste zählt
   const byKey = new Map<string, PriceEntry>();
   for (const p of [...prices].sort((a, b) => a.date.localeCompare(b.date))) {
-    const key = resolveIngredient({ id: '', name: p.name }, 1, table)?.key;
+    const key = keyOfName(p.name, table);
     if (key) byKey.set(key, p);
   }
 

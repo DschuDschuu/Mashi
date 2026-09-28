@@ -12,15 +12,16 @@
 
   /* Text in dunklem Petrol statt Grau – das macht den „Kochbuch“-Ton aus */
   --ink: #2d4748;
-  --ink-2: #647877;
-  --ink-3: #9ba8a6;
+  /* lesbar auf allen Hintergründen (WCAG AA): ink-2 ≥ 6 : 1, ink-3 ≥ 4,5 : 1 – vorher 4,0 bzw. 2,1 */
+  --ink-2: #465d5d;
+  --ink-3: #5b706f;
 
   --primary: #4f8482;
   --primary-press: #3f6d6b;
   --primary-soft: #e2eeec;
   /* Text in der Hauptfarbe (Links, aktive Tabs) und Schrift AUF der Hauptfarbe (Knöpfe) –
      getrennt, weil manche Themen (Sonnengelb) als Text dunkler und auf dem Knopf dunkle Schrift brauchen */
-  --primary-text: var(--primary);
+  --primary-text: #437270; /* etwas dunkler als --primary: Links und aktive Tabs ≥ 4,5 : 1 (vorher 3,6) */
   --on-primary: #fff;
   /* Hintergrund neben der App auf Tablet/Desktop */
   --backdrop: #efebe3;
@@ -172,7 +173,7 @@ p { margin: 0; }
 .chip.is-on svg { color: var(--on-primary); }
 .chip--xs { min-height: 22px; padding: 0 9px; font-size: 0.72rem; background: var(--sky); color: var(--ink-2); }
 
-.badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 999px; font-size: 0.72rem; font-weight: 700; color: var(--ink); }
+.badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 999px; font-size: 0.72rem; font-weight: 700; color: var(--ink); white-space: nowrap; }
 
 .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; flex: none; }
 .dot--green { background: var(--green); }
@@ -205,11 +206,11 @@ p { margin: 0; }
 .card__status { position: absolute; left: 8px; bottom: 8px; }
 .card__fav { position: absolute; top: 8px; right: 8px; z-index: 2; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: rgb(255 255 255 / 0.92); color: var(--ink-2); }
 .card__fav.is-on { color: var(--heart); }
-.card__body { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 3px; }
+.card__body { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 3px; flex: 1; }
 .card__title { font-size: 0.92rem; line-height: 1.25; }
 .card__meta { font-size: 0.76rem; color: var(--ink-2); display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
 .card__meta svg { color: var(--ink-3); }
-.card__chips { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
+.card__chips { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; min-height: 24px; }
 
 /* ── Bilder / Platzhalter-Illustration ───────────────────────── */
 .rimg { display: block; width: 100%; aspect-ratio: 1 / 0.78; object-fit: cover; }
@@ -238,13 +239,32 @@ p { margin: 0; }
 }
 .nav__item { display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 0.68rem; font-weight: 600; color: var(--ink-3); height: 100%; justify-content: center; }
 .nav__item.is-active { color: var(--primary-text); }
+/* Aktiver Reiter: ein Pinselstrich in der Akzentfarbe hinter dem Icon – die Schriftfarbe allein war kaum
+   vom Grau der anderen zu unterscheiden. 30 % Akzent auf der hellen Tönung; ohne color-mix nur die Tönung
+   (sonst würde die Füllung ungültig und damit schwarz). */
+:root { --nav-brush: var(--primary-soft); }
+@supports (color: color-mix(in srgb, red 50%, blue)) {
+  :root { --nav-brush: color-mix(in srgb, var(--primary) 30%, var(--primary-soft)); }
+}
+.nav__icon { position: relative; display: grid; place-items: center; width: 40px; height: 26px; }
+.nav__glyph { position: relative; }
+.nav__brush {
+  position: absolute; left: 50%; top: 50%; width: 44px; height: 24px; transform: translate(-50%, calc(-50% + 1px));
+  overflow: visible; pointer-events: none; fill: var(--nav-brush);
+  /* wird von links nach rechts „hingepinselt“ */
+  opacity: 0; clip-path: inset(0 100% 0 0); transition: clip-path 0.24s ease-out, opacity 0.1s;
+}
+.nav__bristles { fill: none; stroke: var(--nav-brush); stroke-linecap: round; }
+.nav__item.is-active .nav__brush { opacity: 1; clip-path: inset(-3px); }
+@media (prefers-reduced-motion: reduce) { .nav__brush { transition: none; } }
 /* Wie im Bild: kleiner Kreis in der Leiste, nicht erhöht */
 .nav__plus { justify-self: center; width: 44px; height: 44px; border-radius: 50%; background: var(--primary); color: var(--on-primary); display: grid; place-items: center; box-shadow: 0 3px 10px rgb(79 132 130 / 0.3); }
 .nav__plus:active { transform: scale(0.95); }
 
 /* ── Bottom Sheet ────────────────────────────────────────────── */
 .sheet-backdrop { position: fixed; inset: 0; z-index: 30; background: rgb(45 71 72 / 0.3); display: flex; align-items: flex-end; justify-content: center; animation: fade 0.15s ease-out; }
-.sheet { width: 100%; max-width: 560px; background: var(--bg); border-radius: 28px 28px 0 0; padding: 10px var(--gutter) calc(24px + var(--safe-b)); animation: rise 0.22s ease-out; }
+/* nie höher als der Bildschirm – sonst schneidet das iPhone SE oder das Querformat unten ab */
+.sheet { max-height: 90dvh; overflow-y: auto; overscroll-behavior: contain; width: 100%; max-width: 560px; background: var(--bg); border-radius: 28px 28px 0 0; padding: 10px var(--gutter) calc(24px + var(--safe-b)); animation: rise 0.22s ease-out; }
 .sheet__grip { width: 40px; height: 5px; border-radius: 3px; background: var(--line); margin: 0 auto 14px; }
 .sheet__title { font-size: 1.15rem; margin-bottom: 14px; }
 .sheet__options { display: flex; flex-direction: column; gap: 10px; }
@@ -261,7 +281,7 @@ p { margin: 0; }
 .segments::-webkit-scrollbar { display: none; }
 .segment { min-height: 34px; padding: 0 16px; border-radius: 999px; font-weight: 600; font-size: 0.86rem; color: var(--ink-2); background: var(--surface-2); white-space: nowrap; }
 .segment.is-on { background: var(--primary); color: var(--on-primary); }
-.filters { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+.filters { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 16px 16px 76px; display: flex; flex-direction: column; gap: 14px; }
 .filters__group { display: flex; flex-direction: column; gap: 8px; }
 .filters__group h3 { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-3); }
 
@@ -315,7 +335,7 @@ p { margin: 0; }
 /* Zutaten wie im Bild: Menge links, Name daneben, ohne Trennlinien */
 .ingredients { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
 .ingredients li { display: grid; grid-template-columns: 76px 1fr; gap: 12px; padding: 5px 0; font-size: 0.95rem; }
-.ingredients__qty { font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
+.ingredients__qty { font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .ingredients__name { color: var(--ink-2); }
 /* mit Speisekammer: dritte Spalte „da / fehlt“ */
 .ingredients.has-stock li { grid-template-columns: 76px 1fr auto; align-items: baseline; }
@@ -420,7 +440,7 @@ p { margin: 0; }
 .cook__ing:disabled { cursor: default; }
 .cook__ingredients li.is-changed strong { color: var(--primary-text); }
 .cook__edit { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.cook__edit input { width: 5.5em; font-size: 1rem; }
+.cook__edit input { width: 5.5em; }
 .cook__leftovers { margin-top: 12px; padding: 12px 14px; background: var(--primary-soft); border-radius: var(--r); display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
 .cook__leftovers p { margin: 0; }
 .cook__leftover-list { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -436,7 +456,9 @@ p { margin: 0; }
 .cook__nav { display: flex; gap: 12px; }
 
 /* ── Toast ───────────────────────────────────────────────────── */
-.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(var(--nav-h) + var(--safe-b) + 16px); z-index: 40; background: var(--toast-bg); color: var(--toast-ink); padding: 12px 18px; border-radius: 999px; font-weight: 600; font-size: 0.9rem; box-shadow: var(--shadow-lift); max-width: calc(100% - 32px); text-align: center; animation: rise 0.2s ease-out; }
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(var(--nav-h) + var(--safe-b) + 16px); z-index: 40; background: var(--toast-bg); color: var(--toast-ink); padding: 12px 18px; border-radius: 999px; font-weight: 600; font-size: 0.9rem; box-shadow: var(--shadow-lift); text-align: center; animation: rise 0.2s ease-out;
+  /* alle Hinweise gleich breit wie der mit „Rückgängig“ – schmale wirkten gequetscht */
+  width: 90%; max-width: 420px; display: flex; align-items: center; gap: 12px; justify-content: center; }
 
 /* ── Verbinden ───────────────────────────────────────────────── */
 .connect { padding-top: 28px; }
@@ -470,7 +492,6 @@ p { margin: 0; }
   /* Plus unter den Bereichen (unter „Speisekammer“), Einstellungen ganz unten */
   .nav__plus { order: 1; margin: 10px auto 0; width: 50px; height: 50px; }
   .nav__item { height: auto; padding: 10px 4px; border-radius: 14px; font-size: 0.72rem; gap: 4px; }
-  .nav__item.is-active { background: var(--primary-soft); }
 
   /* Inhalt: breiter, mehr Luft */
   .screen { max-width: 1120px; margin: 0 auto; padding: 24px var(--gutter) 48px; gap: 22px; }
@@ -608,7 +629,8 @@ p { margin: 0; }
 .plan-chip.is-on { border-style: solid; background: var(--primary-soft); }
 .plan-layout { display: flex; flex-direction: column; gap: 18px; }
 .plan-layout__main, .plan-layout__side { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
-.plan-list__hit { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; text-align: left; }
+/* breite Plan-Zeile: Titel behält Platz, Nährwerte/Preis brechen um statt ihn zusammenzudrücken */
+.plan-list__hit { display: flex; align-items: center; gap: 12px; flex: 1 1 11rem; min-width: 0; text-align: left; }
 .plan-list .list__title, .suggestion .list__title { overflow-wrap: anywhere; }
 .plan-list .stepper { flex: none; }
 .suggestion__text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
@@ -624,7 +646,7 @@ p { margin: 0; }
 .shopping__item.is-done .shopping__name, .shopping__item.is-done .shopping__qty { color: var(--ink-3); text-decoration: line-through; }
 
 .sheet--tall { max-height: 85vh; display: flex; flex-direction: column; gap: 12px; }
-.picker { overflow-y: auto; min-height: 0; flex: 1; padding-bottom: 4px; }
+.picker { display: flex; flex-direction: column; gap: 16px; overflow-y: auto; min-height: 0; flex: 1; padding-bottom: 4px; }
 .picker__item { width: 100%; text-align: left; }
 
 @media (min-width: 900px) {
@@ -633,7 +655,6 @@ p { margin: 0; }
 }
 
 /* ── Gericht auswählen: Gruppen & Autocomplete ───────────────── */
-.picker { display: flex; flex-direction: column; gap: 16px; }
 .picker__group { display: flex; flex-direction: column; gap: 8px; }
 .picker__heading { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 0.8rem; font-weight: 700; color: var(--ink-2); text-transform: uppercase; letter-spacing: 0.04em; }
 .picker__heading svg { color: var(--art); }
@@ -644,7 +665,6 @@ p { margin: 0; }
 .sheet--tall .search .iconbtn { margin-left: auto; }
 
 /* ── Status-Badge in Listenzeilen: immer einzeilig, rechtsbündig, kleiner ── */
-.badge { white-space: nowrap; }
 .list__item .suggestion__text { flex: 1; }
 .list__item .badge { flex: none; margin-left: auto; padding: 2px 8px; font-size: 0.66rem; }
 
@@ -664,8 +684,7 @@ p { margin: 0; }
 }
 /* Tippfläche 44 px, auch wenn der Kreis kleiner aussieht */
 .plan-cooked::after { content: ''; position: absolute; inset: -4px; }
-.plan-cooked.is-on { opacity: 1; }
-.plan-cooked.is-on { background: var(--green); border-color: var(--green); color: #fff; }
+.plan-cooked.is-on { opacity: 1; background: var(--green); border-color: var(--green); color: #fff; }
 .plan-list .is-cooked .list__title { text-decoration: line-through; color: var(--ink-3); }
 .plan-list .is-cooked .rimg { opacity: 0.55; }
 
@@ -674,7 +693,8 @@ p { margin: 0; }
 .pantry__item { display: flex; align-items: center; gap: 8px; padding: 4px 6px 4px 14px; border-top: 1px solid var(--line); }
 .pantry__item:first-child { border-top: 0; }
 .pantry__hit { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; min-height: 44px; text-align: left; }
-.pantry__name { flex: 1; min-width: 0; font-weight: 600; overflow-wrap: anywhere; }
+/* der Name bricht nie mitten im Wort („Milc|h“) – lieber bricht die Menge daneben um */
+.pantry__name { flex: 1; font-weight: 600; overflow-wrap: break-word; }
 .pantry__qty { color: var(--ink-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .pantry__item--edit { flex-wrap: wrap; padding: 10px 12px; background: var(--surface-2); }
 .pantry__item--edit > input { flex: 1 1 160px; }
@@ -736,24 +756,22 @@ p { margin: 0; }
 /* ── Rezeptkarte: Zeit, Nährwerte und Mahlzeittyp immer auf gleicher Höhe ──
    Titel oben (1 oder 2 Zeilen), die drei Zeilen darunter unten verankert. Karten in einer
    Reihe sind gleich hoch (Grid), also stehen die Zeilen nebeneinander auf einer Linie. */
-.card__body { flex: 1; }
 .card__bottom { margin-top: auto; display: flex; flex-direction: column; gap: 3px; padding-top: 4px; }
-.card__chips { min-height: 24px; }
 
 /* ── Startseite: große Karten zum Wischen ────────────────────── */
+/* über die ganze Breite – die nächste Karte schaut nicht herein, die Punkte zeigen, dass es mehr gibt */
 .swiper {
-  list-style: none; display: grid; grid-auto-flow: column; grid-auto-columns: 86%; gap: 14px;
+  list-style: none; display: grid; grid-auto-flow: column; grid-auto-columns: 100%; gap: 14px;
   overflow-x: auto; scroll-snap-type: x mandatory; scroll-padding-inline: var(--gutter);
   margin: 0 calc(-1 * var(--gutter)); padding: 4px var(--gutter) 6px; scrollbar-width: none;
 }
 .swiper::-webkit-scrollbar { display: none; }
-.swiper--single { grid-auto-columns: 100%; }
 .swiper__slide { scroll-snap-align: start; display: flex; }
 .bigcard {
   flex: 1; display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--line);
   border-radius: var(--r-lg); box-shadow: var(--shadow); overflow: hidden;
 }
-.bigcard__media { display: block; width: 100%; }
+.bigcard__media { display: block; width: 100%; position: relative; }
 /* flacher als 4:3, damit die Kurzwege darunter auf den ersten Blick zu sehen sind */
 .bigcard__media .rimg { aspect-ratio: 16 / 9; }
 .bigcard__body { flex: 1; display: flex; flex-direction: column; gap: 6px; padding: 14px 16px 16px; }
@@ -765,7 +783,9 @@ p { margin: 0; }
 .swiper__dot::after { content: ''; position: absolute; inset: -8px -7px; }
 .swiper__dot.is-on { background: var(--primary); width: 20px; border-radius: 999px; }
 @media (min-width: 768px) {
-  .swiper { margin: 0; padding-inline: 0; scroll-padding-inline: 0; }
+  /* Tablet: zwei Gerichte nebeneinander – nur eins → mittig */
+  .swiper { margin: 0; padding-inline: 0; scroll-padding-inline: 0; grid-auto-columns: calc((100% - 14px) / 2); }
+  .swiper--single { grid-auto-columns: minmax(0, 520px); justify-content: center; }
   .today > .bigcard { width: 100%; max-width: 520px; align-self: center; }
 }
 @media (prefers-reduced-motion: reduce) { .swiper__dot { transition: none; } }
@@ -833,19 +853,11 @@ p { margin: 0; }
 .shopping__item.is-done .shopping__from { text-decoration: none; }
 .page-head .cart-btn { align-self: center; }
 
-/* Wisch-Karten über die ganze Breite – die nächste Karte schaut nicht mehr herein, die Punkte zeigen, dass es mehr gibt */
-.swiper { grid-auto-columns: 100%; }
-/* Tablet: zwei Gerichte nebeneinander (vom Handy-Wert oben überschrieben, deshalb hier) – nur eins → mittig */
-@media (min-width: 768px) {
-  .swiper { grid-auto-columns: calc((100% - 14px) / 2); }
-  .swiper--single { grid-auto-columns: minmax(0, 520px); justify-content: center; }
-}
 
 /* ── Suchfeld leeren ─────────────────────────────────────────── */
 .search .search__clear { margin-left: auto; flex: none; }
 
 /* ── Filter: Leiste unten fest ───────────────────────────────── */
-.filters { padding-bottom: 76px; }
 .filterbar {
   position: fixed; z-index: 20; left: 50%; transform: translateX(-50%); width: min(560px, 100%);
   bottom: calc(var(--nav-h) + var(--safe-b));
@@ -859,21 +871,21 @@ p { margin: 0; }
 }
 
 /* ── Hinweis mit „Rückgängig“ ────────────────────────────────── */
-.toast { display: flex; align-items: center; gap: 12px; justify-content: center; }
 .toast__action { flex: none; color: inherit; font-weight: 700; padding: 4px 2px; text-decoration: underline; text-underline-offset: 3px; }
 
 /* ── Bald verbrauchen ────────────────────────────────────────── */
 .useup-banner {
-  display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+  display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; margin-top: 0;
   padding: 12px 14px; border-radius: var(--r); background: var(--peach); color: var(--ink); font-size: 0.9rem;
 }
 .useup-banner > svg:first-child { flex: none; color: var(--art); }
 .useup-banner > span { flex: 1; min-width: 0; }
 .useup-hint { margin: 0; font-size: 0.82rem; font-weight: 600; color: #9a5a2f; }
-.pantry__qty--stack { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.25; padding: 4px 0; }
+.pantry__qty--stack { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.25; padding: 4px 0; min-width: 0; flex: 0 1 auto; white-space: normal; }
 .pantry__shelf { font-size: 0.75rem; color: var(--ink-3); }
 .pantry__shelf.is-urgent { color: #9a5a2f; font-weight: 700; }
-.pantry-date { display: flex; flex-direction: column; gap: 2px; }
+/* „Essen bis“ links neben dem Datum – lange Beschriftungen rutschen von selbst darüber */
+.pantry-date { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; }
 .pantry-date input { border: 1px solid var(--line); background: var(--surface); border-radius: var(--r-sm); padding: 8px 10px; font-size: 0.95rem; }
 
 
@@ -883,7 +895,7 @@ p { margin: 0; }
 .savings__tiles .stat__value { font-size: clamp(1rem, 4.6vw, 1.35rem); }
 .pantry__mhd { margin-left: 6px; font-size: 0.68rem; vertical-align: middle; }
 .pantry-mhd, .bonrow__mhd { display: inline-flex; align-items: center; gap: 6px; }
-.pantry-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.pantry-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .pantry-freeze { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; width: 100%; }
 .pantry-freeze input { width: 6em; margin: 0 4px; }
 .pantry-frozen { margin: 0; }
@@ -941,7 +953,7 @@ p { margin: 0; }
 .shelf__special { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .shelf__tile { display: flex; flex-direction: column; justify-content: space-between; gap: 8px; padding: 10px; border-radius: var(--r-sm); background: var(--bg); min-width: 0; }
 .shelf__tile-label { font-size: 0.78rem; font-weight: 600; color: var(--ink-2); line-height: 1.25; }
-.shelf__tile .days-field { align-self: flex-start; }
+.shelf__tile .days-field { align-self: stretch; justify-content: center; padding: 0 8px 0 2px; }
 .shelf__groups { display: flex; flex-direction: column; }
 .shelf__group { border-top: 1px solid var(--line); }
 .shelf__group > summary { display: flex; align-items: center; gap: 10px; padding: 11px 0; cursor: pointer; list-style: none; font-weight: 600; }
@@ -953,7 +965,7 @@ p { margin: 0; }
 .shelf__chevron { flex: none; color: var(--ink-3); transform: rotate(90deg); transition: transform 0.15s; }
 .shelf__group[open] .shelf__chevron { transform: rotate(-90deg); }
 .shelf__rows { display: grid; gap: 4px; padding: 0 0 12px 28px; }
-.shelf__row { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 40px; }
+.shelf__row { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 40px; font-size: 0.92rem; }
 /* Zahl + Einheit als ein Feld */
 .days-field { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); padding: 0 10px 0 4px; height: 34px; color: var(--ink-3); font-size: 0.82rem; }
 .days-field:focus-within { border-color: var(--primary); }
@@ -961,12 +973,9 @@ p { margin: 0; }
 .days-field input::placeholder { color: var(--ink-3); font-weight: 600; }
 .days-field.is-own { border-color: var(--primary); background: var(--primary-soft); }
 @media (prefers-reduced-motion: reduce) { .fold__chevron, .shelf__chevron { transition: none; } }
-.shelf__tile .days-field { align-self: stretch; justify-content: center; padding: 0 8px 0 2px; }
 .shelf__tile .days-field input { width: 2.1em; }
-.shelf__row { font-size: 0.92rem; }
 
 /* ── Badge „Bald verbrauchen“ auf geplanten Gerichten ─────────── */
-.bigcard__media { position: relative; }
 .img-badged { position: relative; flex: none; display: block; }
 .useup-badge {
   position: absolute; top: 10px; right: 10px; display: inline-flex; align-items: center; gap: 5px;
@@ -991,9 +1000,8 @@ p { margin: 0; }
 .stock-line--list { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; }
 .card__meta--split { justify-content: space-between; gap: 8px; }
 .card__meta--split > span { display: inline-flex; align-items: center; gap: 4px; min-width: 0; }
-.plan-list__meta { display: flex; flex-direction: column; justify-content: center; gap: 1px; min-width: 0; }
+.plan-list__meta { display: flex; flex-direction: column; justify-content: center; gap: 1px; min-width: 0; flex: 0 1 14rem; }
 .plan-list__meta:empty { display: none; }
-.useup-banner { margin-top: 0; }
 .useup-banner__text { display: flex; flex-direction: column; gap: 2px; }
 /* Banner: auf dem Handy „Bald verbrauchen“ in eigener Zeile – wo Platz ist, alles in einer Zeile */
 @media (min-width: 600px) {
@@ -1037,7 +1045,8 @@ p { margin: 0; }
 .cropper__zoom { display: flex; align-items: center; gap: 12px; }
 .cropper__zoom input { flex: 1; accent-color: var(--primary); }
 .cropper__actions { display: flex; justify-content: flex-end; gap: 10px; }
-label.btn.is-disabled { opacity: 0.6; pointer-events: none; }
+/* gesperrt, aber lesbar – z. B. „Lese Foto … 42 %“ */
+.filebtn:disabled { opacity: 0.6; }
 
 /* Nährwerte hinzufügen (schlanker Dialog) */
 .quicknut__ways { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -1057,28 +1066,22 @@ label.btn.is-disabled { opacity: 0.6; pointer-events: none; }
 .variants { display: flex; flex-direction: column; gap: 12px; max-height: 88vh; overflow-y: auto; }
 .variants__group { border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .variants__group legend { font-weight: 700; margin-bottom: 6px; }
-.variants__opt { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: var(--r-sm); background: var(--surface); border: 1px solid var(--line); cursor: pointer; }
+.variants__opt { position: relative; display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: var(--r-sm); background: var(--surface); border: 1px solid var(--line); cursor: pointer; }
 .variants__opt.is-on { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary); }
 .variants__opt input { accent-color: var(--primary); }
-.variants__text { display: flex; flex-direction: column; gap: 2px; }
+.variants__text { flex: 1; display: flex; flex-direction: column; gap: 2px; }
 .variants__best { margin-left: 8px; padding: 1px 7px; border-radius: 999px; background: var(--mint); color: var(--ink); font-size: 0.7rem; font-weight: 700; }
 .variants__actions { display: flex; justify-content: flex-end; gap: 10px; }
 .pantry__sort { display: block; font-size: 0.72rem; font-weight: 500; color: var(--ink-3); }
 .macrogoal__fields { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
 
 /* Favorit unter den Sorten */
-.variants__opt { position: relative; }
-.variants__text { flex: 1; }
 .variants__star { flex: none; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; color: var(--ink-3); }
 .variants__star.is-on { color: #e0a526; }
 .matchlist__favs { grid-column: 2; display: flex; flex-wrap: wrap; gap: 6px; }
 .favchip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); font-size: 0.74rem; color: var(--ink-2); }
 .favchip.is-on { border-color: #e0a526; background: var(--butter); color: var(--ink); }
 .favchip.is-on svg { color: #e0a526; }
-/* Breite Plan-Zeile: Titel behält Platz, Nährwerte/Preis brechen um statt ihn zusammenzudrücken */
-.plan-list__hit { flex: 1 1 11rem; }
-.plan-list__meta { flex: 0 1 14rem; }
-.plan-list__meta .dishnut { row-gap: 0; }
 
 /* Anteil je Zutat unter „Wie wurde gerechnet?“ */
 /* Formulare mit fester Speichern-Leiste: unten Platz, damit nichts darunter verschwindet */
@@ -1106,9 +1109,9 @@ label.btn.is-disabled { opacity: 0.6; pointer-events: none; }
 .foods__sorthead strong { flex: 1; min-width: 0; }
 .foods__sorthead .variants__star { width: 30px; height: 30px; }
 
-/* Filter als Tabs (wie im Rezept) – vier gleich breite, Anzahl klein darunter */
-.foods__tabs { margin-top: -4px; }
-.foods__tabs .tab { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 8px 4px 9px; }
+/* Filter als Tabs (wie im Rezept) – gleich breit; kleben unter der festen Kopfzeile, nicht dahinter */
+.foods__tabs { margin-top: -4px; top: 52px; }
+.foods__tabs .tab { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 8px 4px 9px; }
 .foods__tabs .tab small { font-size: 0.72rem; font-weight: 600; color: var(--ink-3); }
 .foods__tabs .tab.is-on small { color: var(--primary-press); }
 
@@ -1135,19 +1138,19 @@ label.btn.is-disabled { opacity: 0.6; pointer-events: none; }
    Salbei (Original) liegt bei weißer Knopfschrift mit 4,2 : 1 knapp darunter – bewusst unverändert. */
 :root[data-theme="bordeaux"] {
   --bg: #faf6f5; --surface: #ffffff; --surface-2: #f3ebea; --line: #eadedc; --backdrop: #efe5e3;
-  --ink: #3d1f25; --ink-2: #7a5c61; --ink-3: #ab9598;
+  --ink: #3d1f25; --ink-2: #6e5056; --ink-3: #7e6569;
   --primary: #7d2a3a; --primary-press: #62202e; --primary-soft: #f4e2e5; --primary-text: #7d2a3a;
   --art: #7a3945; --on-primary: #ffffff;
 }
 :root[data-theme="sonne"] {
   --bg: #fcf9f0; --surface: #ffffff; --surface-2: #f6f0dc; --line: #ede4c8; --backdrop: #f1ead3;
-  --ink: #3b321c; --ink-2: #6f6446; --ink-3: #a69b7c;
+  --ink: #3b321c; --ink-2: #64593d; --ink-3: #766c51;
   --primary: #f4cf1f; --primary-press: #766608; --primary-soft: #fcf4d2; --primary-text: #766608;
   --art: #766814; --on-primary: #2f2710;
 }
 :root[data-theme="nacht"] {
   --bg: #f4f6fa; --surface: #ffffff; --surface-2: #eaeef5; --line: #dde2ec; --backdrop: #e6eaf2;
-  --ink: #1d2842; --ink-2: #56617a; --ink-3: #959eb2;
+  --ink: #1d2842; --ink-2: #4e5972; --ink-3: #636c83;
   --primary: #2b3d6b; --primary-press: #1f2e55; --primary-soft: #e2e8f4; --primary-text: #2b3d6b;
   --art: #34497d; --star: #c9a24a; --on-primary: #ffffff;
 }
@@ -1217,7 +1220,7 @@ label.btn.is-disabled { opacity: 0.6; pointer-events: none; }
 .pantry-offer p { margin: 0; }
 
 /* Plan-Karte: Nährwerte in EINER Zeile, die Sorte/Marke als eigene Zeile darunter */
-.plan-list__meta .dishnut { flex-direction: column; align-items: flex-start; flex-wrap: nowrap; }
+.plan-list__meta .dishnut { flex-direction: column; align-items: flex-start; flex-wrap: nowrap; row-gap: 0; }
 /* neben dem Portionen-Regler ist „pro Portion“ klar – so passt es auch schmal in eine Zeile */
 .plan-list__meta .dishnut__values { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 .plan-list__meta .dishnut__per { display: none; }
@@ -1234,8 +1237,6 @@ label.btn.is-disabled { opacity: 0.6; pointer-events: none; }
 /* kompakt: Zahl und Einheit direkt hinter „Nachkaufen, wenn weniger als“ */
 .restock .pantry-amount input { width: 3.2rem; padding-left: 8px; padding-right: 8px; text-align: center; }
 .restock .pantry-amount select { padding-left: 8px; padding-right: 24px; }
-/* alle Hinweise gleich breit wie der mit „Rückgängig“ – schmale wirkten gequetscht */
-.toast { width: 90%; max-width: 420px; }
 .restock__status { color: var(--ink-2); }
 .restock__status.is-unter { color: var(--primary-text); font-weight: 600; }
 .restock__status.is-unbekannt { color: var(--ink-2); font-style: italic; }
@@ -1248,12 +1249,17 @@ label.btn.is-disabled { opacity: 0.6; pointer-events: none; }
 .pantry__item--part .pantry__name { font-size: 0.92rem; color: var(--ink-2); }
 /* „Was ist übrig?“ nach dem Kochen */
 .leftover__stepper { display: flex; align-items: center; justify-content: center; gap: 16px; margin: 12px 0; }
-.leftover__count { min-width: 9rem; text-align: center; }
-.leftover__count strong { font-size: 1.4rem; }
+.leftover__count { color: var(--ink-2); }
 .leftover .sheet__actions { display: flex; flex-direction: column; gap: 8px; }
 .pantry-portions { display: flex; align-items: center; gap: 8px; max-width: 12rem; }
 .pantry-portions input { width: 5rem; }
+.pantry-nutri { flex: 1 1 100%; }
+/* Vorgekocht in der Speisekammer: kcal links, KH · Eiweiß · Fett rechtsbündig */
+.dishnut__values--full { flex: 1 1 100%; display: flex; justify-content: space-between; gap: 8px; }
+.dishnut__macros { text-align: right; }
 .plan-list__prepared { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+/* „1 gegessen“ (Plan und Speisekammer) – kleine Pille, damit die Karte flach bleibt */
+.eat-pill { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 999px; background: var(--primary-soft); color: var(--primary-press); font-size: 0.78rem; font-weight: 600; }
 /* Vorgekocht auf der Startseite: ruhig in der Themenfarbe – erst bei „heute/morgen“ wie „Bald verbrauchen“ */
 .useup-banner--prepared { background: var(--primary-soft); margin-top: 8px; }
 .useup-banner--prepared > svg:first-child { color: var(--primary-text); }
@@ -1261,7 +1267,6 @@ label.btn.is-disabled { opacity: 0.6; pointer-events: none; }
 .useup-banner--prepared.is-urgent > svg:first-child { color: var(--art); }
 /* Mengenspalte so breit wie die längste Menge („1 Handvoll“, „2 Messlöffel“) – nie umbrechen,
    die Namen bleiben trotzdem bündig untereinander (Subgrid: alle Zeilen teilen die Spalten der Liste) */
-.ingredients__qty { white-space: nowrap; }
 @supports (grid-template-columns: subgrid) {
   .ingredients { display: grid; grid-template-columns: minmax(76px, max-content) 1fr; }
   .ingredients.has-stock { grid-template-columns: minmax(76px, max-content) 1fr auto; }
@@ -1271,14 +1276,16 @@ label.btn.is-disabled { opacity: 0.6; pointer-events: none; }
 .home-q--title { margin-bottom: 0; }
 /* Stufe: normal · immer im Haus · nachkaufen */
 .stage { display: flex; flex-direction: column; gap: 6px; }
-.stage__options { display: flex; flex-wrap: wrap; gap: 6px; }
+/* drei Stufen-Knöpfe in einer Zeile, auch auf dem Handy */
+.stage__options { display: flex; flex-wrap: nowrap; gap: 4px; }
+.stage__options .chip { padding: 4px 8px; font-size: 0.76rem; gap: 3px; white-space: nowrap; flex: 0 1 auto; min-width: 0; }
 .stage__hint { margin: 0; }
-.foods__tablabel { display: inline-flex; align-items: center; gap: 4px; }
+.foods__tablabel { display: inline-flex; flex-wrap: wrap; justify-content: center; align-items: center; column-gap: 4px; text-align: center; }
+/* schmales Handy oder große Zahlen: die Zahl rutscht in die zweite Zeile, statt dass ein Reiter rechts verschwindet */
+@media (max-width: 399px) { .foods__tabs .tab { padding-inline: 2px; } .foods__tablabel { font-size: 0.88rem; column-gap: 3px; } }
 .foods__mark { display: inline-flex; color: var(--ink-2); }
 .pantry__item--edit .stage { flex: 1 1 100%; }
-/* lange Mengen („1,2 l offen + 7 × 1 l“) brechen an den „+“ um – der Name nie mitten im Wort („Milc|h“) */
-.pantry__name { min-width: auto; overflow-wrap: break-word; }
-.pantry__qty--stack { min-width: 0; flex: 0 1 auto; white-space: normal; }
+/* lange Mengen („1,2 l offen + 7 × 1 l“) brechen an den „+“ um */
 .pantry__parts { display: flex; flex-wrap: wrap; justify-content: flex-end; column-gap: 4px; }
 .pantry__part { white-space: nowrap; }
 .foods__count { font-weight: 400; color: var(--ink-3); }
@@ -1286,10 +1293,6 @@ label.btn.is-disabled { opacity: 0.6; pointer-events: none; }
 .restock .pantry-amount input, .restock .pantry-amount select {
   height: 34px; padding-top: 0; padding-bottom: 0; font-size: 0.95rem; border-radius: 999px;
 }
-/* drei Stufen-Knöpfe in einer Zeile, auch auf dem Handy */
-.stage__options { flex-wrap: nowrap; gap: 6px; }
-.stage__options { gap: 4px; }
-.stage__options .chip { padding: 4px 8px; font-size: 0.76rem; gap: 3px; white-space: nowrap; flex: 0 1 auto; min-width: 0; }
 /* Inventur */
 .inventory__toggle { display: flex; align-items: center; gap: 8px; }
 .inventory__list { list-style: none; margin: 0; padding: 0 12px; }
@@ -1314,3 +1317,21 @@ label.btn.is-disabled { opacity: 0.6; pointer-events: none; }
 .shopping__item--extra { display: flex; align-items: center; gap: 4px; }
 .shopping__item--extra > label { flex: 1; min-width: 0; }
 .shopping__add input::-webkit-calendar-picker-indicator { display: none !important; }
+.inventory__edit select { height: 34px; padding: 0 22px 0 8px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); font-size: 0.9rem; }
+/* Zutaten-Editor am Handy: oben der Name (mit ✕), darunter Menge und Einheit – sonst bleiben dem Namen ein paar Buchstaben */
+@media (max-width: 519px) {
+  .editor__row { grid-template-columns: 72px 104px 1fr 36px; grid-template-areas: "name name name del" "amount unit . ."; row-gap: 6px; padding: 6px 0; border-top: 1px solid var(--line); }
+  .editor__row:first-of-type { border-top: 0; }
+  .editor__name { grid-area: name; }
+  .editor__amount { grid-area: amount; }
+  .editor__unit { grid-area: unit; }
+  .editor__row > .iconbtn { grid-area: del; }
+  .editor__row > .rename-hint { grid-column: 1 / -1; }
+}
+/* Eingabefelder überall gleich: Rahmen, Radius, Fokus (vorher teils nackt) */
+.quicknut__search input, .pantry-freeze input, .cook__edit input {
+  border: 1px solid var(--line); background: var(--surface); border-radius: var(--r-sm); padding: 8px 10px; font-size: 1rem; color: var(--ink);
+}
+.quicknut__search input:focus, .pantry-freeze input:focus, .cook__edit input:focus { outline: none; border-color: var(--primary); }
+/* Haltbarkeit: dreispaltig passt „14 Tagen“ am Handy nicht – unter 400 px zwei Spalten */
+@media (max-width: 399px) { .shelf__special { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

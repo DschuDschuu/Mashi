@@ -122,7 +122,7 @@ export function CookbookScreen({ route }: { route: Route }) {
           </FilterGroup>
           <FilterGroup title="Pro Portion">
             <ChipSelect single options={[400, 600, 800].map((k) => ({ value: String(k), label: `≤ ${k} kcal` }))} selected={f.maxKcal ? [String(f.maxKcal)] : []} onChange={([v]) => set({ maxKcal: v ? Number(v) : undefined })} />
-            <ChipSelect single options={[20, HIGH_PROTEIN_G, 35].map((p) => ({ value: String(p), label: `≥ ${p} g Protein` }))} selected={f.minProtein ? [String(f.minProtein)] : []} onChange={([v]) => set({ minProtein: v ? Number(v) : undefined })} />
+            <ChipSelect single options={[20, HIGH_PROTEIN_G, 35].map((p) => ({ value: String(p), label: `≥ ${p} g Eiweiß` }))} selected={f.minProtein ? [String(f.minProtein)] : []} onChange={([v]) => set({ minProtein: v ? Number(v) : undefined })} />
           </FilterGroup>
           <FilterGroup title="Tags">
             <ChipSelect options={allTags.map((t) => ({ value: t, label: t }))} selected={f.tags ?? []} onChange={(tags) => set({ tags })} />

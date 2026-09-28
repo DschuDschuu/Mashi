@@ -1,4 +1,4 @@
-import { resolveIngredient } from './mealplan';
+import { keyOfName, resolveName } from './mealplan';
 import type { FoodEntry, FoodKind, FoodTable } from './nutrition/types';
 import type { Pantry, PantryItem } from './pantry';
 
@@ -149,7 +149,7 @@ export function useByOf(item: PantryItem, table: FoodTable, custom: ShelfDays = 
   const closed = closedUseBy(item, table, custom);
   if (!item.openedAt || item.frozenAt) return closed;
   // Angebrochen: ab Öffnen gezählt – aber nie länger als das Datum der Packung
-  const r = resolveIngredient({ id: item.id, name: item.name }, 1, table);
+  const r = resolveName(item.name, table);
   const days = openedDaysOf(r?.food, r?.kind, custom);
   if (days === undefined) return closed;
   const opened = new Date(new Date(item.openedAt).getTime() + days * DAY);
@@ -184,7 +184,7 @@ function closedUseBy(item: PantryItem, table: FoodTable, custom: ShelfDays): Dat
   if (item.recipeId && !item.frozenAt) return new Date(new Date(item.boughtAt ?? item.addedAt).getTime() + specialDays('prepared', custom) * DAY);
   // Eingefroren: die Uhr steht – erst nach Monaten ein sanfter Hinweis
   if (item.frozenAt) return new Date(new Date(item.frozenAt).getTime() + specialDays('frozen', custom) * DAY);
-  const r = resolveIngredient({ id: item.id, name: item.name }, 1, table);
+  const r = resolveName(item.name, table);
   let days = shelfDaysOf(r?.food, r?.kind, custom);
   // MHD-Ware: kurz vor dem Datum gekauft – höchstens so lange wie eingestellt
   if (item.reduced) days = Math.min(days ?? Infinity, specialDays('reduced', custom));
@@ -246,7 +246,7 @@ export function useUpKeys(pantry: Pantry, table: FoodTable, now = new Date(), wi
   const keys = new Map<string, number>();
   for (const e of expiringSoon(pantry, table, now, within)) {
     if (e.item.recipeId) continue; // Vorgekochtes isst man – es macht kein Rezept „passend“
-    const key = resolveIngredient({ id: e.item.id, name: e.item.name }, 1, table)?.key;
+    const key = keyOfName(e.item.name, table);
     if (key && !keys.has(key)) keys.set(key, e.daysLeft);
   }
   return keys;
@@ -260,7 +260,7 @@ export function useUpKeys(pantry: Pantry, table: FoodTable, now = new Date(), wi
 export function storageOf(item: PantryItem, table: FoodTable, custom: ShelfDays = {}): 'vorrat' | 'kuehl' | 'gefroren' {
   if (item.frozenAt) return 'gefroren';
   if (item.recipeId) return 'kuehl';
-  const r = resolveIngredient({ id: item.id, name: item.name }, 1, table);
+  const r = resolveName(item.name, table);
   // offen im Kühlschrank: was nach dem Öffnen eine Frist hat (Konserven, Pesto) – offene Nudeln bleiben im Schrank
   if (item.openedAt && openedDaysOf(r?.food, r?.kind, custom) !== undefined) return 'kuehl';
   const days = shelfDaysOf(r?.food, r?.kind, custom);

@@ -1,8 +1,6 @@
-import { useMemo } from 'react';
-import { MY_PRODUCTS_PROVIDER, productLabel, withMyProducts } from '../../domain/nutrition/myProducts';
+import { MY_PRODUCTS_PROVIDER, productLabel } from '../../domain/nutrition/myProducts';
 import type { FoodVariant } from '../../domain/nutrition/types';
-import { useProducts } from '../../data/store';
-import { foodTable } from '../../services';
+import { useFoodTable, useProducts } from '../../data/store';
 import { Icon } from './Icon';
 
 /**
@@ -10,7 +8,7 @@ import { Icon } from './Icon';
  */
 export function useSortOptions(name: string): FoodVariant[] {
   const products = useProducts();
-  const table = useMemo(() => withMyProducts(foodTable, products), [products]);
+  const table = useFoodTable();
   if (!name.trim()) return [];
   const food = table.matchName(name)?.food;
   if (!food) return [];

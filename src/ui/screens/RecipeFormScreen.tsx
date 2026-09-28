@@ -1,11 +1,11 @@
-import { useState, type FormEvent } from 'react';
+import { useState, type FormEvent, useRef } from 'react';
 import { CATEGORIES } from '../../domain/catalog';
 import { cloneContent, currentContent, newId, sameContent } from '../../domain/recipe';
 import type { Difficulty, RecipeContent, RecipeImage, ImageCrop } from '../../domain/types';
 import type { TextImport } from '../../domain/importText';
 import { createRecipe, regenerateImage, saveContent, setImage as storeImage, useRecipe } from '../../data/store';
 import { goBack, navigate } from '../../router';
-import { ChipSelect, DevicePicker, Stepper } from '../components/Controls';
+import { ChipSelect, DevicePicker, FileButton, Stepper } from '../components/Controls';
 import { IngredientEditor, StepEditor } from '../components/ContentEditors';
 import { RecipeImage as RecipeImageView } from '../components/RecipeImage';
 import { Icon } from '../components/Icon';
@@ -24,7 +24,7 @@ const EMPTY: RecipeContent = {
  * Formular für „Eigenes Rezept“, „Bearbeiten“ (dann entsteht eine neue Version)
  * und zum Prüfen eines Text-Imports (draft: vorausgefüllt, mit Hinweisen).
  */
-export function RecipeFormScreen({ editId, draft }: { editId?: string; draft?: TextImport }) {
+export function RecipeFormScreen({ editId, draft, onBack }: { editId?: string; draft?: TextImport; /** Import: zurück zum eingefügten Text */ onBack?: () => void }) {
   const existing = useRecipe(editId);
   const [c, setC] = useState<RecipeContent>(() =>
     existing ? cloneContent(currentContent(existing)) : cloneContent(draft?.content ?? EMPTY));
@@ -34,7 +34,11 @@ export function RecipeFormScreen({ editId, draft }: { editId?: string; draft?: T
   const [tested, setTested] = useState<'ja' | 'nein'>(draft ? 'nein' : 'ja');
   const [image, setImage] = useState<RecipeImage | undefined>(existing?.image);
   const [error, setError] = useState<string | null>(null);
+  const titleRef = useRef<HTMLInputElement>(null);
   const set = (patch: Partial<RecipeContent>) => setC((prev) => ({ ...prev, ...patch }));
+  // Geändert? Dann vor dem Zurück fragen – sonst ginge die Arbeit stillschweigend verloren
+  const [initial] = useState(() => JSON.stringify({ c, tagText, notes, image }));
+  const dirty = JSON.stringify({ c, tagText, notes, image }) !== initial;
 
   /** Bild, das gerade zugeschnitten wird: neu gewählte Datei oder das vorhandene Foto */
   const [cropping, setCropping] = useState<{ src: Blob | string; initial?: ImageCrop } | null>(null);
@@ -57,7 +61,12 @@ export function RecipeFormScreen({ editId, draft }: { editId?: string; draft?: T
   const submit = (e: FormEvent) => {
     e.preventDefault();
     const content = toSave();
-    if (!content.title) return setError('Bitte gib dem Rezept einen Titel.');
+    if (!content.title) {
+      // der Hinweis steht sonst hinter der festen Speichern-Leiste – gleich ins Titelfeld springen
+      titleRef.current?.focus();
+      titleRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      return setError('Bitte gib dem Rezept einen Titel.');
+    }
     if (!content.ingredients.length) return setError('Mindestens eine Zutat, bitte.');
 
     if (existing) {
@@ -78,7 +87,8 @@ export function RecipeFormScreen({ editId, draft }: { editId?: string; draft?: T
 
   return (
     <main className="screen screen--cta">
-      <TopBar title={existing ? 'Rezept bearbeiten' : draft ? 'Import prüfen' : 'Eigenes Rezept'} />
+      <TopBar title={existing ? 'Rezept bearbeiten' : draft ? 'Import prüfen' : 'Eigenes Rezept'} onBack={onBack}
+        confirmBack={dirty ? (draft && onBack ? 'Zurück zum Text? Deine Änderungen am Rezept gehen verloren.' : 'Verwerfen? Deine Änderungen gehen verloren.') : undefined} />
       <form className="stack" onSubmit={submit} noValidate>
         {draft && (
           <div className="tip tint-butter">
@@ -92,10 +102,9 @@ export function RecipeFormScreen({ editId, draft }: { editId?: string; draft?: T
         <div className="photo-pick">
           {image ? <RecipeImageView image={image} size="md" /> : <div className="photo-pick__empty">Kein Foto – Mashi erzeugt nach dem Speichern ein Bild.</div>}
           <div className="stack stack--tight">
-            <label className="btn btn--soft">
+            <FileButton className="btn btn--soft" onFile={(f) => setCropping({ src: f })}>
               {image?.kind === 'url' ? 'Anderes Foto' : 'Eigenes Foto wählen'}
-              <input type="file" accept="image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) setCropping({ src: f }); e.target.value = ''; }} />
-            </label>
+            </FileButton>
             {image?.kind === 'url' && <button type="button" className="btn btn--ghost btn--sm" onClick={() => setCropping(image.original ? { src: image.original, initial: image.crop } : { src: image.url })}>Ausschnitt ändern</button>}
             {image?.kind === 'url' && <button type="button" className="btn btn--ghost btn--sm" onClick={() => setImage(undefined)}>Foto entfernen</button>}
           </div>
@@ -105,7 +114,8 @@ export function RecipeFormScreen({ editId, draft }: { editId?: string; draft?: T
           onDone={({ url, original, crop }) => { setImage({ kind: 'url', url, original, crop }); setCropping(null); }} />}
 
         <label className="field"><span>Titel</span>
-          <input value={c.title} onChange={(e) => set({ title: e.target.value })} placeholder="z. B. Omas Kartoffelsalat" required />
+          <input ref={titleRef} value={c.title} onChange={(e) => set({ title: e.target.value })} placeholder="z. B. Omas Kartoffelsalat" required />
+          {error && !c.title.trim() && <span className="error small" role="alert">{error}</span>}
         </label>
         <label className="field"><span>Beschreibung</span>
           <AutoTextarea value={c.description} onChange={(e) => set({ description: e.target.value })} />

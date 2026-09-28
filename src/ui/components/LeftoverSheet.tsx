@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { answerLeftover, useLeftoverAsk } from '../../data/store';
 import { useSheet } from '../useSheet';
-import { Icon } from './Icon';
+import { Stepper } from './Controls';
 
 /**
  * Nach „Gekocht“: Wie viele Portionen sind übrig? Die kommen als „Vorgekocht“ in die Speisekammer –
@@ -22,10 +22,10 @@ function Sheet({ title, servings }: { title: string; servings: number }) {
         <div className="sheet__grip" />
         <h2 className="sheet__title">{title} gekocht – was ist übrig?</h2>
         <p className="small muted">Übrige Portionen kommen als „Vorgekocht“ in die Speisekammer: Mashi erinnert dich, bevor sie weg müssen, und du kannst sie einfrieren.</p>
+        {/* derselbe Regler wie bei den Portionen im Rezept */}
         <div className="leftover__stepper">
-          <button type="button" className="iconbtn iconbtn--box" onClick={() => setLeft(Math.max(0, left - 1))} disabled={left <= 0} aria-label="Eine Portion weniger"><Icon name="minus" size={18} /></button>
-          <span className="leftover__count"><strong>{left}</strong> {left === 1 ? 'Portion' : 'Portionen'} übrig</span>
-          <button type="button" className="iconbtn iconbtn--box" onClick={() => setLeft(Math.min(servings, left + 1))} disabled={left >= servings} aria-label="Eine Portion mehr"><Icon name="plus" size={18} /></button>
+          <Stepper value={left} min={0} max={servings} onChange={setLeft} label="Portionen übrig" />
+          <span className="leftover__count">{left === 1 ? 'Portion' : 'Portionen'} übrig</span>
         </div>
         <div className="sheet__actions">
           <button type="button" className="btn btn--primary" onClick={() => answerLeftover(left)} disabled={left <= 0}>In die Speisekammer</button>

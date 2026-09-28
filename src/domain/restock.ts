@@ -1,4 +1,4 @@
-import { buildShoppingList, resolveIngredient, type ExtraItem, type MealPlan, type ShoppingItem } from './mealplan';
+import { buildShoppingList, keyOfName, resolveName, type ExtraItem, type MealPlan, type ShoppingItem } from './mealplan';
 import { normalizeName } from './nutrition/localFoods';
 import type { MyProduct } from './nutrition/myProducts';
 import type { FoodEntry, FoodTable } from './nutrition/types';
@@ -43,7 +43,7 @@ export interface RestockStatus {
 export const RESTOCK_PREFIX = 'restock:';
 
 /** Schlüssel einer Regel – „Passata“ und „Passierte Tomaten“ sind dasselbe */
-export const ruleKey = (rule: Pick<RestockRule, 'name'>, table: FoodTable) => resolveIngredient({ id: 'restock', name: rule.name }, 1, table)?.key;
+export const ruleKey = (rule: Pick<RestockRule, 'name'>, table: FoodTable) => keyOfName(rule.name, table);
 
 /**
  * Stand aller Regeln. Gezählt wird, was nach dem Wochenplan übrig bleibt – so kommt es auf die
@@ -59,7 +59,7 @@ export function restockStatus(
   // Schlüssel je Vorrat einmal auflösen (nicht je Regel neu)
   const keyOf = new Map<string, string | undefined>();
   const key = (it: PantryItem) => {
-    if (!keyOf.has(it.id)) keyOf.set(it.id, it.recipeId ? undefined : resolveIngredient({ id: it.id, name: it.name }, 1, table)?.key);
+    if (!keyOf.has(it.id)) keyOf.set(it.id, it.recipeId ? undefined : keyOfName(it.name, table));
     return keyOf.get(it.id);
   };
   const byKey = new Map<string, RestockRule>();
@@ -71,7 +71,7 @@ export function restockStatus(
   }
   const out: RestockStatus[] = [];
   for (const [k, rule] of byKey) {
-    const r = resolveIngredient({ id: 'restock', name: rule.name }, 1, table);
+    const r = resolveName(rule.name, table);
     const sizes = packSizes(k, r?.food, pantry, table, products);
     const now = stockIn(pantry.items.filter((it) => key(it) === k), rule.unit, sizes);
     const later = stockIn(afterPlan.items.filter((it) => key(it) === k), rule.unit, sizes);
@@ -102,7 +102,7 @@ export function restockNeeds(
   pantry: Pantry, table: FoodTable, products: readonly MyProduct[] = [], afterPlan: Pantry = pantry,
 ): RestockNeed[] {
   return restockStatus(pantry, table, products, afterPlan).filter((s) => s.state === 'unter').map((s) => {
-    const r = resolveIngredient({ id: 'restock', name: s.rule.name }, 1, table);
+    const r = resolveName(s.rule.name, table);
     const unit = s.rule.unit;
     const below = `${formatAmount(s.rule.below, isCount(unit) ? 'Stück' : 'g')} ${unit}`;
     return { key: s.key, name: s.rule.name, ...(r?.kind ? { kind: r.kind } : {}), label: `${s.have} · Nachkaufen unter ${below}` };
@@ -113,7 +113,7 @@ export function restockNeeds(
  * Einkaufsliste mit Nachkauf-Hinweisen: Steht die Zutat schon zum Kaufen drauf, bekommt sie nur den
  * Hinweis. Stünde sie sonst unter „Basics“ oder „Hast du schon“, kommt sie auf die Liste. Sonst neu dazu.
  */
-export function withRestock(list: ShoppingItem[], needs: readonly RestockNeed[]): ShoppingItem[] {
+function withRestock(list: ShoppingItem[], needs: readonly RestockNeed[]): ShoppingItem[] {
   const out = [...list];
   for (const n of needs) {
     const i = out.findIndex((x) => x.key === n.key || x.key === RESTOCK_PREFIX + n.key);
@@ -133,10 +133,10 @@ export const EXTRA_PREFIX = 'extra:';
  * Eigene Einträge (selbst getippt, aus der Inventur) dazu. Steht die Zutat schon zum Kaufen drauf, bekommt sie
  * nur den Hinweis; stünde sie unter „Basics“ oder „Hast du schon“, kommt sie auf die Liste – du willst sie ja kaufen.
  */
-export function withExtras(list: ShoppingItem[], extras: readonly ExtraItem[], table: FoodTable): ShoppingItem[] {
+function withExtras(list: ShoppingItem[], extras: readonly ExtraItem[], table: FoodTable): ShoppingItem[] {
   const out = [...list];
   for (const x of extras) {
-    const r = resolveIngredient({ id: 'extra', name: x.name }, 1, table);
+    const r = resolveName(x.name, table);
     const note = x.source === 'inventur' ? 'aus der Inventur' : undefined;
     const i = r ? out.findIndex((o) => o.key === r.key || o.key === RESTOCK_PREFIX + r.key) : -1;
     if (i >= 0) {
@@ -177,7 +177,7 @@ function packSizes(key: string, food: FoodEntry | undefined, pantry: Pantry, tab
   const own = ids.map((id) => byProduct.get(id)).find((x) => x !== undefined);
   // gelernt vom Kassenbon: „Mais 285 g“ je Stück
   const rule = pantry.rules.find((r) => !r.skip && r.name && r.amount && (r.unit === 'g' || r.unit === 'ml')
-    && resolveIngredient({ id: r.key, name: r.name }, 1, table)?.key === key);
+    && keyOfName(r.name, table) === key);
   const pack = own ?? rule?.amount;
   return { byProduct, piece: pack ?? food?.portions?.Stück, glass: food?.portions?.Glas ?? pack };
 }
@@ -193,8 +193,8 @@ function stockIn(items: readonly PantryItem[], unit: PantryUnit, sizes: Sizes): 
   let value = 0;
   let approx = false;
   for (const it of items) {
-    // Angebrochenes ist kein Vorrat mehr – der offene Becher zählt nicht als „noch einer da“
-    if (it.openedAt) continue;
+    // Angebrochenes zählt nicht als „noch einer da“ (Stück/Glas) – in g/ml aber sehr wohl: 400 g offen sind 400 g
+    if (it.openedAt && isCount(unit)) continue;
     if (it.amount === undefined || it.unit === undefined) return { why: 'ohne-menge' };
     if (it.amount <= 0) continue;
     if (it.unit === unit || (!isCount(it.unit) && !isCount(unit))) {

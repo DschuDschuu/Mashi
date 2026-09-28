@@ -39,7 +39,7 @@ export function VariantSheet({ choices, pick, title = 'Welche Sorte nimmst du?',
       <div className="sheet variants" role="dialog" aria-modal="true" aria-label={title} onClick={(e) => e.stopPropagation()} ref={ref}>
         <div className="sheet__grip" />
         <h2 className="sheet__title">{title}</h2>
-        <p className="small muted">{unsorted ? 'Im Vorrat steht die Zutat ohne Sorte – welche ist es? Mashi merkt es sich beim Vorrat.' : 'Beide liegen im Vorrat.'} Vorgeschlagen ist die Sorte, die näher an deinem Ziel liegt ({goal.carbs} / {goal.protein} / {goal.fat} – Kohlenhydrate / Eiweiß / Fett). Mit ★ machst du eine Sorte zum Favoriten: Dann rechnen alle Rezepte damit und Mashi fragt nicht mehr.</p>
+        <p className="small muted">{unsorted ? 'Im Vorrat steht die Zutat ohne Sorte – welche ist es? Mashi merkt es sich beim Vorrat.' : 'Mehrere Sorten liegen im Vorrat.'} Vorgeschlagen ist die Sorte, die näher an deinem Ziel liegt ({goal.carbs} / {goal.protein} / {goal.fat} – Kohlenhydrate / Eiweiß / Fett). Mit ★ machst du eine Sorte zum Favoriten: Dann rechnen alle Rezepte damit und Mashi fragt nicht mehr.</p>
         {asking.map((c) => (
           <fieldset key={c.ingredientId} className="variants__group">
             <legend>{c.name}</legend>

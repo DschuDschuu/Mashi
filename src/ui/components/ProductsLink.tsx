@@ -1,15 +1,15 @@
-import { DEFAULT_BASICS } from '../../domain/mealplan';
-import { DEFAULT_NO_NUTRITION } from '../../domain/nutrition/noNutrition';
+import { basicsOf } from '../../domain/mealplan';
+import { zeroOf } from '../../domain/nutrition/noNutrition';
 import { usePantry, useProducts } from '../../data/store';
 import { navigate } from '../../router';
 import { Icon } from './Icon';
 
-/** Zeile „Meine Lebensmittel“ – eigene Nährwerte, Produkte, Immer im Haus, Ohne Nährwerte. */
+/** Zeile „Meine Lebensmittel“ – eigene Nährwerte, Produkte, Immer im Haus, Gewürze. */
 export function ProductsLink() {
   const n = useProducts().length;
   const pantry = usePantry();
-  const basics = (pantry.basics ?? DEFAULT_BASICS).length;
-  const zero = (pantry.noNutrition ?? DEFAULT_NO_NUTRITION).length;
+  const basics = basicsOf(pantry).length;
+  const zero = zeroOf(pantry).length;
   return (
     <button className="panel link-row" onClick={() => navigate('/produkte')}>
       <Icon name="bookmark" size={20} />

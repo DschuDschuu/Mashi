@@ -21,7 +21,7 @@ export interface RecipeRepository {
   /** „Meine Produkte“ – eine Liste pro Kochbuch, wird wie die Rezepte abgeglichen. */
   loadProducts(): Promise<MyProduct[]>;
   saveProducts(products: MyProduct[], base?: MyProduct[]): Promise<MyProduct[] | void>;
-  /** Wochenplan „Diese Woche“ inkl. abgehakter Einkäufe – auf allen Geräten gleich. */
+  /** Wochenplan inkl. abgehakter Einkäufe – auf allen Geräten gleich. */
   loadPlan(): Promise<MealPlan>;
   savePlan(plan: MealPlan, base?: MealPlan): Promise<MealPlan | void>;
   /** Speisekammer inkl. gelernter Bon-Artikel – auf allen Geräten gleich. */

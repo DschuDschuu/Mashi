@@ -1,14 +1,13 @@
 import { useMemo, useState } from 'react';
-import { DEFAULT_BASICS } from '../../domain/mealplan';
+import { basicsOf } from '../../domain/mealplan';
 import { buildFoodList, matchesFilter, type FoodFilter, type FoodRow } from '../../domain/nutrition/foodList';
 import { appliesAliases, normalizeName } from '../../domain/nutrition/localFoods';
 import { brandOf, nameOf, productLabel, type MyProduct } from '../../domain/nutrition/myProducts';
-import { DEFAULT_NO_NUTRITION } from '../../domain/nutrition/noNutrition';
+import { zeroOf } from '../../domain/nutrition/noNutrition';
 import { averageNutrients } from '../../domain/nutrition/variants';
 import type { Nutrients } from '../../domain/nutrition/types';
-import { dismissRename, saveProducts, setFavoriteVariant, setFoodStage, usePantry, useProducts, useRecipes } from '../../data/store';
+import { dismissRename, saveProducts, setFavoriteVariant, setFoodStage, useFoodTable, usePantry, useProducts, useRecipes } from '../../data/store';
 import { stageOf } from '../../domain/stage';
-import { withMyProducts } from '../../domain/nutrition/myProducts';
 import { StagePicker } from './StagePicker';
 import { currentContent } from '../../domain/recipe';
 import { foodTable } from '../../services';
@@ -43,8 +42,8 @@ const macros = (n: Nutrients) => `KH ${fmt(n.carbs)} · Eiweiß ${fmt(n.protein)
 export function FoodList() {
   const products = useProducts();
   const pantry = usePantry();
-  const basics = pantry.basics ?? DEFAULT_BASICS;
-  const zero = pantry.noNutrition ?? DEFAULT_NO_NUTRITION;
+  const basics = basicsOf(pantry);
+  const zero = zeroOf(pantry);
   const recipes = useRecipes();
   // Schreibweise wie in deinen Rezepten und im Vorrat („Grünes Pesto“ statt „grünes pesto“)
   const known = useMemo(() => [...recipes.flatMap((r) => currentContent(r).ingredients.map((i) => i.name)), ...pantry.items.map((i) => i.name)], [recipes, pantry.items]);
@@ -94,7 +93,12 @@ export function FoodList() {
             : <>Gewürze & Co.: immer da und zählen in Rezepten nicht mit (keine Nährwerte). Auf der Einkaufsliste unter „Basics“.</>}
       </p>
 
-      {shown.length === 0 && <p className="small">Hier ist noch nichts.</p>}
+      {shown.length === 0 && (
+        <p className="small muted">
+          {filter === 'produkte' ? 'Noch keine Produkte – unten hinzufügen, oder bei einem Rezept unter „Nährwerte“ eigene Werte eintragen.'
+            : filter === 'haus' ? 'Noch nichts „immer im Haus“ – unten hinzufügen.' : 'Noch keine Gewürze – unten hinzufügen.'}
+        </p>
+      )}
       <ul className="foods">{shown.map(line)}</ul>
 
       </div>
@@ -134,7 +138,8 @@ function FoodLine({ row, open, onToggle, products, onTouch }: {
   };
   // Stufe über den Schlüssel: „Passata“ und „Passierte Tomaten“ sind dasselbe
   const pantry = usePantry();
-  const { stage, rule } = stageOf(row.ingredient, pantry, withMyProducts(foodTable, products));
+  const table = useFoodTable();
+  const { stage, rule } = stageOf(row.ingredient, pantry, table);
   const nothing = !ps.length && stage === 'normal' && !row.zero;
   const zeroRow = !!row.zero;
 
@@ -254,7 +259,7 @@ function AddFood({ tab, onDone }: { tab: FoodFilter; onDone: () => void }) {
           onKeyDown={(e) => e.key === 'Enter' && tab !== 'produkte' && addName()} />
       </label>
       {tab === 'produkte' && (
-        <button type="button" className={`favchip${basic ? ' is-on' : ''}`} aria-pressed={basic} onClick={() => setBasic(!basic)}>
+        <button type="button" className={`chip chip--sm${basic ? ' is-on' : ''}`} aria-pressed={basic} onClick={() => setBasic(!basic)}>
           <Icon name="home" size={14} /> Immer im Haus
         </button>
       )}

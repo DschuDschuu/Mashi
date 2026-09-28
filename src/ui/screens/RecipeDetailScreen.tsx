@@ -10,7 +10,7 @@ import { orderByUse } from '../../domain/stepIngredients';
 import type { Recipe, RecipeContent } from '../../domain/types';
 import { describeChange, diffContent } from '../../domain/versions';
 import {
-  addToPlan, adoptToCookbook, archiveRecipe, deleteRecipe, markCooked, regenerateImage, setPlanVariants, setStatus, toggleFavorite, togglePlanCooked, updateNotes, usePlan, useRecipe,
+  addToPlan, adoptToCookbook, archiveRecipe, deleteRecipe, restoreRecipe, markCooked, regenerateImage, setPlanVariants, setStatus, toggleFavorite, togglePlanCooked, updateNotes, usePlan, useRecipe,
 } from '../../data/store';
 import { cookedToast } from '../cookedToast';
 import { goBack, navigate } from '../../router';
@@ -112,7 +112,7 @@ function Detail({ recipe }: { recipe: Recipe }) {
         <MenuPanel onClose={() => setMenu(false)}>
           <button role="menuitem" onClick={() => navigate(`/rezept/${recipe.id}/bearbeiten`)}><Icon name="pencil" size={18} /> Bearbeiten</button>
           <button role="menuitem" onClick={onRegenerate}><Icon name="refresh" size={18} /> Bild neu generieren</button>
-          <button role="menuitem" onClick={() => { archiveRecipe(recipe.id); toast('Archiviert – unter Einstellungen → Archiv wiederherstellbar'); goBack('/kochbuch'); }}>
+          <button role="menuitem" onClick={() => { archiveRecipe(recipe.id); toast('Archiviert – unter Einstellungen → Archiv wiederherstellbar', { label: 'Rückgängig', run: () => restoreRecipe(recipe.id) }); goBack('/kochbuch'); }}>
             <Icon name="archive" size={18} /> Archivieren
           </button>
         </MenuPanel>
@@ -310,7 +310,7 @@ function CookedButton({ recipe, servings }: { recipe: Recipe; servings: number }
   );
 }
 
-/** Für Meal Prep: mit der eingestellten Portionszahl in „Diese Woche“ aufnehmen. */
+/** Für Meal Prep: mit der eingestellten Portionszahl in den Wochenplan aufnehmen. */
 function PlanButton({ recipe, servings }: { recipe: Recipe; servings: number }) {
   const inPlan = usePlan().items.find((i) => i.recipeId === recipe.id);
   const prompt = useVariantPrompt();

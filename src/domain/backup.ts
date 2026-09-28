@@ -1,9 +1,11 @@
 import { isValidProduct, type MyProduct } from './nutrition/myProducts';
+import type { MealPlan } from './mealplan';
+import type { Pantry } from './pantry';
 import type { Recipe, RecipeSource, RecipeStatus } from './types';
 
 /**
  * Format der Sicherungsdatei („Einstellungen → Sicherung herunterladen / einspielen“).
- * Bewusst einfach: die Rezepte genau so, wie Mashi sie speichert.
+ * Bewusst einfach: alles genau so, wie Mashi es speichert (Rezepte, Lebensmittel, Speisekammer, Plan).
  */
 export interface BackupFile {
   app: 'mashi';
@@ -11,10 +13,15 @@ export interface BackupFile {
   recipes: Recipe[];
   /** „Meine Produkte“ – in älteren Sicherungen noch nicht enthalten */
   products?: MyProduct[];
+  /** Speisekammer mit Preisen, gelernten Bon-Artikeln, Stufen, Nachkauf-Grenzen – ab 2026-09 */
+  pantry?: Pantry;
+  /** Wochenplan samt Haken und eigenen Einkaufslisten-Einträgen – ab 2026-09 */
+  plan?: MealPlan;
 }
 
-export function createBackup(recipes: Recipe[], products: MyProduct[] = [], now = new Date().toISOString()): BackupFile {
-  return { app: 'mashi', exportedAt: now, recipes, products };
+/** Alles, was Mashi weiß – eine Sicherung, die unabhängig vom Server ist. */
+export function createBackup(recipes: Recipe[], products: MyProduct[] = [], now = new Date().toISOString(), pantry?: Pantry, plan?: MealPlan): BackupFile {
+  return { app: 'mashi', exportedAt: now, recipes, products, ...(pantry ? { pantry } : {}), ...(plan ? { plan } : {}) };
 }
 
 export interface ParsedBackup {
@@ -22,6 +29,9 @@ export interface ParsedBackup {
   /** Einträge, die nicht vollständig/gültig waren und deshalb übersprungen werden */
   rejected: number;
   products: MyProduct[];
+  /** nur, wenn die Datei sie enthält und sie gültig aussehen */
+  pantry?: Pantry;
+  plan?: MealPlan;
 }
 
 const STATUSES: RecipeStatus[] = ['ki_entwurf', 'zum_testen', 'bewaehrt', 'kochbuch'];
@@ -74,5 +84,18 @@ export function parseBackup(input: unknown): ParsedBackup {
   const unique = recipes.filter((r) => !seen.has(r.id) && seen.add(r.id)).map(withLists);
   const rawProducts = isObj(input) && Array.isArray(input.products) ? input.products : [];
   const products = rawProducts.filter(isValidProduct);
-  return { recipes: unique, rejected: list.length - unique.length + rawProducts.length - products.length, products };
+  const pantry = isObj(input) && isValidPantry(input.pantry) ? input.pantry : undefined;
+  const plan = isObj(input) && isValidPlan(input.plan) ? input.plan : undefined;
+  return { recipes: unique, rejected: list.length - unique.length + rawProducts.length - products.length, products, ...(pantry ? { pantry } : {}), ...(plan ? { plan } : {}) };
+}
+
+/** Grob, aber so, dass die App damit nicht abstürzt: Listen da, Vorräte mit ID und Namen */
+function isValidPantry(v: unknown): v is Pantry {
+  if (!isObj(v) || !Array.isArray(v.items) || !Array.isArray(v.rules) || !isStr(v.updatedAt)) return false;
+  return v.items.every((i) => isObj(i) && isStr(i.id) && isStr(i.name) && isStr(i.addedAt));
+}
+
+function isValidPlan(v: unknown): v is MealPlan {
+  if (!isObj(v) || !Array.isArray(v.items) || !Array.isArray(v.checked) || !isStr(v.updatedAt)) return false;
+  return v.items.every((i) => isObj(i) && isStr(i.recipeId) && typeof i.servings === 'number');
 }

@@ -1,4 +1,5 @@
-import type { MealPlan } from './mealplan';
+import { DEFAULT_BASICS, type MealPlan } from './mealplan';
+import { DEFAULT_NO_NUTRITION } from './nutrition/noNutrition';
 import type { MyProduct } from './nutrition/myProducts';
 import type { Pantry, PantryItem } from './pantry';
 import { normalizeName } from './nutrition/localFoods';
@@ -52,6 +53,12 @@ function merge3Set(base: string[] = [], ours: string[] = [], theirs: string[] = 
   return [...new Set([...theirs.filter((x) => !removed.has(x)), ...added])];
 }
 
+/** Stufen-Listen (Immer im Haus, Gewürze) eintragsweise – undefined = die Vorbelegung */
+function stageList(base: string[] | undefined, ours: string[] | undefined, theirs: string[] | undefined, fallback: readonly string[]): string[] | undefined {
+  if (!base && !ours && !theirs) return undefined;
+  return merge3Set(base ?? [...fallback], ours ?? [...fallback], theirs ?? [...fallback]);
+}
+
 /** Einfacher Wert: haben wir ihn geändert, gilt unserer – sonst deren. */
 const merge3Value = <T>(base: T, ours: T, theirs: T): T => (same(base, ours) ? theirs : ours);
 
@@ -87,8 +94,10 @@ export function merge3Pantry(base: Pantry, ours: Pantry, theirs: Pantry): Pantry
     savings: merge3Keyed(base.savings ?? [], ours.savings ?? [], theirs.savings ?? [], (s) => s.key),
     receipts: merge3Set(base.receipts, ours.receipts, theirs.receipts),
     shelfDays: merge3Value(base.shelfDays, ours.shelfDays, theirs.shelfDays),
-    basics: merge3Value(base.basics, ours.basics, theirs.basics),
-    noNutrition: merge3Value(base.noNutrition, ours.noNutrition, theirs.noNutrition),
+    // je Eintrag statt ganze Liste: am Handy „Mais“ raus, am Tablet „Tahini“ rein → beides gilt.
+    // Fehlt eine Liste, gilt die Vorbelegung – sonst sähe „nichts geändert“ wie „alles gelöscht“ aus.
+    basics: stageList(base.basics, ours.basics, theirs.basics, DEFAULT_BASICS),
+    noNutrition: stageList(base.noNutrition, ours.noNutrition, theirs.noNutrition, DEFAULT_NO_NUTRITION),
     // je Zutat: am Handy „Mais“, am Laptop „Tomatenmark“ eingestellt → beide bleiben
     restock: base.restock || ours.restock || theirs.restock
       ? merge3Keyed(base.restock ?? [], ours.restock ?? [], theirs.restock ?? [], (r) => normalizeName(r.name)) : undefined,

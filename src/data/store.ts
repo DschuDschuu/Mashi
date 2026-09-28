@@ -2,16 +2,20 @@ import { useSyncExternalStore } from 'react';
 import { normalizeName } from '../domain/nutrition/localFoods';
 import { EXTRA_PREFIX, RESTOCK_PREFIX, shoppingList, type RestockRule } from '../domain/restock';
 import { exclusiveStages, stageOf, withStage, type FoodStage } from '../domain/stage';
-import { emptyPlan, normalizePlan, resolveIngredient, toggleCooked, type MealPlan } from '../domain/mealplan';
+import { emptyPlan, keyOfName, normalizePlan, toggleCooked, type MealPlan } from '../domain/mealplan';
 import { mergeRecipes } from '../domain/merge';
+import { unionPantry, unionPlan } from '../domain/syncMerge';
 import { withMyProducts, type MyProduct } from '../domain/nutrition/myProducts';
+import type { FoodTable } from '../domain/nutrition/types';
 import {
-  addItem, addPrepared, applyImport, attachPacks, bonKey, eatPrepared, mergeSamePacks, deductRecipe, emptyPantry, freezeItem, openItem, rememberReceipt, restock, takenBetween, thawItem, type Taken, type ImportRow, type Pantry, type PantryItem, type PantryUnit,
+  addItem, applyImport, bonKey, deductRecipe, emptyPantry, freezeItem, rememberReceipt, returnTaken, takenBetween, thawItem, type Taken, type ImportRow, type Pantry, type PantryItem, type PantryUnit,
 } from '../domain/pantry';
+import { attachPacks, mergeSamePacks, openItem } from '../domain/packs';
+import { addPrepared, eatPrepared } from '../domain/prepared';
 import { currentContent, currentVersion, newId, sameContent, withNewVersion } from '../domain/recipe';
 import { recordSavings, type BonSavings } from '../domain/savings';
 import { specialDays, type ShelfDays } from '../domain/shelfLife';
-import { DEFAULT_NO_NUTRITION } from '../domain/nutrition/noNutrition';
+import { zeroOf } from '../domain/nutrition/noNutrition';
 import { DEFAULT_MACRO_GOAL, withFavorite, type MacroGoal } from '../domain/nutrition/variants';
 import { canTransition } from '../domain/status';
 import type { Rating, Recipe, RecipeContent, RecipeImage, RecipeSource, RecipeStatus } from '../domain/types';
@@ -177,6 +181,19 @@ export function useProducts(): MyProduct[] {
   return useSyncExternalStore(subscribe, () => products);
 }
 
+/**
+ * Die Lebensmitteltabelle mit meinen Produkten – überall dieselbe, damit „Mein Pesto“ auf jedem
+ * Bildschirm gleich erkannt wird. withMyProducts merkt sich das Ergebnis: gleiche Produkte → dieselbe Tabelle.
+ */
+export function currentFoodTable(): FoodTable {
+  return withMyProducts(foodTable, products);
+}
+
+/** Dasselbe für die Oberfläche – neu, sobald sich meine Produkte ändern */
+export function useFoodTable(): FoodTable {
+  return withMyProducts(foodTable, useProducts());
+}
+
 /** Für Berechnungen außerhalb von React (z. B. Nährwerte auf den Rezeptkarten). */
 export function currentProducts(): MyProduct[] {
   return products;
@@ -184,7 +201,7 @@ export function currentProducts(): MyProduct[] {
 
 /** „Ohne Nährwerte“ – stabile Referenz, solange sich die Liste nicht ändert (für den Nährwert-Cache). */
 export function currentNoNutrition(): string[] {
-  return pantry.noNutrition ?? DEFAULT_NO_NUTRITION;
+  return zeroOf(pantry);
 }
 
 export function useNoNutrition(): string[] {
@@ -329,7 +346,7 @@ export function markCooked(id: string, servings?: number, amounts: Record<string
 function consume(r: Recipe, servings: number, amounts: Record<string, number> = {}, log = false, variants: Record<string, string> = {}): CookedResult {
   if (!pantry.items.length) return { used: [], toCheck: [] };
   const before = pantry;
-  const d = deductRecipe(pantry, currentContent(r), servings, withMyProducts(foodTable, products), amounts, variants);
+  const d = deductRecipe(pantry, currentContent(r), servings, currentFoodTable(), amounts, variants);
   if (!d.used.length && !d.toCheck.length) return { used: [], toCheck: [] };
   const taken = takenBetween(before, d.pantry);
   commitPantry(log ? { ...d.pantry, cookLog: { ...pruneCookLog(d.pantry.cookLog), [r.id]: taken } } : d.pantry);
@@ -339,7 +356,7 @@ function consume(r: Recipe, servings: number, amounts: Record<string, number> = 
 /** Genommenes zurücklegen und den Merkzettel dafür löschen. */
 function putBack(recipeId: string, taken: Taken[]) {
   const { [recipeId]: _done, ...rest } = pantry.cookLog ?? {};
-  const back = restock(pantry, taken);
+  const back = returnTaken(pantry, taken);
   commitPantry(Object.keys(rest).length ? { ...back, cookLog: rest } : withoutCookLog(back));
 }
 
@@ -483,6 +500,16 @@ export function importRecipes(list: Recipe[]): { added: number; merged: number }
 }
 
 /** Produkte aus einer Sicherung übernehmen: gleiche ID = ersetzen, neue = anhängen. */
+/** Speisekammer aus einer Sicherung: mit dem heutigen Stand vereinen, nichts wird gelöscht */
+export function importPantry(incoming: Pantry) {
+  commitPantry(unionPantry(pantry, incoming));
+}
+
+/** Wochenplan aus einer Sicherung: vereinen (Gerichte, Haken, eigene Einträge) */
+export function importPlan(incoming: MealPlan) {
+  commitPlan(unionPlan(plan, normalizePlan(incoming)));
+}
+
 export function importProducts(incoming: MyProduct[]): number {
   if (!incoming.length) return 0;
   const byId = new Map(products.map((p) => [p.id, p]));
@@ -581,10 +608,10 @@ export function removeExtra(name: string) {
 /** „Erledigtes entfernen“: abgehakte eigene Einträge von der Liste – gibt „Rückgängig“ zurück. */
 export function clearDoneExtras(): () => void {
   const before = { extra: plan.extra, checked: plan.checked };
-  const table = withMyProducts(foodTable, products);
+  const table = currentFoodTable();
   const done = shoppingList(plan, recipes, table, pantry, products).filter((i) => i.extra && plan.checked.includes(i.key));
   const doneKeys = new Set(done.map((i) => i.key));
-  const keyOf = (n: string) => resolveIngredient({ id: 'x', name: n }, 1, table)?.key;
+  const keyOf = (n: string) => keyOfName(n, table);
   const extra = (plan.extra ?? []).filter((x) => !doneKeys.has(EXTRA_PREFIX + normalizeName(x.name)) && !doneKeys.has(keyOf(x.name) ?? ''));
   commitPlan({ ...plan, extra, checked: plan.checked.filter((k) => !(k.startsWith(EXTRA_PREFIX) && doneKeys.has(k))) });
   return () => commitPlan({ ...plan, extra: before.extra, checked: before.checked });
@@ -599,22 +626,31 @@ export interface InventoryChanges {
   remove: string[];
   /** Immer im Haus / Gewürze: auffüllen → auf die Einkaufsliste */
   refill: string[];
+  /** Einheit für Vorräte, die bisher nur „vorhanden“ waren (sonst hieße „3“ nichts) */
+  units?: Record<string, PantryUnit>;
 }
 
 /** Inventur übernehmen – alles auf einmal, mit „Rückgängig“. */
 export function applyInventory(c: InventoryChanges): () => void {
-  const before = { items: pantry.items, extra: plan.extra };
+  // nur die angefassten Vorräte merken – „Rückgängig“ soll nicht überschreiben, was inzwischen kam (Bon, anderes Gerät)
+  const touched = pantry.items.filter((it) => c.remove.includes(it.id) || c.amounts[it.id] !== undefined);
+  const hadExtra = new Set((plan.extra ?? []).map((x) => normalizeName(x.name)));
   const items = pantry.items.flatMap((it) => {
     if (c.remove.includes(it.id)) return [];
     const a = c.amounts[it.id];
     if (a === undefined) return [it];
-    return a > 0 ? [{ ...it, amount: a, check: false }] : [];
+    const unit = it.unit ?? c.units?.[it.id];
+    return a > 0 ? [{ ...it, amount: a, ...(unit ? { unit } : {}), check: false }] : [];
   });
-  if (items.length !== pantry.items.length || Object.keys(c.amounts).length) commitPantry({ ...pantry, items });
+  if (touched.length) commitPantry({ ...pantry, items });
   for (const n of c.refill) addExtra(n, 'inventur');
+  const added = c.refill.filter((n) => !hadExtra.has(normalizeName(n)));
   return () => {
-    commitPantry({ ...pantry, items: before.items });
-    commitPlan({ ...plan, extra: before.extra });
+    const back = new Map(touched.map((it) => [it.id, it]));
+    const kept = pantry.items.map((it) => back.get(it.id) ?? it);
+    const missing = touched.filter((it) => !pantry.items.some((x) => x.id === it.id));
+    commitPantry({ ...pantry, items: [...kept, ...missing] });
+    if (added.length) commitPlan({ ...plan, extra: (plan.extra ?? []).filter((x) => !added.some((n) => sameExtra(n, x.name))) });
   };
 }
 
@@ -720,14 +756,14 @@ export function importReceipt(rows: ImportRow[], paidAt?: string, savings?: BonS
   const next = rememberReceipt(applyImport(pantry, rows, t, () => newId('v'), paidAt ?? t), bonKey(paidAt, savings?.total));
   commitPantry(savings ? recordSavings(next, savings, paidAt ?? t) : next);
 
-  const table = withMyProducts(foodTable, products);
-  const bought = new Set(rows.filter((r) => !r.skip).map((r) => resolveIngredient({ id: r.key, name: r.name }, 1, table)?.key));
+  const table = currentFoodTable();
+  const bought = new Set(rows.filter((r) => !r.skip).map((r) => keyOfName(r.name, table)));
   // mit Nachkaufen: was darunter bleibt, zählt nicht als „erledigt“
   const list = shoppingList(plan, recipes, table, pantry, products).filter((i) => bought.has(i.key) && !plan.checked.includes(i.key));
   const tick = list.filter((i) => !i.covered && i.have === 'vorhanden').map((i) => i.key);
   if (tick.length) commitPlan({ ...plan, checked: [...plan.checked, ...tick] });
   // eigene Einträge, die auf dem Bon stehen, sind gekauft → von der Liste
-  const boughtExtra = (plan.extra ?? []).filter((x) => bought.has(resolveIngredient({ id: 'x', name: x.name }, 1, table)?.key));
+  const boughtExtra = (plan.extra ?? []).filter((x) => bought.has(keyOfName(x.name, table)));
   if (boughtExtra.length) commitPlan({ ...plan, extra: (plan.extra ?? []).filter((x) => !boughtExtra.includes(x)) });
   return { count: rows.filter((r) => !r.skip).length, onList: list.filter((i) => i.covered).length + tick.length };
 }
@@ -746,7 +782,7 @@ export function addPantryItem(name: string, amount?: number, unit?: PantryUnit, 
 /** Vorräte ohne Packungsgröße, deren Produkt eine hat: einmal umstellen („2⅔ Stück“ → „2 × 500 g“ + „333 g offen“) */
 function normalizePacks() {
   if (!pantry.items.length) return;
-  const attached = attachPacks(pantry.items, withMyProducts(foodTable, products), products, now(), () => newId('v')) ?? pantry.items;
+  const attached = attachPacks(pantry.items, currentFoodTable(), products, now()) ?? pantry.items;
   // … und doppelte Zeilen derselben Packung zusammen („2 × 500 g“ + „2 × 500 g“)
   const items = mergeSamePacks(attached) ?? attached;
   if (items !== pantry.items) commitPantry({ ...pantry, items });
@@ -832,18 +868,18 @@ export function setNoNutrition(names: string[]) {
  * Gibt „Rückgängig“ zurück (stellt genau die vorige Stufe dieses Lebensmittels wieder her).
  */
 export function setFoodStage(name: string, stage: FoodStage, rule?: Omit<RestockRule, 'name'>): () => void {
-  const table = withMyProducts(foodTable, products);
+  const table = currentFoodTable();
   const before = stageOf(name, pantry, table);
   commitStages(withStage(pantry, name, stage, table, rule));
   return () => {
-    const t = withMyProducts(foodTable, products);
+    const t = currentFoodTable();
     commitStages(withStage(pantry, before.basic ?? before.zero ?? before.rule?.name ?? name, before.stage, t, before.rule && { below: before.rule.below, unit: before.rule.unit }));
   };
 }
 
 /** Stufen speichern – ändert sich „Ohne Nährwerte“, rechnen alle Rezepte neu (wie setNoNutrition) */
 function commitStages(next: Partial<Pick<Pantry, 'basics' | 'restock' | 'noNutrition'>>) {
-  const zeroChanged = next.noNutrition !== undefined && next.noNutrition.join('|') !== (pantry.noNutrition ?? DEFAULT_NO_NUTRITION).join('|');
+  const zeroChanged = next.noNutrition !== undefined && next.noNutrition.join('|') !== zeroOf(pantry).join('|');
   commitPantry({ ...pantry, ...next });
   if (zeroChanged) {
     recipes = [...recipes];
@@ -853,7 +889,7 @@ function commitStages(next: Partial<Pick<Pantry, 'basics' | 'restock' | 'noNutri
 
 /** Einmal beim Start: wo zwei Stufen zugleich galten, gilt die genauere (siehe exclusiveStages). */
 function normalizeStages() {
-  const fix = exclusiveStages(pantry, withMyProducts(foodTable, products));
+  const fix = exclusiveStages(pantry, currentFoodTable());
   if (fix) commitStages(fix);
 }
 
@@ -866,7 +902,7 @@ function tidyRestockChecks() {
   if (tidying || !plan.checked.length) return;
   tidying = true;
   try {
-    const onList = new Set(shoppingList(plan, recipes, withMyProducts(foodTable, products), pantry, products).map((i) => i.key));
+    const onList = new Set(shoppingList(plan, recipes, currentFoodTable(), pantry, products).map((i) => i.key));
     const next: string[] = [];
     for (const k of plan.checked) {
       if (onList.has(k)) next.push(k);
@@ -875,6 +911,10 @@ function tidyRestockChecks() {
         // sonst reicht es wieder → Haken weg
         const plain = k.slice(RESTOCK_PREFIX.length);
         if (onList.has(plain)) next.push(plain);
+      } else if (k.startsWith(EXTRA_PREFIX)) {
+        // eigener Eintrag, und jetzt braucht ihn auch ein Rezept → der Haken wandert mit
+        const plain = keyOfName(k.slice(EXTRA_PREFIX.length), currentFoodTable());
+        if (plain && onList.has(plain)) next.push(plain);
       } else if (onList.has(RESTOCK_PREFIX + k)) next.push(RESTOCK_PREFIX + k); // Gericht raus, bleibt als Nachkaufen: Haken mitnehmen
       // sonst steht es nicht mehr auf der Liste (Gericht gekocht oder entfernt) → Haken weg
     }
@@ -883,11 +923,6 @@ function tidyRestockChecks() {
   } finally {
     tidying = false;
   }
-}
-
-/** „Immer im Haus“ – gilt auf allen Geräten. */
-export function setPantryBasics(basics: string[]) {
-  commitPantry({ ...pantry, basics });
 }
 
 /** Deine Richtwerte „hält X Tage“ (je Art oder Lebensmittel) – gelten auf allen Geräten. */

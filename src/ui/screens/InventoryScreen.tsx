@@ -1,21 +1,21 @@
-import { useMemo, useState } from 'react';
-import { applyInventory, usePantry, usePlan, useProducts } from '../../data/store';
-import { DEFAULT_BASICS } from '../../domain/mealplan';
-import { withMyProducts } from '../../domain/nutrition/myProducts';
-import { DEFAULT_NO_NUTRITION } from '../../domain/nutrition/noNutrition';
+import { useState } from 'react';
+import { applyInventory, useFoodTable, usePantry, usePlan } from '../../data/store';
+import { basicsOf } from '../../domain/mealplan';
+import { zeroOf } from '../../domain/nutrition/noNutrition';
 import { normalizeName } from '../../domain/nutrition/localFoods';
-import type { PantryItem } from '../../domain/pantry';
+import { type PantryItem, type PantryUnit } from '../../domain/pantry';
+import { suggestPantryUnit } from '../../domain/packs';
 import { amountLabel, packLabel } from '../../domain/pantryLabel';
 import { storageOf } from '../../domain/shelfLife';
 import { stageOf } from '../../domain/stage';
 import { navigate } from '../../router';
-import { foodTable } from '../../services';
 import { Section } from '../components/Controls';
 import { Icon } from '../components/Icon';
 import { TopBar } from '../components/TopBar';
 import { toast } from '../toast';
 
-type Mark = 'ok' | 'weg' | { amount: string };
+type Mark = 'ok' | 'weg' | { amount: string; unit?: PantryUnit };
+const UNITS: PantryUnit[] = ['Stück', 'g', 'ml', 'Glas'];
 
 const parse = (s: string) => {
   const n = Number(s.replace(',', '.'));
@@ -31,8 +31,7 @@ const parse = (s: string) => {
 export function InventoryScreen() {
   const pantry = usePantry();
   const plan = usePlan();
-  const products = useProducts();
-  const table = useMemo(() => withMyProducts(foodTable, products), [products]);
+  const table = useFoodTable();
   const [fridge, setFridge] = useState(false);
   const [marks, setMarks] = useState<Record<string, Mark>>({});
   const [checks, setChecks] = useState<Record<string, 'da' | 'auffuellen'>>({});
@@ -49,8 +48,8 @@ export function InventoryScreen() {
   ].filter((g) => g.items.length);
   const onList = new Set((plan.extra ?? []).map((x) => normalizeName(x.name)));
   const lists = [
-    { title: 'Immer im Haus', icon: 'home' as const, names: [...(pantry.basics ?? DEFAULT_BASICS)].sort((a, b) => a.localeCompare(b, 'de')) },
-    { title: 'Gewürze', icon: 'leaf' as const, names: [...(pantry.noNutrition ?? DEFAULT_NO_NUTRITION)].sort((a, b) => a.localeCompare(b, 'de')) },
+    { title: 'Immer im Haus', icon: 'home' as const, names: [...basicsOf(pantry)].sort((a, b) => a.localeCompare(b, 'de')) },
+    { title: 'Gewürze', icon: 'leaf' as const, names: [...zeroOf(pantry)].sort((a, b) => a.localeCompare(b, 'de')) },
   ].filter((l) => l.names.length);
 
   const all = groups.reduce((n, g) => n + g.items.length, 0) + lists.reduce((n, l) => n + l.names.length, 0);
@@ -59,15 +58,23 @@ export function InventoryScreen() {
 
   const finish = () => {
     const amounts: Record<string, number> = {};
+    const units: Record<string, PantryUnit> = {};
     const remove: string[] = [];
     for (const [id, m] of Object.entries(marks)) {
       if (m === 'weg') remove.push(id);
-      else if (m !== 'ok') { const n = parse(m.amount); if (n !== undefined) amounts[id] = n; }
+      else if (m !== 'ok') {
+        const n = parse(m.amount);
+        if (n === undefined) continue;
+        amounts[id] = n;
+        const it = pantry.items.find((x) => x.id === id);
+        // bisher nur „vorhanden“: die gewählte (oder vorgeschlagene) Einheit mitgeben
+        if (it && !it.unit) units[id] = m.unit ?? suggestPantryUnit(table.matchName(it.name)?.food);
+      }
     }
     const refill = Object.entries(checks).filter(([, v]) => v === 'auffuellen').map(([n]) => n);
     const changed = remove.length + Object.keys(amounts).length + refill.length;
     if (changed) {
-      const undo = applyInventory({ amounts, remove, refill });
+      const undo = applyInventory({ amounts, remove, refill, units });
       toast(`Inventur übernommen${refill.length ? ` – ${refill.length} auf der Einkaufsliste` : ''}`, { label: 'Rückgängig', run: undo });
     } else toast('Alles stimmt – nichts geändert');
     navigate('/speisekammer', { replace: true });
@@ -94,13 +101,24 @@ export function InventoryScreen() {
                   {editing === it.id ? (
                     <span className="inventory__edit">
                       <input inputMode="decimal" autoFocus value={edited?.amount ?? String(it.amount ?? '').replace('.', ',')} aria-label={`Menge ${it.name}`}
-                        onChange={(e) => mark(it.id, { amount: e.target.value })} onBlur={() => setEditing(null)}
+                        onChange={(e) => mark(it.id, { ...edited, amount: e.target.value })}
+                        // Wechsel ins Einheiten-Feld daneben schließt die Bearbeitung nicht
+                        onBlur={(e) => { if (!e.relatedTarget?.closest('.inventory__edit')) setEditing(null); }}
                         onKeyDown={(e) => e.key === 'Enter' && setEditing(null)} />
-                      <span className="small muted">{unit}</span>
+                      {it.unit || it.recipeId
+                        ? <span className="small muted">{unit}</span>
+                        : (
+                          // bisher nur „vorhanden“ – dann braucht die Zahl eine Einheit
+                          <select value={edited?.unit ?? suggestPantryUnit(table.matchName(it.name)?.food)} aria-label={`Einheit ${it.name}`}
+                            onMouseDown={(e) => e.stopPropagation()}
+                            onChange={(e) => mark(it.id, { amount: edited?.amount ?? '', unit: e.target.value as PantryUnit })}>
+                            {UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
+                          </select>
+                        )}
                     </span>
                   ) : (
                     <button type="button" className="inventory__qty" onClick={() => setEditing(it.id)} aria-label={`Menge von ${it.name} ändern`}>
-                      {edited && parse(edited.amount) !== undefined ? amountLabel({ ...it, amount: parse(edited.amount) }) : amountLabel(it)}
+                      {edited && parse(edited.amount) !== undefined ? amountLabel({ ...it, amount: parse(edited.amount), unit: it.unit ?? edited.unit ?? suggestPantryUnit(table.matchName(it.name)?.food) }) : amountLabel(it)}
                       <Icon name="pencil" size={13} />
                     </button>
                   )}

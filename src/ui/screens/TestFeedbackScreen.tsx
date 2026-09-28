@@ -2,9 +2,9 @@ import { useState } from 'react';
 import { cloneContent, currentContent, newId } from '../../domain/recipe';
 import type { Rating, Recipe, RecipeContent, RecipeImage as RecipeImageData } from '../../domain/types';
 import { describeChange, diffContent } from '../../domain/versions';
-import { adoptToCookbook, archiveRecipe, setImage, submitTest, useRecipe } from '../../data/store';
+import { adoptToCookbook, archiveRecipe, restoreRecipe, setImage, submitTest, useRecipe } from '../../data/store';
 import { navigate } from '../../router';
-import { Stars } from '../components/Controls';
+import { FileButton, Stars } from '../components/Controls';
 import { Icon } from '../components/Icon';
 import { IngredientEditor, StepEditor } from '../components/ContentEditors';
 import { RecipeImage } from '../components/RecipeImage';
@@ -43,7 +43,8 @@ function Feedback({ recipe }: { recipe: Recipe }) {
 
   return (
     <main className="screen">
-      <TopBar title="Wie war's?" backTo={`/rezept/${recipe.id}`} />
+      <TopBar title="Wie war’s?" backTo={`/rezept/${recipe.id}`}
+        confirmBack={rating || note.trim() || photo || editing ? 'Verwerfen? Deine Bewertung und Änderungen gehen verloren.' : undefined} />
 
       <div className="mini-recipe">
         <RecipeImage image={recipe.image} size="sm" />
@@ -66,14 +67,9 @@ function Feedback({ recipe }: { recipe: Recipe }) {
         <h2 className="h3">Foto vom Ergebnis</h2>
         <div className="photo-pick">
           {photo && <RecipeImage image={photo} size="md" />}
-          <label className="btn btn--soft">
+          <FileButton className="btn btn--soft" onFile={setCropping}>
             <Icon name="camera" size={18} /> {photo ? 'Anderes Foto' : 'Foto aufnehmen oder wählen'}
-            <input type="file" accept="image/*" hidden onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) setCropping(file);
-              e.target.value = '';
-            }} />
-          </label>
+          </FileButton>
           {cropping && <ImageCropper src={cropping} onCancel={() => setCropping(null)}
             onDone={({ url, original, crop }) => { setPhoto({ kind: 'url', url, original, crop }); setCropping(null); }} />}
           {!photo && <p className="muted small">Optional. Wird zum Bild des Rezepts – so sieht es bei dir aus.</p>}
@@ -115,7 +111,7 @@ function Feedback({ recipe }: { recipe: Recipe }) {
           </button>
         )}
         <button className="btn btn--ghost btn--block" disabled={!rating} onClick={() => save('zum_testen')}>Speichern &amp; weiter testen</button>
-        <button className="link link--muted center" onClick={() => { archiveRecipe(recipe.id); toast('Archiviert'); navigate('/kochbuch?segment=testen', { replace: true }); }}>
+        <button className="link link--muted center" onClick={() => { archiveRecipe(recipe.id); toast('Archiviert', { label: 'Rückgängig', run: () => restoreRecipe(recipe.id) }); navigate('/kochbuch?segment=testen', { replace: true }); }}>
           Nicht mein Fall – archivieren
         </button>
       </div>

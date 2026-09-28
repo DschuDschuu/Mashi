@@ -15,18 +15,6 @@ const DEVICE_ICONS: Record<string, IconName> = {
   'slow-cooker': 'slowcooker',
 };
 
-const CATEGORY_ICONS: Record<string, IconName> = {
-  fruehstueck: 'cup',
-  hauptgericht: 'cloche',
-  suppe: 'pot',
-  'salat-bowl': 'leaf',
-  beilage: 'rice',
-  snack: 'cookie',
-  dessert: 'cake',
-  backen: 'bread',
-  getraenke: 'glass',
-};
-
 export const STATUS_ICONS: Record<RecipeStatus, IconName> = {
   ki_entwurf: 'sparkles',
   zum_testen: 'flask',
@@ -34,6 +22,5 @@ export const STATUS_ICONS: Record<RecipeStatus, IconName> = {
   kochbuch: 'book',
 };
 
-/** Unbekannte (später ergänzte) Einträge bekommen ein neutrales Icon statt eines Fehlers. */
+/** Unbekannte (später ergänzte) Geräte bekommen ein neutrales Icon statt eines Fehlers. */
 export const deviceIcon = (id: string): IconName => DEVICE_ICONS[id] ?? 'stove';
-export const categoryIcon = (id: string): IconName => CATEGORY_ICONS[id] ?? 'cloche';

@@ -1,12 +1,10 @@
 import { useMemo } from 'react';
 import { resolveIngredient } from '../domain/mealplan';
-import { withMyProducts } from '../domain/nutrition/myProducts';
 import { deductRecipe, pantryAfterPlan, plannedByDish, type Stock } from '../domain/pantry';
 import { currentContent } from '../domain/recipe';
 import { useUpKeys } from '../domain/shelfLife';
 import type { Recipe } from '../domain/types';
-import { usePantry, usePlan, useProducts, useRecipes } from '../data/store';
-import { foodTable } from '../services';
+import { useFoodTable, usePantry, usePlan, useRecipes } from '../data/store';
 
 /**
  * Für die Rezeptseite: je Zutat da / knapp / fehlt – und welche bald weg muss.
@@ -18,10 +16,9 @@ export function useRecipeStock(recipe: Recipe, servings: number): { stock?: Map<
   const pantry = usePantry();
   const plan = usePlan();
   const recipes = useRecipes();
-  const products = useProducts();
+  const table = useFoodTable();
   return useMemo(() => {
     if (!pantry.items.length) return { soon: new Set<string>() };
-    const table = withMyProducts(foodTable, products);
     const c = currentContent(recipe);
     const planned = plan.items.some((i) => i.recipeId === recipe.id) && !plan.cooked.includes(recipe.id);
     const stock = planned
@@ -34,5 +31,5 @@ export function useRecipeStock(recipe: Recipe, servings: number): { stock?: Map<
       return !!key && keys.has(key) && stock?.get(i.id) !== 'fehlt';
     }).map((i) => i.id));
     return { stock, soon };
-  }, [pantry, plan, recipes, products, recipe, servings]);
+  }, [pantry, plan, recipes, table, recipe, servings]);
 }

@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { createMockRecipes } from '../data/mockRecipes';
 import { localFoodTable } from './nutrition/localFoods';
-import { addItem, applyImport, deductRecipe, emptyPantry, pantryAfterPlan, proposeImport, recipesFromPantry, suggestPantryUnit, type Pantry } from './pantry';
+import { addItem, applyImport, deductRecipe, emptyPantry, pantryAfterPlan, proposeImport, recipesFromPantry, type Pantry } from './pantry';
+import { suggestPantryUnit } from './packs';
 import { parseReceipt } from './receipt';
 import { buildShoppingList, type MealPlan } from './mealplan';
 import { withMyProducts, type MyProduct } from './nutrition/myProducts';

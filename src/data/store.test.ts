@@ -4,13 +4,20 @@ import memory from 'pouchdb-adapter-memory';
 import { describe, expect, it } from 'vitest';
 import { PouchRecipeRepository, type RecipeDb } from './pouchRepository';
 import { addExtra, addPantryItem, addToPlan, answerLeftover, applyInventory, clearDoneExtras, importReceipt, clearCooked, createRecipe, currentLeftoverAsk, currentPantry, eatPreparedPortions, initStore, togglePlanCooked, removeFromPlan, removePantryItem, setFoodStage, toggleShoppingItem, updatePantryItem } from './store';
-import { resolveIngredient } from '../domain/mealplan';
+import { keyOfName } from '../domain/mealplan';
 import { EXTRA_PREFIX, RESTOCK_PREFIX } from '../domain/restock';
 import { foodTable } from '../services';
 
 PouchDB.plugin(memory);
 
 const settle = () => new Promise((r) => setTimeout(r, 50));
+
+/** frisches Kochbuch im Speicher – jeder Test für sich, der Name nur zum Wiederfinden */
+async function freshStore(name: string) {
+  const repo = new PouchRecipeRepository(new PouchDB(`${name}-${Date.now()}`, { adapter: 'memory' }) as unknown as RecipeDb);
+  await initStore(repo);
+  return repo;
+}
 
 describe('Store: Änderung vom anderen Gerät wird nicht überschrieben', () => {
   it('Tablet mit altem Stand ändert die Speisekammer – der Bon vom Handy bleibt erhalten', async () => {
@@ -39,9 +46,8 @@ describe('Store: Änderung vom anderen Gerät wird nicht überschrieben', () => 
 
 describe('Store: Nachkaufen – Haken', () => {
   it('abgehakt, Vorrat reicht wieder → Haken weg; fällt er wieder darunter, steht es offen auf der Liste', async () => {
-    const repo = new PouchRecipeRepository(new PouchDB(`restock-${Date.now()}`, { adapter: 'memory' }) as unknown as RecipeDb);
-    await initStore(repo);
-    const key = RESTOCK_PREFIX + resolveIngredient({ id: 'x', name: 'Passierte Tomaten' }, 1, foodTable)!.key;
+    const repo = await freshStore('restock');
+    const key = RESTOCK_PREFIX + keyOfName('Passierte Tomaten', foodTable)!;
     const checked = async () => { await settle(); return (await repo.loadPlan()).checked.includes(key); };
 
     setFoodStage('Passierte Tomaten', 'nachkaufen', { below: 4, unit: 'Stück' });
@@ -66,9 +72,8 @@ describe('Store: Nachkaufen – Haken', () => {
 
 describe('Store: Nachkaufen – Haken wandert mit dem Plan', () => {
   it('im Wagen, dann kommt ein Rezept dazu und wieder weg: der Haken bleibt erhalten', async () => {
-    const repo = new PouchRecipeRepository(new PouchDB(`restock-plan-${Date.now()}`, { adapter: 'memory' }) as unknown as RecipeDb);
-    await initStore(repo);
-    const k = resolveIngredient({ id: 'x', name: 'Passierte Tomaten' }, 1, foodTable)!.key;
+    const repo = await freshStore('restock-plan');
+    const k = keyOfName('Passierte Tomaten', foodTable)!;
     const checked = async () => { await settle(); return (await repo.loadPlan()).checked; };
 
     setFoodStage('Passierte Tomaten', 'nachkaufen', { below: 4, unit: 'Stück' });
@@ -90,8 +95,7 @@ describe('Store: Nachkaufen – Haken wandert mit dem Plan', () => {
 
 describe('Store: Vorgekocht', () => {
   it('kochen → „was ist übrig?“ → Reste in der Speisekammer; essen; „Gekocht“ zurück nimmt sie wieder weg; aufräumen lässt Reste stehen', async () => {
-    const repo = new PouchRecipeRepository(new PouchDB(`prep-${Date.now()}`, { adapter: 'memory' }) as unknown as RecipeDb);
-    await initStore(repo);
+    const repo = await freshStore('prep');
     const content = (title: string) => ({
       title, description: '', servings: 5, prepMinutes: 0, cookMinutes: 0, difficulty: 1 as const,
       ingredients: [], steps: [], categories: [], tags: [], devices: [],
@@ -128,8 +132,7 @@ describe('Store: Vorgekocht', () => {
 
 describe('Store: Inventur und eigene Einträge', () => {
   it('Inventur: Menge ändern, weg, Gewürz auffüllen → Liste; Erledigtes entfernen; Bon hakt eigenen Eintrag ab; Rückgängig', async () => {
-    const repo = new PouchRecipeRepository(new PouchDB(`inv-${Date.now()}`, { adapter: 'memory' }) as unknown as RecipeDb);
-    await initStore(repo);
+    const repo = await freshStore('inv');
     addPantryItem('Pasta', 3, 'Stück');
     addPantryItem('Mais', 2, 'Stück');
     const [pasta, mais] = ['Pasta', 'Mais'].map((n) => currentPantry().items.find((i) => i.name === n)!.id);
@@ -156,5 +159,34 @@ describe('Store: Inventur und eigene Einträge', () => {
     importReceipt([{ line: { name: 'Spülmittel', count: 1, price: 1.29 }, key: 'spülmittel', known: false, skip: false, name: 'Spülmittel', amount: 1, unit: 'Stück' }]);
     await settle();
     expect((await repo.loadPlan()).extra ?? []).toEqual([]);
+  });
+});
+
+describe('Store: Inventur – Einheit und gezieltes Rückgängig', () => {
+  it('„vorhanden“ + Menge bekommt eine Einheit; Rückgängig lässt Neues von zwischendurch stehen', async () => {
+    await freshStore('inv2');
+    addPantryItem('Rinderhack');
+    const id = currentPantry().items[0].id;
+    const undo = applyInventory({ amounts: { [id]: 500 }, remove: [], refill: [], units: { [id]: 'g' } });
+    expect(currentPantry().items[0]).toMatchObject({ amount: 500, unit: 'g' });
+    addPantryItem('Pasta', 2, 'Stück'); // kommt zwischendurch dazu
+    undo();
+    expect(currentPantry().items.map((i) => [i.name, i.amount])).toEqual([['Rinderhack', undefined], ['Pasta', 2]]);
+  });
+});
+
+describe('Store: Haken eines eigenen Eintrags wandert mit', () => {
+  it('„Milch“ selbst aufgeschrieben und abgehakt, dann braucht ein Rezept Milch → der Haken bleibt', async () => {
+    const repo = await freshStore('extra');
+    addExtra('Milch');
+    toggleShoppingItem(`${EXTRA_PREFIX}milch`);
+    const rid = createRecipe({
+      title: 'Pfannkuchen', description: '', servings: 2, prepMinutes: 0, cookMinutes: 0, difficulty: 1,
+      ingredients: [{ id: 'a', name: 'Milch', amount: 250, unit: 'ml' }], steps: [], categories: [], tags: [], devices: [],
+    }, { source: 'selbst', status: 'kochbuch' });
+    addToPlan(rid, 2);
+    await settle();
+    const key = keyOfName('Milch', foodTable)!;
+    expect((await repo.loadPlan()).checked).toEqual([key]);
   });
 });

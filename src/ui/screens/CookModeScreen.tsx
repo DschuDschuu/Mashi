@@ -1,13 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { withMyProducts } from '../../domain/nutrition/myProducts';
-import { leftoverSuggestions, packSuggestions, pantryAfterPlan } from '../../domain/pantry';
+import { leftoverSuggestions, pantryAfterPlan } from '../../domain/pantry';
+import { packSuggestions } from '../../domain/packs';
 import { packLabel } from '../../domain/pantryLabel';
 import { currentContent } from '../../domain/recipe';
 import { formatAmount, formatQuantity, formatUnitAmount, scaleIngredients } from '../../domain/scaling';
 import { orderByUse } from '../../domain/stepIngredients';
 import type { Ingredient } from '../../domain/types';
-import { markCooked, usePantry, usePlan, useProducts, useRecipe, useRecipes } from '../../data/store';
-import { foodTable } from '../../services';
+import { markCooked, useFoodTable, usePantry, usePlan, useRecipe, useRecipes } from '../../data/store';
 import { goBack, navigate } from '../../router';
 import { Icon } from '../components/Icon';
 import { StepIngredients } from '../components/StepIngredients';
@@ -43,7 +42,6 @@ export function CookModeScreen({ id, servings, variants }: { id: string; serving
   const pantry = usePantry();
   const plan = usePlan();
   const recipes = useRecipes();
-  const products = useProducts();
 
   const base = useMemo(() => {
     if (!recipe) return [];
@@ -52,16 +50,16 @@ export function CookModeScreen({ id, servings, variants }: { id: string; serving
     return orderByUse(scaleIngredients(c, servings ?? c.servings), c.steps);
   }, [recipe, servings]);
   // Reste mitverbrauchen – aber nicht, was andere geplante Gerichte noch brauchen
+  const table = useFoodTable();
   const { leftovers, packs } = useMemo(() => {
     if (!recipe) return { leftovers: [], packs: [] };
-    const table = withMyProducts(foodTable, products);
     const others = { ...plan, items: plan.items.filter((i) => i.recipeId !== recipe.id) };
     const rest = pantryAfterPlan(pantry, others, recipes, table);
     // „Ganze Packung?“ – 600 g Hack bei Packungen à 500 g. Die Rest-Frage („alle 3 Tomaten?“) geht vor.
     const leftovers = leftoverSuggestions(rest, base, table);
     const packs = packSuggestions(rest, base, table).filter((p) => !leftovers.some((l) => l.ingredientId === p.ingredientId));
     return { leftovers, packs };
-  }, [recipe, base, pantry, plan, recipes, products]);
+  }, [recipe, base, pantry, plan, recipes, table]);
 
   // Läuft ein Timer, 4× pro Sekunde neu zeichnen
   useEffect(() => {

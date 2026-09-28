@@ -1,10 +1,8 @@
 import { useState } from 'react';
-import { setFoodStage, usePantry, useProducts } from '../../data/store';
-import { withMyProducts } from '../../domain/nutrition/myProducts';
+import { setFoodStage, useFoodTable, usePantry } from '../../data/store';
 import type { PantryUnit } from '../../domain/pantry';
 import { ruleKey, type RestockRule, type RestockStatus } from '../../domain/restock';
 import { stageOf, type FoodStage } from '../../domain/stage';
-import { foodTable } from '../../services';
 import { toast } from '../toast';
 import { useRestockStatus } from '../useShoppingCount';
 import { Icon } from './Icon';
@@ -31,15 +29,14 @@ const HINT: Record<FoodStage, string> = {
  */
 export function StagePicker({ name, onTouch }: { name: string; onTouch?: () => void }) {
   const pantry = usePantry();
-  const products = useProducts();
   const statuses = useRestockStatus();
-  const table = withMyProducts(foodTable, products);
+  const table = useFoodTable();
   const { stage, rule } = stageOf(name, pantry, table);
   const key = ruleKey({ name }, table);
   /** „Nachkaufen“ angetippt, Grenze noch nicht eingetragen */
   const [asking, setAsking] = useState(false);
   const shown = asking ? 'nachkaufen' : stage;
-  const pick = (s: FoodStage) => {
+  const pick = (s: Exclude<FoodStage, 'normal'>) => {
     onTouch?.();
     // der aktive Knopf nochmal → wieder normal
     if (s === shown) {
@@ -55,7 +52,7 @@ export function StagePicker({ name, onTouch }: { name: string; onTouch?: () => v
     }
     setAsking(false);
     const undo = setFoodStage(name, s);
-    toast(s === 'haus' ? `„${name}“ ist jetzt immer im Haus` : s === 'ohne' ? `„${name}“ steht jetzt unter „Gewürze“ – zählt nicht mit` : `„${name}“ – nichts Besonderes mehr festgelegt`, { label: 'Rückgängig', run: undo });
+    toast(s === 'haus' ? `„${name}“ ist jetzt immer im Haus` : `„${name}“ steht jetzt unter „Gewürze“ – zählt nicht mit`, { label: 'Rückgängig', run: undo });
   };
   return (
     <div className="stage">

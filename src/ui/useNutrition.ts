@@ -42,12 +42,6 @@ export function nutritionOf(content: RecipeContent, products: MyProduct[] = curr
 
 export const recipeNutrition = (r: Recipe) => nutritionOf(currentContent(r));
 
-/** Mit gewählter Sorte je Zutat (Plan/Kochmodus) – ohne Wahl wie nutritionOf (Durchschnitt) */
-export function nutritionWith(content: RecipeContent, pick: Readonly<Record<string, string>>): NutritionResult {
-  if (!Object.keys(pick).length) return nutritionOf(content);
-  return computeNutrition(content, tableFor(currentProducts(), currentNoNutrition()), pick);
-}
-
 /** Bei welchen Zutaten die Sorte zählt (mind. eine im Vorrat) – jetzt, ohne Hook */
 export function choicesFor(content: RecipeContent): VariantChoice[] {
   return variantChoices(content, tableFor(currentProducts(), currentNoNutrition()), currentPantry().items, currentMacroGoal());

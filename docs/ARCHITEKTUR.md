@@ -15,18 +15,29 @@ mashi/
 │  │  ├─ scaling.ts           Portionen umrechnen, Mengen küchentauglich anzeigen
 │  │  ├─ versions.ts          Unterschiede zwischen Versionen („300 g → 350 g“)
 │  │  ├─ filter.ts            Suche und Filter
+│  │  ├─ mealplan.ts          Wochenplan, Einkaufsliste; Zutaten/Namen einordnen (resolveIngredient, keyOfName)
+│  │  ├─ pantry.ts            Speisekammer: Vorrat, Bon-Import, beim Kochen abziehen, Verplantes
+│  │  ├─ packs.ts             Packungen: anbrechen, „ganze Packung?“, Größe nachtragen, zusammenlegen
+│  │  ├─ prepared.ts          Vorgekochte Portionen
+│  │  ├─ shelfLife.ts         Haltbarkeit, Bald verbrauchen
+│  │  ├─ stage.ts             Stufen: Nachkaufen · Im Haus · Gewürze (eine je Lebensmittel)
+│  │  ├─ restock.ts           Nachkaufen + eigene Einträge → Einkaufsliste (shoppingList)
+│  │  ├─ syncMerge.ts         Zwei Geräte gleichzeitig: Änderungen zusammenführen
+│  │  ├─ backup.ts            Sicherung schreiben und prüfen
 │  │  └─ nutrition/           Nährwertengine – rechnet NUR aus Zutaten × Tabelle
 │  │     ├─ engine.ts         Berechnung + Einstufung berechnet/geschätzt/nicht verfügbar
 │  │     ├─ units.ts          EL, Stück, Zehe … → Gramm
 │  │     ├─ localFoods.ts     Lokale Lebensmitteltabelle (Prototyp)
-│  │     └─ types.ts          FoodTable / NutritionProvider-Schnittstellen
+│  │     └─ types.ts          FoodTable-Schnittstelle
 │  ├─ services/               Austauschbare Anbieter hinter Schnittstellen
 │  │  ├─ index.ts             ← DIE Stelle, an der Anbieter verdrahtet werden
 │  │  ├─ ai/                  RecipeAiProvider (heute: Mock)
 │  │  └─ images/              ImageProvider + zentraler Bildstil
 │  ├─ data/
 │  │  ├─ repository.ts        RecipeRepository-Schnittstelle
-│  │  ├─ localRepository.ts   heute: localStorage
+│  │  ├─ localRepository.ts   Demo: nur localStorage, nichts wird abgeglichen
+│  │  ├─ pouchRepository.ts   echtes Kochbuch: PouchDB im Browser
+│  │  ├─ sync.ts / backend.ts Abgleich mit der CouchDB, Wahl Demo oder Sync beim Start
 │  │  ├─ mockRecipes.ts       Beispielrezepte
 │  │  └─ store.ts             App-Zustand + alle Aktionen (createRecipe, submitTest …)
 │  ├─ ui/
@@ -86,8 +97,8 @@ aus den Zutaten berechnet (gecacht je Version).
  #/speisekammer/bon       Kassenbon importieren
  #/produkte               Meine Lebensmittel: Tabs „Produkte“ (pflegen: Werte, Sorten + Favorit, Nachkaufen) · „Im Haus“ · „Gewürze“ (= ohne Nährwerte)
  #/preise                 Preise und Ersparnis
- #/reste                  Reste verwerten
- #/mehr                   Einstellungen (Zahnrad): Über Mashi, Archiv, Makro-Ziel, Sicherung, Sync
+ #/reste                  Bald verbrauchen
+ #/mehr                   Einstellungen (Zahnrad): Über Mashi, Archiv, Makro-Ziel, Sicherung (vollständig, Einspielen führt zusammen), Sync
  #/rezept/:id             Rezeptdetail
  #/rezept/:id/kochen?p=3  Kochmodus (ohne Navigation)
  #/rezept/:id/test        Testfeedback

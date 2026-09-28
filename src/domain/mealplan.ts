@@ -1,5 +1,5 @@
 import type { FoodEntry, FoodKind, FoodTable } from './nutrition/types';
-import { DEFAULT_NO_NUTRITION } from './nutrition/noNutrition';
+import { zeroOf } from './nutrition/noNutrition';
 import { toGrams } from './nutrition/units';
 import { normalizeName } from './nutrition/localFoods';
 import { MY_PRODUCTS_PROVIDER } from './nutrition/myProducts';
@@ -65,6 +65,8 @@ const PANTRY = new Set([
  * „Basics“ und wird nie als „fehlt“ gemeldet. Einstellbar in der Speisekammer (Pantry.basics).
  */
 export const DEFAULT_BASICS = ['Pasta', 'Reis', 'Gochujang', 'Miso', 'Sesam', 'Sojasauce'];
+/** „Immer im Haus“ – nie eingestellt (keine Liste) = die Vorbelegung, eine leere Liste bleibt leer */
+export const basicsOf = (pantry: { basics?: string[] } | undefined): string[] => pantry?.basics ?? DEFAULT_BASICS;
 
 /** Schlüssel der „Immer im Haus“-Zutaten (fehlt die Liste: die Vorbelegung). */
 /**
@@ -72,8 +74,8 @@ export const DEFAULT_BASICS = ['Pasta', 'Reis', 'Gochujang', 'Miso', 'Sesam', 'S
  * „Immer im Haus“ – und alles „Ohne Nährwerte“ (Gewürze & Co.), wie Salz und Pfeffer.
  */
 export function basicsKeys(pantry: Pick<Pantry, 'basics' | 'noNutrition'> | undefined, table: FoodTable): Set<string> {
-  const names = [...(pantry?.basics ?? DEFAULT_BASICS), ...(pantry?.noNutrition ?? DEFAULT_NO_NUTRITION)];
-  return new Set(names.map((name) => resolveIngredient({ id: name, name }, 1, table)?.key).filter((k): k is string => !!k));
+  const names = [...basicsOf(pantry), ...zeroOf(pantry)];
+  return new Set(names.map((name) => keyOfName(name, table)).filter((k): k is string => !!k));
 }
 
 /**
@@ -155,6 +157,14 @@ export function resolveIngredient(ing: Ingredient, factor: number, table: FoodTa
     unit: ing.unit,
   };
 }
+
+/**
+ * Einen Namen ohne Menge einordnen – ein Vorrat, eine Nachkaufen-Regel, ein eigener Einkaufseintrag.
+ * Dieselbe Regel wie für Zutaten, damit „Tomaten“ im Vorrat = „Tomate“ im Rezept.
+ */
+export const resolveName = (name: string, table: FoodTable) => resolveIngredient({ id: name, name }, 1, table);
+/** Schlüssel eines Namens (siehe Resolved.key) – zum Vergleichen: gleiches Lebensmittel? */
+export const keyOfName = (name: string, table: FoodTable) => resolveName(name, table)?.key;
 
 function resolveRecipe(r: Recipe, servings: number, table: FoodTable): Resolved[] {
   const c = currentContent(r);
@@ -309,7 +319,7 @@ export function buildShoppingList(plan: MealPlan, all: Recipe[], table: FoodTabl
 
   const stock = (pantry?.items ?? [])
     .filter((it) => (it.amount ?? 1) > 0 && !it.recipeId) // Vorgekochtes ist keine Zutat
-    .map((it) => ({ it, key: resolveIngredient({ id: it.id, name: it.name }, 1, table)?.key }));
+    .map((it) => ({ it, key: keyOfName(it.name, table) }));
 
   return [...groups.entries()]
     .map(([key, g]): ShoppingItem => {

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { emptyPantry } from './pantry';
 import { createMockRecipes } from '../data/mockRecipes';
 import { createBackup, parseBackup } from './backup';
 
@@ -76,5 +77,24 @@ describe('Sicherung mit fehlenden Listen', () => {
     for (const v of raw.versions) { delete v.content.tags; delete v.content.categories; delete v.content.devices; }
     const [back] = parseBackup([raw]).recipes;
     for (const v of back.versions) expect([v.content.tags, v.content.categories, v.content.devices]).toEqual([[], [], []]);
+  });
+});
+
+describe('Vollständige Sicherung', () => {
+  const NOW = '2026-09-28T12:00:00.000Z';
+  it('enthält Speisekammer und Plan und liest sie wieder ein', () => {
+    const pantry = { ...emptyPantry(), items: [{ id: 'p1', name: 'Pasta', amount: 2, unit: 'Stück' as const, addedAt: NOW }], restock: [{ name: 'Mais', below: 2, unit: 'Stück' as const }], updatedAt: NOW };
+    const plan = { items: [{ recipeId: 'r1', servings: 2 }], checked: [], cooked: [], extra: [{ name: 'Spülmittel', addedAt: NOW }], updatedAt: NOW };
+    const file = JSON.parse(JSON.stringify(createBackup([], [], NOW, pantry, plan)));
+    const back = parseBackup(file);
+    expect(back.pantry?.items.map((i) => i.name)).toEqual(['Pasta']);
+    expect(back.pantry?.restock).toEqual([{ name: 'Mais', below: 2, unit: 'Stück' }]);
+    expect(back.plan?.extra?.map((x) => x.name)).toEqual(['Spülmittel']);
+  });
+  it('alte Sicherung ohne Speisekammer/Plan und kaputte Teile: werden ignoriert, nicht geworfen', () => {
+    expect(parseBackup({ app: 'mashi', recipes: [] }).pantry).toBeUndefined();
+    const broken = parseBackup({ app: 'mashi', recipes: [], pantry: { items: 'kaputt' }, plan: { items: [{}] } });
+    expect(broken.pantry).toBeUndefined();
+    expect(broken.plan).toBeUndefined();
   });
 });

@@ -2,12 +2,15 @@ import type { ReactNode } from 'react';
 import { goBack } from '../../router';
 import { Icon } from './Icon';
 
-/** @param confirmBack Frage vor dem Zurückgehen, z. B. wenn sonst Eingaben verloren gingen */
-export function TopBar({ title, back = true, backTo = '/', right, confirmBack }: { title?: ReactNode; back?: boolean; backTo?: string; right?: ReactNode; confirmBack?: string }) {
+/**
+ * @param confirmBack Frage vor dem Zurückgehen, z. B. wenn sonst Eingaben verloren gingen
+ * @param onBack statt zur vorigen Seite: selbst zurück (z. B. „Import prüfen“ → zum eingefügten Text)
+ */
+export function TopBar({ title, back = true, backTo = '/', right, confirmBack, onBack }: { title?: ReactNode; back?: boolean; backTo?: string; right?: ReactNode; confirmBack?: string; onBack?: () => void }) {
   return (
     <header className="topbar">
       {back ? (
-        <button className="iconbtn" onClick={() => (!confirmBack || confirm(confirmBack)) && goBack(backTo)} aria-label="Zurück">
+        <button className="iconbtn" onClick={() => (!confirmBack || confirm(confirmBack)) && (onBack ? onBack() : goBack(backTo))} aria-label="Zurück">
           <Icon name="back" />
         </button>
       ) : <span className="iconbtn-spacer" />}

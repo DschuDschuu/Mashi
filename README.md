@@ -28,7 +28,7 @@ Live: <https://dschudschuu.github.io/Mashi/> · installierbar als App (PWA), fun
   aufgeschlüsselt, Makro-Ziel für die Sortenwahl
 - **Kochmodus** Schritt für Schritt mit Timer, Mengen nur für dieses Mal
 - **Abgleich** zwischen Geräten über eine eigene CouchDB (siehe `server/couchdb/ANLEITUNG.md`),
-  Sicherung als Datei, Einführung beim ersten Start, vier Farbthemen
+  Sicherung als Datei (alles: Rezepte, Lebensmittel, Speisekammer, Plan), Einführung beim ersten Start, vier Farbthemen
 
 ## Loslegen
 

@@ -2,11 +2,13 @@ import { normalizeName } from './localFoods';
 import type { FoodEntry, FoodTable } from './types';
 
 /**
- * „Ohne Nährwerte“: Gewürze & Co., die du nicht mitzählen willst – ein TL Paprikapulver ist
+ * „Ohne Nährwerte“ (in der App: „Gewürze“): Gewürze & Co., die du nicht mitzählen willst – ein TL Paprikapulver ist
  * nicht der Rede wert. Einstellbar in der Speisekammer (Pantry.noNutrition); fehlt die Liste,
  * gilt diese Vorbelegung.
  */
 export const DEFAULT_NO_NUTRITION = ['Paprikapulver', 'Currypulver', 'Kreuzkümmel', 'Zimt', 'Chiliflocken', 'Kurkuma', 'Oregano', 'Muskat'];
+/** „Gewürze“ – nie eingestellt (keine Liste) = die Vorbelegung, eine leere Liste bleibt leer */
+export const zeroOf = (pantry: { noNutrition?: string[] } | undefined): string[] => pantry?.noNutrition ?? DEFAULT_NO_NUTRITION;
 
 const PROVIDER = 'mashi-ohne-naehrwerte';
 

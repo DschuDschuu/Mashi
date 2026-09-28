@@ -20,15 +20,15 @@ export function AccuracyBadge({ n }: { n: NutritionResult }) {
 /** Die vier Kacheln unter dem Titel. „ca.“ bei Schätzung, nichts bei „nicht verfügbar“. */
 export function NutritionTiles({ n }: { n: NutritionResult }) {
   if (!n.perServing) {
-    return <p className="muted small">Für dieses Rezept können wir keine verlässlichen Nährwerte berechnen.</p>;
+    return <p className="muted small">Für dieses Rezept kann Mashi keine verlässlichen Nährwerte berechnen.</p>;
   }
   const ca = n.accuracy === 'geschaetzt' ? 'ca. ' : '';
   const p = n.perServing;
   return (
     <div className="tiles">
       <div className="tile"><strong>{ca}{Math.round(p.kcal)}</strong><span>kcal</span></div>
-      <div className="tile"><strong>{gram(p.carbs)}</strong><span>Kohlenhydr.</span></div>
-      <div className="tile"><strong>{gram(p.protein)}</strong><span>Protein</span></div>
+      <div className="tile"><strong>{gram(p.carbs)}</strong><span>KH</span></div>
+      <div className="tile"><strong>{gram(p.protein)}</strong><span>Eiweiß</span></div>
       <div className="tile"><strong>{gram(p.fat)}</strong><span>Fett</span></div>
       <VariantRange n={n} />
     </div>
@@ -45,7 +45,7 @@ function VariantRange({ n }: { n: NutritionResult }) {
   const names = [...new Set(n.items.filter((i) => i.food?.variants?.length).map((i) => i.name))];
   return (
     <p className="variant-range small muted">
-      Je nach Sorte ({names.join(', ')}): {Math.round(r.kcal[0])}–{Math.round(r.kcal[1])} kcal · {gram(r.protein[0])}–{gram(r.protein[1])} Protein pro Portion
+      Je nach Sorte ({names.join(', ')}): {Math.round(r.kcal[0])}–{Math.round(r.kcal[1])} kcal · {gram(r.protein[0])}–{gram(r.protein[1])} Eiweiß pro Portion
     </p>
   );
 }
@@ -61,7 +61,7 @@ const MATCH_LABEL: Record<MatchStatus, string> = {
 
 export function NutritionDetails({ n, servings }: { n: NutritionResult; servings: number }) {
   const rows: [string, keyof NonNullable<NutritionResult['total']>][] = [
-    ['Kalorien', 'kcal'], ['Kohlenhydrate', 'carbs'], ['Protein', 'protein'], ['Fett', 'fat'],
+    ['Kalorien', 'kcal'], ['Kohlenhydrate', 'carbs'], ['Eiweiß', 'protein'], ['Fett', 'fat'],
     ['Ballaststoffe', 'fiber'], ['Zucker', 'sugar'], ['Ges. Fettsäuren', 'satFat'], ['Salz', 'salt'],
   ];
   return (
@@ -84,7 +84,7 @@ export function NutritionDetails({ n, servings }: { n: NutritionResult; servings
           </tbody>
         </table>
       ) : (
-        <p className="muted">Zu viele Zutaten konnten nicht zugeordnet werden. Wir zeigen lieber keine Werte als erfundene.</p>
+        <p className="muted">Zu viele Zutaten konnten nicht zugeordnet werden. Mashi zeigt lieber keine Werte als erfundene.</p>
       )}
 
       <PerIngredient n={n} />

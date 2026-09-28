@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { DEFAULT_NO_NUTRITION } from './nutrition/noNutrition';
 import type { MealPlan } from './mealplan';
 import type { MyProduct } from './nutrition/myProducts';
 import { emptyPantry, type Pantry, type PantryItem } from './pantry';
@@ -97,5 +98,24 @@ describe('Nachkaufen-Grenzen zwischen Geräten', () => {
   });
   it('ohne Grenzen bleibt das Feld leer', () => {
     expect(merge3Pantry(pantry([]), pantry([]), pantry([])).restock).toBeUndefined();
+  });
+});
+
+describe('Stufen zwischen Geräten', () => {
+  it('Handy: Mais nachkaufen (aus Immer im Haus raus) · Tablet: Tahini immer im Haus → beides bleibt', () => {
+    const base = pantry([], { basics: ['Pasta', 'Mais'] });
+    const handy = pantry([], { basics: ['Pasta'], restock: [{ name: 'Mais', below: 2, unit: 'Stück' }] });
+    const tablet = pantry([], { basics: ['Pasta', 'Mais', 'Tahini'] });
+    const m = merge3Pantry(base, handy, tablet);
+    expect(m.basics).toEqual(['Pasta', 'Tahini']);
+    expect(m.restock?.map((r) => r.name)).toEqual(['Mais']);
+  });
+  it('ohne eigene Liste (Vorbelegung) auf der einen Seite: nichts geht verloren', () => {
+    const base = pantry([]);
+    const handy = pantry([], { noNutrition: [...DEFAULT_NO_NUTRITION, 'Sumach'] });
+    const tablet = pantry([], { noNutrition: DEFAULT_NO_NUTRITION.filter((z) => z !== 'Zimt') });
+    const m = merge3Pantry(base, handy, tablet);
+    expect(m.noNutrition).toContain('Sumach');
+    expect(m.noNutrition).not.toContain('Zimt');
   });
 });

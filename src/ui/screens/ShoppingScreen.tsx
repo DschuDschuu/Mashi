@@ -1,12 +1,10 @@
 import { useMemo, useState } from 'react';
 import type { ShoppingItem } from '../../domain/mealplan';
 import { shoppingList } from '../../domain/restock';
-import { withMyProducts } from '../../domain/nutrition/myProducts';
-import { addExtra, clearDoneExtras, removeExtra, toggleBuyAnyway, toggleShoppingItem, usePantry, usePlan, useProducts, useRecipes } from '../../data/store';
+import { addExtra, clearDoneExtras, removeExtra, toggleBuyAnyway, toggleShoppingItem, useFoodTable, usePantry, usePlan, useProducts, useRecipes } from '../../data/store';
 import { IngredientNames } from '../components/IngredientNames';
 import { toast } from '../toast';
 import { navigate } from '../../router';
-import { foodTable } from '../../services';
 import { Empty, Section } from '../components/Controls';
 import { Icon } from '../components/Icon';
 import { TopBar } from '../components/TopBar';
@@ -25,7 +23,7 @@ export function ShoppingScreen() {
   const plan = usePlan();
   const pantry = usePantry();
   const [view, setView] = useState<View>('liste');
-  const table = useMemo(() => withMyProducts(foodTable, products), [products]);
+  const table = useFoodTable();
   const all = useMemo(() => shoppingList(plan, recipes, table, pantry, products), [plan, recipes, table, pantry, products]);
 
   const shown = all.filter((i) => (view === 'basics' ? i.pantry : !i.pantry));

@@ -11,11 +11,13 @@ import { VariantSheet } from './VariantSheet';
  * „620 kcal · 32 g Eiweiß pro Portion · mit Pesto (K-Classic)“.
  * Liegen mehrere Sorten im Vorrat und steht das Gericht im Plan, lässt sich die Sorte antippen und umwählen.
  */
-export function DishNutrition({ content, own, recipeId, className = '' }: {
+export function DishNutrition({ content, own, recipeId, full = false, className = '' }: {
   content: RecipeContent;
   own: Record<string, string> | undefined;
   /** nur im Plan: dann ist die Sorte umwählbar und wird am Plan-Eintrag gemerkt */
   recipeId?: string;
+  /** alle vier Werte (kcal · KH · Eiweiß · Fett) – wo Platz ist; der Plan bleibt einzeilig bei kcal und Eiweiß */
+  full?: boolean;
   className?: string;
 }) {
   const { choices, pick, n } = useVariants(content, own);
@@ -28,7 +30,13 @@ export function DishNutrition({ content, own, recipeId, className = '' }: {
   const ca = n.accuracy === 'geschaetzt' ? 'ca. ' : '';
   return (
     <span className={`dishnut small ${className}`.trim()}>
-      <span className="dishnut__values" title="pro Portion">{ca}{Math.round(n.perServing.kcal)} kcal · {gram(n.perServing.protein)} Eiweiß<span className="dishnut__per"> pro Portion</span></span>
+      <span className={`dishnut__values${full ? ' dishnut__values--full' : ''}`} title="pro Portion">{full ? (
+        // kcal links, die drei Makros rechtsbündig – eine Zeile, direkt unter „3 Portionen“ ist „pro Portion“ klar
+        <><span>{ca}{Math.round(n.perServing.kcal)} kcal</span>
+          <span className="dishnut__macros">{gram(n.perServing.carbs)} KH · {gram(n.perServing.protein)} Eiweiß · {gram(n.perServing.fat)} Fett</span></>
+      ) : (
+        <>{ca}{Math.round(n.perServing.kcal)} kcal · {gram(n.perServing.protein)} Eiweiß<span className="dishnut__per"> pro Portion</span></>
+      )}</span>
       {chosen.length > 0 && (canChoose ? (
         <button type="button" className="dishnut__variant" onClick={() => setChoosing(true)} aria-label="Sorte wählen">
           <span className="dishnut__label">mit {chosen.map((x) => x.name).join(', ')}</span> <Icon name="chevron" size={12} />

@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { createMockRecipes } from '../data/mockRecipes';
 import { localFoodTable as T } from './nutrition/localFoods';
-import { addItem, attachPacks, mergeSamePacks, deductRecipe, emptyPantry, openItem, suggestPantryUnit, packSuggestions, restock, takenBetween, type Pantry, type PantryItem } from './pantry';
+import { addItem, freezeItem, thawItem, deductRecipe, emptyPantry, returnTaken, takenBetween, type Pantry, type PantryItem } from './pantry';
+import { attachPacks, mergeSamePacks, openItem, suggestPantryUnit, packSuggestions } from './packs';
 import { amountLabel } from './pantryLabel';
+import { merge3Pantry } from './syncMerge';
 import { restockNeeds } from './restock';
 import { useByOf } from './shelfLife';
 import type { Ingredient, RecipeContent } from './types';
@@ -52,7 +54,7 @@ describe('Packungen im Vorrat', () => {
   it('„Gekocht“ zurücknehmen: die Packung kommt zurück, der offene Rest verschwindet', () => {
     const before = pantry(hack());
     const after = cook(before, { id: 'a', name: 'Rinderhack', amount: 600, unit: 'g' });
-    expect(show(restock(after, takenBetween(before, after)))).toEqual(['4 × 500 g']);
+    expect(show(returnTaken(after, takenBetween(before, after)))).toEqual(['4 × 500 g']);
   });
 
   it('von Hand angebrochen: eine Packung wird zum offenen Rest', () => {
@@ -141,13 +143,13 @@ describe('Alte Vorräte bekommen ihre Packungsgröße', () => {
   const table = { ...T, matchName: (n: string) => (n === 'Joghurt' ? { food: { ref: { provider: 'mine', foodId: 'pj' }, name: 'Joghurt', per100g: { kcal: 60, protein: 4, carbs: 5, fat: 3 } }, quality: 'exact' as const } : T.matchName(n)) };
 
   it('„2⅔ Stück Joghurt“ → „2 × 500 g“ + „333 g offen“', () => {
-    const items = attachPacks([{ id: 'j', name: 'Joghurt', amount: 2.67, unit: 'Stück', addedAt: NOW }], table, [joghurt], NOW, id)!;
+    const items = attachPacks([{ id: 'j', name: 'Joghurt', amount: 2.67, unit: 'Stück', addedAt: NOW }], table, [joghurt], NOW)!;
     expect(items.map(amountLabel)).toEqual(['2 × 500 g', '335 g offen']);
     // Produkt gemerkt: neue Becher vom selben Produkt werden dazugezählt
     expect(addItem(items, { name: 'Joghurt', amount: 3, unit: 'Stück', pack: { amount: 500, unit: 'g' }, productId: 'pj' }, NOW, id).map(amountLabel)).toEqual(['5 × 500 g', '335 g offen']);
   });
   it('ohne Produkt mit Packung (Paprika) bleibt alles, wie es ist', () => {
-    expect(attachPacks([{ id: 'p', name: 'Paprika', amount: 2.5, unit: 'Stück', addedAt: NOW }], table, [joghurt], NOW, id)).toBeUndefined();
+    expect(attachPacks([{ id: 'p', name: 'Paprika', amount: 2.5, unit: 'Stück', addedAt: NOW }], table, [joghurt], NOW)).toBeUndefined();
   });
 });
 
@@ -190,16 +192,72 @@ describe('Alte Einträge in ml/g werden Packungen', () => {
   const ml = (id: string, amount: number, extra: Partial<PantryItem> = {}): PantryItem => ({ id, name: 'Milch', amount, unit: 'ml', addedAt: NOW, ...extra });
 
   it('„3000 ml“ → „3 × 1 l“, „400 ml“ → „400 ml offen“, „2500 ml“ → „2 × 1 l“ + „500 ml offen“', () => {
-    expect(attachPacks([ml('a', 3000)], table, [milch], NOW, id)!.map(amountLabel)).toEqual(['3 × 1 l']);
-    expect(attachPacks([ml('b', 400)], table, [milch], NOW, id)!.map(amountLabel)).toEqual(['400 ml offen']);
-    expect(attachPacks([ml('c', 2500)], table, [milch], NOW, id)!.map(amountLabel)).toEqual(['2 × 1 l', '500 ml offen']);
+    expect(attachPacks([ml('a', 3000)], table, [milch], NOW)!.map(amountLabel)).toEqual(['3 × 1 l']);
+    expect(attachPacks([ml('b', 400)], table, [milch], NOW)!.map(amountLabel)).toEqual(['400 ml offen']);
+    expect(attachPacks([ml('c', 2500)], table, [milch], NOW)!.map(amountLabel)).toEqual(['2 × 1 l', '500 ml offen']);
   });
   it('schon offen oder gefroren und nicht aufgehend → bleibt, wie es ist', () => {
-    expect(attachPacks([ml('d', 800, { openedAt: NOW }), ml('e', 1500, { frozenAt: NOW })], table, [milch], NOW, id)).toBeUndefined();
+    expect(attachPacks([ml('d', 800, { openedAt: NOW }), ml('e', 1500, { frozenAt: NOW })], table, [milch], NOW)).toBeUndefined();
   });
   it('große Mengen lesbar: „1500 g“ → „1,5 kg“, „1200 ml offen“ → „1,2 l offen“', () => {
     expect(amountLabel({ amount: 1500, unit: 'g' })).toBe('1,5 kg');
     expect(amountLabel({ amount: 1200, unit: 'ml', openedAt: NOW })).toBe('1,2 l offen');
     expect(amountLabel({ amount: 400, unit: 'ml' })).toBe('400 ml');
+  });
+});
+
+describe('Umstellen auf Packungen – zwei Geräte, Stückware', () => {
+  const joghurt = { id: 'pj', packageAmount: 500, packageUnit: 'g' as const };
+  const table = { ...T, matchName: (n: string) => (n === 'Joghurt' ? { food: { ref: { provider: 'mine', foodId: 'pj' }, name: 'Joghurt', per100g: { kcal: 60, protein: 4, carbs: 5, fat: 3 } }, quality: 'exact' as const } : T.matchName(n)) };
+  it('beide Geräte stellen gleichzeitig um → derselbe offene Rest (gleiche ID), nicht zwei', () => {
+    const it0: PantryItem = { id: 'j', name: 'Joghurt', amount: 1300, unit: 'g', addedAt: NOW };
+    const a = attachPacks([it0], table, [joghurt], NOW)!;
+    const b = attachPacks([it0], table, [joghurt], '2026-09-28T12:05:00.000Z')!;
+    expect(a.map((x) => x.id)).toEqual(b.map((x) => x.id));
+    const merged = merge3Pantry({ ...emptyPantry(), items: [it0] }, { ...emptyPantry(), items: a }, { ...emptyPantry(), items: b });
+    expect(merged.items.map(amountLabel)).toEqual(['2 × 500 g', '300 g offen']);
+  });
+  it('„6 Zwiebeln“ mit einem Produkt „Netz 1 kg“ bleiben 6 Stück', () => {
+    const netz = { id: 'pz', packageAmount: 1000, packageUnit: 'g' as const };
+    const t2 = { ...T, matchName: (n: string) => (n === 'Zwiebel' ? { food: { ...T.matchName('Zwiebel')!.food, ref: { provider: 'mine', foodId: 'pz' } }, quality: 'exact' as const } : T.matchName(n)) };
+    expect(attachPacks([{ id: 'z', name: 'Zwiebel', amount: 6, unit: 'Stück', addedAt: NOW }], t2, [netz], NOW)).toBeUndefined();
+  });
+});
+
+describe('Nachkaufen in g zählt Offenes mit', () => {
+  it('Regel „Hack unter 1200 g“: 2 × 500 g + 400 g offen = 1400 g → reicht', () => {
+    const p: Pantry = { ...pantry(hack(2), { id: 'o', name: 'Rinderhack', amount: 400, unit: 'g', addedAt: NOW, openedAt: NOW }), restock: [{ name: 'Rinderhack', below: 1200, unit: 'g' }] };
+    expect(restockNeeds(p, T)).toEqual([]);
+  });
+});
+
+describe('Gefrorenes und Aufgetautes', () => {
+  it('angebrochen eingefroren, Wochen später aufgetaut → nicht sofort „drüber“ (Offen-Frist ab dem Auftauen)', () => {
+    const open: PantryItem = { id: 'o', name: 'Milch', amount: 500, unit: 'ml', addedAt: '2026-09-01T12:00:00.000Z', openedAt: '2026-09-01T12:00:00.000Z' };
+    const frozen = freezeItem([open], 'o', '2026-09-01T13:00:00.000Z');
+    const [thawed] = thawItem(frozen, 'o', NOW, 1);
+    expect(useByOf(thawed, T)!.getTime()).toBeGreaterThan(new Date(NOW).getTime());
+  });
+  it('gefrorene Packung angebrochen: ganze bleiben gefroren, der Rest ist aufgetaut und hält kurz', () => {
+    const three = cook(pantry({ ...hack(3), frozenAt: '2026-09-01T12:00:00.000Z' }), { id: 'a', name: 'Rinderhack', amount: 600, unit: 'g' });
+    expect(three.items.map((i) => [amountLabel(i), !!i.frozenAt])).toEqual([['1 × 500 g', true], ['400 g offen', false]]);
+    const p = pantry({ ...hack(2), frozenAt: '2026-09-01T12:00:00.000Z' });
+    const after = cook(p, { id: 'a', name: 'Rinderhack', amount: 600, unit: 'g' });
+    // 600 g aus 2 × 500 g: beide aufgetaut, 400 g bleiben – nicht mehr gefroren
+    expect(after.items.map((i) => [amountLabel(i), !!i.frozenAt])).toEqual([['400 g offen', false]]);
+    expect(after.items.find((i) => i.openedAt)!.useBy).toBeDefined();
+  });
+  it('Frisches wird zuerst genommen, Gefrorenes (auch angebrochen eingefroren) zuletzt', () => {
+    const p = pantry(hack(1), { id: 'f', name: 'Rinderhack', amount: 300, unit: 'g', addedAt: NOW, openedAt: NOW, frozenAt: NOW });
+    const after = cook(p, { id: 'a', name: 'Rinderhack', amount: 200, unit: 'g' });
+    expect(after.items.find((i) => i.frozenAt)!.amount).toBe(300);
+  });
+  it('Aufgetautes mit Datum wird nicht mit frischer Ware zusammengelegt', () => {
+    const thawed: PantryItem = { ...hack(2), id: 't', useBy: '2026-09-29T12:00:00.000Z' };
+    expect(mergeSamePacks([hack(1), thawed])).toBeUndefined();
+    expect(addItem([thawed], { name: 'Rinderhack', amount: 1, unit: 'Stück', pack: { amount: 500, unit: 'g' } }, NOW, id)).toHaveLength(2);
+  });
+  it('„Ganze Packung?“: nie mehr Packungen, als da sind', () => {
+    expect(packSuggestions(pantry(hack(2)), [{ id: 'a', name: 'Rinderhack', amount: 1600, unit: 'g' }], T)).toEqual([]);
   });
 });

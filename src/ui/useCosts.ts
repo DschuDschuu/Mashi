@@ -1,18 +1,17 @@
 import { useMemo } from 'react';
 import { productPrices, recipeCost, type Cost, type PriceEntry } from '../domain/cost';
-import { withMyProducts, MY_PRODUCTS_PROVIDER } from '../domain/nutrition/myProducts';
+import { MY_PRODUCTS_PROVIDER } from '../domain/nutrition/myProducts';
 import type { FoodTable } from '../domain/nutrition/types';
 import type { PackageLookup } from '../domain/pantry';
 import type { RecipeContent } from '../domain/types';
-import { usePantry, useProducts } from '../data/store';
-import { foodTable } from '../services';
+import { useFoodTable, usePantry, useProducts } from '../data/store';
 
 /** Tabelle mit „Meinen Produkten“ + alle bekannten Preise (Kassenbon und von Hand). */
 export function usePricing(): { table: FoodTable; prices: PriceEntry[]; packageFor: PackageLookup } {
   const products = useProducts();
   const pantry = usePantry();
+  const table = useFoodTable();
   return useMemo(() => {
-    const table = withMyProducts(foodTable, products);
     // Packungsgröße deines Produkts, wenn der Bon-Name zu ihm führt („Mozzarella light“ → dein Mozzarella)
     const packageFor: PackageLookup = (name) => {
       const food = table.matchName(name)?.food;
@@ -20,7 +19,7 @@ export function usePricing(): { table: FoodTable; prices: PriceEntry[]; packageF
       return product?.packageAmount ? { amount: product.packageAmount, unit: product.packageUnit ?? 'g' } : undefined;
     };
     return { table, prices: [...(pantry.prices ?? []), ...productPrices(products)], packageFor };
-  }, [products, pantry]);
+  }, [products, pantry, table]);
 }
 
 export function useRecipeCost(content: RecipeContent, servings: number): Cost | null {

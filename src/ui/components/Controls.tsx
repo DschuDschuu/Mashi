@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useRef, type ReactNode } from 'react';
 import type { Rating } from '../../domain/types';
 import { DEVICES } from '../../domain/catalog';
 import { deviceIcon } from '../catalogIcons';
@@ -102,5 +102,25 @@ export function Switch({ checked, onChange, label, hint }: { checked: boolean; o
       </span>
       <span className={`switch${checked ? ' is-on' : ''}`} aria-hidden="true"><span /></span>
     </button>
+  );
+}
+
+/**
+ * Knopf, der die Dateiauswahl öffnet – ein echter <button>, also per Tastatur erreichbar (ein <label>
+ * um ein verstecktes Dateifeld ist das nicht). Danach wird die Auswahl geleert, damit dieselbe Datei nochmal geht.
+ */
+export function FileButton({ className, accept = 'image/*', disabled, onFile, children }: {
+  className: string; accept?: string; disabled?: boolean; onFile: (file: File) => void; children: ReactNode;
+}) {
+  const input = useRef<HTMLInputElement>(null);
+  return (
+    <>
+      <button type="button" className={`${className} filebtn`} disabled={disabled} onClick={() => input.current?.click()}>{children}</button>
+      <input ref={input} type="file" accept={accept} hidden onChange={(e) => {
+        const file = e.target.files?.[0];
+        e.target.value = '';
+        if (file) onFile(file);
+      }} />
+    </>
   );
 }

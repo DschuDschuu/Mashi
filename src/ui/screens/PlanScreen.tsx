@@ -3,15 +3,13 @@ import { DishNutrition } from '../components/DishNutrition';
 import { recipeCost, sumCosts } from '../../domain/cost';
 import { suggestRecipes, type ShoppingItem, type Suggestion } from '../../domain/mealplan';
 import { ingredientCompletions, longNotCooked, searchRecipes } from '../../domain/recipeSearch';
-import { withMyProducts } from '../../domain/nutrition/myProducts';
 import { currentContent } from '../../domain/recipe';
 import type { Recipe } from '../../domain/types';
-import { preparedOf } from '../../domain/pantry';
+import { preparedOf } from '../../domain/prepared';
 import {
-  addToPlan, clearCooked, eatPreparedPortions, removeFromPlan, usePantry, setPlanServings, togglePlanCooked, usePlan, useProducts, useRecipes,
+  addToPlan, clearCooked, eatPreparedPortions, removeFromPlan, usePantry, setPlanServings, togglePlanCooked, usePlan, useRecipes, useFoodTable
 } from '../../data/store';
 import { navigate } from '../../router';
-import { foodTable } from '../../services';
 import { Empty, Section, Stepper } from '../components/Controls';
 import { useMissing } from '../useShoppingCount';
 import { useSheet } from '../useSheet';
@@ -30,17 +28,16 @@ import { toast } from '../toast';
 const plannable = (r: Recipe) => !r.archivedAt && r.status !== 'ki_entwurf';
 
 /**
- * „Diese Woche“ – Meal Prep ohne feste Tage: Gerichte sammeln, Mashi schlägt passende vor
+ * Wochenplan – Meal Prep ohne feste Tage: Gerichte sammeln, Mashi schlägt passende vor
  * (ähnliche Zutaten = weniger Einkauf, weniger Reste), daraus entsteht die Einkaufsliste.
  * Plan und Haken sind auf allen Geräten gleich (werden abgeglichen).
  */
 export function PlanScreen() {
   const recipes = useRecipes();
-  const products = useProducts();
   const plan = usePlan();
   const [picking, setPicking] = useState(false);
 
-  const table = useMemo(() => withMyProducts(foodTable, products), [products]);
+  const table = useFoodTable();
   const items = plan.items
     .map((i) => ({ ...i, recipe: recipes.find((r) => r.id === i.recipeId) }))
     .filter((i): i is typeof i & { recipe: Recipe } => !!i.recipe)
@@ -349,7 +346,7 @@ function PreparedLine({ recipeId }: { recipeId: string }) {
     <span className="plan-list__prepared">
       <span className="plan-list__done"><Icon name="check" size={13} /> Vorgekocht{fresh ? ` · noch ${portions(fresh)}` : ''}{frozen ? ` · ${portions(frozen)} eingefroren` : ''}</span>
       {next && (
-        <button type="button" className="dishnut__variant" onClick={() => {
+        <button type="button" className="eat-pill" onClick={() => {
           const undo = eatPreparedPortions(next.id, 1);
           toast(fresh > 1 ? `Guten Appetit! Noch ${portions(fresh - 1)}` : 'Aufgegessen', { label: 'Rückgängig', run: undo });
         }}>1 gegessen</button>

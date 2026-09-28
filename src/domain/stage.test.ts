@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { localFoodTable as T } from './nutrition/localFoods';
 import { exclusiveStages, stageOf, withStage } from './stage';
+import { basicsOf, DEFAULT_BASICS, keyOfName } from './mealplan';
+import { DEFAULT_NO_NUTRITION, zeroOf } from './nutrition/noNutrition';
 
 const TOMATEN = { below: 4, unit: 'Stück' as const };
 
@@ -39,5 +41,20 @@ describe('Vierte Stufe: ohne Nährwerte', () => {
   });
   it('bisher „immer im Haus“ UND „ohne Nährwerte“ → ohne Nährwerte', () => {
     expect(exclusiveStages({ basics: ['Pasta', 'Kreuzkümmel'], restock: [], noNutrition: ['Kreuzkümmel'] }, T)).toEqual({ basics: ['Pasta'] });
+  });
+});
+
+describe('Listen mit Vorbelegung', () => {
+  it('nie eingestellt = Vorbelegung, bewusst geleert bleibt leer', () => {
+    expect(basicsOf({})).toEqual(DEFAULT_BASICS);
+    expect(basicsOf(undefined)).toEqual(DEFAULT_BASICS);
+    expect(basicsOf({ basics: [] })).toEqual([]);
+    expect(zeroOf({})).toEqual(DEFAULT_NO_NUTRITION);
+    expect(zeroOf({ noNutrition: [] })).toEqual([]);
+  });
+
+  it('ein Name, ein Schlüssel – egal wie geschrieben', () => {
+    expect(keyOfName('Nudeln', T)).toBe(keyOfName('Pasta', T));
+    expect(keyOfName('Mais', T)).not.toBe(keyOfName('Pasta', T));
   });
 });
