@@ -2,7 +2,7 @@ import { useEffect, type ReactElement } from 'react';
 import { Onboarding } from './ui/components/Onboarding';
 import { useSettings } from './ui/settings';
 import type { Mode } from './data/backend';
-import { useStoreReady } from './data/store';
+import { useLeftoverAsk, useStoreReady } from './data/store';
 import { navigate, useRoute, type Route } from './router';
 import { BottomNav } from './ui/components/BottomNav';
 import { StatusBanner } from './ui/components/StatusBanner';
@@ -24,6 +24,7 @@ import { ProductsScreen } from './ui/screens/ProductsScreen';
 import { StartScreen } from './ui/screens/StartScreen';
 import { TestFeedbackScreen } from './ui/screens/TestFeedbackScreen';
 import { UseUpScreen } from './ui/screens/UseUpScreen';
+import { LeftoverSheet } from './ui/components/LeftoverSheet';
 
 /** Weiterleitung ohne eigenen Eintrag im Verlauf */
 function Redirect({ to }: { to: string }) {
@@ -67,6 +68,7 @@ export function App({ mode }: { mode: Mode | null }) {
   const ready = useStoreReady();
   const route = useRoute();
   const message = useToast();
+  const leftoverOpen = !!useLeftoverAsk();
   const settings = useSettings();
 
   // Geschweifte Klammern nötig: neuere Browser geben bei scrollTo ein Promise zurück,
@@ -88,7 +90,10 @@ export function App({ mode }: { mode: Mode | null }) {
       {!cooking && <BottomNav active={tab} onlyTablet={!tab} />}
       {/* Einführung beim ersten Start (je Gerät) – nicht mitten im Kochen */}
       {!settings.onboarded && !cooking && <Onboarding onClose={() => undefined} />}
-      {message && (
+      {/* nach „Gekocht“ – überall, auch nach dem Kochmodus */}
+      <LeftoverSheet />
+      {/* solange „Was ist übrig?“ offen ist, nicht über dessen Knöpfe legen – danach erscheint er wieder */}
+      {message && !leftoverOpen && (
         <div className={`toast${message.action ? ' toast--action' : ''}`} role="status">
           {message.text}
           {message.action && (

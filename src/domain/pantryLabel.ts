@@ -6,7 +6,7 @@ export interface Pack {
   unit: 'g' | 'ml';
 }
 
-type Labelled = { amount?: number; unit?: 'g' | 'ml' | 'Stück' | 'Glas'; pack?: Pack; openedAt?: string };
+type Labelled = { amount?: number; unit?: 'g' | 'ml' | 'Stück' | 'Glas'; pack?: Pack; openedAt?: string; recipeId?: string };
 
 /** „500 g“, „1 kg“, „1 l“, „250 ml“ */
 export function packLabel(p: Pack): string {
@@ -21,6 +21,7 @@ export function packLabel(p: Pack): string {
  */
 export function amountLabel(item: Labelled): string {
   if (item.amount === undefined) return 'vorhanden';
+  if (item.recipeId) return `${formatAmount(item.amount, 'Stück')} ${item.amount === 1 ? 'Portion' : 'Portionen'}`;
   const count = item.unit === 'Stück' || item.unit === 'Glas';
   const n = formatAmount(item.amount, count ? 'Stück' : 'g');
   if (item.pack && count) return `${n} × ${packLabel(item.pack)}`;

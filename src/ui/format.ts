@@ -48,4 +48,4 @@ export function recipeCount(n: number): string {
 export const euro = (n: number) => n.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
 
 /** „980 g“, „3 Stück“ – oder „vorhanden“, wenn die Menge unbekannt ist. */
-export const quantityLabel = (item: Pick<PantryItem, 'amount' | 'unit' | 'pack' | 'openedAt'>) => amountLabel(item);
+export const quantityLabel = (item: Pick<PantryItem, 'amount' | 'unit' | 'pack' | 'openedAt' | 'recipeId'>) => amountLabel(item);

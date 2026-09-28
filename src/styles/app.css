@@ -1269,3 +1269,31 @@ label.btn.is-disabled { opacity: 0.6; pointer-events: none; }
 .restock__status.is-unbekannt { color: var(--ink-2); font-style: italic; }
 .restock .link { align-self: flex-start; }
 .pantry-warn { color: var(--danger, #b3261e); margin: 0; }
+/* eine Zeile je Lebensmittel, aufgeklappt die Teile (offen / Packungen) eingerückt */
+.pantry__chev { display: inline-flex; padding: 0 10px; color: var(--ink-2); transform: rotate(90deg); transition: transform 0.15s; }
+.pantry__chev.is-open { transform: rotate(-90deg); }
+.pantry__item--part { padding-left: 28px; background: var(--surface-2); }
+.pantry__item--part .pantry__name { font-size: 0.92rem; color: var(--ink-2); }
+/* „Was ist übrig?“ nach dem Kochen */
+.leftover__stepper { display: flex; align-items: center; justify-content: center; gap: 16px; margin: 12px 0; }
+.leftover__count { min-width: 9rem; text-align: center; }
+.leftover__count strong { font-size: 1.4rem; }
+.leftover .sheet__actions { display: flex; flex-direction: column; gap: 8px; }
+.pantry-portions { display: flex; align-items: center; gap: 8px; max-width: 12rem; }
+.pantry-portions input { width: 5rem; }
+.plan-list__prepared { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+/* Vorgekocht auf der Startseite: ruhig in der Themenfarbe – erst bei „heute/morgen“ wie „Bald verbrauchen“ */
+.useup-banner--prepared { background: var(--primary-soft); margin-top: 8px; }
+.useup-banner--prepared > svg:first-child { color: var(--primary-text); }
+.useup-banner--prepared.is-urgent { background: var(--peach); }
+.useup-banner--prepared.is-urgent > svg:first-child { color: var(--art); }
+/* Mengenspalte so breit wie die längste Menge („1 Handvoll“, „2 Messlöffel“) – nie umbrechen,
+   die Namen bleiben trotzdem bündig untereinander (Subgrid: alle Zeilen teilen die Spalten der Liste) */
+.ingredients__qty { white-space: nowrap; }
+@supports (grid-template-columns: subgrid) {
+  .ingredients { display: grid; grid-template-columns: minmax(76px, max-content) 1fr; }
+  .ingredients.has-stock { grid-template-columns: minmax(76px, max-content) 1fr auto; }
+  .ingredients li, .ingredients.has-stock li { grid-column: 1 / -1; grid-template-columns: subgrid; }
+}
+.useup-banner__line { display: block; }
+.home-q--title { margin-bottom: 0; }

@@ -41,7 +41,15 @@ export interface PantryItem {
   pack?: Pack;
   /** angebrochen am … – der Rest einer Packung (in g/ml); hält kürzer, siehe shelfLife */
   openedAt?: string;
+  /**
+   * Vorgekocht: Portionen dieses Rezepts (amount = Portionen, unit 'Stück'). Nie eine Zutat –
+   * „Pesto-Pasta · 3 Portionen“ darf beim nächsten Pesto-Rezept nicht abgezogen werden.
+   */
+  recipeId?: string;
 }
+
+/** Vorgekochtes (Portionen eines Rezepts) – kein Zutatenvorrat */
+export const isPrepared = (it: Pick<PantryItem, 'recipeId'>) => !!it.recipeId;
 
 /**
  * Gelernter Bon-Artikel: „Mozzarella light“ auf dem Bon = „Mozzarella“, 125 g je Stück.
@@ -70,7 +78,7 @@ export interface Pantry {
   savings?: ReceiptSavings[];
   /**
    * Was „Gekocht“ je geplantem Rezept aus der Speisekammer genommen hat – nimmst du den Haken
-   * im Wochenplan zurück, kommt es wieder hinein. „Neue Woche beginnen“ leert es.
+   * im Wochenplan zurück, kommt es wieder hinein (und beim Kochen entstandene Reste verschwinden). „Gekochtes aufräumen“ leert es.
    */
   cookLog?: Record<string, Taken[]>;
   /** „Immer im Haus“ (Namen) – fehlt die Liste, gilt DEFAULT_BASICS */
@@ -340,7 +348,7 @@ export function deductRecipe(
   newId = defaultId,
 ): Deduction {
   const factor = servings / content.servings;
-  const keyOf = new Map(pantry.items.map((it) => [it.id, itemAsIngredient(it, table)?.key]));
+  const keyOf = new Map(pantry.items.map((it) => [it.id, isPrepared(it) ? undefined : itemAsIngredient(it, table)?.key]));
   // Gibt es etwas doppelt (MHD-Ware + frische Packung, oder gefroren), zuerst das, was eher weg muss
   // Angebrochenes vor allem anderen – erst die offene Milch, dann eine neue
   const rank = (it: PantryItem) => (it.openedAt ? -Infinity : it.frozenAt ? Infinity : useByOf(it, table, pantry.shelfDays)?.getTime() ?? Number.MAX_SAFE_INTEGER);
@@ -440,6 +448,8 @@ export function pantryAfterPlan(pantry: Pantry, plan: MealPlan, recipes: Recipe[
  *   stehen IMMER vorne – die Tomaten müssen weg, die Pasta hält. Innerhalb der Gruppen zählt die Übereinstimmung.
  */
 export function recipesFromPantry(pantry: Pantry, recipes: Recipe[], table: FoodTable, limit = 8, useUp = new Map<string, number>()): PantryMatch[] {
+  // Vorgekochtes ist keine Zutat
+  pantry = { ...pantry, items: pantry.items.filter((it) => !isPrepared(it)) };
   const inStock = new Set(pantry.items.map((it) => itemAsIngredient(it, table)?.key).filter(Boolean));
   if (!inStock.size) return [];
   return recipes
@@ -482,7 +492,7 @@ export interface Leftover {
  * @param pantry am besten ohne das, was andere geplante Gerichte noch brauchen (pantryAfterPlan)
  */
 export function leftoverSuggestions(pantry: Pantry, ingredients: Ingredient[], table: FoodTable): Leftover[] {
-  const perishable = pantry.items.filter((it) => (it.amount ?? 0) > 0 && !it.frozenAt && useByOf(it, table, pantry.shelfDays));
+  const perishable = pantry.items.filter((it) => !isPrepared(it) && (it.amount ?? 0) > 0 && !it.frozenAt && useByOf(it, table, pantry.shelfDays));
   const resolved = ingredients.map((ing) => ({ ing, need: resolveIngredient(ing, 1, table) }));
   const out: Leftover[] = [];
   for (const { ing, need } of resolved) {
@@ -621,8 +631,14 @@ export function plannedUse(pantry: Pantry, plan: MealPlan, recipes: Recipe[], ta
  * Passende Einheit beim Eintragen: Pesto im Glas, Eier und Paprika als Stück, Milch in ml, sonst g.
  * Ein Produkt mit Packung „Stück“ (10er-Eier) geht vor.
  */
-export function suggestPantryUnit(food: FoodEntry | undefined, product?: { packageUnit?: 'g' | 'ml' | 'Stück' }): PantryUnit {
+export function suggestPantryUnit(
+  food: FoodEntry | undefined, product?: { packageUnit?: 'g' | 'ml' | 'Stück'; packageAmount?: number },
+  /** der Eintrag der allgemeinen Tabelle (ohne deine Produkte) – kennt er „Glas“, ist es ein echtes Glas (Pesto) */
+  base?: FoodEntry,
+): PantryUnit {
   if (product?.packageUnit === 'Stück') return 'Stück';
+  // Produkt mit Packungsgröße: in Packungen zählen – „3 Stück“, die Größe hängt Mashi selbst an
+  if (product?.packageAmount) return base?.portions?.Glas ? 'Glas' : 'Stück';
   if (!food) return 'g';
   if (food.portions?.Glas) return 'Glas';
   if (food.portions?.Stück) return 'Stück';
@@ -688,7 +704,7 @@ export function packSuggestions(pantry: Pantry, ingredients: Ingredient[], table
   for (const { ing, need } of resolved) {
     if (!need || need.pantry || need.food?.negligible || ing.amount === undefined) continue;
     if (resolved.filter((r) => r.need?.key === need.key).length > 1) continue;
-    const mine = pantry.items.filter((it) => (it.amount ?? 0) > 0 && keyOf(it) === need.key);
+    const mine = pantry.items.filter((it) => !isPrepared(it) && (it.amount ?? 0) > 0 && keyOf(it) === need.key);
     if (mine.some((it) => it.openedAt)) continue;
     const item = mine.find((it) => it.pack && isCount(it.unit) && !it.frozenAt);
     if (!item?.pack) continue;
@@ -706,4 +722,103 @@ export function packSuggestions(pantry: Pantry, ingredients: Ingredient[], table
     });
   }
   return out;
+}
+
+/**
+ * Vorräte, die vor den Packungen eingetragen wurden (oder bevor das Produkt eine Packungsgröße hatte):
+ * „2⅔ Stück Joghurt“ → „2 × 500 g“ + „333 g offen“. Nur mit Produkt samt Packungsgröße – sonst weiß
+ * Mashi es nicht. undefined = nichts zu tun.
+ */
+export function attachPacks(items: PantryItem[], table: FoodTable, products: readonly MyProductPack[], now: string, newId = defaultId): PantryItem[] | undefined {
+  let changed = false;
+  const out: PantryItem[] = [];
+  for (const it of items) {
+    const product = it.pack || it.openedAt || isPrepared(it) || !isCount(it.unit) || it.amount === undefined ? undefined : productFor(it, table, products);
+    if (!product) {
+      out.push(it);
+      continue;
+    }
+    changed = true;
+    const pack: Pack = { amount: product.packageAmount!, unit: product.packageUnit === 'ml' ? 'ml' : 'g' };
+    const closed = it.frozenAt ? it.amount! : Math.floor(it.amount! + 1e-6);
+    const rest = it.amount! - closed;
+    const openRest = rest > 0.02 ? Math.round(rest * pack.amount) : 0;
+    const { check: _c, ...keep } = it;
+    // Produkt mitmerken – sonst hielte addItem die nächsten Becher für eine andere Sorte
+    const productId = it.productId ?? product.id;
+    if (closed > 0) out.push({ ...it, amount: closed, pack, productId });
+    if (openRest > 0) {
+      // ohne geschlossene Packung behält der offene Rest die ID (Verweise wie „für den Wochenplan“ bleiben)
+      out.push({ ...keep, productId, id: closed > 0 ? newId() : it.id, amount: openRest, unit: pack.unit, openedAt: now, boughtAt: it.boughtAt ?? it.addedAt, ...(closed > 0 ? { addedAt: now } : {}) });
+    }
+  }
+  return changed ? out : undefined;
+}
+
+/** das, was attachPacks von einem Produkt braucht */
+type MyProductPack = { id: string; packageAmount?: number; packageUnit?: 'g' | 'ml' | 'Stück'; favorite?: boolean };
+
+/** Produkt eines Vorrats mit Packungsgröße in g/ml: die Sorte am Vorrat, sonst das (eine) Produkt für den Namen */
+function productFor(it: PantryItem, table: FoodTable, products: readonly MyProductPack[]): MyProductPack | undefined {
+  const withPack = (p?: MyProductPack) => (p?.packageAmount && p.packageUnit !== 'Stück' ? p : undefined);
+  if (it.productId) return withPack(products.find((p) => p.id === it.productId));
+  const food = table.matchName(it.name)?.food;
+  if (!food) return undefined;
+  const ids = food.variants?.length ? food.variants.map((v) => v.id) : [food.ref.foodId];
+  const ps = ids.map((id) => products.find((p) => p.id === id)).filter((p): p is MyProductPack => !!withPack(p));
+  // mehrere Sorten: nur, wenn alle gleich groß sind (sonst wüsste Mashi nicht, welche es ist)
+  return ps.length && ps.every((p) => p.packageAmount === ps[0].packageAmount && p.packageUnit === ps[0].packageUnit) ? ps[0] : undefined;
+}
+
+/**
+ * Doppelte Zeilen zusammenlegen: gleicher Name, gleiche Einheit und Packung, beide geschlossen und frisch –
+ * „2 × 500 g“ + „2 × 500 g“ → „4 × 500 g“. Fehlt einem die Sorte, übernimmt er die des anderen.
+ * undefined = nichts zu tun.
+ */
+export function mergeSamePacks(items: PantryItem[]): PantryItem[] | undefined {
+  const out: PantryItem[] = [];
+  let changed = false;
+  for (const it of items) {
+    const i = it.amount === undefined || it.frozenAt || it.openedAt || isPrepared(it) ? -1 : out.findIndex((x) => x.amount !== undefined && !x.frozenAt && !x.openedAt && !isPrepared(x)
+      && sameName(x.name, it.name) && x.unit === it.unit && samePack(x.pack, it.pack) && !!x.reduced === !!it.reduced
+      && (x.productId === it.productId || !x.productId || !it.productId));
+    if (i < 0) {
+      out.push(it);
+      continue;
+    }
+    const x = out[i];
+    changed = true;
+    out[i] = {
+      ...x, amount: Math.round((x.amount! + it.amount!) * 10) / 10, check: false,
+      ...(x.productId || it.productId ? { productId: x.productId ?? it.productId } : {}),
+      // das ältere Kaufdatum zählt (wie beim Eintragen)
+      boughtAt: [x.boughtAt ?? x.addedAt, it.boughtAt ?? it.addedAt].sort()[0],
+    };
+  }
+  return changed ? out : undefined;
+}
+
+// ── Vorgekocht ─────────────────────────────────────────────────────
+
+/** Übrige Portionen nach dem Kochen als Vorgekochtes eintragen (hält im Kühlschrank kurz, einfrierbar). */
+export function addPrepared(items: PantryItem[], recipe: { id: string; title: string }, portions: number, now: string, newId = defaultId): { items: PantryItem[]; item?: PantryItem } {
+  if (!(portions > 0)) return { items };
+  const item: PantryItem = { id: newId(), name: recipe.title, amount: portions, unit: 'Stück', addedAt: now, boughtAt: now, recipeId: recipe.id };
+  return { items: [...items, item], item };
+}
+
+/** Portionen gegessen – bei 0 ist das Vorgekochte weg. */
+export function eatPrepared(items: PantryItem[], id: string, portions = 1): PantryItem[] {
+  return items.flatMap((x) => {
+    if (x.id !== id) return [x];
+    const left = Math.round(((x.amount ?? 0) - portions) * 10) / 10;
+    return left > 0 ? [{ ...x, amount: left }] : [];
+  });
+}
+
+/** Wie viel ist von einem Rezept vorgekocht? (frisch und gefroren getrennt) */
+export function preparedOf(pantry: Pantry, recipeId: string): { fresh: number; frozen: number; items: PantryItem[] } {
+  const items = pantry.items.filter((it) => it.recipeId === recipeId && (it.amount ?? 0) > 0);
+  const sum = (xs: PantryItem[]) => xs.reduce((n, x) => n + (x.amount ?? 0), 0);
+  return { fresh: sum(items.filter((x) => !x.frozenAt)), frozen: sum(items.filter((x) => x.frozenAt)), items };
 }

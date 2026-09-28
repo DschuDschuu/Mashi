@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { currentContent, totalMinutes } from '../../domain/recipe';
 import { recipeOfTheDay } from '../../domain/recipeOfTheDay';
 import type { Recipe } from '../../domain/types';
-import { addToPlan, usePlan, useRecipes } from '../../data/store';
+import { addToPlan, usePantry, usePlan, useProducts, useRecipes } from '../../data/store';
+import { withMyProducts } from '../../domain/nutrition/myProducts';
+import { foodTable } from '../../services';
 import { navigate } from '../../router';
 import { Empty } from '../components/Controls';
 import { Icon } from '../components/Icon';
@@ -11,10 +13,10 @@ import { StockLine } from '../components/StockLine';
 import type { Stock } from '../../domain/pantry';
 import { SettingsButton } from '../components/SettingsButton';
 import { RecipeImage } from '../components/RecipeImage';
-import { formatMinutes, kcalLabel, portionCount } from '../format';
+import { formatMinutes, kcalLabel, portionCount, quantityLabel } from '../format';
 import { toast } from '../toast';
 import { recipeNutrition } from '../useNutrition';
-import { expiryLabel } from '../../domain/shelfLife';
+import { daysLabel, daysLeft, expiryLabel, useByOf } from '../../domain/shelfLife';
 import { useUseUp } from '../useUseUp';
 import { useShoppingCount } from '../useShoppingCount';
 
@@ -34,7 +36,7 @@ export function StartScreen() {
     .filter((i): i is { recipe: Recipe; servings: number } => !!i.recipe)
     .sort((a, b) => Number(plannedUseUp.has(b.recipe.id)) - Number(plannedUseUp.has(a.recipe.id)));
   // Jeder Name nur einmal – die Liste ist nach Dringlichkeit sortiert, der dringendste Eintrag bleibt
-  const expiring = all.filter((e, i) => all.findIndex((o) => o.item.name === e.item.name) === i);
+  const expiring = all.filter((e, i) => !e.item.recipeId && all.findIndex((o) => o.item.name === e.item.name) === i);
   const daily = recipeOfTheDay(recipes, new Date(), new Set(usingUp.keys()));
 
   return (
@@ -59,12 +61,13 @@ export function StartScreen() {
           <Icon name="chevron" size={16} />
         </button>
       )}
+      <PreparedRow />
       {planned.length > 0 ? (
         <section className="today" aria-labelledby="today-title">
-          <div className="row-between">
-            <h2 className="today__title" id="today-title"><Icon name="calendar" size={18} /> Bereit zum Kochen</h2>
-            <button className="link" onClick={() => navigate('/plan')}>Plan</button>
-          </div>
+          {/* derselbe Aufbau wie ohne Plan („Was möchtest du heute kochen?“ + „Rezept des Tages“): mittige Überschrift,
+              darunter die Unterüberschrift mit Symbol – zum Plan geht es unten über die Navigation */}
+          <h2 className="home-q home-q--title" id="today-title">Bereit zum Kochen</h2>
+          <p className="today__title"><Icon name="calendar" size={18} /> Aus deinem Wochenplan</p>
           <Swiper items={planned} />
         </section>
       ) : daily ? (
@@ -105,7 +108,7 @@ function Shortcuts() {
       {allCooked && (
         <button className="home-row" onClick={() => navigate('/plan')}>
           <Icon name="calendar" size={18} />
-          <span><strong>Alles gekocht</strong> – neue Woche planen?</span>
+          <span><strong>Alles gekocht</strong> – Neues planen?</span>
           <Icon name="chevron" size={16} />
         </button>
       )}
@@ -192,5 +195,41 @@ function BigCard({ recipe, servings, daily = false, hint, badge, stock }: {
         </div>
       </div>
     </article>
+  );
+}
+
+/**
+ * Vorgekocht (nicht Eingefrorenes – wie bei Verderblichem): „Bolognese (3 Portionen, morgen)“.
+ * Das Dringendste zuerst; antippen führt in die Speisekammer.
+ */
+function PreparedRow() {
+  const pantry = usePantry();
+  const products = useProducts();
+  const table = withMyProducts(foodTable, products);
+  const now = new Date();
+  const fresh = pantry.items
+    .filter((i) => i.recipeId && !i.frozenAt && (i.amount ?? 0) > 0)
+    .map((i) => ({ i, by: useByOf(i, table, pantry.shelfDays) }))
+    .sort((a, b) => (a.by?.getTime() ?? Infinity) - (b.by?.getTime() ?? Infinity));
+  if (!fresh.length) return null;
+  const urgent = fresh.some((f) => f.by && daysLeft(f.by, now) <= 1);
+  return (
+    <button className={`useup-banner useup-banner--prepared${urgent ? ' is-urgent' : ''}`} onClick={() => navigate('/speisekammer')}>
+      <Icon name="pot" size={18} />
+      <span className="useup-banner__text">
+        <strong>Vorgekocht</strong>
+        <span>
+          {/* die Haltbarkeit nur, wenn es drängt (heute, morgen, drüber) – sonst reicht die Portion */}
+          {/* jedes Gericht in einer eigenen Zeile */}
+          {fresh.slice(0, 3).map(({ i, by }) => (
+            <span key={i.id} className="useup-banner__line">
+              {i.name} ({quantityLabel(i)}{by && daysLeft(by, now) <= 1 ? `, ${daysLabel(daysLeft(by, now))}` : ''})
+            </span>
+          ))}
+          {fresh.length > 3 && <span className="useup-banner__line">und {fresh.length - 3} mehr</span>}
+        </span>
+      </span>
+      <Icon name="chevron" size={16} />
+    </button>
   );
 }

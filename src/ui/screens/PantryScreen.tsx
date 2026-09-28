@@ -5,6 +5,7 @@ import { recipesFromPantry, suggestPantryUnit, type PantryItem, type PantryUnit 
 import { daysLabel, daysLeft, frozenSince, specialDays, useByOf } from '../../domain/shelfLife';
 import { formatAmount } from '../../domain/scaling';
 import {
+  eatPreparedPortions,
   openPantryItem,
   addPantryItem, answerPantryCheck, assignPantrySorts, currentPantry, currentProducts, forgetReceiptRule, freezePantryItem, removePantryItem, thawPantryItem, updatePantryItem,
   saveProducts, usePantry, usePlan, useProducts, useRecipes,
@@ -108,10 +109,73 @@ export function PantryScreen() {
   // Gefrorenes als eigene Gruppe am Ende – es hält ganz anders als der Rest seiner Art
   // Ganz Verplantes fällt oben weg; Bearbeiten zeigt aber immer den echten Vorrat
   const shown = sorted.filter((i) => freeOf(i) !== null);
+  const prepared = shown.filter((i) => i.recipeId && !i.frozenAt);
   const groups = [
-    ...groupByKind(shown.filter((i) => !i.frozenAt), kindOf),
+    // Vorgekochtes zuerst – es hält am kürzesten und will gegessen werden
+    ...(prepared.length ? [{ title: 'Vorgekocht', items: prepared }] : []),
+    ...groupByKind(shown.filter((i) => !i.frozenAt && !i.recipeId), kindOf),
     ...(shown.some((i) => i.frozenAt) ? [{ title: 'Gefroren', items: shown.filter((i) => i.frozenAt) }] : []),
   ];
+  // Eine Zeile je Lebensmittel: „Joghurt · 4 × 500 g + 400 g offen“ – antippen klappt die Teile auf
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const clusters = (items: PantryItem[]) => {
+    const out: PantryItem[][] = [];
+    for (const i of items) {
+      const last = out[out.length - 1];
+      if (last && !i.frozenAt && normalizeName(last[0].name) === normalizeName(i.name)) last.push(i);
+      else out.push([i]);
+    }
+    return out;
+  };
+  const row = (i: PantryItem, part = false) => editing === i.id
+    ? <EditRow key={i.id} item={i} estimate={useByOf({ ...i, useBy: undefined }, table, pantry.shelfDays)} reserved={reservedLabel(i)} onDone={() => setEditing(null)} />
+    : (
+      <li key={i.id} className={`pantry__item${part ? ' pantry__item--part' : ''}`}>
+        <button className="pantry__hit" onClick={() => setEditing(i.id)} aria-label={`${i.name} bearbeiten`}>
+          {/* links nur der Name (groß), rechts die freie Menge mit dem Datum darunter */}
+          <span className="pantry__name">
+            {part ? (i.openedAt ? `angebrochen ${new Date(i.openedAt).toLocaleDateString('de-DE', { day: 'numeric', month: 'numeric' })}` : 'geschlossen') : i.name}
+            {shelfLabel(i)?.alarm && <span className="pantry__alarm" role="img" aria-label="läuft heute oder morgen ab"><Icon name="clock" size={14} /></span>}
+            {i.reduced && !i.frozenAt && <span className="badge tint-peach pantry__mhd">MHD</span>}
+            {/* nur, wenn es etwas Neues sagt (Marke, Sorte) – nicht „Milch“ unter „Milch“ */}
+            {i.productId && sortName(i.productId) && normalizeName(sortName(i.productId)!) !== normalizeName(i.name) && <span className="pantry__sort">{sortName(i.productId)}</span>}
+          </span>
+          <span className="pantry__qty pantry__qty--stack">
+            {/* in der Teilzeile sagt links schon „angebrochen“ */}
+            {quantityLabel(part ? { ...(freeOf(i) ?? i), openedAt: undefined } : freeOf(i) ?? i)}
+            {shelfLabel(i) && <span className={`pantry__shelf${shelfLabel(i)!.urgent ? ' is-urgent' : ''}`}>{shelfLabel(i)!.text}</span>}
+          </span>
+        </button>
+        <button className="iconbtn iconbtn--sm" aria-label={`${i.name} entfernen`} onClick={() => remove(i)}>
+          <Icon name="close" size={16} />
+        </button>
+      </li>
+    );
+  const clusterRow = (parts: PantryItem[]) => {
+    if (parts.length === 1) return row(parts[0]);
+    const k = `${normalizeName(parts[0].name)}|${parts[0].id}`;
+    const open = expanded === k || parts.some((p) => p.id === editing);
+    // das früheste Datum zählt – das Offene muss zuerst weg
+    const first = [...parts].sort((a, b) => (useByOf(a, table, pantry.shelfDays)?.getTime() ?? Infinity) - (useByOf(b, table, pantry.shelfDays)?.getTime() ?? Infinity))[0];
+    const shelf = shelfLabel(first);
+    return [
+      <li key={k} className="pantry__item pantry__item--group">
+        <button className="pantry__hit" onClick={() => setExpanded(open ? null : k)} aria-expanded={open} aria-label={`${parts[0].name}: ${parts.length} Teile`}>
+          <span className="pantry__name">
+            {parts[0].name}
+            {parts.some((p) => shelfLabel(p)?.alarm) && <span className="pantry__alarm" role="img" aria-label="läuft heute oder morgen ab"><Icon name="clock" size={14} /></span>}
+          </span>
+          <span className="pantry__qty pantry__qty--stack">
+            {/* Geschlossenes zuerst: „3 × 500 g + 400 g offen“ */}
+            {[...parts].sort((a, b) => Number(!!a.openedAt) - Number(!!b.openedAt)).map((p) => quantityLabel(freeOf(p) ?? p)).join(' + ')}
+            {shelf && <span className={`pantry__shelf${shelf.urgent ? ' is-urgent' : ''}`}>{shelf.text}</span>}
+          </span>
+        </button>
+        <span className={`pantry__chev${open ? ' is-open' : ''}`} aria-hidden="true"><Icon name="chevron" size={16} /></span>
+      </li>,
+      ...(open ? parts.map((p) => row(p, true)) : []),
+    ];
+  };
 
   return (
     <main className="screen screen--tabbed" {...swipe}>
@@ -147,31 +211,9 @@ export function PantryScreen() {
           ) : (
             groups.map(({ title, items }) => {
               return (
-                <Section key={title} title={`${title} (${items.length})`}>
+                <Section key={title} title={`${title} (${clusters(items).length})`}>
                   <ul className="pantry">
-                    {items.map((i) => editing === i.id
-                      ? <EditRow key={i.id} item={i} estimate={useByOf({ ...i, useBy: undefined }, table, pantry.shelfDays)} reserved={reservedLabel(i)} onDone={() => setEditing(null)} />
-                      : (
-                        <li key={i.id} className="pantry__item">
-                          <button className="pantry__hit" onClick={() => setEditing(i.id)} aria-label={`${i.name} bearbeiten`}>
-                            {/* links nur der Name (groß), rechts die freie Menge mit dem Datum darunter */}
-                            <span className="pantry__name">
-                              {i.name}
-                              {shelfLabel(i)?.alarm && <span className="pantry__alarm" role="img" aria-label="läuft heute oder morgen ab"><Icon name="clock" size={14} /></span>}
-                              {i.reduced && !i.frozenAt && <span className="badge tint-peach pantry__mhd">MHD</span>}
-                              {/* nur, wenn es etwas Neues sagt (Marke, Sorte) – nicht „Milch“ unter „Milch“ */}
-                              {i.productId && sortName(i.productId) && normalizeName(sortName(i.productId)!) !== normalizeName(i.name) && <span className="pantry__sort">{sortName(i.productId)}</span>}
-                            </span>
-                            <span className="pantry__qty pantry__qty--stack">
-                              {quantityLabel(freeOf(i) ?? i)}
-                              {shelfLabel(i) && <span className={`pantry__shelf${shelfLabel(i)!.urgent ? ' is-urgent' : ''}`}>{shelfLabel(i)!.text}</span>}
-                            </span>
-                          </button>
-                          <button className="iconbtn iconbtn--sm" aria-label={`${i.name} entfernen`} onClick={() => remove(i)}>
-                            <Icon name="close" size={16} />
-                          </button>
-                        </li>
-                      ))}
+                    {clusters(items).flatMap(clusterRow)}
                   </ul>
                 </Section>
               );
@@ -245,7 +287,10 @@ function AddForm({ onDone }: { onDone: () => void }) {
   const askBrand = !chosen && (options.length === 0 || otherBrand);
   // Einheit passend zur Zutat/Marke: Pesto → Glas, Eier → Stück, Milch → ml
   const unitTable = useMemo(() => withMyProducts(foodTable, products), [products]);
-  const suggestedUnit = suggestPantryUnit(name.trim() ? unitTable.matchName(name)?.food : undefined, chosen ?? undefined);
+  const suggestedUnit = suggestPantryUnit(name.trim() ? unitTable.matchName(name)?.food : undefined, chosen ?? undefined, name.trim() ? foodTable.matchName(name)?.food : undefined);
+  /** Packungsgröße des Produkts – bei Stück/Glas hängt Mashi sie im Hintergrund an */
+  const packHint = chosen?.packageAmount && chosen.packageUnit !== 'Stück' && (unit === 'Stück' || unit === 'Glas')
+    ? packLabel({ amount: chosen.packageAmount, unit: chosen.packageUnit === 'ml' ? 'ml' : 'g' }) : undefined;
   useEffect(() => { if (!unitTouched) setUnit(suggestedUnit); }, [suggestedUnit, unitTouched]);
   /** Nach dem Eintragen: „… zu Meine Lebensmittel hinzufügen?“ */
   const [offer, setOffer] = useState<{ name: string; brand: string } | null>(null);
@@ -264,8 +309,12 @@ function AddForm({ onDone }: { onDone: () => void }) {
     // Schreibweise wie beim vorhandenen Vorrat, sonst mit großem Anfangsbuchstaben
     const known = currentPantry().items.find((it) => normalizeName(it.name) === normalizeName(n))?.name;
     if (!name.trim()) setName(known ?? n.charAt(0).toLocaleUpperCase('de-DE') + n.slice(1));
-    // Packungsgröße vom Barcode („190 g“) – dann nicht mehr automatisch auf „Glas“ springen
-    if (!amount && p.packageAmount && p.packageUnit) { setAmount(String(p.packageAmount).replace('.', ',')); setUnit(p.packageUnit); setUnitTouched(true); }
+    // Barcode: eine Packung – „1 Stück“ (die Größe hängt Mashi an); bei „10er“-Packungen die Stückzahl
+    if (!amount && p.packageAmount && p.packageUnit) {
+      setAmount(p.packageUnit === 'Stück' ? String(p.packageAmount) : '1');
+      setUnit('Stück');
+      setUnitTouched(true);
+    }
   };
   // Richtwert der Tabelle fürs Angebot – kennt sie die Zutat nicht, geht nur „Mit Nährwerten“
   const offerTable = offer ? foodTable.matchName(offer.name)?.food : undefined;
@@ -314,6 +363,7 @@ function AddForm({ onDone }: { onDone: () => void }) {
           onKeyDown={(e) => e.key === 'Enter' && submit()} />
       </label>
       <AmountFields amount={amount} unit={unit} onAmount={setAmount} onUnit={(u) => { setUnit(u); setUnitTouched(true); }} />
+      {packHint && <p className="small muted">Packung à {packHint} – aus „Meine Lebensmittel“</p>}
       <SortPicker options={options} value={chosen?.id} onChange={(id) => setProduct(products.find((p) => p.id === id) ?? null)}
         onOther={() => { setProduct(null); setOtherBrand(true); }} />
       {askBrand && name.trim() && (
@@ -363,7 +413,7 @@ function EditRow({ item, estimate, reserved, onDone }: { item: PantryItem; estim
     const part = freezing ? parseAmount(freezing) : undefined;
     freezePantryItem(item.id, part);
     toast(part !== undefined && item.amount !== undefined && part < item.amount
-      ? `${quantityLabel({ amount: part, unit: item.unit })} ${item.name} eingefroren`
+      ? `${quantityLabel({ amount: part, unit: item.unit, recipeId: item.recipeId })} ${item.name} eingefroren`
       : `„${item.name}“ eingefroren`);
     onDone();
   };
@@ -384,6 +434,13 @@ function EditRow({ item, estimate, reserved, onDone }: { item: PantryItem; estim
     toast(take ? `${formatAmount(take, 'g')} ${openUnit} ${item.name} herausgenommen – der Rest ist offen` : `${what} angebrochen – hält offen kürzer`);
     onDone();
   };
+  const prep = !!item.recipeId;
+  const eat = () => {
+    const undo = eatPreparedPortions(item.id, 1);
+    const left = (item.amount ?? 0) - 1;
+    toast(left > 0 ? `Guten Appetit! Noch ${quantityLabel({ ...item, amount: left })} ${item.name}` : `„${item.name}“ aufgegessen`, { label: 'Rückgängig', run: undo });
+    onDone();
+  };
   const thaw = () => {
     thawPantryItem(item.id);
     const d = specialDays('thawed', pantry.shelfDays);
@@ -392,34 +449,43 @@ function EditRow({ item, estimate, reserved, onDone }: { item: PantryItem; estim
   };
   return (
     <li className="pantry__item pantry__item--edit">
-      <input value={name} onChange={(e) => setName(e.target.value)} list="ingredient-names" aria-label="Name" />
+      <input value={name} onChange={(e) => setName(e.target.value)} list={prep ? undefined : 'ingredient-names'} aria-label="Name" />
       {reserved && <p className="small muted pantry-reserved">{reserved} Hier steht der ganze Vorrat.</p>}
-      <AmountFields amount={amount} unit={unit} onAmount={setAmount} onUnit={setUnit} />
+      {prep ? (
+        <label className="pantry-amount pantry-portions">
+          <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} aria-label="Portionen" />
+          <span className="small">Portionen</span>
+        </label>
+      ) : <AmountFields amount={amount} unit={unit} onAmount={setAmount} onUnit={setUnit} />}
+      {prep && <button className="link small" onClick={() => navigate(`/rezept/${item.recipeId}`)}>Zum Rezept</button>}
       {item.pack && (unit === 'Stück' || unit === 'Glas') && <p className="small muted">Packungen à {packLabel(item.pack)}</p>}
       {item.openedAt && <p className="small muted">Angebrochen am {new Date(item.openedAt).toLocaleDateString('de-DE')} – hält offen kürzer.</p>}
-      <SortPicker options={editOptions} value={productId} onChange={setProductId} />
+      {!prep && <SortPicker options={editOptions} value={productId} onChange={setProductId} />}
       {item.frozenAt ? (
         <p className="small muted pantry-frozen">Eingefroren am {new Date(item.frozenAt).toLocaleDateString('de-DE')}</p>
       ) : (
         <>
           <label className="pantry-date">
-            <span className="small muted">{item.useBy ? 'Verbrauchen bis' : estimate ? 'Verbrauchen bis (geschätzt)' : 'Verbrauchen bis (optional)'}</span>
+            <span className="small muted">{prep ? 'Essen bis' : item.useBy ? 'Verbrauchen bis' : estimate ? 'Verbrauchen bis (geschätzt)' : 'Verbrauchen bis (optional)'}</span>
             <input type="date" value={useBy} onChange={(e) => setUseBy(e.target.value)} />
           </label>
-          <label className="pantry-mhd">
-            <input type="checkbox" checked={reduced} onChange={(e) => setReduced(e.target.checked)} />
-            <span className="small">MHD-Ware (reduziert)</span>
-          </label>
+          {!prep && (
+            <label className="pantry-mhd">
+              <input type="checkbox" checked={reduced} onChange={(e) => setReduced(e.target.checked)} />
+              <span className="small">MHD-Ware (reduziert)</span>
+            </label>
+          )}
         </>
       )}
       <div className="pantry-actions">
         <button className="btn btn--primary btn--sm" onClick={save}>OK</button>
+        {prep && !item.frozenAt && <button className="btn btn--soft btn--sm" onClick={eat}>1 gegessen</button>}
         {item.frozenAt
           ? <button className="btn btn--soft btn--sm" onClick={thaw}>Auftauen</button>
           : freezing === null && (
             <button className="btn btn--soft btn--sm" onClick={() => setFreezing(item.amount === undefined ? '' : String(item.amount).replace('.', ','))}>Einfrieren</button>
           )}
-        {!item.frozenAt && !item.openedAt && freezing === null && opening === null && (
+        {!prep && !item.frozenAt && !item.openedAt && freezing === null && opening === null && (
           <button className="btn btn--soft btn--sm" onClick={() => (canTake ? setOpening('') : open())}>{(item.pack || !canTake) && (item.amount ?? 0) > 1 ? 'Eine anbrechen' : 'Angebrochen'}</button>
         )}
       </div>
@@ -439,7 +505,7 @@ function EditRow({ item, estimate, reserved, onDone }: { item: PantryItem; estim
         <div className="pantry-freeze">
           {item.amount !== undefined && (
             <label className="small">Wie viel?
-              <input inputMode="decimal" value={freezing} onChange={(e) => setFreezing(e.target.value)} aria-label="Menge zum Einfrieren" /> {item.unit}
+              <input inputMode="decimal" value={freezing} onChange={(e) => setFreezing(e.target.value)} aria-label="Menge zum Einfrieren" /> {prep ? 'Portionen' : item.unit}
             </label>
           )}
           <button className="btn btn--primary btn--sm" onClick={freeze}>Einfrieren</button>

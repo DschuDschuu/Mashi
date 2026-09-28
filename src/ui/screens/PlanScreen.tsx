@@ -6,8 +6,9 @@ import { ingredientCompletions, longNotCooked, searchRecipes } from '../../domai
 import { withMyProducts } from '../../domain/nutrition/myProducts';
 import { currentContent } from '../../domain/recipe';
 import type { Recipe } from '../../domain/types';
+import { preparedOf } from '../../domain/pantry';
 import {
-  addToPlan, clearPlan, removeFromPlan, setPlanServings, togglePlanCooked, usePlan, useProducts, useRecipes,
+  addToPlan, clearCooked, eatPreparedPortions, removeFromPlan, usePantry, setPlanServings, togglePlanCooked, usePlan, useProducts, useRecipes,
 } from '../../data/store';
 import { navigate } from '../../router';
 import { foodTable } from '../../services';
@@ -83,7 +84,7 @@ export function PlanScreen() {
                 </button>
                 {/* eigene Zeile unter Bild und Titel – sonst bleibt neben dem Portionen-Regler nur ein schmaler Streifen */}
                 <div className="plan-list__meta">
-                  {cooked && <span className="plan-list__done"><Icon name="check" size={13} /> Gekocht</span>}
+                  {cooked && <PreparedLine recipeId={recipe.id} />}
                   <DishNutrition content={currentContent(recipe)} own={variants} recipeId={cooked ? undefined : recipe.id} />
                   {costs.get(recipe.id) && <span className="small muted">ca. {euro(costs.get(recipe.id)!.total)}</span>}
                 </div>
@@ -103,7 +104,7 @@ export function PlanScreen() {
         )}
         {week.total > 0 && (
           <p className="cost-line">
-            <span>Diese Woche ca. <strong>{euro(week.total)}</strong></span>
+            <span>Im Plan ca. <strong>{euro(week.total)}</strong></span>
             {(week.unknown > 0 || week.missing.length > 0) && (
               <span className="small muted">
                 {week.unknown > 0 ? `${week.unknown} ${week.unknown === 1 ? 'Gericht' : 'Gerichte'} ohne Preise` : ''}
@@ -116,9 +117,10 @@ export function PlanScreen() {
         <button className="btn btn--soft btn--block" onClick={() => setPicking(true)}>
           <Icon name="plus" size={18} /> Gericht hinzufügen
         </button>
-        {items.length > 0 && (
-          <button className="link link--muted center" onClick={() => confirm('Neue Woche beginnen? Plan, Haken und „Gekocht“ werden geleert – die Rezepte bleiben natürlich.') && clearPlan()}>
-            Neue Woche beginnen
+        {/* statt „Neue Woche“: der Plan läuft weiter – nur Gekochtes kommt raus, Vorgekochtes bleibt in der Speisekammer */}
+        {plan.cooked.length > 0 && (
+          <button className="link link--muted center" onClick={() => confirm('Gekochte Gerichte aus dem Plan nehmen? Geplantes bleibt, Vorgekochtes bleibt in der Speisekammer.') && clearCooked()}>
+            Gekochtes aufräumen
           </button>
         )}
       </Section>
@@ -332,5 +334,26 @@ function MissingPanel({ items }: { items: ShoppingItem[] }) {
         </ul>
       )}
     </section>
+  );
+}
+
+/** Gekocht – und wenn etwas übrig ist: „Vorgekocht · noch 3 Portionen“ mit „1 gegessen“ */
+function PreparedLine({ recipeId }: { recipeId: string }) {
+  const pantry = usePantry();
+  const { fresh, frozen, items } = preparedOf(pantry, recipeId);
+  if (!fresh && !frozen) return <span className="plan-list__done"><Icon name="check" size={13} /> Gekocht</span>;
+  // zuerst das, was am längsten steht
+  const next = items.filter((x) => !x.frozenAt).sort((a, b) => (a.boughtAt ?? a.addedAt).localeCompare(b.boughtAt ?? b.addedAt))[0];
+  const portions = (n: number) => `${n.toLocaleString('de-DE')} ${n === 1 ? 'Portion' : 'Portionen'}`;
+  return (
+    <span className="plan-list__prepared">
+      <span className="plan-list__done"><Icon name="check" size={13} /> Vorgekocht{fresh ? ` · noch ${portions(fresh)}` : ''}{frozen ? ` · ${portions(frozen)} eingefroren` : ''}</span>
+      {next && (
+        <button type="button" className="dishnut__variant" onClick={() => {
+          const undo = eatPreparedPortions(next.id, 1);
+          toast(fresh > 1 ? `Guten Appetit! Noch ${portions(fresh - 1)}` : 'Aufgegessen', { label: 'Rückgängig', run: undo });
+        }}>1 gegessen</button>
+      )}
+    </span>
   );
 }

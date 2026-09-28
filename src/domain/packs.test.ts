@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createMockRecipes } from '../data/mockRecipes';
 import { localFoodTable as T } from './nutrition/localFoods';
-import { addItem, deductRecipe, emptyPantry, openItem, packSuggestions, restock, takenBetween, type Pantry, type PantryItem } from './pantry';
+import { addItem, attachPacks, mergeSamePacks, deductRecipe, emptyPantry, openItem, suggestPantryUnit, packSuggestions, restock, takenBetween, type Pantry, type PantryItem } from './pantry';
 import { amountLabel } from './pantryLabel';
 import { restockNeeds } from './restock';
 import { useByOf } from './shelfLife';
@@ -133,5 +133,53 @@ describe('Ganze Packung verwenden?', () => {
   it('schon etwas offen → keine Frage (das Offene kommt zuerst dran)', () => {
     const p = pantry(hack(), { id: 'o', name: 'Rinderhack', amount: 100, unit: 'g', addedAt: NOW, openedAt: NOW });
     expect(packSuggestions(p, [{ id: 'a', name: 'Rinderhack', amount: 600, unit: 'g' }], T)).toEqual([]);
+  });
+});
+
+describe('Alte Vorräte bekommen ihre Packungsgröße', () => {
+  const joghurt = { id: 'pj', packageAmount: 500, packageUnit: 'g' as const };
+  const table = { ...T, matchName: (n: string) => (n === 'Joghurt' ? { food: { ref: { provider: 'mine', foodId: 'pj' }, name: 'Joghurt', per100g: { kcal: 60, protein: 4, carbs: 5, fat: 3 } }, quality: 'exact' as const } : T.matchName(n)) };
+
+  it('„2⅔ Stück Joghurt“ → „2 × 500 g“ + „333 g offen“', () => {
+    const items = attachPacks([{ id: 'j', name: 'Joghurt', amount: 2.67, unit: 'Stück', addedAt: NOW }], table, [joghurt], NOW, id)!;
+    expect(items.map(amountLabel)).toEqual(['2 × 500 g', '335 g offen']);
+    // Produkt gemerkt: neue Becher vom selben Produkt werden dazugezählt
+    expect(addItem(items, { name: 'Joghurt', amount: 3, unit: 'Stück', pack: { amount: 500, unit: 'g' }, productId: 'pj' }, NOW, id).map(amountLabel)).toEqual(['5 × 500 g', '335 g offen']);
+  });
+  it('ohne Produkt mit Packung (Paprika) bleibt alles, wie es ist', () => {
+    expect(attachPacks([{ id: 'p', name: 'Paprika', amount: 2.5, unit: 'Stück', addedAt: NOW }], table, [joghurt], NOW, id)).toBeUndefined();
+  });
+});
+
+describe('Einheit beim Eintragen mit Produkt', () => {
+  it('Produkt mit Packung → Stück; echtes Glas (Pesto) → Glas', () => {
+    const pesto = T.matchName('Pesto')?.food;
+    expect(suggestPantryUnit(T.matchName('Joghurt')?.food, { packageAmount: 500, packageUnit: 'g' }, T.matchName('Joghurt')?.food)).toBe('Stück');
+    expect(suggestPantryUnit(pesto, { packageAmount: 190, packageUnit: 'g' }, pesto)).toBe('Glas');
+  });
+});
+
+describe('Offener Joghurt vom Produkt ist kein Glas', () => {
+  it('Produkt mit Packung 500 g: offen 3 Tage, nicht 14', async () => {
+    const { withMyProducts } = await import('./nutrition/myProducts');
+    const table = withMyProducts(T, [{ id: 'pj2', name: 'Joghurt', replaces: ['joghurt-35'], names: ['joghurt'], per100g: { kcal: 60, protein: 4, carbs: 5, fat: 3 }, packageAmount: 500, packageUnit: 'g', updatedAt: NOW }]);
+    const open: PantryItem = { id: 'o', name: 'Joghurt', amount: 350, unit: 'g', addedAt: NOW, boughtAt: NOW, openedAt: NOW };
+    expect(useByOf(open, table)!.toISOString().slice(0, 10)).toBe('2026-09-30');
+  });
+});
+
+describe('Doppelte Zeilen zusammenlegen', () => {
+  it('„2 × 500 g“ (ohne Sorte) + „2 × 500 g“ (mit Sorte) → „4 × 500 g“; Offenes und andere Größen bleiben', () => {
+    const p = (id: string, amount: number, extra: Partial<PantryItem> = {}): PantryItem => ({ id, name: 'Joghurt', amount, unit: 'Stück', pack: { amount: 500, unit: 'g' }, addedAt: NOW, ...extra });
+    const items = mergeSamePacks([
+      p('a', 2), p('b', 2, { productId: 'pj' }),
+      { id: 'o', name: 'Joghurt', amount: 400, unit: 'g', addedAt: NOW, openedAt: NOW },
+      p('c', 1, { pack: { amount: 250, unit: 'g' } }),
+    ])!;
+    expect(items.map(amountLabel)).toEqual(['4 × 500 g', '400 g offen', '1 × 250 g']);
+    expect(items[0].productId).toBe('pj');
+  });
+  it('nichts doppelt → undefined', () => {
+    expect(mergeSamePacks([{ id: 'a', name: 'Joghurt', amount: 2, unit: 'Stück', addedAt: NOW }])).toBeUndefined();
   });
 });

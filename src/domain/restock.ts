@@ -58,7 +58,7 @@ export function restockStatus(
   // Schlüssel je Vorrat einmal auflösen (nicht je Regel neu)
   const keyOf = new Map<string, string | undefined>();
   const key = (it: PantryItem) => {
-    if (!keyOf.has(it.id)) keyOf.set(it.id, resolveIngredient({ id: it.id, name: it.name }, 1, table)?.key);
+    if (!keyOf.has(it.id)) keyOf.set(it.id, it.recipeId ? undefined : resolveIngredient({ id: it.id, name: it.name }, 1, table)?.key);
     return keyOf.get(it.id);
   };
   const byKey = new Map<string, RestockRule>();

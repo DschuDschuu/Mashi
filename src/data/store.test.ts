@@ -3,7 +3,7 @@ import PouchDB from 'pouchdb-core';
 import memory from 'pouchdb-adapter-memory';
 import { describe, expect, it } from 'vitest';
 import { PouchRecipeRepository, type RecipeDb } from './pouchRepository';
-import { addPantryItem, addToPlan, createRecipe, currentPantry, initStore, removeFromPlan, removePantryItem, setPantryRestock, toggleShoppingItem, updatePantryItem } from './store';
+import { addPantryItem, addToPlan, answerLeftover, clearCooked, createRecipe, currentLeftoverAsk, currentPantry, eatPreparedPortions, initStore, togglePlanCooked, removeFromPlan, removePantryItem, setPantryRestock, toggleShoppingItem, updatePantryItem } from './store';
 import { resolveIngredient } from '../domain/mealplan';
 import { RESTOCK_PREFIX } from '../domain/restock';
 import { foodTable } from '../services';
@@ -85,5 +85,43 @@ describe('Store: Nachkaufen – Haken wandert mit dem Plan', () => {
 
     removeFromPlan(rid);
     expect(await checked()).toEqual([RESTOCK_PREFIX + k]); // wieder nur Nachkaufen – weiter im Wagen
+  });
+});
+
+describe('Store: Vorgekocht', () => {
+  it('kochen → „was ist übrig?“ → Reste in der Speisekammer; essen; „Gekocht“ zurück nimmt sie wieder weg; aufräumen lässt Reste stehen', async () => {
+    const repo = new PouchRecipeRepository(new PouchDB(`prep-${Date.now()}`, { adapter: 'memory' }) as unknown as RecipeDb);
+    await initStore(repo);
+    const content = (title: string) => ({
+      title, description: '', servings: 5, prepMinutes: 0, cookMinutes: 0, difficulty: 1 as const,
+      ingredients: [], steps: [], categories: [], tags: [], devices: [],
+    });
+    const bolo = createRecipe(content('Bolognese'), { source: 'selbst', status: 'kochbuch' });
+    const curry = createRecipe(content('Curry'), { source: 'selbst', status: 'kochbuch' });
+    addToPlan(bolo, 5);
+    addToPlan(curry, 2);
+
+    togglePlanCooked(bolo);
+    expect(currentLeftoverAsk()).toMatchObject({ title: 'Bolognese', servings: 5, planned: true });
+    answerLeftover(4);
+    expect(currentLeftoverAsk()).toBeNull();
+    const prep = () => currentPantry().items.filter((i) => i.recipeId === bolo);
+    expect(prep().map((i) => i.amount)).toEqual([4]);
+
+    eatPreparedPortions(prep()[0].id);
+    expect(prep().map((i) => i.amount)).toEqual([3]);
+
+    // „Gekocht“ zurück → die beim Kochen entstandenen Reste verschwinden
+    togglePlanCooked(bolo);
+    expect(prep()).toEqual([]);
+
+    // nochmal kochen, Reste eintragen, dann „Gekochtes aufräumen“: Curry (nicht gekocht) bleibt im Plan, Reste bleiben
+    togglePlanCooked(bolo);
+    answerLeftover(2);
+    clearCooked();
+    await settle();
+    const plan = await repo.loadPlan();
+    expect(plan.items.map((i) => i.recipeId)).toEqual([curry]);
+    expect(prep().map((i) => i.amount)).toEqual([2]);
   });
 });

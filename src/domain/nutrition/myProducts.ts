@@ -97,14 +97,16 @@ function pieceOf(p: MyProduct, replaced?: FoodEntry): number | undefined {
 
 /** Ein Produkt als Tabelleneintrag. Umrechnungen (Dichte, Stückgewicht) erbt es vom ersetzten Eintrag. */
 function asEntry(p: MyProduct, replaced?: FoodEntry): FoodEntry {
-  const glass = glassOf(p, replaced);
+  // „1 Glas = Packung“ nur, wo es wirklich ein Glas ist (Pesto, Senf) oder die Tabelle es nicht kennt –
+  // sonst hielte offener Joghurt „wie ein Glas“ 14 statt 3 Tage (siehe openedDaysOf)
+  const glass = replaced && !replaced.portions?.Glas ? undefined : glassOf(p, replaced);
   const piece = pieceOf(p, replaced);
   return {
     ref: { provider: MY_PRODUCTS_PROVIDER, foodId: p.id },
     name: productLabel(p),
     per100g: p.per100g,
     ...(replaced?.density !== undefined ? { density: replaced.density } : {}),
-    ...(replaced?.portions || glass ? { portions: { ...replaced?.portions, ...(glass ? { Glas: glass } : {}), ...(piece ? { Stück: piece } : {}) } } : {}),
+    ...(replaced?.portions || glass || piece ? { portions: { ...replaced?.portions, ...(glass ? { Glas: glass } : {}), ...(piece ? { Stück: piece } : {}) } } : {}),
     ...(replaced?.kind ? { kind: replaced.kind } : {}),
     ...(replaced ? { baseId: replaced.ref.foodId } : {}),
     ...(p.shelfDays ? { shelfDays: p.shelfDays } : {}),

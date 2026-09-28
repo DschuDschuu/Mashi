@@ -9,7 +9,7 @@ import type { Ingredient, Recipe, Unit } from './types';
 import type { Pantry, PantryItem } from './pantry';
 import { amountLabel } from './pantryLabel';
 
-/** Der Wochenplan: eine Liste „Diese Woche“ – ohne feste Tage, passend zu Meal Prep. */
+/** Der Wochenplan: eine laufende Liste – ohne feste Tage und ohne Wochenwechsel, passend zu Meal Prep. */
 export interface PlanItem {
   recipeId: string;
   servings: number;
@@ -21,7 +21,7 @@ export interface MealPlan {
   items: PlanItem[];
   /** abgehakte Einträge der Einkaufsliste (ShoppingItem.key) */
   checked: string[];
-  /** diese Woche schon gekochte Gerichte (recipeId) – bleiben bis „Neue Woche“ im Plan */
+  /** schon gekochte Gerichte (recipeId) – bleiben im Plan, bis du „Gekochtes aufräumen“ tippst (Reste: Vorgekocht in der Speisekammer) */
   cooked: string[];
   /** Einkaufsliste: trotz Vorrat ganz kaufen (ShoppingItem.key) – „Doch kaufen“ */
   buy?: string[];
@@ -295,7 +295,7 @@ export function buildShoppingList(plan: MealPlan, all: Recipe[], table: FoodTabl
   for (const [key, g] of groups) if (basics.has(key)) g.pantry = true;
 
   const stock = (pantry?.items ?? [])
-    .filter((it) => (it.amount ?? 1) > 0)
+    .filter((it) => (it.amount ?? 1) > 0 && !it.recipeId) // Vorgekochtes ist keine Zutat
     .map((it) => ({ it, key: resolveIngredient({ id: it.id, name: it.name }, 1, table)?.key }));
 
   return [...groups.entries()]

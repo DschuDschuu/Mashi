@@ -79,7 +79,7 @@ aus den Zutaten berechnet (gecacht je Version).
  #/                       Start
  #/kochbuch?device=…      Kochbuch (Filter als URL → Schnellfilter sind Links)
  #/testen                 KI-Ideen · Zum Testen · Bewährt (über Start erreichbar)
- #/plan                   Wochenplan „Diese Woche“, Vorschläge
+ #/plan                   Wochenplan (laufend, ohne Wochenwechsel), Vorschläge, Vorgekocht · „1 gegessen“
  #/einkauf                Einkaufsliste (zieht den Vorrat ab) – Wagen oben rechts in der Speisekammer
  #/speisekammer           Vorräte, Bald verbrauchen, Verwalten (Haltbarkeit, gelernte Bon-Artikel)
  #/speisekammer/bon       Kassenbon importieren

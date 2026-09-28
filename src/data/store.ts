@@ -4,7 +4,7 @@ import { emptyPlan, normalizePlan, resolveIngredient, toggleCooked, type MealPla
 import { mergeRecipes } from '../domain/merge';
 import { withMyProducts, type MyProduct } from '../domain/nutrition/myProducts';
 import {
-  addItem, applyImport, bonKey, deductRecipe, emptyPantry, freezeItem, openItem, rememberReceipt, restock, takenBetween, thawItem, type Taken, type ImportRow, type Pantry, type PantryItem, type PantryUnit,
+  addItem, addPrepared, applyImport, attachPacks, bonKey, eatPrepared, mergeSamePacks, deductRecipe, emptyPantry, freezeItem, openItem, rememberReceipt, restock, takenBetween, thawItem, type Taken, type ImportRow, type Pantry, type PantryItem, type PantryUnit,
 } from '../domain/pantry';
 import { currentContent, currentVersion, newId, sameContent, withNewVersion } from '../domain/recipe';
 import { recordSavings, type BonSavings } from '../domain/savings';
@@ -40,6 +40,8 @@ let productsPending = 0;
 let reloadMissed = false;
 /** Letzter Speicherfehler (z. B. Speicher voll). Wird beim nächsten erfolgreichen Speichern gelöscht. */
 let saveError: string | null = null;
+/** Nach „Gekocht“: „Wie viele Portionen sind übrig?“ – null = keine Frage offen */
+let leftoverAsk: LeftoverAsk | null = null;
 let ready = false;
 const listeners = new Set<() => void>();
 
@@ -107,6 +109,7 @@ export async function initStore(r: RecipeRepository) {
   plan = normalizePlan(loaded);
   ready = true;
   emit();
+  normalizePacks();
   repo.onExternalChange?.(scheduleReload);
 }
 
@@ -198,6 +201,52 @@ export function usePantry(): Pantry {
   return useSyncExternalStore(subscribe, () => pantry);
 }
 
+export interface LeftoverAsk {
+  recipeId: string;
+  title: string;
+  servings: number;
+  /** im Wochenplan gekocht → „Gekocht“ zurücknehmen nimmt die Reste wieder weg */
+  planned: boolean;
+}
+
+/** für Tests und Nicht-React-Code */
+export const currentLeftoverAsk = () => leftoverAsk;
+
+export function useLeftoverAsk(): LeftoverAsk | null {
+  return useSyncExternalStore(subscribe, () => leftoverAsk);
+}
+
+function askLeftover(r: Recipe, servings: number, planned: boolean) {
+  if (servings <= 1) return; // eine Portion gekocht – bleibt nichts übrig
+  leftoverAsk = { recipeId: r.id, title: currentContent(r).title, servings, planned };
+  emit();
+}
+
+/** Antwort auf „Wie viele Portionen sind übrig?“ – als Vorgekochtes in die Speisekammer (0 = nichts). */
+export function answerLeftover(portions: number) {
+  const ask = leftoverAsk;
+  leftoverAsk = null;
+  emit();
+  if (!ask || !(portions > 0)) return;
+  const { items, item } = addPrepared(pantry.items, { id: ask.recipeId, title: ask.title }, portions, now(), () => newId('v'));
+  // im Plan gekocht: beim Zurücknehmen von „Gekocht“ verschwinden die Reste wieder (wie Angebrochenes)
+  const log = ask.planned && plan.cooked.includes(ask.recipeId) && item
+    ? { cookLog: { ...pruneCookLog(pantry.cookLog), [ask.recipeId]: [...(pantry.cookLog?.[ask.recipeId] ?? []), { item, created: true }] } }
+    : {};
+  commitPantry({ ...pantry, items, ...log });
+}
+
+/** Vorgekochtes gegessen (Standard 1 Portion) – gibt „Rückgängig“ zurück. */
+export function eatPreparedPortions(id: string, portions = 1): () => void {
+  const before = pantry.items.find((x) => x.id === id);
+  commitPantry({ ...pantry, items: eatPrepared(pantry.items, id, portions) });
+  return () => {
+    if (!before) return;
+    const now = pantry.items.find((x) => x.id === id);
+    commitPantry({ ...pantry, items: now ? pantry.items.map((x) => (x.id === id ? { ...x, amount: Math.round(((x.amount ?? 0) + portions) * 10) / 10 } : x)) : [...pantry.items, before] });
+  };
+}
+
 export function useSaveError(): string | null {
   return useSyncExternalStore(subscribe, () => saveError);
 }
@@ -247,7 +296,9 @@ export function markCooked(id: string, servings?: number, amounts: Record<string
   const planned = plan.items.find((i) => i.recipeId === id);
   if (planned && plan.cooked.includes(id)) return { used: [], toCheck: [], undo: () => commit({ ...get(id), lastCookedAt: r.lastCookedAt }) };
   if (planned) commitPlan(toggleCooked(plan, id, true));
-  const result = consume(r, servings ?? planned?.servings ?? currentContent(r).servings, amounts, !!planned, variants ?? planned?.variants);
+  const cookedServings = servings ?? planned?.servings ?? currentContent(r).servings;
+  const result = consume(r, cookedServings, amounts, !!planned, variants ?? planned?.variants);
+  askLeftover(r, cookedServings, !!planned);
   return {
     ...result,
     undo: () => {
@@ -436,6 +487,8 @@ export function saveProducts(next: MyProduct[]) {
   products = next;
   recipes = [...recipes];
   emit();
+  // Packungsgröße neu eingetragen → vorhandener Vorrat zählt ab jetzt in Packungen
+  normalizePacks();
   productsPending++;
   void tracked(repo.saveProducts(next, base))
     .then((stored) => {
@@ -522,12 +575,15 @@ export function togglePlanCooked(recipeId: string): CookedResult | null {
     const taken = pantry.cookLog?.[recipeId];
     if (!taken?.length) return null;
     putBack(recipeId, taken);
-    return { used: [], toCheck: [], restored: [...new Set(taken.map((t) => t.item.name))] };
+    // Reste, die beim Kochen entstanden, verschwinden wieder – sie sind kein „Zurückgelegtes“
+    const restored = [...new Set(taken.filter((t) => !t.created).map((t) => t.item.name))];
+    return { used: [], toCheck: [], restored };
   }
   const r = get(recipeId);
   commit({ ...r, lastCookedAt: now() });
   const item = next.items.find((i) => i.recipeId === recipeId)!;
   const result = consume(r, item.servings, {}, true, item.variants);
+  askLeftover(r, item.servings, true);
   return {
     ...result,
     undo: () => {
@@ -538,10 +594,25 @@ export function togglePlanCooked(recipeId: string): CookedResult | null {
   };
 }
 
-/** „Neue Woche“: Plan, Haken und „Gekocht“ leeren. */
+/** Plan, Haken und „Gekocht“ ganz leeren (Demo zurücksetzen, Tests) – in der App gibt es dafür „Gekochtes aufräumen“. */
+/**
+ * Gekochte Gerichte aus dem Plan nehmen – Geplantes bleibt, Vorgekochtes bleibt in der Speisekammer.
+ * (Ersetzt „Neue Woche beginnen“: der Plan läuft einfach weiter, auch übers Wochenende hinaus.)
+ */
+export function clearCooked() {
+  const cooked = new Set(plan.cooked);
+  if (!cooked.size) return;
+  commitPlan({ ...plan, items: plan.items.filter((i) => !cooked.has(i.recipeId)), cooked: [] });
+  // das Zurücklegen dieser Gerichte ist erledigt
+  if (pantry.cookLog) {
+    const rest = Object.fromEntries(Object.entries(pantry.cookLog).filter(([id]) => !cooked.has(id)));
+    commitPantry(Object.keys(rest).length ? { ...pantry, cookLog: rest } : withoutCookLog(pantry));
+  }
+}
+
 export function clearPlan() {
   commitPlan({ items: [], checked: [], cooked: [] });
-  // Neue Woche: das Zurücklegen alter Gerichte ist erledigt
+  // das Zurücklegen alter Gerichte ist erledigt
   if (pantry.cookLog) commitPantry(withoutCookLog(pantry));
 }
 
@@ -598,11 +669,20 @@ export function importReceipt(rows: ImportRow[], paidAt?: string, savings?: BonS
 
 export function addPantryItem(name: string, amount?: number, unit?: PantryUnit, productId?: string) {
   if (!name.trim()) return;
-  // „3 Stück“ von einem Produkt mit Packungsgröße → „3 × 500 g“
+  // „3 Stück“ (oder „2 Glas“) von einem Produkt mit Packungsgröße → „3 × 500 g“
   const p = productId ? products.find((x) => x.id === productId) : undefined;
-  const pack = unit === 'Stück' && p?.packageAmount && (p.packageUnit === 'g' || p.packageUnit === 'ml' || p.packageUnit === undefined)
+  const pack = (unit === 'Stück' || unit === 'Glas') && p?.packageAmount && (p.packageUnit === 'g' || p.packageUnit === 'ml' || p.packageUnit === undefined)
     ? { amount: p.packageAmount, unit: p.packageUnit ?? 'g' as const } : undefined;
   commitPantry({ ...pantry, items: addItem(pantry.items, { name: name.trim(), amount, unit, productId, pack }, now(), () => newId('v')) });
+}
+
+/** Vorräte ohne Packungsgröße, deren Produkt eine hat: einmal umstellen („2⅔ Stück“ → „2 × 500 g“ + „333 g offen“) */
+function normalizePacks() {
+  if (!pantry.items.length) return;
+  const attached = attachPacks(pantry.items, withMyProducts(foodTable, products), products, now(), () => newId('v')) ?? pantry.items;
+  // … und doppelte Zeilen derselben Packung zusammen („2 × 500 g“ + „2 × 500 g“)
+  const items = mergeSamePacks(attached) ?? attached;
+  if (items !== pantry.items) commitPantry({ ...pantry, items });
 }
 
 /** Von Hand angebrochen: eine Packung wird zum offenen Rest (hält dann kürzer); take = gleich herausgenommen. */
@@ -691,7 +771,6 @@ export function setPantryRestock(restock: RestockRule[]) {
 let tidying = false;
 function tidyRestockChecks() {
   if (tidying || !plan.checked.length) return;
-  if (!pantry.restock?.length && !plan.checked.some((k) => k.startsWith(RESTOCK_PREFIX))) return;
   tidying = true;
   try {
     const onList = new Set(shoppingList(plan, recipes, withMyProducts(foodTable, products), pantry, products).map((i) => i.key));
@@ -704,7 +783,7 @@ function tidyRestockChecks() {
         const plain = k.slice(RESTOCK_PREFIX.length);
         if (onList.has(plain)) next.push(plain);
       } else if (onList.has(RESTOCK_PREFIX + k)) next.push(RESTOCK_PREFIX + k); // Gericht raus, bleibt als Nachkaufen: Haken mitnehmen
-      else next.push(k); // Rezept-Zutaten bleiben bis zur neuen Woche
+      // sonst steht es nicht mehr auf der Liste (Gericht gekocht oder entfernt) → Haken weg
     }
     const checked = [...new Set(next)];
     if (checked.length !== plan.checked.length || checked.some((k, i) => k !== plan.checked[i])) commitPlan({ ...plan, checked });

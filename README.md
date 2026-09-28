@@ -13,7 +13,8 @@ Live: <https://dschudschuu.github.io/Mashi/> · installierbar als App (PWA), fun
 
 - **Kochbuch** mit Versionen: eigene Rezepte, Import aus Text oder Foto (Texterkennung im Browser),
   KI-Ideen erst testen, Bewertung, „Zutaten vereinheitlichen“ (eine Schreibweise je Zutat)
-- **Wochenplan** mit Vorschlägen (gemeinsame Zutaten), Nährwerten pro Portion, „Gekocht“-Haken
+- **Wochenplan** (laufend, ohne Wochenwechsel) mit Vorschlägen (gemeinsame Zutaten), Nährwerten pro Portion,
+  „Gekocht“-Haken und **Vorgekocht**: übrige Portionen in der Speisekammer mit Erinnerung, einfrierbar, „1 gegessen“
 - **Einkaufsliste** aus dem Plan, zieht den Vorrat ab, Basics, „Doch kaufen“, Kassenbon hakt ab,
   „Nachkaufen“ bei Vorratsware unter dem Mindestbestand (z. B. passierte Tomaten unter 4 Dosen)
 - **Speisekammer**: Vorrat per Kassenbon oder von Hand (mit Marke/Sorte), Packungen („4 × 500 g“,
