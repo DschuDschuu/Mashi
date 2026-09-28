@@ -251,3 +251,18 @@ export function useUpKeys(pantry: Pantry, table: FoodTable, now = new Date(), wi
   }
   return keys;
 }
+
+/**
+ * Wo steht es ungefähr? „vorrat“ = Speisekammer/Keller (hält lange: Nudeln, Konserven, Gläser, Gewürze),
+ * „kuehl“ = Kühlschrank (verdirbt schnell, Angebrochenes, Vorgekochtes), „gefroren“ = Tiefkühler.
+ * Für die Inventur – im Kühlschrank hat man es meist im Blick, im Keller verschwindet es gern.
+ */
+export function storageOf(item: PantryItem, table: FoodTable, custom: ShelfDays = {}): 'vorrat' | 'kuehl' | 'gefroren' {
+  if (item.frozenAt) return 'gefroren';
+  if (item.recipeId) return 'kuehl';
+  const r = resolveIngredient({ id: item.id, name: item.name }, 1, table);
+  // offen im Kühlschrank: was nach dem Öffnen eine Frist hat (Konserven, Pesto) – offene Nudeln bleiben im Schrank
+  if (item.openedAt && openedDaysOf(r?.food, r?.kind, custom) !== undefined) return 'kuehl';
+  const days = shelfDaysOf(r?.food, r?.kind, custom);
+  return days !== undefined && days < 30 ? 'kuehl' : 'vorrat';
+}

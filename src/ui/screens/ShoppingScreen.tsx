@@ -2,7 +2,9 @@ import { useMemo, useState } from 'react';
 import type { ShoppingItem } from '../../domain/mealplan';
 import { shoppingList } from '../../domain/restock';
 import { withMyProducts } from '../../domain/nutrition/myProducts';
-import { toggleBuyAnyway, toggleShoppingItem, usePantry, usePlan, useProducts, useRecipes } from '../../data/store';
+import { addExtra, clearDoneExtras, removeExtra, toggleBuyAnyway, toggleShoppingItem, usePantry, usePlan, useProducts, useRecipes } from '../../data/store';
+import { IngredientNames } from '../components/IngredientNames';
+import { toast } from '../toast';
 import { navigate } from '../../router';
 import { foodTable } from '../../services';
 import { Empty, Section } from '../components/Controls';
@@ -36,10 +38,12 @@ export function ShoppingScreen() {
   return (
     <main className="screen screen--tabbed">
       <TopBar title="Einkaufsliste" backTo="/speisekammer" />
+      {/* eigene Einträge: „Spülmittel“, „Backpapier“ – auch ohne Plan */}
+      <AddExtra />
       {all.length === 0 ? (
         <Empty icon="cart">
           <span>
-            Noch nichts einzukaufen – plane zuerst Gerichte für diese Woche.{' '}
+            Noch nichts einzukaufen – plane Gerichte oder schreib oben selbst etwas auf.{' '}
             <button className="link" onClick={() => navigate('/plan', { replace: true })}>Zum Wochenplan</button>
           </span>
         </Empty>
@@ -67,6 +71,13 @@ export function ShoppingScreen() {
           {done.length > 0 && (
             <Section title={`Im Wagen (${done.length})`}>
               <ul className="shopping panel">{done.map((i) => <ShoppingRow key={i.key} item={i} checked />)}</ul>
+              {/* eigene Einträge verschwinden mit dem Bon – oder hier von Hand */}
+              {done.some((i) => i.extra) && (
+                <button className="link link--muted" onClick={() => {
+                  const undo = clearDoneExtras();
+                  toast('Erledigte Einträge entfernt', { label: 'Rückgängig', run: undo });
+                }}>Erledigtes entfernen</button>
+              )}
             </Section>
           )}
           {have.length > 0 && (
@@ -101,7 +112,7 @@ export function ShoppingScreen() {
 function ShoppingRow({ item, checked }: { item: ShoppingItem; checked: boolean }) {
   const buyAnyway = !!usePlan().buy?.includes(item.key);
   return (
-    <li className={`shopping__item${checked ? ' is-done' : ''}`}>
+    <li className={`shopping__item${checked ? ' is-done' : ''}${item.extra && !item.from.length && !item.restock ? ' shopping__item--extra' : ''}`}>
       <label>
         <input type="checkbox" checked={checked} onChange={() => toggleShoppingItem(item.key)} />
         <span className="shopping__text">
@@ -110,12 +121,38 @@ function ShoppingRow({ item, checked }: { item: ShoppingItem; checked: boolean }
           {/* Nachkaufen: der Hinweis nennt den Vorrat schon selbst */}
           {item.restock && !checked && <span className="shopping__from shopping__restock"><Icon name="refresh" size={12} /> {item.restock}</span>}
           {item.have && !item.restock && !checked && <span className="shopping__from">Im Vorrat {item.have}</span>}
+          {item.note && !checked && <span className="shopping__from">{item.note}</span>}
         </span>
         <span className="shopping__qty">{item.quantity}</span>
       </label>
+      {/* eigener Eintrag ohne Rezept: wieder weg */}
+      {item.extra && !item.from.length && !item.restock && !checked && (
+        <button className="iconbtn iconbtn--sm" aria-label={`${item.name} von der Liste nehmen`} onClick={() => {
+          removeExtra(item.name);
+          toast(`„${item.name}“ von der Liste`, { label: 'Rückgängig', run: () => addExtra(item.name) });
+        }}><Icon name="close" size={16} /></button>
+      )}
       {item.have && !checked && buyAnyway && (
         <button className="link link--muted shopping__undo" onClick={() => toggleBuyAnyway(item.key)}>Vorrat abziehen</button>
       )}
     </li>
+  );
+}
+
+/** „Etwas aufschreiben“ – ein Feld, Vorschläge aus deinen Zutaten, Enter oder ＋ */
+function AddExtra() {
+  const [name, setName] = useState('');
+  const add = () => {
+    const n = name.trim();
+    if (!n) return;
+    addExtra(n);
+    setName('');
+  };
+  return (
+    <form className="shopping__add" onSubmit={(e) => { e.preventDefault(); add(); }}>
+      <IngredientNames />
+      <input value={name} onChange={(e) => setName(e.target.value)} list="ingredient-names" placeholder="Etwas aufschreiben …" aria-label="Eigener Eintrag" />
+      <button type="submit" className="iconbtn iconbtn--box" disabled={!name.trim()} aria-label="Auf die Liste"><Icon name="plus" size={20} /></button>
+    </form>
   );
 }

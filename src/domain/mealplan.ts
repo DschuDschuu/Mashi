@@ -25,7 +25,16 @@ export interface MealPlan {
   cooked: string[];
   /** Einkaufsliste: trotz Vorrat ganz kaufen (ShoppingItem.key) – „Doch kaufen“ */
   buy?: string[];
+  /** eigene Einträge auf der Einkaufsliste – selbst getippt („Spülmittel“) oder aus der Inventur („auffüllen“) */
+  extra?: ExtraItem[];
   updatedAt: string;
+}
+
+export interface ExtraItem {
+  name: string;
+  addedAt: string;
+  /** woher: aus der Inventur („auffüllen“) – sonst selbst eingetippt */
+  source?: 'inventur';
 }
 
 export const emptyPlan = (): MealPlan => ({ items: [], checked: [], cooked: [], updatedAt: new Date(0).toISOString() });
@@ -266,6 +275,10 @@ export interface ShoppingItem {
   covered?: boolean;
   /** unter dem Mindestbestand („Im Vorrat 3 Stück · Nachkaufen unter 4 Stück“) – siehe restock.ts */
   restock?: string;
+  /** eigener Eintrag (selbst getippt oder aus der Inventur) – lässt sich wieder entfernen */
+  extra?: boolean;
+  /** kleiner Hinweis darunter, z. B. „aus der Inventur“ */
+  note?: string;
 }
 
 /**

@@ -107,6 +107,8 @@ export function merge3Plan(base: MealPlan, ours: MealPlan, theirs: MealPlan): Me
     checked: merge3Set(base.checked, ours.checked, theirs.checked),
     cooked: merge3Set(base.cooked, ours.cooked, theirs.cooked),
     buy: merge3Set(base.buy, ours.buy, theirs.buy),
+    // eigene Einträge: am Handy „Spülmittel“, am Laptop „Backpapier“ → beide
+    ...(base.extra || ours.extra || theirs.extra ? { extra: merge3Keyed(base.extra ?? [], ours.extra ?? [], theirs.extra ?? [], (x) => normalizeName(x.name)) } : {}),
     updatedAt: later(ours.updatedAt, theirs.updatedAt)!,
   };
 }
@@ -149,6 +151,7 @@ export function unionPlan(a: MealPlan, b: MealPlan): MealPlan {
     checked: unionSet(newer.checked, older.checked),
     cooked: unionSet(newer.cooked, older.cooked),
     buy: unionSet(newer.buy, older.buy),
+    ...(newer.extra || older.extra ? { extra: unionKeyed(newer.extra ?? [], older.extra ?? [], (x) => normalizeName(x.name)) } : {}),
   };
 }
 

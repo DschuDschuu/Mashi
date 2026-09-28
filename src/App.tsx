@@ -25,6 +25,7 @@ import { StartScreen } from './ui/screens/StartScreen';
 import { TestFeedbackScreen } from './ui/screens/TestFeedbackScreen';
 import { UseUpScreen } from './ui/screens/UseUpScreen';
 import { LeftoverSheet } from './ui/components/LeftoverSheet';
+import { InventoryScreen } from './ui/screens/InventoryScreen';
 
 /** Weiterleitung ohne eigenen Eintrag im Verlauf */
 function Redirect({ to }: { to: string }) {
@@ -43,9 +44,11 @@ function resolve(route: Route): { screen: ReactElement; tab?: string } {
     case 'plan': return { screen: <PlanScreen />, tab: '/plan' };
     case 'reste': return { screen: <UseUpScreen /> };
     case 'preise': return { screen: <PricesScreen />, tab: '/speisekammer' };
-    case 'einkauf': return { screen: <ShoppingScreen />, tab: '/plan' };
+    // die Einkaufsliste hängt am Wagen in der Speisekammer
+    case 'einkauf': return { screen: <ShoppingScreen />, tab: '/speisekammer' };
     case 'speisekammer':
       if (b === 'bon') return { screen: <ReceiptImportScreen shared={route.query.has('geteilt')} /> };
+      if (b === 'inventur') return { screen: <InventoryScreen /> };
       return { screen: <PantryScreen />, tab: '/speisekammer' };
     // „Einstellungen“ (früher Tab „Mehr“) – übers Zahnrad auf Start und Kochbuch, auf dem Tablet in der Seitenleiste
     case 'mehr': return { screen: <MoreScreen /> };

@@ -238,6 +238,15 @@ export function PantryScreen() {
           <section className="manage" aria-labelledby="manage-title">
             <h2 className="manage__title" id="manage-title">Verwalten</h2>
             <ProductsLink />
+            {/* wann du willst – kein Rhythmus */}
+            <button className="panel link-row" onClick={() => navigate('/speisekammer/inventur')}>
+              <Icon name="list" size={20} />
+              <span className="link-row__text">
+                <strong>Inventur</strong>
+                <small className="muted">Speisekammer, Keller, Tiefkühler und Gewürze durchgehen</small>
+              </span>
+              <Icon name="chevron" size={18} />
+            </button>
             <ShelfSettings />
 
             {pantry.rules.length > 0 && (

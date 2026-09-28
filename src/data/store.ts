@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react';
-import { RESTOCK_PREFIX, shoppingList, type RestockRule } from '../domain/restock';
+import { normalizeName } from '../domain/nutrition/localFoods';
+import { EXTRA_PREFIX, RESTOCK_PREFIX, shoppingList, type RestockRule } from '../domain/restock';
 import { exclusiveStages, stageOf, withStage, type FoodStage } from '../domain/stage';
 import { emptyPlan, normalizePlan, resolveIngredient, toggleCooked, type MealPlan } from '../domain/mealplan';
 import { mergeRecipes } from '../domain/merge';
@@ -562,6 +563,61 @@ export function setPlanServings(recipeId: string, servings: number) {
   commitPlan({ ...plan, items: plan.items.map((i) => (i.recipeId === recipeId ? { ...i, servings } : i)) });
 }
 
+// ── Eigene Einträge auf der Einkaufsliste ──────────────────────────
+
+const sameExtra = (a: string, b: string) => normalizeName(a) === normalizeName(b);
+
+/** Selbst getippt („Spülmittel“) oder aus der Inventur („auffüllen“) – doppelt wird nichts. */
+export function addExtra(name: string, source?: 'inventur') {
+  const n = name.trim();
+  if (!n || (plan.extra ?? []).some((x) => sameExtra(x.name, n))) return;
+  commitPlan({ ...plan, extra: [...(plan.extra ?? []), { name: n, addedAt: now(), ...(source ? { source } : {}) }] });
+}
+
+export function removeExtra(name: string) {
+  commitPlan({ ...plan, extra: (plan.extra ?? []).filter((x) => !sameExtra(x.name, name)) });
+}
+
+/** „Erledigtes entfernen“: abgehakte eigene Einträge von der Liste – gibt „Rückgängig“ zurück. */
+export function clearDoneExtras(): () => void {
+  const before = { extra: plan.extra, checked: plan.checked };
+  const table = withMyProducts(foodTable, products);
+  const done = shoppingList(plan, recipes, table, pantry, products).filter((i) => i.extra && plan.checked.includes(i.key));
+  const doneKeys = new Set(done.map((i) => i.key));
+  const keyOf = (n: string) => resolveIngredient({ id: 'x', name: n }, 1, table)?.key;
+  const extra = (plan.extra ?? []).filter((x) => !doneKeys.has(EXTRA_PREFIX + normalizeName(x.name)) && !doneKeys.has(keyOf(x.name) ?? ''));
+  commitPlan({ ...plan, extra, checked: plan.checked.filter((k) => !(k.startsWith(EXTRA_PREFIX) && doneKeys.has(k))) });
+  return () => commitPlan({ ...plan, extra: before.extra, checked: before.checked });
+}
+
+// ── Inventur ───────────────────────────────────────────────────────
+
+export interface InventoryChanges {
+  /** neue Menge je Vorrat (in seiner Einheit; bei Packungen die Zahl der Packungen) – 0 = aufgebraucht */
+  amounts: Record<string, number>;
+  /** weg (aufgebraucht, weggeworfen) */
+  remove: string[];
+  /** Immer im Haus / Gewürze: auffüllen → auf die Einkaufsliste */
+  refill: string[];
+}
+
+/** Inventur übernehmen – alles auf einmal, mit „Rückgängig“. */
+export function applyInventory(c: InventoryChanges): () => void {
+  const before = { items: pantry.items, extra: plan.extra };
+  const items = pantry.items.flatMap((it) => {
+    if (c.remove.includes(it.id)) return [];
+    const a = c.amounts[it.id];
+    if (a === undefined) return [it];
+    return a > 0 ? [{ ...it, amount: a, check: false }] : [];
+  });
+  if (items.length !== pantry.items.length || Object.keys(c.amounts).length) commitPantry({ ...pantry, items });
+  for (const n of c.refill) addExtra(n, 'inventur');
+  return () => {
+    commitPantry({ ...pantry, items: before.items });
+    commitPlan({ ...plan, extra: before.extra });
+  };
+}
+
 /** Einkaufsliste: trotz Vorrat kaufen – oder wieder mit dem Vorrat verrechnen. */
 export function toggleBuyAnyway(key: string) {
   const buy = plan.buy ?? [];
@@ -670,6 +726,9 @@ export function importReceipt(rows: ImportRow[], paidAt?: string, savings?: BonS
   const list = shoppingList(plan, recipes, table, pantry, products).filter((i) => bought.has(i.key) && !plan.checked.includes(i.key));
   const tick = list.filter((i) => !i.covered && i.have === 'vorhanden').map((i) => i.key);
   if (tick.length) commitPlan({ ...plan, checked: [...plan.checked, ...tick] });
+  // eigene Einträge, die auf dem Bon stehen, sind gekauft → von der Liste
+  const boughtExtra = (plan.extra ?? []).filter((x) => bought.has(resolveIngredient({ id: 'x', name: x.name }, 1, table)?.key));
+  if (boughtExtra.length) commitPlan({ ...plan, extra: (plan.extra ?? []).filter((x) => !boughtExtra.includes(x)) });
   return { count: rows.filter((r) => !r.skip).length, onList: list.filter((i) => i.covered).length + tick.length };
 }
 

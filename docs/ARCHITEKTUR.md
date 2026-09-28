@@ -80,7 +80,8 @@ aus den Zutaten berechnet (gecacht je Version).
  #/kochbuch?device=…      Kochbuch (Filter als URL → Schnellfilter sind Links)
  #/testen                 KI-Ideen · Zum Testen · Bewährt (über Start erreichbar)
  #/plan                   Wochenplan (laufend, ohne Wochenwechsel), Vorschläge, Vorgekocht · „1 gegessen“
- #/einkauf                Einkaufsliste (zieht den Vorrat ab) – Wagen oben rechts in der Speisekammer
+ #/einkauf                Einkaufsliste (zieht den Vorrat ab, eigene Einträge) – Wagen oben rechts in der Speisekammer
+ #/speisekammer/inventur  Inventur (wann du willst): Speisekammer & Keller, Tiefkühler, Immer im Haus/Gewürze abhaken
  #/speisekammer           Vorräte, Bald verbrauchen, Verwalten (Haltbarkeit, gelernte Bon-Artikel)
  #/speisekammer/bon       Kassenbon importieren
  #/produkte               Meine Lebensmittel: Tabs „Produkte“ (pflegen: Werte, Sorten + Favorit, Nachkaufen) · „Im Haus“ · „Gewürze“ (= ohne Nährwerte)

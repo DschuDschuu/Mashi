@@ -3,9 +3,9 @@ import PouchDB from 'pouchdb-core';
 import memory from 'pouchdb-adapter-memory';
 import { describe, expect, it } from 'vitest';
 import { PouchRecipeRepository, type RecipeDb } from './pouchRepository';
-import { addPantryItem, addToPlan, answerLeftover, clearCooked, createRecipe, currentLeftoverAsk, currentPantry, eatPreparedPortions, initStore, togglePlanCooked, removeFromPlan, removePantryItem, setFoodStage, toggleShoppingItem, updatePantryItem } from './store';
+import { addExtra, addPantryItem, addToPlan, answerLeftover, applyInventory, clearDoneExtras, importReceipt, clearCooked, createRecipe, currentLeftoverAsk, currentPantry, eatPreparedPortions, initStore, togglePlanCooked, removeFromPlan, removePantryItem, setFoodStage, toggleShoppingItem, updatePantryItem } from './store';
 import { resolveIngredient } from '../domain/mealplan';
-import { RESTOCK_PREFIX } from '../domain/restock';
+import { EXTRA_PREFIX, RESTOCK_PREFIX } from '../domain/restock';
 import { foodTable } from '../services';
 
 PouchDB.plugin(memory);
@@ -123,5 +123,38 @@ describe('Store: Vorgekocht', () => {
     const plan = await repo.loadPlan();
     expect(plan.items.map((i) => i.recipeId)).toEqual([curry]);
     expect(prep().map((i) => i.amount)).toEqual([2]);
+  });
+});
+
+describe('Store: Inventur und eigene Einträge', () => {
+  it('Inventur: Menge ändern, weg, Gewürz auffüllen → Liste; Erledigtes entfernen; Bon hakt eigenen Eintrag ab; Rückgängig', async () => {
+    const repo = new PouchRecipeRepository(new PouchDB(`inv-${Date.now()}`, { adapter: 'memory' }) as unknown as RecipeDb);
+    await initStore(repo);
+    addPantryItem('Pasta', 3, 'Stück');
+    addPantryItem('Mais', 2, 'Stück');
+    const [pasta, mais] = ['Pasta', 'Mais'].map((n) => currentPantry().items.find((i) => i.name === n)!.id);
+
+    const undo = applyInventory({ amounts: { [pasta]: 1 }, remove: [mais], refill: ['Kreuzkümmel'] });
+    expect(currentPantry().items.map((i) => [i.name, i.amount])).toEqual([['Pasta', 1]]);
+    await settle();
+    expect((await repo.loadPlan()).extra?.map((x) => [x.name, x.source])).toEqual([['Kreuzkümmel', 'inventur']]);
+
+    undo();
+    await settle();
+    expect(currentPantry().items.map((i) => [i.name, i.amount])).toEqual([['Pasta', 3], ['Mais', 2]]);
+    expect((await repo.loadPlan()).extra ?? []).toEqual([]);
+
+    // selbst aufgeschrieben, abgehakt, „Erledigtes entfernen“
+    addExtra('Backpapier');
+    toggleShoppingItem(`${EXTRA_PREFIX}backpapier`);
+    clearDoneExtras();
+    await settle();
+    expect((await repo.loadPlan()).extra ?? []).toEqual([]);
+
+    // Bon: „Spülmittel“ steht drauf → vom Zettel
+    addExtra('Spülmittel');
+    importReceipt([{ line: { name: 'Spülmittel', count: 1, price: 1.29 }, key: 'spülmittel', known: false, skip: false, name: 'Spülmittel', amount: 1, unit: 'Stück' }]);
+    await settle();
+    expect((await repo.loadPlan()).extra ?? []).toEqual([]);
   });
 });

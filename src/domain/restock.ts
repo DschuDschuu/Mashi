@@ -1,4 +1,5 @@
-import { buildShoppingList, resolveIngredient, type MealPlan, type ShoppingItem } from './mealplan';
+import { buildShoppingList, resolveIngredient, type ExtraItem, type MealPlan, type ShoppingItem } from './mealplan';
+import { normalizeName } from './nutrition/localFoods';
 import type { MyProduct } from './nutrition/myProducts';
 import type { FoodEntry, FoodTable } from './nutrition/types';
 import { pantryAfterPlan, type Pantry, type PantryItem, type PantryUnit } from './pantry';
@@ -125,6 +126,28 @@ export function withRestock(list: ShoppingItem[], needs: readonly RestockNeed[])
   return out.sort((a, b) => a.name.localeCompare(b.name, 'de'));
 }
 
+/** Schlüssel der Haken für eigene Einträge */
+export const EXTRA_PREFIX = 'extra:';
+
+/**
+ * Eigene Einträge (selbst getippt, aus der Inventur) dazu. Steht die Zutat schon zum Kaufen drauf, bekommt sie
+ * nur den Hinweis; stünde sie unter „Basics“ oder „Hast du schon“, kommt sie auf die Liste – du willst sie ja kaufen.
+ */
+export function withExtras(list: ShoppingItem[], extras: readonly ExtraItem[], table: FoodTable): ShoppingItem[] {
+  const out = [...list];
+  for (const x of extras) {
+    const r = resolveIngredient({ id: 'extra', name: x.name }, 1, table);
+    const note = x.source === 'inventur' ? 'aus der Inventur' : undefined;
+    const i = r ? out.findIndex((o) => o.key === r.key || o.key === RESTOCK_PREFIX + r.key) : -1;
+    if (i >= 0) {
+      out[i] = { ...out[i], pantry: false, covered: false, extra: true, ...(note ? { note } : {}) };
+      continue;
+    }
+    out.push({ key: EXTRA_PREFIX + normalizeName(x.name), name: x.name, quantity: '', pantry: false, from: [], ...(r?.kind ? { kind: r.kind } : {}), extra: true, ...(note ? { note } : {}) });
+  }
+  return out.sort((a, b) => a.name.localeCompare(b.name, 'de'));
+}
+
 // Die Liste wird an mehreren Stellen gebraucht (Liste, Wagen-Zahl, Startseite) – gleiche Eingaben, gleiches Ergebnis
 let last: { args: unknown[]; list: ShoppingItem[] } | undefined;
 
@@ -133,7 +156,8 @@ export function shoppingList(plan: MealPlan, recipes: Recipe[], table: FoodTable
   const args = [plan, recipes, table, pantry, products];
   if (last && last.args.every((a, i) => a === args[i])) return last.list;
   const base = buildShoppingList(plan, recipes, table, pantry);
-  const list = pantry.restock?.length ? withRestock(base, restockNeeds(pantry, table, products, pantryAfterPlan(pantry, plan, recipes, table))) : base;
+  const withNeeds = pantry.restock?.length ? withRestock(base, restockNeeds(pantry, table, products, pantryAfterPlan(pantry, plan, recipes, table))) : base;
+  const list = plan.extra?.length ? withExtras(withNeeds, plan.extra, table) : withNeeds;
   last = { args, list };
   return list;
 }

@@ -161,8 +161,6 @@ p { margin: 0; }
 
 /* ── Chips, Badges ───────────────────────────────────────────── */
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
-.chips--scroll { flex-wrap: nowrap; overflow-x: auto; margin: 0 calc(-1 * var(--gutter)); padding: 2px var(--gutter); scrollbar-width: none; }
-.chips--scroll::-webkit-scrollbar { display: none; }
 /* Wie im Bild: gefüllte Fläche ohne Rahmen, aktiv = Petrol */
 .chip {
   display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
@@ -172,7 +170,6 @@ p { margin: 0; }
 .chip svg { color: var(--art); }
 .chip.is-on { background: var(--primary); color: var(--on-primary); }
 .chip.is-on svg { color: var(--on-primary); }
-.chip--lg { min-height: 42px; padding: 0 16px; background: var(--surface); border: 1px solid var(--line); color: var(--ink); }
 .chip--xs { min-height: 22px; padding: 0 9px; font-size: 0.72rem; background: var(--sky); color: var(--ink-2); }
 
 .badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 999px; font-size: 0.72rem; font-weight: 700; color: var(--ink); }
@@ -192,24 +189,13 @@ p { margin: 0; }
 
 /* ── Kacheln (Geräte auf der Startseite, Import) ─────────────── */
 /* minmax(0, 1fr) statt 1fr: sonst erzwingt das längste Wort („Monsieur Cuisine“) Überbreite */
-.quick-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
-.quick { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; aspect-ratio: 1 / 1.12; border-radius: var(--r); font-size: 0.76rem; font-weight: 700; text-align: center; line-height: 1.15; padding: 8px 4px; color: var(--ink); }
-.quick:active { transform: scale(0.97); }
-.quick > svg { color: var(--art); margin-bottom: 4px; }
-.quick small { font-size: 0.66rem; font-weight: 600; color: var(--ink-2); }
-.quick.is-disabled { opacity: 0.55; }
-@media (max-width: 370px) { .quick { font-size: 0.68rem; } }
 
 /* ── Abschnitte, Karussell, Raster ───────────────────────────── */
 .section { display: flex; flex-direction: column; gap: 12px; }
 .section__head { display: flex; justify-content: space-between; align-items: baseline; }
 .section__head h2 { font-size: 1.12rem; display: inline-flex; align-items: center; gap: 8px; }
 .section__head h2 svg { color: var(--art); }
-.carousel { display: grid; grid-auto-flow: column; grid-auto-columns: 62%; gap: 14px; overflow-x: auto; scroll-snap-type: x mandatory; scroll-padding-inline: var(--gutter); margin: 0 calc(-1 * var(--gutter)); padding: 4px var(--gutter) 10px; scrollbar-width: none; }
-.carousel::-webkit-scrollbar { display: none; }
-.carousel > * { scroll-snap-align: start; }
 .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-@media (min-width: 520px) { .carousel { grid-auto-columns: 44%; } }
 
 /* ── Rezeptkarte ─────────────────────────────────────────────── */
 .card { position: relative; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--shadow); overflow: hidden; display: flex; flex-direction: column; }
@@ -223,7 +209,6 @@ p { margin: 0; }
 .card__title { font-size: 0.92rem; line-height: 1.25; }
 .card__meta { font-size: 0.76rem; color: var(--ink-2); display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
 .card__meta svg { color: var(--ink-3); }
-.card__meta-sep { width: 8px; }
 .card__chips { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
 
 /* ── Bilder / Platzhalter-Illustration ───────────────────────── */
@@ -286,9 +271,6 @@ p { margin: 0; }
 .tip { display: flex; gap: 12px; padding: 14px 16px; border-radius: var(--r); font-size: 0.86rem; color: var(--ink-2); align-items: flex-start; }
 .tip strong { color: var(--ink); }
 .tip svg { flex: none; color: var(--art); margin-top: 1px; }
-.cta-card { display: flex; align-items: center; gap: 14px; padding: 16px 18px; border-radius: var(--r); text-align: left; color: var(--art); }
-.cta-card span { flex: 1; display: flex; flex-direction: column; color: var(--ink); }
-.cta-card small { color: var(--ink-2); }
 
 /* ── Detailseite ─────────────────────────────────────────────── */
 .hero { position: relative; }
@@ -407,7 +389,6 @@ p { margin: 0; }
 .photo-pick { display: flex; flex-direction: column; gap: 10px; align-items: stretch; }
 .photo-pick .rimg { border-radius: var(--r); }
 .photo-pick__empty { border: 1.5px dashed var(--line); border-radius: var(--r); padding: 26px; text-align: center; color: var(--ink-3); font-size: 0.9rem; }
-.import-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 
 .list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; }
 .list__item { display: flex; align-items: center; gap: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 8px; }
@@ -502,9 +483,6 @@ p { margin: 0; }
   .logo { font-size: 3.4rem; }
 
   .grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
-  .carousel { grid-auto-columns: 31%; }
-  .quick { aspect-ratio: auto; min-height: 118px; font-size: 0.85rem; }
-  .quick small { font-size: 0.72rem; }
 
   /* Erstellen-Menü: mittiger Dialog statt Bottom Sheet */
   .sheet-backdrop { align-items: center; }
@@ -534,7 +512,6 @@ p { margin: 0; }
 @media (min-width: 1100px) {
   :root { --rail: 100px; }
   .grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-  .carousel { grid-auto-columns: 23%; }
 }
 
 /* Kochmodus quer auf dem Tablet: Zutaten dauerhaft als Spalte links */
@@ -600,14 +577,7 @@ p { margin: 0; }
 .backup-preview__list { margin: 0; padding-left: 18px; font-size: 0.9rem; }
 
 /* ── Meine Produkte ──────────────────────────────────────────── */
-.product { display: flex; flex-direction: column; gap: 4px; padding: 10px 0; border-top: 1px solid var(--line); }
-.product__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
-.product__head > strong { flex: 1; min-width: 0; padding-top: 6px; }
 .product__actions { display: flex; gap: 2px; flex: none; margin: 0 -6px 0 0; }
-.product__kcal em { font-style: normal; color: var(--ink-3); font-size: 0.85rem; }
-.product:first-of-type { border-top: 0; }
-.product__main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.product__main em { font-style: normal; color: var(--ink-3); }
 .product-form { background: var(--surface-2); border-radius: var(--r-sm); padding: 14px; }
 
 /* ── Hinweise: Speichern/Abgleich ────────────────────────────── */
@@ -1320,3 +1290,27 @@ label.btn.is-disabled { opacity: 0.6; pointer-events: none; }
 .stage__options { flex-wrap: nowrap; gap: 6px; }
 .stage__options { gap: 4px; }
 .stage__options .chip { padding: 4px 8px; font-size: 0.76rem; gap: 3px; white-space: nowrap; flex: 0 1 auto; min-width: 0; }
+/* Inventur */
+.inventory__toggle { display: flex; align-items: center; gap: 8px; }
+.inventory__list { list-style: none; margin: 0; padding: 0 12px; }
+.inventory__row { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-top: 1px solid var(--line); }
+.inventory__row:first-child { border-top: 0; }
+.inventory__row.is-ok .inventory__name { color: var(--ink-2); }
+.inventory__row.is-gone .inventory__name, .inventory__row.is-gone .inventory__qty { color: var(--ink-3); text-decoration: line-through; }
+.inventory__name { flex: 1; min-width: 0; font-weight: 600; overflow-wrap: break-word; }
+.inventory__qty { display: inline-flex; align-items: center; gap: 4px; color: var(--ink-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.inventory__edit { display: inline-flex; align-items: center; gap: 4px; }
+.inventory__edit input { width: 4rem; height: 34px; padding: 0 8px; border: 1px solid var(--line); border-radius: 999px; text-align: center; background: var(--surface); }
+.inventory__actions { display: inline-flex; gap: 4px; flex: none; }
+.inventory__actions .iconbtn.is-on { background: var(--primary-soft); color: var(--primary-press); }
+/* diese Seite hat unten keine Navigation – direkt an den Rand */
+.inventory__done { position: sticky; bottom: calc(var(--safe-b, 0px) + 12px); display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 10px 12px; margin-top: 8px; border-radius: 999px; background: var(--surface); box-shadow: var(--shadow-lift); }
+/* Einkaufsliste: eigener Eintrag */
+.shopping__add { display: flex; gap: 8px; align-items: center; }
+.shopping__add input { flex: 1; min-width: 0; height: 44px; padding: 0 14px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--ink); font-size: 1rem; }
+.shopping__add input:focus { outline: none; border-color: var(--primary); }
+/* eigener Eintrag: ✕ rechts in derselben Zeile; kein Vorschlags-Dreieck im Feld */
+.shopping__item--extra { display: flex; align-items: center; gap: 4px; }
+.shopping__item--extra > label { flex: 1; min-width: 0; }
+.shopping__add input::-webkit-calendar-picker-indicator { display: none !important; }
