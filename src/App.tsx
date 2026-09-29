@@ -26,6 +26,7 @@ import { TestFeedbackScreen } from './ui/screens/TestFeedbackScreen';
 import { UseUpScreen } from './ui/screens/UseUpScreen';
 import { LeftoverSheet } from './ui/components/LeftoverSheet';
 import { InventoryScreen } from './ui/screens/InventoryScreen';
+import { ErrorBoundary } from './ui/components/ErrorBoundary';
 
 /** Weiterleitung ohne eigenen Eintrag im Verlauf */
 function Redirect({ to }: { to: string }) {
@@ -92,7 +93,8 @@ export function App({ mode }: { mode: Mode | null }) {
   return (
     <div className={`app${cooking ? '' : ' app--nav'}`}>
       <StatusBanner />
-      {screen}
+      {/* stürzt eine Seite ab: Meldung statt leerem Bildschirm – je Seite neu (key), damit Zurück wieder geht */}
+      <ErrorBoundary key={route.path}>{screen}</ErrorBoundary>
       {!cooking && <BottomNav active={tab ?? section} onlyTablet={!tab} />}
       {/* Einführung beim ersten Start (je Gerät) – nicht mitten im Kochen */}
       {!settings.onboarded && !cooking && <Onboarding onClose={() => undefined} />}

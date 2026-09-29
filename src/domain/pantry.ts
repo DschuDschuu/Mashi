@@ -40,6 +40,8 @@ export interface PantryItem {
   pack?: Pack;
   /** angebrochen am … – der Rest einer Packung (in g/ml); hält kürzer, siehe shelfLife */
   openedAt?: string;
+  /** beim Kochen aus diesem Vorrat angebrochen – so weiß „verplant“, zu welcher Dose der Rest gehört (zwei Marken heißen gleich) */
+  openedFrom?: string;
   /**
    * Vorgekocht: Portionen dieses Rezepts (amount = Portionen, unit 'Stück'). Nie eine Zutat –
    * „Pesto-Pasta · 3 Portionen“ darf beim nächsten Pesto-Rezept nicht abgezogen werden.
@@ -400,7 +402,7 @@ export function deductRecipe(
           const { id: _id, check: _c, pack, amount: _a, unit: _u, frozenAt, ...keep } = item;
           // aus dem Tiefkühler: der Rest ist aufgetaut und hält nur noch kurz
           const thawed = frozenAt ? { useBy: new Date(new Date(now).getTime() + specialDays('thawed', pantry.shelfDays) * 864e5).toISOString() } : {};
-          const opened: PantryItem = { ...keep, ...thawed, id: newId(), amount: Math.round(rest * pack.amount), unit: pack.unit, addedAt: now, boughtAt: item.boughtAt ?? item.addedAt, openedAt: now };
+          const opened: PantryItem = { ...keep, ...thawed, id: newId(), amount: Math.round(rest * pack.amount), unit: pack.unit, addedAt: now, boughtAt: item.boughtAt ?? item.addedAt, openedAt: now, openedFrom: item.id };
           items.push(opened);
           byUrgency.unshift(opened);
           keyOf.set(opened.id, keyOf.get(item.id));
@@ -635,7 +637,8 @@ export function usedOf(t: Taken, taken: readonly Taken[]): number | undefined {
   if (t.amount === undefined || t.created) return undefined;
   const pack = t.item.pack;
   if (!pack) return t.amount;
-  const rest = taken.filter((c) => c.created && c.item.name === t.item.name && c.item.unit === pack.unit)
+  // nur der Rest, der aus GENAU diesem Vorrat stammt – über den Namen fände er auch die Dose der anderen Marke
+  const rest = taken.filter((c) => c.created && c.item.openedFrom === t.item.id && c.item.unit === pack.unit)
     .reduce((s, c) => s + (c.item.amount ?? 0), 0) / pack.amount;
   return Math.max(0, Math.round((t.amount - rest) * 1000) / 1000);
 }
@@ -683,6 +686,34 @@ export function thawFit(needs: ThawNeed[], servings: number): ThawFit {
     ...(up > servings ? { up } : {}),
     ...(one?.fewer !== undefined && one.down >= 1 && one.down < servings ? { down: { servings: one.down, packs: one.fewer } } : {}),
   };
+}
+
+/**
+ * Was von einem Vorrat frei bleibt, wenn der Plan gekocht ist (null = alles verplant). Nicht auf 0,1 runden:
+ * bei Dosen à 400 ml wären das 40-ml-Schritte – 150 ml verplant zeigte „240 ml frei“ statt 250.
+ */
+export function freeAfterPlan(item: PantryItem, planned: PlannedUse): PantryItem | null {
+  const p = planned.get(item.id);
+  if (p === undefined) return item;
+  if (p === 'all' || item.amount === undefined) return null;
+  return { ...item, amount: Math.round((item.amount - p) * 1000) / 1000 };
+}
+
+/**
+ * Packung, von der etwas verplant ist (auch ganz)? Dann zeigt die Speisekammer die Dosen, wie sie im Schrank
+ * stehen („3 × 400 ml“) – darunter „davon 533 ml verplant“ – statt sie abzuziehen oder auszublenden.
+ */
+export const plannedPack = (item: PantryItem, planned: PlannedUse) =>
+  !!item.pack && item.amount !== undefined && (item.unit === 'Stück' || item.unit === 'Glas') && planned.has(item.id);
+
+/** „davon 533 ml verplant“ – wie viel von den Packungen einer Zeile der Plan braucht (in g bzw. ml) */
+export function plannedFromPacks(items: readonly PantryItem[], planned: PlannedUse): { amount: number; unit: 'g' | 'ml' } | undefined {
+  const parts = items.filter((i) => plannedPack(i, planned));
+  if (!parts.length) return undefined;
+  const unit = parts[0].pack!.unit;
+  const packsOf = (i: PantryItem) => { const p = planned.get(i.id)!; return p === 'all' ? i.amount! : p; };
+  const amount = parts.filter((i) => i.pack!.unit === unit).reduce((n, i) => n + packsOf(i) * i.pack!.amount, 0);
+  return amount > 0 ? { amount: Math.round(amount), unit } : undefined;
 }
 
 /**

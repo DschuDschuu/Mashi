@@ -186,10 +186,21 @@ export function merge3Recipe(base: Recipe | undefined, ours: Recipe, theirs: Rec
   const union = mergeRecipes(ours, theirs);
   if (!base) return union;
   const out: Record<string, unknown> = { ...union };
-  const skip = new Set(['versions', 'feedback', 'lastCookedAt', 'updatedAt']);
+  const skip = new Set(['versions', 'feedback', 'lastCookedAt', 'previousCookedAt', 'updatedAt']);
   for (const k of new Set([...Object.keys(ours), ...Object.keys(theirs)])) {
     if (skip.has(k)) continue;
     out[k] = merge3Value((base as unknown as Record<string, unknown>)[k], (ours as unknown as Record<string, unknown>)[k], (theirs as unknown as Record<string, unknown>)[k]);
+  }
+  // „zuletzt gekocht“ (samt Datum davor): wer es geändert hat, gewinnt – auch zurück auf ein älteres Datum
+  // („Rückgängig“, „Heute gekocht“ zurücknehmen). Nur wenn beide Seiten es geändert haben, das neuere (union).
+  const oursCooked = ours.lastCookedAt !== base.lastCookedAt;
+  const theirsCooked = theirs.lastCookedAt !== base.lastCookedAt;
+  const cookedFrom = oursCooked && !theirsCooked ? ours : !oursCooked && theirsCooked ? theirs : undefined;
+  if (cookedFrom) {
+    delete out.lastCookedAt;
+    delete out.previousCookedAt;
+    if (cookedFrom.lastCookedAt) out.lastCookedAt = cookedFrom.lastCookedAt;
+    if (cookedFrom.previousCookedAt) out.previousCookedAt = cookedFrom.previousCookedAt;
   }
   // die aktuelle Version muss es geben – sonst die neueste
   const versions = union.versions;

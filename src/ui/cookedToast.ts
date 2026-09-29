@@ -4,8 +4,9 @@ import { toast } from './toast';
 /** Rückmeldung nach „Gekocht“: was aus der Speisekammer genommen wurde – mit „Rückgängig“. */
 export function cookedToast(result: CookedResult | null) {
   if (!result) return;
-  if (result.restored?.length) {
-    toast(`Zurück in der Speisekammer: ${result.restored.join(', ')}`);
+  // zurückgenommen – auch wenn nichts aus der Speisekammer genommen worden war
+  if (result.restored) {
+    toast(result.restored.length ? `Zurück in der Speisekammer: ${result.restored.join(', ')}` : 'Nicht mehr als gekocht gemerkt');
     return;
   }
   const parts = [

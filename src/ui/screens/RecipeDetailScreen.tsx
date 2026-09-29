@@ -10,9 +10,10 @@ import { orderByUse } from '../../domain/stepIngredients';
 import type { Recipe, RecipeContent } from '../../domain/types';
 import { describeChange, diffContent } from '../../domain/versions';
 import {
-  addToPlan, adoptToCookbook, archiveRecipe, deleteRecipe, restoreRecipe, markCooked, regenerateImage, setPlanVariants, setStatus, toggleFavorite, togglePlanCooked, updateNotes, usePlan, useRecipe,
+  addToPlan, adoptToCookbook, archiveRecipe, deleteRecipe, restoreRecipe, markCooked, regenerateImage, setPlanVariants, setStatus, toggleFavorite, togglePlanCooked, uncookRecipe, updateNotes, usePlan, useRecipe,
 } from '../../data/store';
 import { cookedToast } from '../cookedToast';
+import { shareMessage, shareRecipes } from '../shareRecipes';
 import { goBack, navigate } from '../../router';
 import { Empty, Stars, Stepper } from '../components/Controls';
 import { Icon } from '../components/Icon';
@@ -112,6 +113,10 @@ function Detail({ recipe }: { recipe: Recipe }) {
         <MenuPanel onClose={() => setMenu(false)}>
           <button role="menuitem" onClick={() => navigate(`/rezept/${recipe.id}/bearbeiten`)}><Icon name="pencil" size={18} /> Bearbeiten</button>
           <button role="menuitem" onClick={onRegenerate}><Icon name="refresh" size={18} /> Bild neu generieren</button>
+          {/* komplett als Mashi-Datei übers Teilen-Menü (WhatsApp …) – der andere spielt es in seinem Mashi ein */}
+          <button role="menuitem" onClick={() => { setMenu(false); void shareRecipes([recipe]).then((r) => { const m = shareMessage(r); if (m) toast(m); }); }}>
+            <Icon name="share" size={18} /> Teilen
+          </button>
           <button role="menuitem" onClick={() => { archiveRecipe(recipe.id); toast('Archiviert – unter Einstellungen → Archiv wiederherstellbar', { label: 'Rückgängig', run: () => restoreRecipe(recipe.id) }); goBack('/kochbuch'); }}>
             <Icon name="archive" size={18} /> Archivieren
           </button>
@@ -298,7 +303,15 @@ function CookedButton({ recipe, servings }: { recipe: Recipe; servings: number }
     );
   }
   const today = !!recipe.lastCookedAt && new Date(recipe.lastCookedAt).toDateString() === new Date().toDateString();
-  if (today) return <span className="plan-chip is-on"><Icon name="check" size={16} /> Heute gekocht</span>;
+  // heute schon gekocht: ein zweites „Gekocht“ zöge doppelt ab – antippen nimmt es stattdessen zurück
+  if (today) {
+    return (
+      <button className="plan-chip is-on" aria-pressed="true" aria-label="Heute gekocht – antippen, um es zurückzunehmen"
+        onClick={() => confirm('„Heute gekocht“ zurücknehmen? Die Zutaten kommen zurück in die Speisekammer.') && cookedToast(uncookRecipe(recipe.id))}>
+        <Icon name="check" size={16} /> Heute gekocht
+      </button>
+    );
+  }
   return (
     <>
       <button className="plan-chip" aria-label="Als gekocht markieren"

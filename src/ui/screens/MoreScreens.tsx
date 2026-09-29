@@ -16,6 +16,7 @@ import { THEMES, updateSettings, useSettings } from '../settings';
 import { Onboarding } from '../components/Onboarding';
 import { recipeCount } from '../format';
 import { toast } from '../toast';
+import { shareMessage, shareRecipes } from '../shareRecipes';
 
 export function MoreScreen() {
   const all = useRecipes();
@@ -154,6 +155,47 @@ function downloadBackup(recipes: Recipe[], products: MyProduct[], pantry: Pantry
 }
 
 /**
+ * Mehrere Rezepte weitergeben (z. B. an einen Freund, der auch Mashi nutzt): auswählen, dann übers
+ * Teilen-Menü. Komplett – mit Versionen, Bewertungen und Notizen; eingespielt wird wie eine Sicherung.
+ */
+function SharePicker({ recipes, onClose }: { recipes: Recipe[]; onClose: () => void }) {
+  const list = [...recipes].sort((a, b) => currentContent(a).title.localeCompare(currentContent(b).title, 'de'));
+  const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
+  const all = picked.size === list.length && list.length > 0;
+  const toggle = (id: string) => setPicked((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const share = () => {
+    // direkt im Tipp aufrufen – das Teilen-Menü öffnet sich nur als Antwort auf eine Berührung
+    void shareRecipes(list.filter((r) => picked.has(r.id))).then((r) => {
+      const m = shareMessage(r);
+      if (m) toast(m);
+      if (r !== 'abgebrochen') onClose();
+    });
+  };
+  return (
+    <div className="backup-preview share-pick">
+      <p><strong>Welche Rezepte teilen?</strong></p>
+      <label className="share-pick__row share-pick__all">
+        <input type="checkbox" checked={all} onChange={() => setPicked(all ? new Set() : new Set(list.map((r) => r.id)))} /> Alle ({list.length})
+      </label>
+      <ul className="share-pick__list">
+        {list.map((r) => (
+          <li key={r.id}>
+            <label className="share-pick__row">
+              <input type="checkbox" checked={picked.has(r.id)} onChange={() => toggle(r.id)} /> {currentContent(r).title}
+            </label>
+          </li>
+        ))}
+      </ul>
+      <p className="small muted">Komplett mit Versionen, Bewertungen und Notizen. Beim anderen: Einstellungen → Sicherung → Einspielen – seine Rezepte bleiben erhalten.</p>
+      <div className="row-gap">
+        <button className="btn btn--primary" disabled={!picked.size} onClick={share}><Icon name="share" size={18} /> Teilen{picked.size ? ` (${picked.size})` : ''}</button>
+        <button className="btn btn--ghost" onClick={onClose}>Abbrechen</button>
+      </div>
+    </div>
+  );
+}
+
+/**
  * Sicherung herunterladen und wieder einspielen. Beim Einspielen erst eine Vorschau –
  * übernommen wird nur nach Bestätigung. Vorhandene Rezepte werden zusammengeführt.
  */
@@ -164,6 +206,7 @@ function BackupPanel({ recipes }: { recipes: Recipe[] }) {
   const input = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<(ParsedBackup & { fileName: string }) | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [sharing, setSharing] = useState(false);
 
   const onFile = async (file: File | undefined) => {
     if (input.current) input.current.value = ''; // dieselbe Datei später erneut wählbar
@@ -173,7 +216,7 @@ function BackupPanel({ recipes }: { recipes: Recipe[] }) {
       setPreview({ ...parseBackup(JSON.parse(await file.text())), fileName: file.name });
     } catch (e) {
       setPreview(null);
-      setError(e instanceof SyntaxError ? 'Die Datei ist kein gültiges JSON.' : (e as Error).message);
+      setError(e instanceof SyntaxError ? 'Das ist keine Mashi-Datei (weder Sicherung noch geteilte Rezepte).' : (e as Error).message);
     }
   };
 
@@ -197,8 +240,12 @@ function BackupPanel({ recipes }: { recipes: Recipe[] }) {
         <button className="btn btn--ghost" onClick={() => downloadBackup(recipes, products, pantry, plan)}>Herunterladen</button>
         <button className="btn btn--ghost" onClick={() => input.current?.click()}>Einspielen …</button>
       </div>
-      <input ref={input} type="file" accept="application/json,.json" hidden onChange={(e) => onFile(e.target.files?.[0])} />
+      {/* geteilte Rezepte kommen je nach Handy als .json oder .txt an (Chrome teilt kein .json) */}
+      <input ref={input} type="file" accept="application/json,.json,text/plain,.txt" hidden onChange={(e) => onFile(e.target.files?.[0])} />
       {error && <p className="error" role="alert">{error}</p>}
+      {sharing
+        ? <SharePicker recipes={recipes.filter((r) => !r.archivedAt)} onClose={() => setSharing(false)} />
+        : <button className="btn btn--soft" onClick={() => setSharing(true)}><Icon name="share" size={18} /> Rezepte teilen …</button>}
 
       {preview && (
         <div className="backup-preview">

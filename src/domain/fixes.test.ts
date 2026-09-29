@@ -3,7 +3,7 @@ import { createMockRecipes } from '../data/mockRecipes';
 import { buildShoppingList, resolveIngredient } from './mealplan';
 import { localFoodTable } from './nutrition/localFoods';
 import {
-  alreadyImported, applyImport, bonKey, deductRecipe, emptyPantry, pantryAfterPlan, plannedByDish, plannedUse, proposeImport, rememberReceipt, returnTaken, stockSummary, takenBetween, usedOf,
+  alreadyImported, applyImport, bonKey, deductRecipe, emptyPantry, freeAfterPlan, pantryAfterPlan, plannedPack, plannedFromPacks, plannedByDish, plannedUse, proposeImport, rememberReceipt, returnTaken, stockSummary, takenBetween, usedOf,
   type Pantry, type PantryItem,
 } from './pantry';
 import { amountLabel } from './pantryLabel';
@@ -199,6 +199,34 @@ describe('Verplant aus einer angebrochenen Packung (Fehler: Milch nach dem Koche
     expect(amountLabel(free)).toBe('1 × 1 l + 800 ml');
     const cooked = deductRecipe(p, content(r.versions[0].content.ingredients), 2, localFoodTable).pantry;
     expect(ml(cooked.items)).toBe(ml([free]));
+  });
+
+  it('Kokosmilch 2 × 400 ml + 1 × 400 ml (zwei Marken), 150 ml verplant → frei „250 ml“, nicht 240 (Rundung auf 0,1 Dosen)', () => {
+    const r2 = recipe('k', [{ id: '1', name: 'Kokosmilch', amount: 150, unit: 'ml' }]);
+    const plan2 = { items: [{ recipeId: 'k', servings: 2 }], checked: [], cooked: [], updatedAt: '' };
+    const dose = { amount: 400, unit: 'ml' as const };
+    const p = pantry(item('a', 'Kokosmilch', 2, 'Stück', { pack: dose, productId: 'A' }), item('b', 'Kokosmilch', 1, 'Stück', { pack: dose, productId: 'B' }));
+    const planned = plannedUse(p, plan2, [r2], localFoodTable);
+    const free = p.items.map((i) => freeAfterPlan(i, planned)!);
+    expect(free.map(amountLabel)).toEqual(['1 × 400 ml + 250 ml', '1 × 400 ml']);
+    // vorher „frei“ = nachher wirklich da
+    const cooked = deductRecipe(p, content(r2.versions[0].content.ingredients), 2, localFoodTable).pantry;
+    expect(ml(cooked.items)).toBe(ml(free));
+    // angezeigt wird wie im Schrank: alle Dosen, darunter „davon 150 ml verplant“ (Julias Wunsch)
+    expect(p.items.map((i) => plannedPack(i, planned))).toEqual([true, false]);
+    expect(plannedFromPacks(p.items, planned)).toEqual({ amount: 150, unit: 'ml' });
+  });
+
+  it('zwei Marken, 1⅓ Dosen verplant: 533 ml – der Rest gehört nur zur angebrochenen Dose (nicht über den Namen zu beiden)', () => {
+    const r3 = recipe('d', [{ id: '1', name: 'Kokosmilch', amount: 4 / 3, unit: 'Dose' }]);
+    const plan3 = { items: [{ recipeId: 'd', servings: 2 }], checked: [], cooked: [], updatedAt: '' };
+    const dose = { amount: 400, unit: 'ml' as const };
+    const p = pantry(item('ja', 'Kokosmilch', 1, 'Stück', { pack: dose, productId: 'B' }), item('aroy', 'Kokosmilch', 2, 'Stück', { pack: dose, productId: 'A' }));
+    const planned = plannedUse(p, plan3, [r3], localFoodTable);
+    expect([...planned.entries()]).toEqual([['ja', 'all'], ['aroy', 0.333]]);
+    // die Zeile zeigt alle drei Dosen – und was davon verplant ist
+    expect(p.items.every((i) => plannedPack(i, planned))).toBe(true);
+    expect(plannedFromPacks(p.items, planned)).toEqual({ amount: 533, unit: 'ml' });
   });
 
   it('„Für den Wochenplan“ zeigt, was das Gericht braucht – nicht die Packung und nicht den Rest', () => {

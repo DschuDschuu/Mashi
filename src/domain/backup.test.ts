@@ -98,3 +98,19 @@ describe('Vollständige Sicherung', () => {
     expect(broken.plan).toBeUndefined();
   });
 });
+
+describe('Rezepte teilen (Datei für ein anderes Mashi)', () => {
+  it('ein Rezept kommt komplett an – Versionen, Bewertungen, Notizen, Foto; ohne Speisekammer und Plan', () => {
+    const r = createMockRecipes().find((x) => x.versions.length > 1 && x.feedback.length > 0)!;
+    const shared = { ...r, notes: 'Mehr Gochujang', image: { kind: 'url' as const, url: 'data:image/jpeg;base64,AAAA' } };
+    // so, wie die Datei unterwegs ist: als Text (.json oder .txt – derselbe Inhalt)
+    const parsed = parseBackup(JSON.parse(JSON.stringify(createBackup([shared]))));
+    expect(parsed.recipes).toHaveLength(1);
+    expect(parsed.recipes[0]).toMatchObject({ id: r.id, notes: 'Mehr Gochujang', image: { url: 'data:image/jpeg;base64,AAAA' } });
+    expect(parsed.recipes[0].versions).toHaveLength(r.versions.length);
+    expect(parsed.recipes[0].feedback).toHaveLength(r.feedback.length);
+    expect(parsed.pantry).toBeUndefined();
+    expect(parsed.plan).toBeUndefined();
+    expect(parsed.products).toEqual([]);
+  });
+});

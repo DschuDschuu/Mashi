@@ -133,6 +133,8 @@ export interface Recipe {
   /** Persönliche, freie Notizen – unabhängig von Versionen. */
   notes: string;
   lastCookedAt?: string;
+  /** das „zuletzt gekocht“ davor – damit „Heute gekocht“ zurückgenommen werden kann, ohne das alte Datum zu verlieren */
+  previousCookedAt?: string;
   currentVersionId: string;
   versions: RecipeVersion[];
   feedback: TestFeedback[];

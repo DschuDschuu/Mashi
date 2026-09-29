@@ -319,14 +319,30 @@ export interface CookedResult {
  * aus der Speisekammer nehmen. Schon im Plan abgehakt → nicht ein zweites Mal abziehen.
  * @param amounts Mengen „nur dieses Mal“ je Zutat-ID (z. B. 3 statt 2 Tomaten) – das Rezept bleibt unverändert
  */
+const sameDay = (iso?: string) => !!iso && new Date(iso).toDateString() === new Date(now()).toDateString();
+
+/** „zuletzt gekocht“ auf jetzt – das Datum davor bleibt gemerkt (zweimal am selben Tag: das von vorher) */
+function stampCooked(r: Recipe): Recipe {
+  const previousCookedAt = sameDay(r.lastCookedAt) ? r.previousCookedAt : r.lastCookedAt;
+  const { previousCookedAt: _p, lastCookedAt: _l, ...rest } = r;
+  return { ...rest, lastCookedAt: now(), ...(previousCookedAt ? { previousCookedAt } : {}) };
+}
+
+/** „zuletzt gekocht“ wieder wie in before – für „Rückgängig“ und „Heute gekocht“ zurücknehmen */
+function unstampCooked(cur: Recipe, before: Pick<Recipe, 'lastCookedAt' | 'previousCookedAt'>): Recipe {
+  const { previousCookedAt: _p, lastCookedAt: _l, ...rest } = cur;
+  return { ...rest, ...(before.lastCookedAt ? { lastCookedAt: before.lastCookedAt } : {}), ...(before.previousCookedAt ? { previousCookedAt: before.previousCookedAt } : {}) };
+}
+
 export function markCooked(id: string, servings?: number, amounts: Record<string, number> = {}, variants?: Record<string, string>): CookedResult {
   const r = get(id);
-  commit({ ...r, lastCookedAt: now() });
+  commit(stampCooked(r));
   const planned = plan.items.find((i) => i.recipeId === id);
-  if (planned && plan.cooked.includes(id)) return { used: [], toCheck: [], undo: () => commit({ ...get(id), lastCookedAt: r.lastCookedAt }) };
+  if (planned && plan.cooked.includes(id)) return { used: [], toCheck: [], undo: () => commit(unstampCooked(get(id), r)) };
   if (planned) commitPlan(toggleCooked(plan, id, true));
   const cookedServings = servings ?? planned?.servings ?? currentContent(r).servings;
-  const result = consume(r, cookedServings, amounts, !!planned, variants ?? planned?.variants);
+  // immer mitschreiben, was genommen wurde – auch ohne Plan lässt sich „Heute gekocht“ so später zurücknehmen
+  const result = consume(r, cookedServings, amounts, true, variants ?? planned?.variants);
   askLeftover(r, cookedServings, !!planned);
   return {
     ...result,
@@ -334,9 +350,27 @@ export function markCooked(id: string, servings?: number, amounts: Record<string
       result.undo?.();
       dropLeftover(id);
       if (planned && plan.cooked.includes(id)) commitPlan({ ...plan, cooked: plan.cooked.filter((x) => x !== id) });
-      commit({ ...get(id), lastCookedAt: r.lastCookedAt });
+      commit(unstampCooked(get(id), r));
     },
   };
+}
+
+/**
+ * „Heute gekocht“ zurücknehmen – für Gerichte, die nicht im Wochenplan stehen (dort ist es der Haken):
+ * Genommenes kommt zurück, „zuletzt gekocht“ wieder wie vorher, die Frage „Was ist übrig?“ fällt weg.
+ */
+export function uncookRecipe(id: string): CookedResult | null {
+  const r = get(id);
+  if (!sameDay(r.lastCookedAt)) return null;
+  if (leftoverAsk?.recipeId === id) {
+    leftoverAsk = null;
+    emit();
+  }
+  dropLeftover(id);
+  const taken = pantry.cookLog?.[id];
+  if (taken?.length) putBack(id, taken);
+  commit(unstampCooked(r, { lastCookedAt: r.previousCookedAt }));
+  return { used: [], toCheck: [], restored: [...new Set((taken ?? []).filter((t) => !t.created).map((t) => t.item.name))] };
 }
 
 /**
@@ -360,9 +394,9 @@ function putBack(recipeId: string, taken: Taken[]) {
   commitPantry(Object.keys(rest).length ? { ...back, cookLog: rest } : withoutCookLog(back));
 }
 
-/** Nur Einträge für Gerichte behalten, die im Plan noch als gekocht gelten. */
+/** Nur Einträge für Gerichte behalten, die im Plan noch als gekocht gelten – oder heute gekocht wurden (zurücknehmbar). */
 function pruneCookLog(log: Pantry['cookLog']): Record<string, Taken[]> {
-  return Object.fromEntries(Object.entries(log ?? {}).filter(([id]) => plan.cooked.includes(id)));
+  return Object.fromEntries(Object.entries(log ?? {}).filter(([id]) => plan.cooked.includes(id) || sameDay(recipes.find((x) => x.id === id)?.lastCookedAt)));
 }
 
 function withoutCookLog(p: Pantry): Pantry {
@@ -668,13 +702,21 @@ export function toggleShoppingItem(key: string) {
 
 /**
  * „Gekocht“ im Plan an- oder abhaken. Beim Abhaken zählt es als „zuletzt gekocht“ und die
- * Zutaten gehen aus der Speisekammer. Zurücknehmen legt sie NICHT wieder hinein.
+ * Zutaten gehen aus der Speisekammer. Zurücknehmen legt das Genommene wieder hinein (Merkzettel cookLog).
  */
 export function togglePlanCooked(recipeId: string): CookedResult | null {
   const next = toggleCooked(plan, recipeId);
   if (next === plan) return null;
   commitPlan(next);
   if (!next.cooked.includes(recipeId)) {
+    // doch nicht gekocht → auch die Frage „Was ist übrig?“ ist hinfällig (sie blieb sonst offen stehen)
+    if (leftoverAsk?.recipeId === recipeId) {
+      leftoverAsk = null;
+      emit();
+    }
+    // am selben Tag zurückgenommen → „zuletzt gekocht“ wieder wie vorher
+    const cur = get(recipeId);
+    if (sameDay(cur.lastCookedAt)) commit(unstampCooked(cur, { lastCookedAt: cur.previousCookedAt }));
     // Haken zurückgenommen → was „Gekocht“ genommen hatte, kommt zurück
     const taken = pantry.cookLog?.[recipeId];
     if (!taken?.length) return null;
@@ -684,7 +726,7 @@ export function togglePlanCooked(recipeId: string): CookedResult | null {
     return { used: [], toCheck: [], restored };
   }
   const r = get(recipeId);
-  commit({ ...r, lastCookedAt: now() });
+  commit(stampCooked(r));
   const item = next.items.find((i) => i.recipeId === recipeId)!;
   const result = consume(r, item.servings, {}, true, item.variants);
   askLeftover(r, item.servings, true);
@@ -694,7 +736,7 @@ export function togglePlanCooked(recipeId: string): CookedResult | null {
       result.undo?.();
       dropLeftover(recipeId);
       if (plan.cooked.includes(recipeId)) commitPlan({ ...plan, cooked: plan.cooked.filter((x) => x !== recipeId) });
-      commit({ ...get(recipeId), lastCookedAt: r.lastCookedAt });
+      commit(unstampCooked(get(recipeId), r));
     },
   };
 }

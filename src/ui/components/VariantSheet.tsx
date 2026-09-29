@@ -11,21 +11,25 @@ const pct = (n: number) => Math.round(n);
 
 /**
  * „Welches Pesto nimmst du?“ – nur für Zutaten, von denen mehrere Sorten im Vorrat liegen.
- * Vorausgewählt: die Sorte, die am nächsten an deinem Makro-Ziel liegt (oder deine letzte Wahl).
+ * Die Sorte, die näher an deinem Makro-Ziel liegt, trägt eine Glühbirne („Tipp“, nicht „gewählt“).
+ * @param preselect die bisherige Wahl markieren (Sorte im Plan umwählen) – beim Nachfragen nicht:
+ *   dann wählst du selbst, sonst sähe der Tipp aus wie schon entschieden
  */
-export function VariantSheet({ choices, pick, title = 'Welche Sorte nimmst du?', onDone, onClose }: {
+export function VariantSheet({ choices, pick, title = 'Welche Sorte nimmst du?', preselect = true, onDone, onClose }: {
   choices: VariantChoice[];
   pick: Record<string, string>;
   title?: string;
+  preselect?: boolean;
   onDone: (pick: Record<string, string>) => void;
   onClose: () => void;
 }) {
   const ref = useSheet(onClose);
   const goal = useMacroGoal();
-  const [value, setValue] = useState(pick);
+  const asking = choices.filter((c) => c.options.length > 1);
+  const [value, setValue] = useState(() => (preselect ? pick : Object.fromEntries(Object.entries(pick).filter(([id]) => !asking.some((c) => c.ingredientId === id)))));
   /** Favoriten im Blatt sofort sichtbar – gespeichert wird direkt (gilt für alle Rezepte) */
   const [favs, setFavs] = useState<Record<string, string | null>>(() => Object.fromEntries(choices.map((c) => [c.ingredientId, c.all.find((v) => v.favorite)?.id ?? null])));
-  const asking = choices.filter((c) => c.options.length > 1);
+  const complete = asking.every((c) => value[c.ingredientId]);
   const unsorted = asking.some((c) => c.unsortedItemIds.length);
   const toggleFavorite = (c: VariantChoice, id: string, name: string) => {
     const next = favs[c.ingredientId] === id ? null : id;
@@ -47,10 +51,14 @@ export function VariantSheet({ choices, pick, title = 'Welche Sorte nimmst du?',
               const s = macroShares(o.per100g);
               return (
                 <label key={o.id} className={`variants__opt${value[c.ingredientId] === o.id ? ' is-on' : ''}`}>
+                  {/* Tipp an der Ecke – kein Text, der bei langen Namen mitten im Namen umbricht */}
+                  {o.id === c.suggested && !favs[c.ingredientId] && (
+                    <span className="variants__tip" role="img" aria-label="passt besser zu deinem Ziel" title="passt besser zu deinem Ziel"><Icon name="bulb" size={12} /></span>
+                  )}
                   <input type="radio" name={c.ingredientId} checked={value[c.ingredientId] === o.id}
                     onChange={() => setValue({ ...value, [c.ingredientId]: o.id })} />
                   <span className="variants__text">
-                    <span>{o.name}{o.id === c.suggested && !favs[c.ingredientId] && <span className="variants__best">passt besser</span>}</span>
+                    <span>{o.name}</span>
                     <span className="small muted">{Math.round(o.per100g.kcal)} kcal · KH {pct(s.carbs)} % · Eiweiß {pct(s.protein)} % · Fett {pct(s.fat)} %</span>
                   </span>
                   <button type="button" className={`variants__star${favs[c.ingredientId] === o.id ? ' is-on' : ''}`}
@@ -65,7 +73,7 @@ export function VariantSheet({ choices, pick, title = 'Welche Sorte nimmst du?',
         ))}
         <div className="variants__actions">
           <button type="button" className="btn btn--ghost" onClick={onClose}>Abbrechen</button>
-          <button type="button" className="btn btn--primary" onClick={() => onDone(value)}>Übernehmen</button>
+          <button type="button" className="btn btn--primary" disabled={!complete} onClick={() => onDone(value)}>{complete ? 'Übernehmen' : 'Bitte eine Sorte wählen'}</button>
         </div>
       </div>
     </div>
@@ -87,7 +95,7 @@ export function useVariantPrompt() {
     else then(pick);
   };
   const sheet = open && (
-    <VariantSheet choices={open.choices} pick={open.pick} onClose={() => setOpen(null)}
+    <VariantSheet choices={open.choices} pick={open.pick} preselect={false} onClose={() => setOpen(null)}
       onDone={(p) => { rememberSorts(open.choices, p); setOpen(null); open.then(p); }} />
   );
   return { ask, sheet };

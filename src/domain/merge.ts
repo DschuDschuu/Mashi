@@ -23,8 +23,11 @@ export function mergeRecipes(a: Recipe, b: Recipe): Recipe {
     .sort((x, y) => x.createdAt.localeCompare(y.createdAt));
 
   const lastCookedAt = [a.lastCookedAt, b.lastCookedAt].filter(Boolean).sort().pop();
+  // das Datum davor gehört zum gewählten „zuletzt gekocht“ – beide kommen vom selben Gerät
+  const from = [newer, older].find((x) => x.lastCookedAt === lastCookedAt) ?? newer;
+  const { previousCookedAt: _p, ...rest } = newer;
 
-  return { ...newer, versions, feedback, lastCookedAt };
+  return { ...rest, versions, feedback, lastCookedAt, ...(from.previousCookedAt ? { previousCookedAt: from.previousCookedAt } : {}) };
 }
 
 function unionById<T extends { id: string }>(items: T[]): T[] {

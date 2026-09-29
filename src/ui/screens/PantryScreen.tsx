@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { resolveName } from '../../domain/mealplan';
-import { recipesFromPantry, type PantryItem, type PantryUnit } from '../../domain/pantry';
+import { freeAfterPlan, plannedPack, plannedFromPacks, recipesFromPantry, type PantryItem, type PantryUnit } from '../../domain/pantry';
 import { suggestPantryUnit } from '../../domain/packs';
 import { daysLabel, daysLeft, frozenSince, specialDays, useByOf } from '../../domain/shelfLife';
 import { formatAmount } from '../../domain/scaling';
@@ -74,11 +74,13 @@ export function PantryScreen() {
   // Nur was nach dem Wochenplan übrig bleibt – bald Ablaufendes zuerst; Eingeplantes nicht noch einmal vorschlagen
   const { rest, keys, idea, planned } = useUseUp();
   // Oben nur, was frei ist – Verplantes steht in „Für den Wochenplan“ (abgezogen wird erst beim Kochen)
-  const freeOf = (item: PantryItem): PantryItem | null => {
-    const p = planned.get(item.id);
-    if (p === undefined) return item;
-    if (p === 'all' || item.amount === undefined) return null;
-    return { ...item, amount: Math.round((item.amount - p) * 10) / 10 };
+  const freeOf = (item: PantryItem) => freeAfterPlan(item, planned);
+  // Packungen, von denen ein Teil verplant ist: so zeigen, wie sie im Schrank stehen – darunter „davon 150 ml verplant“
+  // (sonst hieße „2 × 400 ml + 250 ml“: da ist eine offene Dose – dabei ist sie noch zu)
+  const shownOf = (item: PantryItem) => (plannedPack(item, planned) ? item : freeOf(item) ?? item);
+  const plannedNote = (items: PantryItem[]) => {
+    const p = plannedFromPacks(items, planned);
+    return p ? `davon ${packLabel(p)} verplant` : null;
   };
   const reservedLabel = (item: PantryItem) => {
     const p = planned.get(item.id);
@@ -111,7 +113,8 @@ export function PantryScreen() {
   const sorted = [...pantry.items].sort((a, b) => a.name.localeCompare(b.name, 'de') || Number(!a.openedAt) - Number(!b.openedAt));
   // Gefrorenes als eigene Gruppe am Ende – es hält ganz anders als der Rest seiner Art
   // Ganz Verplantes fällt oben weg; Bearbeiten zeigt aber immer den echten Vorrat
-  const shown = sorted.filter((i) => freeOf(i) !== null);
+  // Dosen & Packungen bleiben sichtbar, auch ganz verplant („3 × 400 ml · davon 533 ml verplant“)
+  const shown = sorted.filter((i) => freeOf(i) !== null || plannedPack(i, planned));
   const prepared = shown.filter((i) => i.recipeId && !i.frozenAt);
   const groups = [
     // Vorgekochtes zuerst – es hält am kürzesten und will gegessen werden
@@ -145,7 +148,8 @@ export function PantryScreen() {
           </span>
           <span className="pantry__qty pantry__qty--stack">
             {/* in der Teilzeile sagt links schon „angebrochen“ */}
-            {quantityLabel(part ? { ...(freeOf(i) ?? i), openedAt: undefined } : freeOf(i) ?? i)}
+            {quantityLabel(part ? { ...shownOf(i), openedAt: undefined } : shownOf(i))}
+            {plannedNote([i]) && <span className="pantry__planned">{plannedNote([i])}</span>}
             {shelfLabel(i) && <span className={`pantry__shelf${shelfLabel(i)!.urgent ? ' is-urgent' : ''}`}>{shelfLabel(i)!.text}</span>}
           </span>
         </button>
@@ -171,12 +175,14 @@ export function PantryScreen() {
           <span className="pantry__qty pantry__qty--stack">
             {/* Offenes vorne und zusammengefasst („1,2 l offen + 7 × 1 l“) – aufgeklappt stehen die Teile einzeln */}
             <span className="pantry__parts">
-              {clusterLabels(parts.map((p) => freeOf(p) ?? p)).map((l, n) => <span key={n} className="pantry__part">{n ? `+ ${l}` : l}</span>)}
+              {clusterLabels(parts.map(shownOf)).map((l, n) => <span key={n} className="pantry__part">{n ? `+ ${l}` : l}</span>)}
             </span>
+            {plannedNote(parts) && <span className="pantry__planned">{plannedNote(parts)}</span>}
             {shelf && <span className={`pantry__shelf${shelf.urgent ? ' is-urgent' : ''}`}>{shelf.text}</span>}
           </span>
+          {/* im Knopf – sonst klappt ein Tipp auf den Pfeil nichts auf */}
+          <span className={`pantry__chev${open ? ' is-open' : ''}`} aria-hidden="true"><Icon name="chevron" size={16} /></span>
         </button>
-        <span className={`pantry__chev${open ? ' is-open' : ''}`} aria-hidden="true"><Icon name="chevron" size={16} /></span>
       </li>,
       ...(open ? parts.map((p) => row(p, true)) : []),
     ];
@@ -544,5 +550,13 @@ function clusterLabels(parts: PantryItem[]): string[] {
   const opened = parts.filter((p) => p.openedAt && p.amount !== undefined && (p.unit === 'g' || p.unit === 'ml'));
   const units = [...new Set(opened.map((p) => p.unit))];
   const openLabels = units.map((u) => quantityLabel({ amount: opened.filter((p) => p.unit === u).reduce((n, p) => n + p.amount!, 0), unit: u, openedAt: 'offen' }));
-  return [...openLabels, ...parts.filter((p) => !opened.includes(p)).map((p) => quantityLabel(p))];
+  // gleich große Packungen zusammen – auch von verschiedenen Marken: „2 × 400 ml“ statt „1 × 400 ml + 1 × 400 ml“
+  const rest = parts.filter((p) => !opened.includes(p));
+  const packed = rest.filter((p) => p.pack && p.amount !== undefined && (p.unit === 'Stück' || p.unit === 'Glas'));
+  const sizes = [...new Map(packed.map((p) => [`${p.unit}|${p.pack!.amount}|${p.pack!.unit}`, p])).entries()];
+  const packLabels = sizes.map(([key, first]) => quantityLabel({
+    ...first, openedAt: undefined,
+    amount: packed.filter((p) => `${p.unit}|${p.pack!.amount}|${p.pack!.unit}` === key).reduce((n, p) => n + p.amount!, 0),
+  }));
+  return [...openLabels, ...packLabels, ...rest.filter((p) => !packed.includes(p)).map((p) => quantityLabel(p))];
 }

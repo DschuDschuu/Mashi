@@ -3,10 +3,11 @@ import PouchDB from 'pouchdb-core';
 import memory from 'pouchdb-adapter-memory';
 import { describe, expect, it } from 'vitest';
 import { PouchRecipeRepository, type RecipeDb } from './pouchRepository';
-import { addExtra, addPantryItem, addToPlan, answerLeftover, applyInventory, clearDoneExtras, importReceipt, clearCooked, createRecipe, currentLeftoverAsk, currentPantry, eatPreparedPortions, freezePantryItem, initStore, thawPantryItem, togglePlanCooked, removeFromPlan, removePantryItem, setFoodStage, toggleShoppingItem, updatePantryItem } from './store';
+import { addExtra, addPantryItem, addToPlan, answerLeftover, applyInventory, clearDoneExtras, importReceipt, importRecipes, markCooked, uncookRecipe, clearCooked, createRecipe, currentLeftoverAsk, currentPantry, eatPreparedPortions, freezePantryItem, initStore, thawPantryItem, togglePlanCooked, removeFromPlan, removePantryItem, setFoodStage, toggleShoppingItem, updatePantryItem } from './store';
 import { keyOfName } from '../domain/mealplan';
 import { EXTRA_PREFIX, RESTOCK_PREFIX } from '../domain/restock';
 import { foodTable } from '../services';
+import { createMockRecipes } from './mockRecipes';
 
 PouchDB.plugin(memory);
 
@@ -201,5 +202,41 @@ describe('Store: teilweise auftauen mit Rückgängig', () => {
     expect(currentPantry().items.map((i) => [i.amount, !!i.frozenAt])).toEqual([[1, true], [2, false]]);
     undo();
     expect(currentPantry().items.map((i) => [i.id, i.amount, !!i.frozenAt])).toEqual([[id, 3, true]]);
+  });
+});
+
+describe('Store: Haken zurück schließt die Frage „Was ist übrig?“', () => {
+  it('abgehakt → Frage offen; Haken zurück → Frage weg', async () => {
+    await freshStore('ask');
+    const id = createRecipe({
+      title: 'Curry', description: '', servings: 4, prepMinutes: 0, cookMinutes: 0, difficulty: 1,
+      ingredients: [], steps: [], categories: [], tags: [], devices: [],
+    }, { source: 'selbst', status: 'kochbuch' });
+    addToPlan(id, 4);
+    togglePlanCooked(id);
+    expect(currentLeftoverAsk()).toMatchObject({ title: 'Curry' });
+    togglePlanCooked(id);
+    expect(currentLeftoverAsk()).toBeNull();
+  });
+});
+
+describe('Store: „Heute gekocht“ ohne Wochenplan zurücknehmen', () => {
+  it('Zutaten zurück, „zuletzt gekocht“ wieder das alte Datum, Frage „Was ist übrig?“ weg', async () => {
+    const repo = await freshStore('uncook');
+    const curry = createMockRecipes().find((r) => r.id === 'linsen-curry')!; // zuletzt gekocht vor 5 Tagen
+    importRecipes([curry]);
+    addPantryItem('Rote Linsen', 500, 'g');
+    const linsen = () => currentPantry().items.find((i) => i.name === 'Rote Linsen')?.amount;
+
+    markCooked(curry.id, 4);
+    expect(linsen()).toBeLessThan(500);
+    expect(currentLeftoverAsk()).not.toBeNull();
+
+    const res = uncookRecipe(curry.id);
+    expect(res?.restored).toEqual(['Rote Linsen']);
+    expect(linsen()).toBe(500);
+    expect(currentLeftoverAsk()).toBeNull();
+    await settle();
+    expect((await repo.list()).find((r) => r.id === curry.id)?.lastCookedAt).toBe(curry.lastCookedAt);
   });
 });

@@ -3,7 +3,8 @@ import { DEFAULT_NO_NUTRITION } from './nutrition/noNutrition';
 import type { MealPlan } from './mealplan';
 import type { MyProduct } from './nutrition/myProducts';
 import { emptyPantry, type Pantry, type PantryItem } from './pantry';
-import { merge3Pantry, merge3Plan, merge3Products, unionPantry, unionPlan, unionProducts } from './syncMerge';
+import { merge3Pantry, merge3Plan, merge3Products, merge3Recipe, unionPantry, unionPlan, unionProducts } from './syncMerge';
+import { createMockRecipes } from '../data/mockRecipes';
 
 // Erfundene Daten – zwei Geräte, „Handy“ (ours) und „Tablet“ (theirs)
 const T = '2026-09-25T10:00:00.000Z';
@@ -117,5 +118,28 @@ describe('Stufen zwischen Geräten', () => {
     const m = merge3Pantry(base, handy, tablet);
     expect(m.noNutrition).toContain('Sumach');
     expect(m.noNutrition).not.toContain('Zimt');
+  });
+});
+
+describe('Rezept: „zuletzt gekocht“ zwischen Geräten', () => {
+  const r0 = createMockRecipes()[0];
+  const at = (lastCookedAt?: string, previousCookedAt?: string, extra: Partial<typeof r0> = {}) => {
+    const { lastCookedAt: _l, previousCookedAt: _p, ...rest } = r0;
+    return { ...rest, ...(lastCookedAt ? { lastCookedAt } : {}), ...(previousCookedAt ? { previousCookedAt } : {}), ...extra };
+  };
+  const OLD = '2026-09-01T12:00:00.000Z', MORNING = '2026-09-29T08:00:00.000Z', EVENING = '2026-09-29T19:00:00.000Z';
+
+  it('„Heute gekocht“ zurückgenommen: das ältere Datum setzt sich durch (früher gewann immer das neuere)', () => {
+    const base = at(MORNING, OLD);
+    expect(merge3Recipe(base, at(OLD), base).lastCookedAt).toBe(OLD);
+  });
+  it('beide Geräte haben gekocht: das neuere zählt', () => {
+    const base = at(OLD);
+    expect(merge3Recipe(base, at(MORNING, OLD), at(EVENING, OLD)).lastCookedAt).toBe(EVENING);
+  });
+  it('nur das andere Gerät hat gekocht: dessen Datum – unsere Notiz bleibt trotzdem', () => {
+    const base = at(OLD);
+    const m = merge3Recipe(base, at(OLD, undefined, { notes: 'mehr Chili' }), at(EVENING, OLD));
+    expect(m).toMatchObject({ lastCookedAt: EVENING, previousCookedAt: OLD, notes: 'mehr Chili' });
   });
 });

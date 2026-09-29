@@ -897,6 +897,8 @@ p { margin: 0; }
 .useup-hint { margin: 0; font-size: 0.82rem; font-weight: 600; color: #9a5a2f; }
 .pantry__qty--stack { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.25; padding: 4px 0; min-width: 0; flex: 0 1 auto; white-space: normal; }
 .pantry__shelf { font-size: 0.75rem; color: var(--ink-3); }
+/* „davon 150 ml verplant“ unter der Menge – die Dose ist noch zu, ein Teil gehört schon einem Gericht */
+.pantry__planned { font-size: 0.75rem; color: var(--primary-text); }
 .pantry__shelf.is-urgent { color: #9a5a2f; font-weight: 700; }
 /* „Essen bis“ links neben dem Datum – lange Beschriftungen rutschen von selbst darüber */
 .pantry-date { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; }
@@ -1084,7 +1086,8 @@ p { margin: 0; }
 .variants__opt.is-on { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary); }
 .variants__opt input { accent-color: var(--primary); }
 .variants__text { flex: 1; display: flex; flex-direction: column; gap: 2px; }
-.variants__best { margin-left: 8px; padding: 1px 7px; border-radius: 999px; background: var(--mint); color: var(--ink); font-size: 0.7rem; font-weight: 700; }
+/* „passt besser“ als Glühbirne an der Ecke – ein Tipp, kein „gewählt“ (das zeigt der Rahmen) */
+.variants__tip { position: absolute; top: -8px; right: -8px; width: 22px; height: 22px; border-radius: 50%; background: #f4cf1f; color: #2f2710; display: grid; place-items: center; box-shadow: 0 0 0 2px var(--bg); }
 .variants__actions { display: flex; justify-content: flex-end; gap: 10px; }
 .pantry__sort { display: block; font-size: 0.72rem; font-weight: 500; color: var(--ink-3); }
 .macrogoal__fields { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
@@ -1269,6 +1272,8 @@ p { margin: 0; }
 /* eine Zeile je Lebensmittel, aufgeklappt die Teile (offen / Packungen) eingerückt */
 .pantry__chev { display: inline-flex; padding: 0 10px; color: var(--ink-2); transform: rotate(90deg); transition: transform 0.15s; }
 .pantry__chev.is-open { transform: rotate(-90deg); }
+/* der Pfeil sitzt im Knopf (Abstand dort 12 statt 8 px) – gleiche Position wie vorher */
+.pantry__hit > .pantry__chev { margin-left: -4px; flex: none; }
 .pantry__item--part { padding-left: 28px; background: var(--surface-2); }
 .pantry__item--part .pantry__name { font-size: 0.92rem; color: var(--ink-2); }
 /* „Was ist übrig?“ nach dem Kochen */
@@ -1374,3 +1379,11 @@ p { margin: 0; }
 .quicknut__search input:focus, .pantry-freeze input:focus, .cook__edit input:focus { outline: none; border-color: var(--primary); }
 /* Haltbarkeit: dreispaltig passt „14 Tagen“ am Handy nicht – unter 400 px zwei Spalten */
 @media (max-width: 399px) { .shelf__special { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+/* Seite abgestürzt (ErrorBoundary): ruhig, mit dem Fehlertext zum Weitergeben */
+.crash { gap: 12px; padding-top: 32px; }
+.crash__detail { white-space: pre-wrap; word-break: break-word; font-size: 0.85rem; background: var(--surface-2); border-radius: var(--r-sm); padding: 10px 12px; margin: 0; }
+/* Rezepte teilen: Auswahl unter Einstellungen → Sicherung */
+.share-pick__list { list-style: none; margin: 0; padding: 0; max-height: 45dvh; overflow-y: auto; display: flex; flex-direction: column; }
+.share-pick__row { display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 2px 0; }
+.share-pick__row input { width: 18px; height: 18px; accent-color: var(--primary); flex: none; }
+.share-pick__all { font-weight: 600; border-bottom: 1px solid var(--line); }
