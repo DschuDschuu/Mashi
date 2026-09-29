@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { askDiscard } from '../confirm';
 import { goBack } from '../../router';
 import { Icon } from './Icon';
 
@@ -10,7 +11,12 @@ export function TopBar({ title, back = true, backTo = '/', right, confirmBack, o
   return (
     <header className="topbar">
       {back ? (
-        <button className="iconbtn" onClick={() => (!confirmBack || confirm(confirmBack)) && (onBack ? onBack() : goBack(backTo))} aria-label="Zurück">
+        <button className="iconbtn" onClick={async () => {
+          // ungespeicherte Eingaben: im Mashi-Blatt nachfragen („Verwerfen?“ / „Weiter bearbeiten“)
+          if (confirmBack && !(await askDiscard(confirmBack))) return;
+          if (onBack) onBack();
+          else goBack(backTo);
+        }} aria-label="Zurück">
           <Icon name="back" />
         </button>
       ) : <span className="iconbtn-spacer" />}

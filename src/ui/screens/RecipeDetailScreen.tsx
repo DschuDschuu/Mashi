@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { ask } from '../confirm';
 import { useSheet } from '../useSheet';
 import { useRecipeStock } from '../useRecipeStock';
 import { StockLine } from '../components/StockLine';
@@ -307,7 +308,9 @@ function CookedButton({ recipe, servings }: { recipe: Recipe; servings: number }
   if (today) {
     return (
       <button className="plan-chip is-on" aria-pressed="true" aria-label="Heute gekocht – antippen, um es zurückzunehmen"
-        onClick={() => confirm('„Heute gekocht“ zurücknehmen? Die Zutaten kommen zurück in die Speisekammer.') && cookedToast(uncookRecipe(recipe.id))}>
+        onClick={async () => {
+          if (await ask({ title: '„Heute gekocht“ zurücknehmen?', text: 'Die Zutaten kommen zurück in die Speisekammer.', confirm: 'Zurücknehmen' })) cookedToast(uncookRecipe(recipe.id));
+        }}>
         <Icon name="check" size={16} /> Heute gekocht
       </button>
     );

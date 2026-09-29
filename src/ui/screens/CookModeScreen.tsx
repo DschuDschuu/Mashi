@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { ask } from '../confirm';
 import { leftoverSuggestions, pantryAfterPlan } from '../../domain/pantry';
 import { packSuggestions } from '../../domain/packs';
 import { packLabel } from '../../domain/pantryLabel';
@@ -108,13 +109,13 @@ export function CookModeScreen({ id, servings, variants }: { id: string; serving
   const here = timers.find((t) => t.step === step);
   const others = byUrgency(timers.filter((t) => t !== here), now);
   // Läuft ein Timer oder sind Mengen geändert, lieber nachfragen – beides wäre sonst weg
-  const leave = () => {
+  const leave = async () => {
     const running = timers.filter((t) => isRunning(t, Date.now())).length;
     const changed = Object.keys(amounts).length > 0;
     const clocks = running === 1 ? 'Ein Timer läuft noch' : `${running} Timer laufen noch`;
     const why = running && changed ? `${clocks} und deine geänderten Mengen gehen verloren.`
       : running ? `${clocks}.` : changed ? 'Deine geänderten Mengen gehen verloren.' : '';
-    if (why && !confirm(`Kochmodus beenden? ${why} Fertig gekocht? Dann lieber im letzten Schritt „Fertig“ tippen.`)) return;
+    if (why && !(await ask({ title: 'Kochmodus beenden?', text: `${why} Fertig gekocht? Dann lieber im letzten Schritt „Fertig“ tippen.`, confirm: 'Beenden', cancel: 'Weiterkochen', danger: true }))) return;
     goBack(`/rezept/${recipe.id}`);
   };
 

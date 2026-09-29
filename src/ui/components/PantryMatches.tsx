@@ -27,8 +27,9 @@ export function PantryMatchList({ matches }: { matches: PantryMatch[] }) {
               </span>
             </button>
             {!inPlan && (
-              <button className="btn btn--soft btn--sm" onClick={() => { addToPlan(m.recipe.id); toast('Eingeplant'); }} aria-label={`${currentContent(m.recipe).title} einplanen`}>
-                <Icon name="plus" size={16} /> Plan
+              // eigene Zeile unter dem Text, damit Titel und „fehlt: …“ die volle Breite behalten
+              <button className="btn btn--soft btn--sm suggestion__plan" onClick={() => { addToPlan(m.recipe.id); toast('Eingeplant'); }} aria-label={`${currentContent(m.recipe).title} zum Wochenplan hinzufügen`}>
+                <Icon name="plus" size={16} /> Zum Wochenplan hinzufügen
               </button>
             )}
           </li>

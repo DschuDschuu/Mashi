@@ -647,6 +647,10 @@ p { margin: 0; }
 .plan-list .list__title, .suggestion .list__title { overflow-wrap: anywhere; }
 .plan-list .stepper { flex: none; }
 .suggestion__text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+/* „Zum Wochenplan hinzufügen“ in eigener Zeile, bündig mit dem Titel (Bild 64 px + Abstand 12 px) */
+.list__item.suggestion { flex-wrap: wrap; row-gap: 6px; }
+.suggestion .plan-list__hit { flex-basis: 100%; }
+.suggestion__plan { margin-left: 76px; }
 
 .shopping { list-style: none; margin: 0; padding: 4px 14px; }
 .shopping__item { border-top: 1px solid var(--line); }
@@ -1135,6 +1139,15 @@ p { margin: 0; }
 .foods__sorthead { display: flex; align-items: center; gap: 6px; }
 .foods__sorthead strong { flex: 1; min-width: 0; }
 .foods__sorthead .variants__star { width: 30px; height: 30px; }
+/* Marke als Chip – nur Anzeige, darum ohne Petrol-Füllung wie bei den Auswahl-Chips */
+.foods__brand { flex: 1; min-width: 0; display: flex; }
+.brand-chip {
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  padding: 2px 10px; border: 1px solid transparent; border-radius: 999px; background: var(--sky); color: var(--ink);
+  font-size: 0.82rem; font-weight: 700;
+}
+/* keine Marke: gestrichelt und leer – liegt auf der Sorten-Karte, deren Fläche schon surface-2 ist */
+.brand-chip.is-empty { background: transparent; border: 1px dashed var(--ink-3); color: var(--ink-3); font-weight: 600; }
 
 /* Filter als Tabs (wie im Rezept) – gleich breit; kleben unter der festen Kopfzeile, nicht dahinter */
 .foods__tabs { margin-top: -4px; top: 52px; }
@@ -1387,3 +1400,9 @@ p { margin: 0; }
 .share-pick__row { display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 2px 0; }
 .share-pick__row input { width: 18px; height: 18px; accent-color: var(--primary); flex: none; }
 .share-pick__all { font-weight: 600; border-bottom: 1px solid var(--line); }
+/* Nachfrage im Mashi-Stil (ask) – über allem anderen, auch über „Was ist übrig?“ */
+.confirm-backdrop { z-index: 45; }
+.confirm__actions { display: flex; flex-direction: column-reverse; gap: 8px; margin-top: 6px; }
+.confirm__actions .btn { width: 100%; }
+.btn--danger { background: #b4513f; color: #fff; border-color: transparent; }
+.btn--danger:active:not(:disabled) { background: #963f30; }

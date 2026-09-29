@@ -1,4 +1,5 @@
 import { useMemo, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { ask } from '../confirm';
 import { DishNutrition } from '../components/DishNutrition';
 import { recipeCost, sumCosts } from '../../domain/cost';
 import { suggestRecipes, type ShoppingItem, type Suggestion } from '../../domain/mealplan';
@@ -124,7 +125,9 @@ export function PlanScreen() {
         </button>
         {/* statt „Neue Woche“: der Plan läuft weiter – nur Gekochtes kommt raus, Vorgekochtes bleibt in der Speisekammer */}
         {plan.cooked.length > 0 && (
-          <button className="link link--muted center" onClick={() => confirm('Gekochte Gerichte aus dem Plan nehmen? Geplantes bleibt, Vorgekochtes bleibt in der Speisekammer.') && clearCooked()}>
+          <button className="link link--muted center" onClick={async () => {
+            if (await ask({ title: 'Gekochte Gerichte aus dem Plan nehmen?', text: 'Geplantes bleibt, Vorgekochtes bleibt in der Speisekammer.', confirm: 'Aus dem Plan nehmen' })) clearCooked();
+          }}>
             Gekochtes aufräumen
           </button>
         )}

@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { ask } from '../confirm';
 import { createBackup, parseBackup, type ParsedBackup } from '../../domain/backup';
 import type { MyProduct } from '../../domain/nutrition/myProducts';
 import { currentContent } from '../../domain/recipe';
@@ -45,7 +46,9 @@ export function MoreScreen() {
                 <span className="list__title">{currentContent(r).title}</span>
                 <button className="btn btn--soft btn--sm" onClick={() => { restoreRecipe(r.id); toast('Wiederhergestellt'); }}>Zurückholen</button>
                 <button className="iconbtn iconbtn--sm" aria-label="Endgültig löschen"
-                  onClick={() => confirm(`„${currentContent(r).title}“ endgültig löschen? Es verschwindet auf allen deinen Geräten und kann nicht wiederhergestellt werden.`) && deleteRecipe(r.id)}>
+                  onClick={async () => {
+                    if (await ask({ title: `„${currentContent(r).title}“ endgültig löschen?`, text: 'Es verschwindet auf allen deinen Geräten und kann nicht wiederhergestellt werden.', confirm: 'Endgültig löschen', danger: true })) deleteRecipe(r.id);
+                  }}>
                   <Icon name="trash" size={18} />
                 </button>
               </li>
@@ -119,11 +122,15 @@ function SyncPanel() {
       {state.kind === "aktuell" && <p className="muted small">Zuletzt abgeglichen: {new Date(state.at).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })} Uhr</p>}
       {cfg && <p className="muted small">Angemeldet als <strong>{cfg.username}</strong> · {new URL(cfg.url).host}</p>}
       <button className="btn btn--ghost" disabled={leaving} onClick={async () => {
-        if (!confirm("Auf diesem Gerät abmelden? Die lokale Kopie wird gelöscht – auf dem Server und deinen anderen Geräten bleibt alles erhalten.")) return;
+        if (!(await ask({ title: 'Auf diesem Gerät abmelden?', text: 'Die lokale Kopie wird gelöscht – auf dem Server und deinen anderen Geräten bleibt alles erhalten.', confirm: 'Abmelden', danger: true }))) return;
         setLeaving(true);
         // Erst hochladen, was noch nicht abgeglichen ist – sonst wäre es mit der lokalen Kopie weg
         if (!(await uploadPending())) {
-          const anyway = confirm("Nicht alles ist beim Server angekommen (offline oder Anmeldung abgelaufen). Trotzdem abmelden? Änderungen, die nur auf diesem Gerät sind, gehen dann verloren. Tipp: vorher unter „Sicherung“ auf „Herunterladen“ tippen.");
+          const anyway = await ask({
+            title: 'Nicht alles ist beim Server angekommen',
+            text: 'Offline oder Anmeldung abgelaufen. Änderungen, die nur auf diesem Gerät sind, gehen beim Abmelden verloren. Tipp: vorher unter „Sicherung“ auf „Herunterladen“ tippen.',
+            confirm: 'Trotzdem abmelden', cancel: 'Angemeldet bleiben', danger: true,
+          });
           if (!anyway) return setLeaving(false);
         }
         await disconnect();
@@ -137,7 +144,9 @@ function DemoPanel() {
     <div className="panel stack">
       <p className="muted small">Du siehst die <strong>Demo</strong>: Beispieldaten, die nur in diesem Browser liegen und nie hochgeladen werden.</p>
       <button className="btn btn--primary" onClick={leaveDemo}>Mit meinem Server verbinden</button>
-      <button className="btn btn--ghost" onClick={async () => { if (confirm("Alle Änderungen verwerfen und Beispieldaten neu laden?")) { await resetDemoData(); toast("Beispieldaten geladen"); } }}>
+      <button className="btn btn--ghost" onClick={async () => {
+        if (await ask({ title: 'Beispieldaten neu laden?', text: 'Alle Änderungen in der Demo gehen verloren.', confirm: 'Neu laden', danger: true })) { await resetDemoData(); toast('Beispieldaten geladen'); }
+      }}>
         Beispieldaten zurücksetzen
       </button>
     </div>

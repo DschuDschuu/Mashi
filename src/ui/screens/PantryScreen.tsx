@@ -33,7 +33,7 @@ import { BrandNames } from '../components/BrandNames';
 import { NutritionQuickForm } from '../components/NutritionQuickForm';
 import type { FoodEntry } from '../../domain/nutrition/types';
 import { newId } from '../../domain/recipe';
-import { productLabel, type MyProduct } from '../../domain/nutrition/myProducts';
+import { brandOf, nameOf, type MyProduct } from '../../domain/nutrition/myProducts';
 import { FOOD_CHOICES, normalizeName } from '../../domain/nutrition/localFoods';
 
 const UNITS: PantryUnit[] = ['g', 'ml', 'Stück', 'Glas'];
@@ -55,7 +55,15 @@ export function PantryScreen() {
   const recipes = useRecipes();
   const products = useProducts();
   /** Sorte eines Vorrats (vom Bon oder Barcode), z. B. „Pesto verde (K-Classic)“ */
-  const sortName = (id: string) => { const p = products.find((x) => x.id === id); return p && productLabel(p); };
+  // Sorte am Vorrat: nur die Marke – der Name steht ja schon darüber („Kokosmilch“ → „Ja!“, nicht „Kokosmilch · Ja!“).
+  // Ohne Marke der Sortenname, aber nur, wenn er etwas Neues sagt
+  const sortLabel = (i: PantryItem) => {
+    const p = i.productId ? products.find((x) => x.id === i.productId) : undefined;
+    if (!p) return undefined;
+    const brand = brandOf(p);
+    if (brand) return brand;
+    return normalizeName(nameOf(p)) !== normalizeName(i.name) ? nameOf(p) : undefined;
+  };
   const plan = usePlan();
   const [adding, setAdding] = useState(false);
   // Plus-Menü → „Vorrat eintragen“ öffnet das Formular – auch wenn du schon hier bist.
@@ -144,7 +152,7 @@ export function PantryScreen() {
             {shelfLabel(i)?.alarm && <span className="pantry__alarm" role="img" aria-label="läuft heute oder morgen ab"><Icon name="clock" size={14} /></span>}
             {i.reduced && !i.frozenAt && <span className="badge tint-peach pantry__mhd">MHD</span>}
             {/* nur, wenn es etwas Neues sagt (Marke, Sorte) – nicht „Milch“ unter „Milch“ */}
-            {i.productId && sortName(i.productId) && normalizeName(sortName(i.productId)!) !== normalizeName(i.name) && <span className="pantry__sort">{sortName(i.productId)}</span>}
+            {sortLabel(i) && <span className="pantry__sort">{sortLabel(i)}</span>}
           </span>
           <span className="pantry__qty pantry__qty--stack">
             {/* in der Teilzeile sagt links schon „angebrochen“ */}
@@ -246,15 +254,6 @@ export function PantryScreen() {
           <section className="manage" aria-labelledby="manage-title">
             <h2 className="manage__title" id="manage-title">Verwalten</h2>
             <ProductsLink />
-            {/* wann du willst – kein Rhythmus */}
-            <button className="panel link-row" onClick={() => navigate('/speisekammer/inventur')}>
-              <Icon name="list" size={20} />
-              <span className="link-row__text">
-                <strong>Inventur</strong>
-                <small className="muted">Speisekammer, Keller, Tiefkühler und Gewürze durchgehen</small>
-              </span>
-              <Icon name="chevron" size={18} />
-            </button>
             <ShelfSettings />
 
             {pantry.rules.length > 0 && (
@@ -272,6 +271,16 @@ export function PantryScreen() {
                 </ul>
               </details>
             )}
+
+            {/* ganz unten (Julia): seltener gebraucht – wann du willst, kein Rhythmus */}
+            <button className="panel link-row" onClick={() => navigate('/speisekammer/inventur')}>
+              <Icon name="list" size={20} />
+              <span className="link-row__text">
+                <strong>Inventur</strong>
+                <small className="muted">Speisekammer, Keller, Tiefkühler und Gewürze durchgehen</small>
+              </span>
+              <Icon name="chevron" size={18} />
+            </button>
           </section>
         </div>
       </div>

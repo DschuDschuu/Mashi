@@ -27,6 +27,8 @@ import { UseUpScreen } from './ui/screens/UseUpScreen';
 import { LeftoverSheet } from './ui/components/LeftoverSheet';
 import { InventoryScreen } from './ui/screens/InventoryScreen';
 import { ErrorBoundary } from './ui/components/ErrorBoundary';
+import { ConfirmSheet } from './ui/components/ConfirmSheet';
+import { useConfirm } from './ui/confirm';
 
 /** Weiterleitung ohne eigenen Eintrag im Verlauf */
 function Redirect({ to }: { to: string }) {
@@ -76,6 +78,7 @@ export function App({ mode }: { mode: Mode | null }) {
   const route = useRoute();
   const message = useToast();
   const leftoverOpen = !!useLeftoverAsk();
+  const confirmOpen = !!useConfirm();
   const settings = useSettings();
 
   // Geschweifte Klammern nötig: neuere Browser geben bei scrollTo ein Promise zurück,
@@ -100,8 +103,10 @@ export function App({ mode }: { mode: Mode | null }) {
       {!settings.onboarded && !cooking && <Onboarding onClose={() => undefined} />}
       {/* nach „Gekocht“ – überall, auch nach dem Kochmodus */}
       <LeftoverSheet />
+      {/* Nachfragen im Mashi-Stil statt Browser-Dialog (ask) */}
+      <ConfirmSheet />
       {/* solange „Was ist übrig?“ offen ist, nicht über dessen Knöpfe legen – danach erscheint er wieder */}
-      {message && !leftoverOpen && (
+      {message && !leftoverOpen && !confirmOpen && (
         <div className={`toast${message.action ? ' toast--action' : ''}`} role="status">
           {message.text}
           {message.action && (

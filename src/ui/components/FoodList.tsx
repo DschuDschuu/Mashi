@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
+import { ask } from '../confirm';
 import { basicsOf } from '../../domain/mealplan';
 import { buildFoodList, matchesFilter, type FoodFilter, type FoodRow } from '../../domain/nutrition/foodList';
 import { normalizeName } from '../../domain/nutrition/localFoods';
-import { brandOf, nameOf, productLabel, sharedOf, withShared, type MyProduct, type SharedMatch } from '../../domain/nutrition/myProducts';
+import { brandOf, productLabel, sharedOf, withShared, type MyProduct, type SharedMatch } from '../../domain/nutrition/myProducts';
 import { zeroOf } from '../../domain/nutrition/noNutrition';
 import { averageNutrients } from '../../domain/nutrition/variants';
 import type { Nutrients } from '../../domain/nutrition/types';
@@ -153,8 +154,8 @@ function FoodLine({ row, open, onToggle, products, onTouch }: {
     if (!n || !shared || n === shared.name) return;
     saveShared({ ...shared, name: n }, ps.length > 1 ? `Alle ${ps.length} Sorten heißen jetzt „${n}“` : `Heißt jetzt „${n}“`);
   };
-  const remove = (p: MyProduct) => {
-    if (!confirm(`„${p.name}“ entfernen? Die Rezepte rechnen dann wieder mit Richtwerten.`)) return;
+  const remove = async (p: MyProduct) => {
+    if (!(await ask({ title: `„${productLabel(p)}“ entfernen?`, text: 'Die Rezepte rechnen dann wieder mit Richtwerten.', confirm: 'Entfernen', danger: true }))) return;
     onTouch();
     saveProducts(products.filter((x) => x.id !== p.id));
   };
@@ -225,7 +226,10 @@ function FoodLine({ row, open, onToggle, products, onTouch }: {
                     <Icon name="star" size={18} filled={!!p.favorite} />
                   </button>
                 )}
-                <strong>{ps.length > 1 ? brandOf(p) ?? `${nameOf(p)} (ohne Marke)` : 'Pro 100 g'}</strong>
+                {/* mehrere Sorten: der Name steht schon oben in der Kachel – hier nur die Marke als Chip */}
+                {ps.length > 1
+                  ? <span className="foods__brand">{brandOf(p) ? <span className="brand-chip">{brandOf(p)}</span> : <span className="brand-chip is-empty">ohne Marke</span>}</span>
+                  : <strong>Pro 100 g</strong>}
                 <span className="product__actions">
                   <button className="iconbtn iconbtn--sm" aria-label={`${p.name} bearbeiten`} onClick={() => setEditing(p.id)}><Icon name="pencil" size={16} /></button>
                   <button className="iconbtn iconbtn--sm" aria-label={`${p.name} entfernen`} onClick={() => remove(p)}><Icon name="trash" size={16} /></button>
