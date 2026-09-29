@@ -4,3 +4,6 @@ dist
 .env.*
 *.log
 !.env.example
+
+# Zwischenstand der Typprüfung (tsc -b)
+*.tsbuildinfo

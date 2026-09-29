@@ -3,7 +3,7 @@ import PouchDB from 'pouchdb-core';
 import memory from 'pouchdb-adapter-memory';
 import { describe, expect, it } from 'vitest';
 import { PouchRecipeRepository, type RecipeDb } from './pouchRepository';
-import { addExtra, addPantryItem, addToPlan, answerLeftover, applyInventory, clearDoneExtras, importReceipt, clearCooked, createRecipe, currentLeftoverAsk, currentPantry, eatPreparedPortions, initStore, togglePlanCooked, removeFromPlan, removePantryItem, setFoodStage, toggleShoppingItem, updatePantryItem } from './store';
+import { addExtra, addPantryItem, addToPlan, answerLeftover, applyInventory, clearDoneExtras, importReceipt, clearCooked, createRecipe, currentLeftoverAsk, currentPantry, eatPreparedPortions, freezePantryItem, initStore, thawPantryItem, togglePlanCooked, removeFromPlan, removePantryItem, setFoodStage, toggleShoppingItem, updatePantryItem } from './store';
 import { keyOfName } from '../domain/mealplan';
 import { EXTRA_PREFIX, RESTOCK_PREFIX } from '../domain/restock';
 import { foodTable } from '../services';
@@ -188,5 +188,18 @@ describe('Store: Haken eines eigenen Eintrags wandert mit', () => {
     await settle();
     const key = keyOfName('Milch', foodTable)!;
     expect((await repo.loadPlan()).checked).toEqual([key]);
+  });
+});
+
+describe('Store: teilweise auftauen mit Rückgängig', () => {
+  it('2 von 3 auftauen, Rückgängig → wieder alle 3 gefroren in einem Eintrag', async () => {
+    await freshStore('thaw');
+    addPantryItem('Rinderhack', 3, 'Stück');
+    const id = currentPantry().items[0].id;
+    freezePantryItem(id);
+    const undo = thawPantryItem(id, 2);
+    expect(currentPantry().items.map((i) => [i.amount, !!i.frozenAt])).toEqual([[1, true], [2, false]]);
+    undo();
+    expect(currentPantry().items.map((i) => [i.id, i.amount, !!i.frozenAt])).toEqual([[id, 3, true]]);
   });
 });

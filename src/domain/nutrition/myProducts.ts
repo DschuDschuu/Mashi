@@ -72,6 +72,39 @@ export function splitBrand(name: string): { name: string; brand?: string } {
 export const brandOf = (p: Pick<MyProduct, 'name' | 'brand'>): string | undefined => p.brand || splitBrand(p.name).brand;
 /** Name ohne Marke */
 export const nameOf = (p: Pick<MyProduct, 'name' | 'brand'>): string => (p.brand ? p.name : splitBrand(p.name).name);
+/**
+ * Was bei mehreren Sorten einer Zutat für alle gilt – nur gemeinsam einstellbar: der Name (die Sorten
+ * unterscheiden sich durch die Marke) und „gilt für“ (ersetzte Einträge, weitere Namen, Ausnahmen).
+ */
+export interface SharedMatch { name: string; replaces: string[]; names: string[]; excludes: string[] }
+
+/**
+ * Das Gemeinsame einer Sortengruppe. Weichen alte Sorten voneinander ab: Name vom Favoriten (sonst der
+ * ersten), ersetzte Einträge und Namen zusammengelegt (nichts, was schon erkannt wurde, fällt weg),
+ * Ausnahmen nur, wo alle Sorten sie haben.
+ */
+export function sharedOf(ps: readonly MyProduct[]): SharedMatch {
+  const first = ps.find((p) => p.favorite) ?? ps[0];
+  const uniq = (xs: string[]) => [...new Set(xs)];
+  return {
+    name: first ? nameOf(first) : '',
+    replaces: uniq(ps.flatMap((p) => p.replaces)),
+    names: uniq(ps.flatMap((p) => p.names ?? [])),
+    excludes: (first?.excludes ?? []).filter((x) => ps.every((p) => p.excludes?.includes(x))),
+  };
+}
+
+/** Das Gemeinsame auf eine Sorte schreiben – die Marke bleibt; steckte sie im Namen („Milch (Weihenstephan)“), kommt sie ins Markenfeld */
+export function withShared(p: MyProduct, s: SharedMatch, now = new Date().toISOString()): MyProduct {
+  const brand = brandOf(p);
+  const { names: _n, excludes: _e, ...rest } = p;
+  return {
+    ...rest, name: s.name, ...(brand ? { brand } : {}), replaces: s.replaces,
+    ...(s.names.length ? { names: s.names } : {}), ...(s.excludes.length ? { excludes: s.excludes } : {}),
+    updatedAt: now,
+  };
+}
+
 /** Für Listen und Auswahl: „Pesto verde · K-Classic“ */
 export const productLabel = (p: Pick<MyProduct, 'name' | 'brand'>): string => {
   const b = brandOf(p);

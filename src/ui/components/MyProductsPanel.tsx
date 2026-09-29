@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { appliesAliases, FOOD_CHOICES, normalizeName } from '../../domain/nutrition/localFoods';
-import { fatGroupOf, fatLevel } from '../../domain/nutrition/fatLevels';
-import { brandOf, nameOf, type MyProduct } from '../../domain/nutrition/myProducts';
+import { FOOD_CHOICES } from '../../domain/nutrition/localFoods';
+import { brandOf, nameOf, type MyProduct, type SharedMatch } from '../../domain/nutrition/myProducts';
+import { MatchChips, visibleExcludes, type Match } from './MatchChips';
 import type { NutritionResult } from '../../domain/nutrition/types';
 import { newId } from '../../domain/recipe';
 import { shelfDaysForFood } from '../../domain/shelfLife';
@@ -14,9 +14,6 @@ import { Icon } from './Icon';
 import { NutritionQuickForm } from './NutritionQuickForm';
 import { BrandNames } from './BrandNames';
 import { parseNum, toField, type Values } from './productFields';
-
-/** „entrahmte milch“ → „Entrahmte Milch“ (gespeichert wird klein) – wie die Namen der Tabelle */
-const cap = (s: string) => s.replace(/(^|[\s-])(\p{L})/gu, (_m, sep: string, ch: string) => sep + ch.toLocaleUpperCase('de-DE'));
 
 /** Was Mashi ohne Angabe schätzt – vom ersetzten Lebensmittel (Mozzarella 7 Tage) */
 function shelfEstimate(replaces: string[], custom: Parameters<typeof shelfDaysForFood>[2]): string {
@@ -68,10 +65,17 @@ export function UnknownIngredients({ n }: { n: NutritionResult }) {
 }
 
 /** Formular für ein eigenes Produkt – auch aus der Bon-Prüfung heraus nutzbar. Mit Barcode-Scan (Open Food Facts). */
-export function ProductForm({ initial, onSave, onCancel }: { initial?: Partial<MyProduct>; onSave: (p: MyProduct) => void; onCancel: () => void }) {
+/**
+ * @param shared ein Produkt, das schon in „Meine Lebensmittel“ steht: Name und „gilt für“ stellst du direkt
+ *   in der Kachel ein (gemeinsam für alle Sorten) – hier nur Marke, Werte, Packung
+ */
+export function ProductForm({ initial, onSave, onCancel, shared }: {
+  initial?: Partial<MyProduct>; onSave: (p: MyProduct) => void; onCancel: () => void; shared?: SharedMatch;
+}) {
   const products = useProducts();
+  const sortOnly = !!shared;
   // Ältere Namen mit Marke in Klammern: getrennt anzeigen – gespeichert wird es beim Speichern
-  const [name, setName] = useState(initial?.name ? nameOf({ name: initial.name, brand: initial.brand }) : '');
+  const [name, setName] = useState(shared?.name ?? (initial?.name ? nameOf({ name: initial.name, brand: initial.brand }) : ''));
   const [brand, setBrand] = useState(initial?.name ? brandOf({ name: initial.name, brand: initial.brand }) ?? '' : '');
   const [ean, setEan] = useState(initial?.ean);
   const [scanning, setScanning] = useState(false);
@@ -86,37 +90,13 @@ export function ProductForm({ initial, onSave, onCancel }: { initial?: Partial<M
     carbs: toField(initial?.per100g?.carbs),
     fat: toField(initial?.per100g?.fat),
   });
-  const [replaces, setReplaces] = useState<string[]>(initial?.replaces ?? []);
-  const [names, setNames] = useState<string[]>(initial?.names ?? []);
-  const [excludes, setExcludes] = useState<string[]>(initial?.excludes ?? []);
-  // Milch/Joghurt/Quark: welche anderen Stufen rechnen mit der Tabelle? („Milch 1,5 % und Milch 3,5 %“)
-  const group = replaces.map(fatGroupOf).find(Boolean);
-  const mine = fatLevel(name)?.label ?? group?.plain;
-  const otherLevels = group ? group.ids.map((id) => FOOD_CHOICES.find((c) => c.id === id)).filter(Boolean)
-    .map((c) => fatLevel(c!.name)?.label ?? group.plain).filter((l) => l !== mine).join(' und ') : '';
-  /** Eine Schreibweise aus- oder wieder einschließen; sind alle aus, fällt der ganze Eintrag weg */
-  const toggleAlias = (id: string, alias: string) => {
-    const next = excludes.includes(alias) ? excludes.filter((x) => x !== alias) : [...excludes, alias];
-    const all = appliesAliases(name || initial?.name || '', id);
-    if (all.every((al) => next.includes(al))) {
-      setReplaces(replaces.filter((x) => x !== id));
-      setExcludes(next.filter((x) => !all.includes(x)));
-    } else setExcludes(next);
-  };
+  const [match, setMatch] = useState<Match>(shared ?? { replaces: initial?.replaces ?? [], names: initial?.names ?? [], excludes: initial?.excludes ?? [] });
   const [packAmount, setPackAmount] = useState(toField(initial?.packageAmount));
   const [packUnit, setPackUnit] = useState<'g' | 'ml' | 'Stück'>(initial?.packageUnit ?? 'g');
   const [packPrice, setPackPrice] = useState(toField(initial?.packagePrice));
   const [shelf, setShelf] = useState(toField(initial?.shelfDays));
   const shelfCustom = usePantry().shelfDays;
-  const [search, setSearch] = useState('');
   const [error, setError] = useState<string | null>(null);
-
-  const q = search.trim().toLocaleLowerCase('de-DE');
-  // eigener Zutatenname – nur, wenn die Tabelle ihn nicht genau so kennt und er noch nicht dabei ist
-  const freeName = q && !FOOD_CHOICES.some((f) => normalizeName(f.name) === normalizeName(q)) && !names.includes(normalizeName(q)) ? normalizeName(q) : '';
-  const hits = q
-    ? FOOD_CHOICES.filter((f) => f.name.toLocaleLowerCase('de-DE').includes(q) && !replaces.includes(f.id)).slice(0, 10)
-    : [];
 
   const submit = () => {
     const kcal = parseNum(values.kcal);
@@ -132,15 +112,14 @@ export function ProductForm({ initial, onSave, onCancel }: { initial?: Partial<M
     if (price !== undefined && !amount) return setError('Für den Preis braucht Mashi die Packungsgröße.');
     const shelfDays = parseNum(shelf);
     if (shelf.trim() && (!shelfDays || shelfDays > 365 || !Number.isInteger(shelfDays))) return setError('Haltbarkeit bitte in ganzen Tagen (1 bis 365).');
+    const ex = visibleExcludes(name, match);
     onSave({
       id: initial?.id ?? newId('p'),
       name: name.trim(),
       ...(brand.trim() ? { brand: brand.trim() } : {}),
-      replaces,
-      ...(names.length ? { names } : {}),
-      // nur Ausnahmen, die zu einem ersetzten Eintrag gehören
-      // nur Ausnahmen, die sichtbar sind – überflüssige (z. B. „Vollmilch“ beim 0,1-%-Produkt) fallen still weg
-      ...(() => { const ex = excludes.filter((x) => replaces.some((id) => appliesAliases(name, id).includes(x))); return ex.length ? { excludes: ex } : {}; })(),
+      replaces: match.replaces,
+      ...(match.names.length ? { names: match.names } : {}),
+      ...(ex.length ? { excludes: ex } : {}),
       // Zusatzwerte vom Etikett (Zucker, Salz …) behalten – das Formular zeigt nur die vier Hauptwerte
       per100g: { ...initial?.per100g, ...extra, kcal, protein, carbs, fat },
       ...(ean ? { ean } : {}),
@@ -224,13 +203,16 @@ export function ProductForm({ initial, onSave, onCancel }: { initial?: Partial<M
         </div>
       )}
       {scanning && <BarcodeScanner onCode={onCode} onClose={() => setScanning(false)} />}
-      <div className="row-2">
+      <div className={sortOnly ? undefined : 'row-2'}>
+        {/* schon in „Meine Lebensmittel“: den Namen änderst du oben in der Kachel (für alle Sorten) */}
+        {!sortOnly && (
+          <label className="field">
+            <span>Name</span>
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="z. B. Milch 0,1 %" />
+          </label>
+        )}
         <label className="field">
-          <span>Name</span>
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="z. B. Milch 0,1 %" />
-        </label>
-        <label className="field">
-          <span>Marke (optional)</span>
+          <span>Marke{sortOnly ? '' : ' (optional)'}</span>
           <input value={brand} onChange={(e) => setBrand(e.target.value)} list="brand-names" placeholder="z. B. Milbona" />
         </label>
       </div>
@@ -254,58 +236,12 @@ export function ProductForm({ initial, onSave, onCancel }: { initial?: Partial<M
         </label>
       </div>
       <label className="field"><span>Hält ab Kauf (Tage, optional)</span>
-        <input inputMode="numeric" value={shelf} onChange={(e) => setShelf(e.target.value)} placeholder={shelfEstimate(replaces, shelfCustom)} />
+        <input inputMode="numeric" value={shelf} onChange={(e) => setShelf(e.target.value)} placeholder={shelfEstimate(match.replaces, shelfCustom)} />
       </label>
 
-      {/* EIN Feld: Tabellen-Einträge (mit allen Schreibweisen als Chips) und freie Namen */}
-      <div className="stack">
-        <span className="small muted">Gilt für diese Zutaten in deinen Rezepten:</span>
-        {(replaces.length > 0 || names.length > 0) && (
-          <div className="chips giltfuer">
-            {replaces.flatMap((id) => appliesAliases(name || initial?.name || '', id).map((al) => {
-              const off = excludes.includes(al);
-              return (
-                <button key={id + al} type="button" className={`afilter${off ? ' is-off' : ''}`}
-                  aria-label={off ? `${cap(al)} wieder einschließen` : `${cap(al)} ausnehmen`}
-                  onClick={() => toggleAlias(id, al)}>
-                  {cap(al)} <Icon name={off ? 'refresh' : 'close'} size={14} />
-                </button>
-              );
-            }))}
-            {names.map((x) => (
-              <button key={x} type="button" className="afilter" onClick={() => setNames(names.filter((y) => y !== x))} aria-label={`${cap(x)} entfernen`}>
-                {cap(x)} <Icon name="close" size={14} />
-              </button>
-            ))}
-          </div>
-        )}
-        {replaces.some((id) => appliesAliases(name, id).some((a) => excludes.includes(a))) && <p className="small muted">Durchgestrichen = ausgenommen: dort rechnet Mashi mit dem Richtwert. Antippen holt es zurück.</p>}
-        {otherLevels && <p className="small muted">{otherLevels} rechnen mit der Tabelle – für eigene Werte leg dafür ein eigenes Produkt an (z. B. „{otherLevels.split(' und ')[0]}“).</p>}
-        <label className="search">
-          <Icon name="search" size={18} />
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Zutat hinzufügen, z. B. Milch" aria-label="Zutat hinzufügen" />
-          {search && (
-            <button type="button" className="iconbtn iconbtn--sm search__clear" onClick={() => setSearch('')} aria-label="Suche leeren">
-              <Icon name="close" size={16} />
-            </button>
-          )}
-        </label>
-        {(hits.length > 0 || freeName) && (
-          <div className="chips">
-            {hits.map((f) => (
-              <button key={f.id} type="button" className="chip chip--sm" onClick={() => { setReplaces([...replaces, f.id]); setSearch(''); }}>
-                <Icon name="plus" size={14} /> {f.name}
-              </button>
-            ))}
-            {/* Kennt die Tabelle den Namen nicht genau: als eigene Zutat übernehmen („Kimchi-Paste“) */}
-            {freeName && (
-              <button type="button" className="chip chip--sm" onClick={() => { setNames([...names, freeName]); setSearch(''); }}>
-                <Icon name="plus" size={14} /> „{search.trim()}“ als Zutat
-              </button>
-            )}
-          </div>
-        )}
-      </div>
+      {sortOnly
+        ? <p className="small muted">Name (Stift oben) und „gilt für“ (unten) stellst du direkt in der Kachel ein – für alle Sorten.</p>
+        : <MatchChips name={name || initial?.name || ''} value={match} onChange={setMatch} />}
 
       {error && <p className="error" role="alert">{error}</p>}
       <div className="row-gap">

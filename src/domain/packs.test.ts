@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createMockRecipes } from '../data/mockRecipes';
 import { localFoodTable as T } from './nutrition/localFoods';
-import { addItem, freezeItem, thawItem, deductRecipe, emptyPantry, returnTaken, takenBetween, type Pantry, type PantryItem } from './pantry';
+import { addItem, freezeItem, thawFit, thawItem, thawNeeds, deductRecipe, emptyPantry, returnTaken, takenBetween, type Pantry, type PantryItem } from './pantry';
 import { attachPacks, mergeSamePacks, openItem, suggestPantryUnit, packSuggestions } from './packs';
 import { amountLabel } from './pantryLabel';
 import { merge3Pantry } from './syncMerge';
@@ -259,5 +259,63 @@ describe('Gefrorenes und Aufgetautes', () => {
   });
   it('„Ganze Packung?“: nie mehr Packungen, als da sind', () => {
     expect(packSuggestions(pantry(hack(2)), [{ id: 'a', name: 'Rinderhack', amount: 1600, unit: 'g' }], T)).toEqual([]);
+  });
+});
+
+describe('Auftauen fürs geplante Gericht', () => {
+  const FROZEN = '2026-09-01T12:00:00.000Z';
+  const dishFor = (p: Pantry, ing: Ingredient) => ({ recipeId: 'r', taken: takenBetween(p, cook(p, ing)), stock: new Map() });
+
+  it('nur gefroren da: so viele Packungen auftauen, wie das Gericht braucht – der Rest bleibt gefroren', () => {
+    const p = pantry({ ...hack(3), frozenAt: FROZEN });
+    const needs = thawNeeds(dishFor(p, { id: 'a', name: 'Rinderhack', amount: 600, unit: 'g' }), T);
+    expect(needs.map((x) => [x.item.id, x.amount])).toEqual([['h', 2]]);
+    const after = thawItem(p.items, 'h', NOW, 1, 2, id);
+    expect(after.map((i) => [amountLabel(i), !!i.frozenAt, !!i.useBy])).toEqual([['1 × 500 g', true, false], ['2 × 500 g', false, true]]);
+  });
+
+  it('Frisches reicht → nichts auftauen', () => {
+    const p = pantry(hack(2), { ...hack(3), id: 'tk', frozenAt: FROZEN });
+    expect(thawNeeds(dishFor(p, { id: 'a', name: 'Rinderhack', amount: 600, unit: 'g' }), T)).toEqual([]);
+  });
+
+  it('TK-Gemüse kommt gefroren in den Topf → kein Hinweis', () => {
+    const p = pantry({ id: 'e', name: 'Erbsen', amount: 750, unit: 'g', addedAt: NOW, frozenAt: FROZEN });
+    expect(thawNeeds(dishFor(p, { id: 'a', name: 'Erbsen', amount: 200, unit: 'g' }), T)).toEqual([]);
+  });
+
+  it('loser Block in Gramm: der ganze Eintrag taut auf (ein Block lässt sich nicht teilen)', () => {
+    const p = pantry({ id: 'b', name: 'Rinderhack', amount: 1000, unit: 'g', addedAt: NOW, frozenAt: FROZEN });
+    const [need] = thawNeeds(dishFor(p, { id: 'a', name: 'Rinderhack', amount: 600, unit: 'g' }), T);
+    expect(need.amount).toBeUndefined();
+    expect(thawItem(p.items, 'b', NOW, 1, need.amount, id).map((i) => [i.amount, !!i.frozenAt])).toEqual([[1000, false]]);
+  });
+});
+
+describe('Portionen passend zum Aufgetauten', () => {
+  const FROZEN = '2026-09-01T12:00:00.000Z';
+  // Rezept: 500 g Hack für 4 Portionen = 125 g je Portion
+  const lasagne = { ...content([{ id: 'a', name: 'Rinderhack', amount: 500, unit: 'g' }]), servings: 4 };
+  const needsAt = (p: Pantry, servings: number) => {
+    const d = deductRecipe(p, lasagne, servings, T, {}, {}, NOW, id);
+    return thawNeeds({ recipeId: 'r', taken: takenBetween(p, d.pantry), stock: new Map() }, T);
+  };
+
+  it('5 Portionen = 625 g → 2 Packungen auftauen; 1 kg reicht für 8, eine Packung für 4', () => {
+    const needs = needsAt(pantry({ ...hack(3), frozenAt: FROZEN }), 5);
+    expect(needs.map((n) => [n.amount, n.used])).toEqual([[2, 1.25]]);
+    expect(thawFit(needs, 5)).toEqual({ up: 8, down: { servings: 4, packs: 1 } });
+  });
+
+  it('passt genau (4 Portionen, 1 Packung) → kein Vorschlag', () => {
+    expect(thawFit(needsAt(pantry({ ...hack(3), frozenAt: FROZEN }), 4), 4)).toEqual({});
+  });
+
+  it('abgerundet: 1 kg-Block bei 150 g je Portion → 6, nicht 7 (sonst fehlte gleich wieder etwas)', () => {
+    const block = pantry({ id: 'b', name: 'Rinderhack', amount: 1000, unit: 'g', addedAt: NOW, frozenAt: FROZEN });
+    const d = deductRecipe(block, { ...lasagne, ingredients: [{ id: 'a', name: 'Rinderhack', amount: 600, unit: 'g' }] }, 4, T, {}, {}, NOW, id);
+    const needs = thawNeeds({ recipeId: 'r', taken: takenBetween(block, d.pantry), stock: new Map() }, T);
+    // ein Block lässt sich nicht teilen → nur „mehr Portionen“, kein „weniger auftauen“
+    expect(thawFit(needs, 4)).toEqual({ up: 6 });
   });
 });

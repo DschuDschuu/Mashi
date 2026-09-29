@@ -14,7 +14,7 @@ import { Icon } from '../components/Icon';
 import { TopBar } from '../components/TopBar';
 import { toast } from '../toast';
 
-type Mark = 'ok' | 'weg' | { amount: string; unit?: PantryUnit };
+type Mark = 'weg' | { amount: string; unit?: PantryUnit };
 const UNITS: PantryUnit[] = ['Stück', 'g', 'ml', 'Glas'];
 
 const parse = (s: string) => {
@@ -55,6 +55,19 @@ export function InventoryScreen() {
   const all = groups.reduce((n, g) => n + g.items.length, 0) + lists.reduce((n, l) => n + l.names.length, 0);
   const done = Object.keys(marks).length + Object.keys(checks).length;
   const mark = (id: string, m: Mark | undefined) => setMarks(({ [id]: _old, ...rest }) => (m ? { ...rest, [id]: m } : rest));
+  // − / +: um eine Packung, ein Stück, eine Portion – bei g und ml um 100. Auf 0 = weg,
+  // zurück auf die alte Menge = unberührt (so zählt „Fertig“ nur echte Änderungen)
+  const step = (it: PantryItem, dir: 1 | -1) => {
+    const m = marks[it.id];
+    // nur „vorhanden“ (ohne Menge): − = weg, + nimmt das zurück
+    if (it.amount === undefined) return mark(it.id, dir < 0 ? 'weg' : undefined);
+    const cur = m === 'weg' ? 0 : m && typeof m === 'object' ? parse(m.amount) ?? it.amount : it.amount;
+    const by = it.unit === 'g' || it.unit === 'ml' ? 100 : 1;
+    const next = Math.max(0, Math.round((cur + dir * by) * 10) / 10);
+    if (next === 0) return mark(it.id, 'weg');
+    if (next === it.amount) return mark(it.id, undefined);
+    mark(it.id, { amount: String(next).replace('.', ','), ...(m && typeof m === 'object' && m.unit ? { unit: m.unit } : {}) });
+  };
 
   const finish = () => {
     const amounts: Record<string, number> = {};
@@ -62,7 +75,7 @@ export function InventoryScreen() {
     const remove: string[] = [];
     for (const [id, m] of Object.entries(marks)) {
       if (m === 'weg') remove.push(id);
-      else if (m !== 'ok') {
+      else {
         const n = parse(m.amount);
         if (n === undefined) continue;
         amounts[id] = n;
@@ -96,8 +109,11 @@ export function InventoryScreen() {
               const edited = m && typeof m === 'object' ? m : undefined;
               const unit = it.pack && (it.unit === 'Stück' || it.unit === 'Glas') ? `× ${packLabel(it.pack)}` : it.recipeId ? 'Portionen' : it.unit ?? '';
               return (
-                <li key={it.id} className={`inventory__row${m === 'weg' ? ' is-gone' : m === 'ok' ? ' is-ok' : ''}`}>
+                <li key={it.id} className={`inventory__row${m === 'weg' ? ' is-gone' : ''}`}>
                   <span className="inventory__name">{it.name}</span>
+                  {/* − Menge +: schneller als tippen; auf 0 = weg. Unberührt heißt: stimmt */}
+                  <button type="button" className="inventory__step" aria-label={`${it.name}: weniger`}
+                    disabled={m === 'weg'} onClick={() => step(it, -1)}><Icon name="minus" size={16} /></button>
                   {editing === it.id ? (
                     <span className="inventory__edit">
                       <input inputMode="decimal" autoFocus value={edited?.amount ?? String(it.amount ?? '').replace('.', ',')} aria-label={`Menge ${it.name}`}
@@ -118,16 +134,13 @@ export function InventoryScreen() {
                     </span>
                   ) : (
                     <button type="button" className="inventory__qty" onClick={() => setEditing(it.id)} aria-label={`Menge von ${it.name} ändern`}>
-                      {edited && parse(edited.amount) !== undefined ? amountLabel({ ...it, amount: parse(edited.amount), unit: it.unit ?? edited.unit ?? suggestPantryUnit(table.matchName(it.name)?.food) }) : amountLabel(it)}
+                      {m === 'weg' ? '0 · weg'
+                        : edited && parse(edited.amount) !== undefined ? amountLabel({ ...it, amount: parse(edited.amount), unit: it.unit ?? edited.unit ?? suggestPantryUnit(table.matchName(it.name)?.food) }) : amountLabel(it)}
                       <Icon name="pencil" size={13} />
                     </button>
                   )}
-                  <span className="inventory__actions">
-                    <button type="button" className={`iconbtn iconbtn--sm${m === 'ok' ? ' is-on' : ''}`} aria-pressed={m === 'ok'} aria-label={`${it.name} stimmt`}
-                      onClick={() => mark(it.id, m === 'ok' ? undefined : 'ok')}><Icon name="check" size={16} /></button>
-                    <button type="button" className={`iconbtn iconbtn--sm${m === 'weg' ? ' is-on' : ''}`} aria-pressed={m === 'weg'} aria-label={`${it.name} ist weg`}
-                      onClick={() => mark(it.id, m === 'weg' ? undefined : 'weg')}><Icon name="trash" size={16} /></button>
-                  </span>
+                  <button type="button" className="inventory__step" aria-label={`${it.name}: mehr`}
+                    disabled={it.amount === undefined && m !== 'weg'} onClick={() => step(it, +1)}><Icon name="plus" size={16} /></button>
                 </li>
               );
             })}

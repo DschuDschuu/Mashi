@@ -423,7 +423,10 @@ function Infos({ recipe }: { recipe: Recipe }) {
         <ol>
           {[...recipe.versions].reverse().map((v) => (
             <li key={v.id} className={v.id === cur.id ? 'is-current' : ''}>
-              <strong>Version {v.number}</strong> · {v.label ?? (v.author === 'ki' ? 'KI' : 'Du')}
+              <strong>Version {v.number}</strong>
+              {/* nicht nur farbig markieren – das Grünlich-Grau war vom normalen Text kaum zu unterscheiden */}
+              {v.id === cur.id && <span className="versions__now"><Icon name="check" size={13} /> aktuell</span>}
+              {' · '}{v.label ?? (v.author === 'ki' ? 'KI' : 'Du')}
               <span className="muted small"> · {relativeDay(v.createdAt)}</span>
             </li>
           ))}

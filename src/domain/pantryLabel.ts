@@ -24,7 +24,16 @@ export function amountLabel(item: Labelled): string {
   if (item.recipeId) return `${formatAmount(item.amount, 'Stück')} ${item.amount === 1 ? 'Portion' : 'Portionen'}`;
   const count = item.unit === 'Stück' || item.unit === 'Glas';
   const n = formatAmount(item.amount, count ? 'Stück' : 'g');
-  if (item.pack && count) return `${n} × ${packLabel(item.pack)}`;
+  if (item.pack && count) {
+    // angebrochene Zahl (frei nach dem Wochenplan: 1,8 Packungen) wie im Schrank: „1 × 1 l + 800 ml“
+    const closed = Math.floor(item.amount + 1e-6);
+    const rest = Math.round((item.amount - closed) * item.pack.amount);
+    if (rest > 0) {
+      const part = packLabel({ amount: rest, unit: item.pack.unit });
+      return closed > 0 ? `${closed} × ${packLabel(item.pack)} + ${part}` : part;
+    }
+    return `${n} × ${packLabel(item.pack)}`;
+  }
   const big = (item.unit === 'g' || item.unit === 'ml') && item.amount >= 1000 ? packLabel({ amount: item.amount, unit: item.unit }) : undefined;
   return (big ?? `${n} ${item.unit ?? ''}`.trim()) + (item.openedAt ? ' offen' : '');
 }

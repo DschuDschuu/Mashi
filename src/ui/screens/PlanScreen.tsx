@@ -6,8 +6,11 @@ import { ingredientCompletions, longNotCooked, searchRecipes } from '../../domai
 import { currentContent } from '../../domain/recipe';
 import type { Recipe } from '../../domain/types';
 import { preparedOf } from '../../domain/prepared';
+import { thawFit, thawNeeds, type ThawNeed } from '../../domain/pantry';
+import { packLabel } from '../../domain/pantryLabel';
+import { specialDays } from '../../domain/shelfLife';
 import {
-  addToPlan, clearCooked, eatPreparedPortions, removeFromPlan, usePantry, setPlanServings, togglePlanCooked, usePlan, useRecipes, useFoodTable
+  addToPlan, clearCooked, eatPreparedPortions, removeFromPlan, setPlanServings, thawPantryItem, togglePlanCooked, useFoodTable, usePantry, usePlan, useRecipes,
 } from '../../data/store';
 import { navigate } from '../../router';
 import { Empty, Section, Stepper } from '../components/Controls';
@@ -52,6 +55,9 @@ export function PlanScreen() {
   const costs = useMemo(() => new Map(items.map((i) => [i.recipeId, recipeCost(currentContent(i.recipe), i.servings, table, prices)])), [items, table, prices]);
   const week = sumCosts([...costs.values()]);
 
+  // was ein Gericht vorher auftauen muss – aus derselben Reservierung wie „Für den Wochenplan“
+  const thawOf = (recipeId: string) => { const d = dishes.find((x) => x.recipeId === recipeId); return d ? thawNeeds(d, table) : []; };
+
   const add = (r: Recipe) => {
     if (addToPlan(r.id)) toast(`„${currentContent(r).title}“ eingeplant`);
     setPicking(false);
@@ -85,6 +91,8 @@ export function PlanScreen() {
                   <DishNutrition content={currentContent(recipe)} own={variants} recipeId={cooked ? undefined : recipe.id} />
                   {costs.get(recipe.id) && <span className="small muted">ca. {euro(costs.get(recipe.id)!.total)}</span>}
                 </div>
+                {/* eigene Zeile über die ganze Karte – neben dem Portionen-Regler wäre sie zu schmal */}
+                {!cooked && <ThawPill needs={thawOf(recipe.id)} recipeId={recipe.id} title={currentContent(recipe).title} servings={servings} />}
                 <div className="plan-list__servings">
                   <span className="small muted" aria-hidden="true">Portionen</span>
                   <Stepper small value={servings} onChange={(v) => setPlanServings(recipe.id, v)} label={`Portionen ${currentContent(recipe).title}`} />
@@ -331,6 +339,51 @@ function MissingPanel({ items }: { items: ShoppingItem[] }) {
         </ul>
       )}
     </section>
+  );
+}
+
+/**
+ * „❄ Rinderhack auftauen“ – Verplantes liegt nur gefroren da. Ohne feste Tage weiß Mashi nicht, wann gekocht
+ * wird, also steht der Hinweis, bis aufgetaut ist. Antippen taut genau das Gebrauchte auf (2 von 3 Packungen).
+ */
+function ThawPill({ needs, recipeId, title, servings }: { needs: ThawNeed[]; recipeId: string; title: string; servings: number }) {
+  const pantry = usePantry();
+  if (!needs.length) return null;
+  const names = [...new Set(needs.map((n) => n.item.name))];
+  const thaw = () => {
+    const undos = needs.map((n) => thawPantryItem(n.item.id, n.amount));
+    const d = specialDays('thawed', pantry.shelfDays);
+    toast(`${names.join(', ')} aufgetaut – hält noch ${d === 1 ? 'einen Tag' : `${d} Tage`}`, { label: 'Rückgängig', run: () => undos.reverse().forEach((u) => u()) });
+  };
+  // ganze Packungen passen selten genau: wofür reicht das Aufgetaute – oder eine Packung weniger?
+  const fit = thawFit(needs, servings);
+  const one = needs.length === 1 ? needs[0] : undefined;
+  const count = one?.amount !== undefined ? ` (${one.amount} ${one.item.pack ? (one.amount === 1 ? 'Packung' : 'Packungen') : 'Stück'})` : '';
+  const thawedLabel = !one ? 'Das Aufgetaute'
+    : one.item.pack && one.amount !== undefined ? packLabel({ amount: one.amount * one.item.pack.amount, unit: one.item.pack.unit })
+    : one.amount !== undefined ? `${one.amount} Stück`
+    : one.item.amount !== undefined && (one.item.unit === 'g' || one.item.unit === 'ml') ? packLabel({ amount: one.item.amount, unit: one.item.unit })
+    : 'Das Aufgetaute';
+  const setTo = (n: number) => {
+    setPlanServings(recipeId, n);
+    toast(`„${title}“ auf ${n} Portionen – die Einkaufsliste passt sich an`, { label: 'Rückgängig', run: () => setPlanServings(recipeId, servings) });
+  };
+  return (
+    <div className="thaw plan-list__thaw">
+      <button type="button" className="eat-pill thaw-pill" onClick={thaw}>
+        <Icon name="snow" size={13} /> {names.join(', ')} auftauen{count}
+      </button>
+      {fit.up && (
+        <span className="thaw__fit">{thawedLabel} reicht für {fit.up} Portionen
+          <button type="button" className="chip chip--sm" onClick={() => setTo(fit.up!)}>Auf {fit.up}</button>
+        </span>
+      )}
+      {fit.down && (
+        <span className="thaw__fit">{fit.down.packs} {fit.down.packs === 1 ? 'Packung reicht' : 'Packungen reichen'} für {fit.down.servings}
+          <button type="button" className="chip chip--sm" onClick={() => setTo(fit.down!.servings)}>Auf {fit.down.servings}</button>
+        </span>
+      )}
+    </div>
   );
 }
 

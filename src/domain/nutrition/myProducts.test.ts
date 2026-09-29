@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { RecipeContent } from '../types';
 import { computeNutrition } from './engine';
 import { localFoodTable } from './localFoods';
-import { brandOf, nameOf, productLabel, splitBrand, withMyProducts, type MyProduct } from './myProducts';
+import { brandOf, nameOf, productLabel, sharedOf, splitBrand, withMyProducts, withShared, type MyProduct } from './myProducts';
 
 const milk: MyProduct = {
   id: 'p-milch', name: 'Milch 0,1 % (Test)', replaces: ['milch', 'milch-fettarm', 'magermilch'],
@@ -110,5 +110,26 @@ describe('Ausnahmen bei „Gilt für“', () => {
   });
   it('erkennt die Schreibweise auch mit Zusätzen', () => {
     expect(t.matchName('frische Vollmilch')?.food.ref.provider).toBe('mashi-lokal');
+  });
+});
+
+describe('Sorten: Name und „gilt für“ gemeinsam', () => {
+  const sort = (id: string, extra: Partial<MyProduct>): MyProduct => ({
+    id, name: 'Pesto', replaces: [], per100g: { kcal: 400, protein: 5, carbs: 6, fat: 40 }, updatedAt: '2026-09-01T00:00:00.000Z', ...extra,
+  });
+
+  it('alte, abweichende Sorten: Name vom Favoriten, Namen und Ersetztes zusammen, Ausnahmen nur gemeinsame', () => {
+    const a = sort('a', { name: 'Pesto', brand: 'K-Classic', names: ['pesto'], excludes: ['pesto rosso'] });
+    const b = sort('b', { name: 'Grünes Pesto (Barilla)', names: ['grünes pesto'], favorite: true, excludes: ['pesto rosso', 'x'] });
+    expect(sharedOf([a, b])).toEqual({ name: 'Grünes Pesto', replaces: [], names: ['pesto', 'grünes pesto'], excludes: ['pesto rosso'] });
+  });
+
+  it('beim Vereinheitlichen bleibt die Marke – auch wenn sie bisher im Namen stand', () => {
+    const b = sort('b', { name: 'Grünes Pesto (Barilla)', names: ['grünes pesto'] });
+    const shared = { name: 'Pesto', replaces: [], names: ['pesto', 'grünes pesto'], excludes: [] };
+    const out = withShared(b, shared, 'T');
+    expect(out).toMatchObject({ name: 'Pesto', brand: 'Barilla', names: ['pesto', 'grünes pesto'], updatedAt: 'T' });
+    expect(out.excludes).toBeUndefined();
+    expect(productLabel(out)).toBe('Pesto · Barilla');
   });
 });

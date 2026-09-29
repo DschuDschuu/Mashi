@@ -497,7 +497,7 @@ function EditRow({ item, estimate, reserved, onDone }: { item: PantryItem; estim
       )}
       <div className="pantry-actions">
         <button className="btn btn--primary btn--sm" onClick={save}>OK</button>
-        {prep && !item.frozenAt && <button className="eat-pill" onClick={eat}>1 gegessen</button>}
+        {prep && !item.frozenAt && <button className="btn btn--soft btn--sm" onClick={eat}>1 gegessen</button>}
         {item.frozenAt
           ? <button className="btn btn--soft btn--sm" onClick={thaw}>Auftauen</button>
           : freezing === null && (

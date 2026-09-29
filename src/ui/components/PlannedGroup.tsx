@@ -1,4 +1,4 @@
-import type { DishReservation } from '../../domain/pantry';
+import { usedOf, type DishReservation } from '../../domain/pantry';
 import { currentContent } from '../../domain/recipe';
 import { useRecipes } from '../../data/store';
 import { navigate } from '../../router';
@@ -35,7 +35,11 @@ export function PlannedGroup({ dishes, urgent, open = false }: { dishes: DishRes
                   )}
                 </span>
                 <span className="small muted">
-                  {d.taken.map((t) => (t.amount !== undefined ? `${quantityLabel({ amount: t.amount, unit: t.item.unit })} ${t.item.name}` : t.item.name)).join(' · ')}
+                  {/* was das Gericht wirklich braucht („200 ml Milch“), nicht die angebrochene Packung – der Rest bleibt ja */}
+                  {d.taken.filter((t) => !t.created).map((t) => {
+                    const used = usedOf(t, d.taken);
+                    return used !== undefined ? `${quantityLabel({ amount: used, unit: t.item.unit, pack: t.item.pack })} ${t.item.name}` : t.item.name;
+                  }).join(' · ')}
                 </span>
               </button>
             </li>

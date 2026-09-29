@@ -811,9 +811,21 @@ export function freezePantryItem(id: string, amount?: number) {
   commitPantry({ ...pantry, items: freezeItem(pantry.items, id, now(), amount, () => newId('v')) });
 }
 
-/** Auftauen – hält danach nur noch kurz (einstellbar, Standard 1 Tag). */
-export function thawPantryItem(id: string) {
-  commitPantry({ ...pantry, items: thawItem(pantry.items, id, now(), specialDays('thawed', pantry.shelfDays)) });
+/**
+ * Auftauen – hält danach nur noch kurz (einstellbar, Standard 1 Tag).
+ * @param amount nur so viele Packungen/Stück (der Rest bleibt gefroren)
+ * Gibt „Rückgängig“ zurück: wieder gefroren wie vorher, der abgeteilte Teil verschwindet.
+ */
+export function thawPantryItem(id: string, amount?: number): () => void {
+  const before = pantry.items.find((i) => i.id === id);
+  const known = new Set(pantry.items.map((i) => i.id));
+  commitPantry({ ...pantry, items: thawItem(pantry.items, id, now(), specialDays('thawed', pantry.shelfDays), amount, () => newId('v')) });
+  const split = pantry.items.filter((i) => !known.has(i.id)).map((i) => i.id);
+  return () => {
+    if (!before) return;
+    const items = pantry.items.filter((i) => !split.includes(i.id)).map((i) => (i.id === id ? before : i));
+    commitPantry({ ...pantry, items: items.some((i) => i.id === id) ? items : [...items, before] });
+  };
 }
 
 /** Entfernen – gibt „Rückgängig“ zurück: legt den Vorrat an dieselbe Stelle zurück. */

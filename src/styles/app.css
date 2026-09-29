@@ -369,6 +369,7 @@ p { margin: 0; }
 .changes li { margin: 2px 0; }
 .versions ol { list-style: none; padding: 0; margin: 8px 0 0; display: flex; flex-direction: column; gap: 6px; }
 .versions .is-current strong { color: var(--primary-text); }
+.versions__now { display: inline-flex; align-items: center; gap: 3px; margin-left: 6px; font-size: 0.78rem; font-weight: 700; color: var(--primary-press); vertical-align: 1px; white-space: nowrap; }
 .feedback { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-sm); padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; }
 
 .bottom-cta { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 560px; padding: 12px var(--gutter) calc(14px + var(--safe-b)); background: linear-gradient(to top, var(--bg) 70%, transparent); z-index: 6; }
@@ -452,7 +453,19 @@ p { margin: 0; }
 .cook__timer.is-done { background: var(--butter); }
 .cook__timer .btn { background: var(--surface); border-color: transparent; }
 .cook__time { font-size: 3.4rem; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1; color: var(--primary-press); }
-.cook__pill { align-self: center; display: inline-flex; gap: 6px; align-items: center; padding: 8px 16px; border-radius: 999px; background: var(--primary-soft); color: var(--primary-press); font-weight: 700; margin-bottom: 12px; }
+/* Mehrere Timer: die anderen (nicht die des aktuellen Schritts) als Leiste über „Zurück/Weiter“ */
+.cook__timers { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.cook__trow { display: flex; align-items: center; gap: 6px; padding: 4px 6px 4px 14px; border-radius: 999px; background: var(--primary-soft); color: var(--primary-press); }
+.cook__trow.is-done { background: var(--butter); }
+.cook__tlabel { flex: 1; min-width: 0; display: inline-flex; align-items: center; gap: 6px; font-weight: 700; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cook__tclock { font-weight: 700; font-variant-numeric: tabular-nums; margin-right: 2px; }
+.cook__addlink { align-self: center; display: inline-flex; align-items: center; gap: 4px; }
+.cook__addtimer { display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: var(--r); background: var(--surface); border: 1px solid var(--line); }
+.cook__addtimer input { border: 1px solid var(--line); background: var(--surface); border-radius: var(--r-sm); padding: 8px 10px; font-size: 1rem; color: var(--ink); min-width: 0; }
+.cook__addtimer input:focus { outline: none; border-color: var(--primary); }
+.cook__addtimer form { display: flex; align-items: center; gap: 8px; }
+.cook__addtimer form input { width: 7rem; }
+.cook__quick { display: flex; flex-wrap: wrap; gap: 6px; }
 .cook__nav { display: flex; gap: 12px; }
 
 /* ── Toast ───────────────────────────────────────────────────── */
@@ -547,7 +560,7 @@ p { margin: 0; }
   .cook--wide .cook__leftovers { grid-area: left; }
   .cook--wide .cook__ingredients { grid-area: ing; align-self: start; margin-top: 20px; font-size: 1.12rem; gap: 10px; max-height: calc(100dvh - 140px); overflow-y: auto; }
   .cook--wide .cook__step { grid-area: step; padding: 32px 0; }
-  .cook--wide .cook__pill { grid-area: pill; }
+  .cook--wide .cook__timers { grid-area: pill; }
   .cook--wide .cook__nav { grid-area: nav; }
   .cook--wide .cook__text { font-size: clamp(1.7rem, 2.6vw, 2.4rem); }
 }
@@ -742,7 +755,7 @@ p { margin: 0; }
   .plan-list .list__item {
     /* oben: Titel bis ans ✕ (über die Regler-Spalte hinweg), unten: Fehlt/Preis links, Portionen rechts */
     display: grid; grid-template-columns: 36px minmax(0, 1fr) auto auto;
-    grid-template-areas: "check hit hit remove" "check meta servings servings";
+    grid-template-areas: "check hit hit remove" "check meta servings servings" "check thaw thaw thaw";
     column-gap: 10px; row-gap: 2px; align-items: center;
   }
   .plan-list .plan-cooked { grid-area: check; }
@@ -750,6 +763,7 @@ p { margin: 0; }
   .plan-list .iconbtn { grid-area: remove; justify-self: end; }
   .plan-list__servings { grid-area: servings; justify-self: end; }
   .plan-list__meta { grid-area: meta; }
+  .plan-list__thaw { grid-area: thaw; padding-top: 4px; }
   .plan-list .list__title { overflow-wrap: normal; }
 }
 
@@ -1097,6 +1111,16 @@ p { margin: 0; }
 .foods__item.is-open { border-color: var(--primary-soft); box-shadow: 0 0 0 1px var(--primary-soft); }
 .foods__head { width: 100%; display: flex; align-items: center; gap: 10px; padding: 11px 12px; text-align: left; color: var(--ink); }
 .foods__head > svg:last-child { color: var(--ink-3); transition: transform 0.15s; flex: none; }
+/* ein unsichtbarer Knopf über der ganzen Kopfzeile klappt auf – nur Stift und Namensfeld liegen darüber */
+.foods__head { position: relative; }
+.foods__toggle { position: absolute; inset: 0; width: 100%; border-radius: inherit; }
+.foods__toggle:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+.foods__head > :not(.foods__toggle) { position: relative; pointer-events: none; }
+.foods__pen, .foods__rename { pointer-events: auto; }
+.foods__pen { display: inline-grid; place-items: center; width: 28px; height: 28px; margin: -6px 0 -6px 2px; border-radius: 999px; color: var(--ink-2); vertical-align: middle; }
+.foods__rename { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; }
+.foods__rename input { font: inherit; font-weight: 600; padding: 4px 8px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface); color: var(--ink); width: 11rem; min-width: 0; }
+.foods__rename input:focus { outline: none; border-color: var(--primary); }
 .foods__item.is-open .foods__head > svg:last-child { transform: rotate(90deg); }
 .foods__name { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; column-gap: 6px; font-weight: 600; }
 .foods__name svg { color: var(--ink-3); }
@@ -1260,6 +1284,15 @@ p { margin: 0; }
 .plan-list__prepared { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
 /* „1 gegessen“ (Plan und Speisekammer) – kleine Pille, damit die Karte flach bleibt */
 .eat-pill { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 999px; background: var(--primary-soft); color: var(--primary-press); font-size: 0.78rem; font-weight: 600; }
+/* „❄ Hack auftauen“ an der Plan-Karte – dieselbe Pille, mit Schneeflocke */
+.thaw-pill { gap: 3px; align-self: flex-start; }
+/* darunter: wofür das Aufgetaute reicht – mit Knopf, der die Portionen gleich umstellt */
+.thaw { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+/* breite Plan-Zeile (Tablet): der Auftau-Block bekommt eine eigene Zeile unter dem Titel */
+.plan-list .list__item:has(.plan-list__thaw) { flex-wrap: wrap; }
+.plan-list__thaw { flex: 1 1 100%; padding-left: 48px; }
+@container (max-width: 640px) { .plan-list__thaw { padding-left: 0; } }
+.thaw__fit { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; font-size: 0.78rem; color: var(--ink-2); padding-left: 2px; }
 /* Vorgekocht auf der Startseite: ruhig in der Themenfarbe – erst bei „heute/morgen“ wie „Bald verbrauchen“ */
 .useup-banner--prepared { background: var(--primary-soft); margin-top: 8px; }
 .useup-banner--prepared > svg:first-child { color: var(--primary-text); }
@@ -1279,6 +1312,9 @@ p { margin: 0; }
 /* drei Stufen-Knöpfe in einer Zeile, auch auf dem Handy */
 .stage__options { display: flex; flex-wrap: nowrap; gap: 4px; }
 .stage__options .chip { padding: 4px 8px; font-size: 0.76rem; gap: 3px; white-space: nowrap; flex: 0 1 auto; min-width: 0; }
+/* „Gilt für“ im selben Stil wie die Stufen darunter: gleich große Chips */
+.match .chips { gap: 6px; }
+.match .afilter, .match .chip { min-height: 30px; padding: 4px 8px; font-size: 0.76rem; gap: 3px; }
 .stage__hint { margin: 0; }
 .foods__tablabel { display: inline-flex; flex-wrap: wrap; justify-content: center; align-items: center; column-gap: 4px; text-align: center; }
 /* schmales Handy oder große Zahlen: die Zahl rutscht in die zweite Zeile, statt dass ein Reiter rechts verschwindet */
@@ -1305,7 +1341,10 @@ p { margin: 0; }
 .inventory__edit { display: inline-flex; align-items: center; gap: 4px; }
 .inventory__edit input { width: 4rem; height: 34px; padding: 0 8px; border: 1px solid var(--line); border-radius: 999px; text-align: center; background: var(--surface); }
 .inventory__actions { display: inline-flex; gap: 4px; flex: none; }
-.inventory__actions .iconbtn.is-on { background: var(--primary-soft); color: var(--primary-press); }
+/* − Menge + wie der kleine Portionen-Regler (34 px, rund) */
+.inventory__step { flex: none; width: 34px; height: 34px; display: grid; place-items: center; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--ink-2); }
+.inventory__step:disabled { opacity: 0.35; }
+.inventory__row .inventory__qty, .inventory__row .inventory__edit { min-width: 6.75rem; justify-content: center; }
 /* diese Seite hat unten keine Navigation – direkt an den Rand */
 .inventory__done { position: sticky; bottom: calc(var(--safe-b, 0px) + 12px); display: flex; align-items: center; justify-content: space-between; gap: 12px;
   padding: 10px 12px; margin-top: 8px; border-radius: 999px; background: var(--surface); box-shadow: var(--shadow-lift); }

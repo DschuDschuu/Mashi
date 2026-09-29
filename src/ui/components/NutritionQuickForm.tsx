@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { parseNutritionLabel } from '../../domain/nutrition/labelOcr';
 import { normalizeName } from '../../domain/nutrition/localFoods';
-import type { MyProduct } from '../../domain/nutrition/myProducts';
+import type { MyProduct, SharedMatch } from '../../domain/nutrition/myProducts';
 import type { ScannedProduct } from '../../domain/nutrition/openFoodFacts';
 import type { Nutrients } from '../../domain/nutrition/types';
 import { newId } from '../../domain/recipe';
@@ -24,10 +24,12 @@ const LABEL: Record<(typeof CORE)[number], string> = { kcal: 'kcal', protein: 'E
  * Die Werte stehen immer zur Prüfung da. Gespeichert wird ein „Mein Produkt“ – Name und Marke
  * sind vorausgefüllt (aus Open Food Facts), Packung, Preis und Barcode lassen sich später ergänzen.
  */
-export function NutritionQuickForm({ ingredient, initialBrand = '', onSave, onCancel }: {
+export function NutritionQuickForm({ ingredient, initialBrand = '', shared, onSave, onCancel }: {
   ingredient: string;
   /** vorausgefüllte Marke (z. B. beim Vorrat eingetragen) */
   initialBrand?: string;
+  /** weitere Sorte einer Zutat: Name und „gilt für“ kommen von den anderen Sorten – nur die Marke unterscheidet */
+  shared?: SharedMatch;
   onSave: (p: MyProduct) => void;
   onCancel: () => void;
 }) {
@@ -46,6 +48,9 @@ export function NutritionQuickForm({ ingredient, initialBrand = '', onSave, onCa
   const [error, setError] = useState<string | null>(null);
   const [productName, setProductName] = useState(ingredient);
   const [brand, setBrand] = useState(initialBrand);
+  /** gleich mit angeben – sonst fehlt sie beim Bon und bei „4 × 500 g“ (Open Food Facts füllt sie vor) */
+  const [packAmount, setPackAmount] = useState('');
+  const [packUnit, setPackUnit] = useState<'g' | 'ml' | 'Stück'>('g');
 
   const take = (found: ScannedProduct, text: string) => {
     const { kcal, protein, carbs, fat, ...rest } = found.per100g;
@@ -54,6 +59,10 @@ export function NutritionQuickForm({ ingredient, initialBrand = '', onSave, onCa
     setSource(found);
     setProductName(found.name);
     setBrand(found.brand ?? '');
+    if (found.packageAmount) {
+      setPackAmount(toField(found.packageAmount));
+      setPackUnit(found.packageUnit ?? 'g');
+    }
     setHits(null);
     setWay(null);
     setNote(text);
@@ -127,17 +136,20 @@ export function NutritionQuickForm({ ingredient, initialBrand = '', onSave, onCa
     if (kcal === undefined || protein === undefined || carbs === undefined || fat === undefined) {
       return setError('Bitte alle vier Werte eintragen (pro 100 g bzw. 100 ml).');
     }
+    const pack = parseNum(packAmount);
+    if (packAmount.trim() && !(pack && pack > 0)) return setError('Die Packungsgröße bitte als Zahl, z. B. 125 – oder leer lassen.');
     // Barcode nur, wenn du ihn nicht schon bei einem anderen Produkt hast
     const ean = source?.ean && !products.some((p) => p.ean === source.ean) ? source.ean : undefined;
     onSave({
       id: newId('p'),
-      name: productName.trim() || ingredient,
+      name: shared?.name || productName.trim() || ingredient,
       ...(brand.trim() ? { brand: brand.trim() } : {}),
-      replaces: [],
-      names: [normalizeName(ingredient)],
+      replaces: shared?.replaces ?? [],
+      names: shared?.names.length ? shared.names : [normalizeName(ingredient)],
+      ...(shared?.excludes.length ? { excludes: shared.excludes } : {}),
       per100g: { ...extra, kcal, protein, carbs, fat },
       ...(ean ? { ean } : {}),
-      ...(source?.packageAmount ? { packageAmount: source.packageAmount, packageUnit: source.packageUnit } : {}),
+      ...(pack ? { packageAmount: pack, packageUnit: packUnit } : {}),
       updatedAt: new Date().toISOString(),
     });
   };
@@ -192,16 +204,27 @@ export function NutritionQuickForm({ ingredient, initialBrand = '', onSave, onCa
         {CORE.slice(2).map((k) => field(k))}
       </div>
 
-      <div className="row-2">
-        <label className="field"><span>Name</span>
-          <input value={productName} onChange={(e) => setProductName(e.target.value)} />
-        </label>
-        <label className="field"><span>Marke (optional)</span>
+      <div className={shared ? undefined : 'row-2'}>
+        {/* weitere Sorte: der Name gilt für alle Sorten – sie unterscheiden sich durch die Marke */}
+        {!shared && (
+          <label className="field"><span>Name</span>
+            <input value={productName} onChange={(e) => setProductName(e.target.value)} />
+          </label>
+        )}
+        <label className="field"><span>Marke{shared ? '' : ' (optional)'}</span>
           <input value={brand} onChange={(e) => setBrand(e.target.value)} list="brand-names" placeholder="z. B. K-Classic" />
         </label>
       </div>
       <BrandNames />
-      <p className="small muted">Gilt für jede Zutat „{ingredient}“. Packung, Preis und Barcode kannst du später unter „Meine Lebensmittel“ ergänzen.</p>
+      <label className="field"><span>Packungsgröße (optional)</span>
+        <span className="pantry-amount">
+          <input inputMode="decimal" value={packAmount} onChange={(e) => setPackAmount(e.target.value)} placeholder="z. B. 125" />
+          <select value={packUnit} onChange={(e) => setPackUnit(e.target.value as 'g' | 'ml' | 'Stück')} aria-label="Einheit der Packung">
+            <option value="g">g</option><option value="ml">ml</option><option value="Stück">Stück</option>
+          </select>
+        </span>
+      </label>
+      <p className="small muted">{shared ? 'Name und „gilt für“ wie bei den anderen Sorten.' : `Gilt für jede Zutat „${ingredient}“.`} Preis und Barcode kannst du später unter „Meine Lebensmittel“ ergänzen.</p>
 
       {error && <p className="error" role="alert">{error}</p>}
       <div className="row-gap">

@@ -295,14 +295,20 @@ export function freezeItem(items: PantryItem[], id: string, now: string, amount?
   return items.map((x) => (x.id === id ? { ...rest, frozenAt: now } : x));
 }
 
-/** Auftauen: hält dann nur noch kurz (Standard 1 Tag) – als festes „verbrauchen bis“. */
-export function thawItem(items: PantryItem[], id: string, now: string, days: number): PantryItem[] {
+/**
+ * Auftauen: hält dann nur noch kurz (Standard 1 Tag) – als festes „verbrauchen bis“.
+ * @param amount nur einen Teil auftauen (2 von 3 Packungen) – der Rest bleibt gefroren
+ */
+export function thawItem(items: PantryItem[], id: string, now: string, days: number, amount?: number, newId = defaultId): PantryItem[] {
+  const item = items.find((x) => x.id === id);
+  if (!item?.frozenAt) return items;
   const useBy = new Date(new Date(now).getTime() + days * 24 * 60 * 60 * 1000).toISOString();
-  return items.map((x) => {
-    if (x.id !== id || !x.frozenAt) return x;
-    const { frozenAt: _f, ...rest } = x;
-    return { ...rest, useBy, ...(x.openedAt ? { openedAt: now } : {}) };
-  });
+  const { frozenAt: _f, ...rest } = item;
+  const thawed: PantryItem = { ...rest, useBy, ...(item.openedAt ? { openedAt: now } : {}) };
+  if (amount !== undefined && item.amount !== undefined && amount > 0 && amount < item.amount) {
+    return items.flatMap((x) => (x.id === id ? [{ ...x, amount: Math.round((x.amount! - amount) * 10) / 10 }, { ...thawed, id: newId(), amount }] : [x]));
+  }
+  return items.map((x) => (x.id === id ? thawed : x));
 }
 
 let seq = 0;
@@ -607,6 +613,78 @@ export function plannedByDish(pantry: Pantry, plan: MealPlan, recipes: Recipe[],
   return out;
 }
 
+export interface ThawNeed {
+  item: PantryItem;
+  /** so viel auftauen (ganze Packungen/Stück); fehlt = den ganzen Eintrag (ein Block Hack lässt sich nicht teilen) */
+  amount?: number;
+  /** so viel braucht das Gericht wirklich (in der Einheit des Vorrats, 1,25 = 1¼ Packungen) – für den Portionen-Vorschlag */
+  used?: number;
+}
+
+/**
+ * Was ein geplantes Gericht vorher auftauen muss: Verplantes, das nur gefroren da ist
+ * (Frisches nimmt Mashi ohnehin zuerst). Gemüse und Obst nicht – TK-Erbsen kommen gefroren in den Topf.
+ */
+/**
+ * Wie viel ein Gericht von einem Vorrat wirklich braucht (in dessen Einheit). Bei Packungen ist das
+ * weniger als „weggenommen“: 200 ml aus „2 × 1 l“ nehmen eine Packung weg, 800 ml davon bleiben als Rest.
+ * Ohne diese Rechnung hielte die Speisekammer die ganze Packung für verplant – und nach dem Kochen
+ * tauchte der Rest wie aus dem Nichts auf („Milch hinzugefügt“).
+ */
+export function usedOf(t: Taken, taken: readonly Taken[]): number | undefined {
+  if (t.amount === undefined || t.created) return undefined;
+  const pack = t.item.pack;
+  if (!pack) return t.amount;
+  const rest = taken.filter((c) => c.created && c.item.name === t.item.name && c.item.unit === pack.unit)
+    .reduce((s, c) => s + (c.item.amount ?? 0), 0) / pack.amount;
+  return Math.max(0, Math.round((t.amount - rest) * 1000) / 1000);
+}
+
+export function thawNeeds(dish: DishReservation, table: FoodTable): ThawNeed[] {
+  return dish.taken
+    .filter((t) => !t.created && t.item.frozenAt)
+    .filter((t) => { const kind = itemAsIngredient(t.item, table)?.kind; return kind !== 'vegetable' && kind !== 'fruit'; })
+    .map((t) => {
+      // angebrochene Packung: „2 genommen“, aber 375 g davon bleiben als Rest – der zählt nicht als gebraucht
+      const used = usedOf(t, dish.taken);
+      return {
+        item: t.item,
+        ...(isCount(t.item.unit) && t.amount !== undefined ? { amount: Math.ceil(t.amount - 1e-9) } : {}),
+        ...(used !== undefined && used > 0 ? { used } : {}),
+      };
+    });
+}
+
+export interface ThawFit {
+  /** alles Aufgetaute verbrauchen: reicht für so viele Portionen (mehr als geplant) */
+  up?: number;
+  /** eine Packung weniger auftauen – dann reicht es für so viele Portionen */
+  down?: { servings: number; packs: number };
+}
+
+/**
+ * Ganze Packungen passen selten genau zum Rezept – wofür reicht das Aufgetaute? Abgerundet: bei „ca. 7“
+ * bräuchte das Gericht sonst gleich wieder eine Packung mehr. Mehrere gefrorene Zutaten: die knappste zählt,
+ * „eine Packung weniger“ nur bei einer (sonst wäre unklar, welche).
+ */
+export function thawFit(needs: ThawNeed[], servings: number): ThawFit {
+  if (!needs.length || !(servings > 0)) return {};
+  const fits = needs.map((n) => {
+    const thawed = n.amount ?? n.item.amount;
+    if (n.used === undefined || thawed === undefined) return undefined;
+    const per = n.used / servings;
+    const fewer = n.amount !== undefined && n.amount > 1 ? n.amount - 1 : undefined;
+    return { up: Math.floor(thawed / per + 1e-9), fewer, down: fewer !== undefined ? Math.floor(fewer / per + 1e-9) : 0 };
+  });
+  if (fits.some((f) => !f)) return {};
+  const up = Math.min(...fits.map((f) => f!.up));
+  const one = fits.length === 1 ? fits[0]! : undefined;
+  return {
+    ...(up > servings ? { up } : {}),
+    ...(one?.fewer !== undefined && one.down >= 1 && one.down < servings ? { down: { servings: one.down, packs: one.fewer } } : {}),
+  };
+}
+
 /**
  * Summe je Vorrat über alle geplanten Gerichte: wie viel verplant ist. 'all' = alles (oder ohne Menge).
  * Die Speisekammer zeigt oben nur, was frei bleibt.
@@ -617,8 +695,10 @@ export function plannedUse(pantry: Pantry, plan: MealPlan, recipes: Recipe[], ta
     for (const t of d.taken) {
       if (t.created) continue;
       const prev = out.get(t.item.id);
-      if (t.amount === undefined || prev === 'all') out.set(t.item.id, 'all');
-      else out.set(t.item.id, Math.round(((prev ?? 0) + t.amount) * 10) / 10);
+      // was das Gericht wirklich braucht – nicht die ganze angebrochene Packung
+      const used = usedOf(t, d.taken);
+      if (used === undefined || prev === 'all') out.set(t.item.id, 'all');
+      else out.set(t.item.id, Math.round(((prev ?? 0) + used) * 1000) / 1000);
     }
   }
   for (const [id, v] of out) {

@@ -16,20 +16,16 @@ import { useMediaQuery } from '../useMediaQuery';
 import { DishNutrition } from '../components/DishNutrition';
 import { pickFor } from '../../domain/nutrition/variants';
 import { choicesFor } from '../useNutrition';
-
-interface TimerState {
-  step: number;
-  totalMs: number;
-  /** Solange er läuft: Endzeitpunkt. Pausiert: Restzeit. So bleibt er genau, auch wenn der Tab kurz schläft. */
-  endsAt?: number;
-  remainingMs: number;
-}
+import { newId } from '../../domain/recipe';
+import { byUrgency, isDone, isRunning, newlyDone, pauseTimer, remainingOf, removeTimer, resumeTimer, startTimer, type CookTimer } from '../../domain/timers';
 
 export function CookModeScreen({ id, servings, variants }: { id: string; servings?: number; variants?: Record<string, string> }) {
   const recipe = useRecipe(id);
   const [step, setStep] = useState(0);
   const [showIngredients, setShowIngredients] = useState(false);
-  const [timer, setTimer] = useState<TimerState | null>(null);
+  /** mehrere gleichzeitig: je Schritt mit Zeitangabe einer, dazu eigene („Ofen“) */
+  const [timers, setTimers] = useState<CookTimer[]>([]);
+  const [addingTimer, setAddingTimer] = useState(false);
   const [, tick] = useState(0);
   useWakeLock();
   // Tablet quer: Zutaten dauerhaft als Spalte neben dem Schritt
@@ -62,22 +58,22 @@ export function CookModeScreen({ id, servings, variants }: { id: string; serving
   }, [recipe, base, pantry, plan, recipes, table]);
 
   // Läuft ein Timer, 4× pro Sekunde neu zeichnen
+  const anyRunning = timers.some((t) => t.endsAt);
   useEffect(() => {
-    if (!timer?.endsAt) return;
+    if (!anyRunning) return;
     const t = setInterval(() => tick((x) => x + 1), 250);
     return () => clearInterval(t);
-  }, [timer?.endsAt]);
+  }, [anyRunning]);
 
-  const remaining = timer ? (timer.endsAt ? Math.max(0, timer.endsAt - Date.now()) : timer.remainingMs) : 0;
-  const done = !!timer && remaining === 0;
-  const alerted = useRef(false);
+  const now = Date.now();
+  // jeder Timer klingelt genau einmal – auch wenn zwei zugleich ablaufen
+  const rung = useRef(new Set<string>());
   useEffect(() => {
-    if (done && !alerted.current) {
-      alerted.current = true;
-      ring();
-    }
-    if (!done) alerted.current = false;
-  }, [done]);
+    const ids = newlyDone(timers, rung.current, Date.now());
+    if (!ids.length) return;
+    ids.forEach((x) => rung.current.add(x));
+    ring();
+  });
 
   if (!recipe) return null;
   const c = currentContent(recipe);
@@ -96,9 +92,11 @@ export function CookModeScreen({ id, servings, variants }: { id: string; serving
     setEditing(null);
   };
 
-  const startTimer = (minutes: number) => setTimer({ step, totalMs: minutes * 60_000, remainingMs: minutes * 60_000, endsAt: Date.now() + minutes * 60_000 });
-  const pause = () => timer && setTimer({ ...timer, endsAt: undefined, remainingMs: remaining });
-  const resume = () => timer && setTimer({ ...timer, endsAt: Date.now() + timer.remainingMs });
+  const start = (minutes: number, label: string, forStep?: number) =>
+    setTimers((l) => startTimer(l, { id: newId('t'), label, minutes, step: forStep }, Date.now()));
+  const pause = (tid: string) => setTimers((l) => pauseTimer(l, tid, Date.now()));
+  const resume = (tid: string) => setTimers((l) => resumeTimer(l, tid, Date.now()));
+  const drop = (tid: string) => setTimers((l) => removeTimer(l, tid));
 
   const finish = () => {
     cookedToast(markCooked(recipe.id, servings ?? c.servings, amounts, pickFor(choicesFor(c), own)));
@@ -106,13 +104,16 @@ export function CookModeScreen({ id, servings, variants }: { id: string; serving
     else goBack(`/rezept/${recipe.id}`);
   };
 
-  const timerHere = timer && timer.step === step;
+  // der Timer dieses Schritts groß im Schritt – alle anderen unten in der Leiste, Dringendes zuerst
+  const here = timers.find((t) => t.step === step);
+  const others = byUrgency(timers.filter((t) => t !== here), now);
   // Läuft ein Timer oder sind Mengen geändert, lieber nachfragen – beides wäre sonst weg
   const leave = () => {
-    const running = !!timer && !done;
+    const running = timers.filter((t) => isRunning(t, Date.now())).length;
     const changed = Object.keys(amounts).length > 0;
-    const why = running && changed ? 'Der Timer läuft noch und deine geänderten Mengen gehen verloren.'
-      : running ? 'Der Timer läuft noch.' : changed ? 'Deine geänderten Mengen gehen verloren.' : '';
+    const clocks = running === 1 ? 'Ein Timer läuft noch' : `${running} Timer laufen noch`;
+    const why = running && changed ? `${clocks} und deine geänderten Mengen gehen verloren.`
+      : running ? `${clocks}.` : changed ? 'Deine geänderten Mengen gehen verloren.' : '';
     if (why && !confirm(`Kochmodus beenden? ${why} Fertig gekocht? Dann lieber im letzten Schritt „Fertig“ tippen.`)) return;
     goBack(`/rezept/${recipe.id}`);
   };
@@ -200,28 +201,48 @@ export function CookModeScreen({ id, servings, variants }: { id: string; serving
         <StepIngredients step={s} ingredients={ingredients} large />
         <p className="cook__text">{s.text}</p>
 
-        {s.timerMinutes && !timerHere && (
-          <button className="btn btn--soft btn--lg" onClick={() => startTimer(s.timerMinutes!)}>
+        {s.timerMinutes && !here && (
+          <button className="btn btn--soft btn--lg" onClick={() => start(s.timerMinutes!, `Schritt ${step + 1}`, step)}>
             <Icon name="timer" /> Timer {s.timerMinutes} Min. starten
           </button>
         )}
-        {timerHere && (
-          <div className={`cook__timer${done ? ' is-done' : ''}`}>
-            <span className="cook__time">{done ? 'Fertig!' : clock(remaining)}</span>
+        {here && (
+          <div className={`cook__timer${isDone(here, now) ? ' is-done' : ''}`}>
+            <span className="cook__time">{isDone(here, now) ? 'Fertig!' : clock(remainingOf(here, now))}</span>
             <div className="row-gap">
-              {!done && (timer.endsAt
-                ? <button className="btn btn--soft" onClick={pause}><Icon name="pause" /> Pause</button>
-                : <button className="btn btn--soft" onClick={resume}><Icon name="play" filled /> Weiter</button>)}
-              <button className="btn btn--ghost" onClick={() => setTimer(null)}>{done ? 'OK' : 'Abbrechen'}</button>
+              {!isDone(here, now) && (here.endsAt
+                ? <button className="btn btn--soft" onClick={() => pause(here.id)}><Icon name="pause" /> Pause</button>
+                : <button className="btn btn--soft" onClick={() => resume(here.id)}><Icon name="play" filled /> Weiter</button>)}
+              <button className="btn btn--ghost" onClick={() => drop(here.id)}>{isDone(here, now) ? 'OK' : 'Abbrechen'}</button>
             </div>
           </div>
         )}
+        {addingTimer
+          ? <AddTimer onStart={(m, label) => start(m, label)} onClose={() => setAddingTimer(false)} />
+          : <button className="link cook__addlink" onClick={() => setAddingTimer(true)}><Icon name="plus" size={16} /> Eigener Timer</button>}
       </section>
 
-      {timer && !timerHere && (
-        <button className="cook__pill" onClick={() => setStep(timer.step)}>
-          <Icon name="timer" size={16} /> {done ? 'Timer fertig!' : clock(remaining)} · Schritt {timer.step + 1}
-        </button>
+      {others.length > 0 && (
+        <ul className="cook__timers" aria-label="Laufende Timer">
+          {others.map((t) => {
+            const done = isDone(t, now);
+            const label = <><Icon name="timer" size={16} /> {t.label}</>;
+            return (
+              <li key={t.id} className={`cook__trow${done ? ' is-done' : ''}`}>
+                {t.step !== undefined
+                  ? <button className="cook__tlabel" onClick={() => setStep(t.step!)} aria-label={`${t.label} – zum Schritt`}>{label}</button>
+                  : <span className="cook__tlabel">{label}</span>}
+                <span className="cook__tclock">{done ? 'fertig!' : clock(remainingOf(t, now))}</span>
+                {!done && (t.endsAt
+                  ? <button className="iconbtn iconbtn--sm" onClick={() => pause(t.id)} aria-label={`${t.label} pausieren`}><Icon name="pause" size={16} /></button>
+                  : <button className="iconbtn iconbtn--sm" onClick={() => resume(t.id)} aria-label={`${t.label} weiterlaufen lassen`}><Icon name="play" size={16} filled /></button>)}
+                <button className="iconbtn iconbtn--sm" onClick={() => drop(t.id)} aria-label={done ? `${t.label}: OK` : `${t.label} abbrechen`}>
+                  <Icon name={done ? 'check' : 'close'} size={16} />
+                </button>
+              </li>
+            );
+          })}
+        </ul>
       )}
 
       <footer className="cook__nav">
@@ -249,6 +270,32 @@ function AmountEdit({ ing, changed, onSave, onCancel }: { ing: Ingredient; chang
       <button className="btn btn--primary btn--sm">OK</button>
       {changed && <button type="button" className="link link--muted" onClick={() => onSave(undefined)}>Wie im Rezept</button>}
     </form>
+  );
+}
+
+const QUICK_MINUTES = [5, 10, 15, 20, 30];
+
+/** Eigener Timer: Schnellwahl für nasse Hände, sonst eigene Zeit; der Name ist freiwillig („Ofen“) */
+function AddTimer({ onStart, onClose }: { onStart: (minutes: number, label: string) => void; onClose: () => void }) {
+  const [minutes, setMinutes] = useState('');
+  const [name, setName] = useState('');
+  const typed = Number(minutes.replace(',', '.'));
+  const go = (m: number) => {
+    onStart(m, name.trim() || `${m.toLocaleString('de-DE')}-Min.-Timer`);
+    onClose();
+  };
+  return (
+    <div className="cook__addtimer">
+      <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Wofür? (optional, z. B. Ofen)" aria-label="Name des Timers" />
+      <div className="cook__quick">
+        {QUICK_MINUTES.map((m) => <button key={m} type="button" className="chip" onClick={() => go(m)}>{m} Min.</button>)}
+      </div>
+      <form onSubmit={(e) => { e.preventDefault(); if (typed > 0) go(typed); }}>
+        <input inputMode="decimal" value={minutes} onChange={(e) => setMinutes(e.target.value)} placeholder="Minuten" aria-label="Eigene Zeit in Minuten" />
+        <button className="btn btn--primary btn--sm" disabled={!(typed > 0)}>Starten</button>
+        <button type="button" className="link link--muted" onClick={onClose}>Abbrechen</button>
+      </form>
+    </div>
   );
 }
 

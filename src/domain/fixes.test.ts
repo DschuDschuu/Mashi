@@ -3,9 +3,10 @@ import { createMockRecipes } from '../data/mockRecipes';
 import { buildShoppingList, resolveIngredient } from './mealplan';
 import { localFoodTable } from './nutrition/localFoods';
 import {
-  alreadyImported, applyImport, bonKey, deductRecipe, emptyPantry, pantryAfterPlan, plannedByDish, plannedUse, proposeImport, rememberReceipt, returnTaken, stockSummary, takenBetween,
+  alreadyImported, applyImport, bonKey, deductRecipe, emptyPantry, pantryAfterPlan, plannedByDish, plannedUse, proposeImport, rememberReceipt, returnTaken, stockSummary, takenBetween, usedOf,
   type Pantry, type PantryItem,
 } from './pantry';
+import { amountLabel } from './pantryLabel';
 import { parseIngredientLine } from './importText';
 import { parseReceipt } from './receipt';
 import type { Ingredient, Recipe, RecipeContent } from './types';
@@ -179,6 +180,31 @@ describe('Verplant – Anzeige in der Speisekammer', () => {
     expect(p.items.map((i) => i.amount)).toEqual([1000, 1, 500]);
     // gekocht → nichts mehr verplant
     expect(plannedUse(p, { ...plan, cooked: ['b'] }, [r], localFoodTable).size).toBe(0);
+  });
+});
+
+describe('Verplant aus einer angebrochenen Packung (Fehler: Milch nach dem Kochen „hinzugefügt“)', () => {
+  // Früher galt die ganze angebrochene Packung als verplant: frei stand „1 × 1 l“ – nach dem Kochen
+  // tauchten die 800 ml Rest auf, als hätte Mashi Milch dazugelegt.
+  const r = recipe('m', [{ id: '1', name: 'Milch', amount: 200, unit: 'ml' }]);
+  const plan = { items: [{ recipeId: 'm', servings: 2 }], checked: [], cooked: [], updatedAt: '' };
+  const milk = item('milch', 'Milch', 2, 'Stück', { pack: { amount: 1000, unit: 'ml' } });
+  const ml = (items: PantryItem[]) => items.reduce((s, i) => s + (i.pack ? (i.amount ?? 0) * i.pack.amount : i.amount ?? 0), 0);
+
+  it('verplant sind 200 ml, frei „1 × 1 l + 800 ml“ – und nach dem Kochen ist genau so viel da', () => {
+    const p = pantry(milk);
+    const planned = plannedUse(p, plan, [r], localFoodTable);
+    expect(planned.get('milch')).toBe(0.2);
+    const free = { ...milk, amount: milk.amount! - (planned.get('milch') as number) };
+    expect(amountLabel(free)).toBe('1 × 1 l + 800 ml');
+    const cooked = deductRecipe(p, content(r.versions[0].content.ingredients), 2, localFoodTable).pantry;
+    expect(ml(cooked.items)).toBe(ml([free]));
+  });
+
+  it('„Für den Wochenplan“ zeigt, was das Gericht braucht – nicht die Packung und nicht den Rest', () => {
+    const [dish] = plannedByDish(pantry(milk), plan, [r], localFoodTable);
+    const used = dish.taken.filter((t) => !t.created).map((t) => amountLabel({ amount: usedOf(t, dish.taken), unit: t.item.unit, pack: t.item.pack }));
+    expect(used).toEqual(['200 ml']);
   });
 });
 

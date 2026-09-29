@@ -1,12 +1,12 @@
 import { useMemo, useState } from 'react';
 import { basicsOf } from '../../domain/mealplan';
 import { buildFoodList, matchesFilter, type FoodFilter, type FoodRow } from '../../domain/nutrition/foodList';
-import { appliesAliases, normalizeName } from '../../domain/nutrition/localFoods';
-import { brandOf, nameOf, productLabel, type MyProduct } from '../../domain/nutrition/myProducts';
+import { normalizeName } from '../../domain/nutrition/localFoods';
+import { brandOf, nameOf, productLabel, sharedOf, withShared, type MyProduct, type SharedMatch } from '../../domain/nutrition/myProducts';
 import { zeroOf } from '../../domain/nutrition/noNutrition';
 import { averageNutrients } from '../../domain/nutrition/variants';
 import type { Nutrients } from '../../domain/nutrition/types';
-import { dismissRename, saveProducts, setFavoriteVariant, setFoodStage, useFoodTable, usePantry, useProducts, useRecipes } from '../../data/store';
+import { currentProducts, dismissRename, saveProducts, setFavoriteVariant, setFoodStage, useFoodTable, usePantry, useProducts, useRecipes } from '../../data/store';
 import { stageOf } from '../../domain/stage';
 import { StagePicker } from './StagePicker';
 import { currentContent } from '../../domain/recipe';
@@ -18,16 +18,10 @@ import { useSlide } from '../useSlide';
 import { Icon } from './Icon';
 import { ProductForm } from './MyProductsPanel';
 import { NutritionQuickForm } from './NutritionQuickForm';
+import { MatchChips, visibleExcludes } from './MatchChips';
 
 const fmt = (n: number) => n.toLocaleString('de-DE', { maximumFractionDigits: 1 });
 const cap = (s: string) => s.replace(/(^|[\s-])(\p{L})/gu, (_m, sep: string, ch: string) => sep + ch.toLocaleUpperCase('de-DE'));
-/** Ausnahmen, die wirklich etwas bewirken (überflüssige alte, z. B. „Vollmilch“ beim 0,1-%-Produkt, nicht) */
-const shownExcludes = (p: MyProduct) => (p.excludes ?? []).filter((x) => p.replaces.some((id) => appliesAliases(nameOf(p), id).includes(x)));
-/** Alle Schreibweisen, für die ein Produkt gilt – aus der Tabelle (ohne Ausnahmen) und freie Namen */
-const appliesTo = (p: MyProduct) => [...new Set([
-  ...p.replaces.flatMap((id) => appliesAliases(nameOf(p), id)).filter((a) => !p.excludes?.includes(a)),
-  ...(p.names ?? []),
-])].map(cap);
 /** Tabs: Schlüssel, kurzer Name, voller Name (für Screenreader) – Reihenfolge = Wischrichtung */
 // Ein Tab je Stufen-Knopf (gleiches Symbol, gleicher Name): Produkte = was du pflegst (normal, 🔄 nachkaufen),
 // dahinter, was du einmal einstellst: 🏠 immer im Haus, 🍃 Gewürze (zählen in Rezepten nicht mit)
@@ -120,16 +114,44 @@ function FoodLine({ row, open, onToggle, products, onTouch }: {
   onTouch: () => void;
 }) {
   const [editing, setEditing] = useState<string | null>(null);
+  /** Name wird gerade getippt (Stift oben in der Kachel) */
+  const [renaming, setRenaming] = useState<string | null>(null);
   const [addingSort, setAddingSort] = useState(false);
   const ps = row.products;
   const fav = ps.find((p) => p.favorite);
   const values = ps.length === 1 ? ps[0].per100g : fav ? fav.per100g : ps.length ? averageNutrients(ps.map((p) => p.per100g)) : row.table?.per100g;
+  // Name und „gilt für“ gelten für alle Sorten – direkt in der Kachel einstellbar: Stift oben, Chips unten
+  const shared = ps.length ? sharedOf(ps) : undefined;
+  const title = shared?.name || row.name;
 
+  /** Speichern hält die Sorten einer Zutat gleich: Name und „gilt für“ bekommen alle (auch ältere, abweichende) */
+  const store = (changed: MyProduct[], s?: SharedMatch) => {
+    // bearbeitete Sorten ersetzen, neue anhängen …
+    const byId = new Map(changed.map((p) => [p.id, p]));
+    const next = [...products.map((x) => byId.get(x.id) ?? x), ...changed.filter((p) => !products.some((x) => x.id === p.id))];
+    // … und das Gemeinsame auf alle Sorten dieser Zutat
+    const group = new Set([...ps.map((p) => p.id), ...byId.keys()]);
+    saveProducts(s ? next.map((x) => (group.has(x.id) ? withShared(x, s) : x)) : next);
+  };
   const save = (p: MyProduct) => {
-    saveProducts(products.some((x) => x.id === p.id) ? products.map((x) => (x.id === p.id ? p : x)) : [...products, p]);
+    // eine Sorte mehr oder eine bearbeitet: alle Sorten dieser Zutat bekommen dasselbe Gemeinsame
+    const group = [...ps.filter((x) => x.id !== p.id), p];
+    store([p], group.length > 1 ? sharedOf(group.map((x) => (x.id === p.id ? p : x))) : undefined);
     setEditing(null);
     setAddingSort(false);
     toast('Gespeichert – alle Rezepte rechnen neu');
+  };
+  /** Name oder „gilt für“ für alle Sorten – sofort gespeichert, mit „Rückgängig“ (wie die Stufen darunter) */
+  const saveShared = (s: SharedMatch, what: string) => {
+    const old = new Map(ps.map((p) => [p.id, p]));
+    store([], s);
+    toast(`${what} – alle Rezepte rechnen neu`, { label: 'Rückgängig', run: () => saveProducts(currentProducts().map((x) => old.get(x.id) ?? x)) });
+  };
+  const rename = () => {
+    const n = renaming?.trim();
+    setRenaming(null);
+    if (!n || !shared || n === shared.name) return;
+    saveShared({ ...shared, name: n }, ps.length > 1 ? `Alle ${ps.length} Sorten heißen jetzt „${n}“` : `Heißt jetzt „${n}“`);
   };
   const remove = (p: MyProduct) => {
     if (!confirm(`„${p.name}“ entfernen? Die Rezepte rechnen dann wieder mit Richtwerten.`)) return;
@@ -145,9 +167,23 @@ function FoodLine({ row, open, onToggle, products, onTouch }: {
 
   return (
     <li className={`foods__item${open ? ' is-open' : ''}`}>
-      <button type="button" className="foods__head" onClick={onToggle} aria-expanded={open}>
+      <div className="foods__head">
+        {/* die ganze Kopfzeile klappt auf (unsichtbarer Knopf darunter) – nur der Stift liegt darüber */}
+        <button type="button" className="foods__toggle" onClick={onToggle} aria-expanded={open} aria-label={`${title}: ${open ? 'zuklappen' : 'aufklappen'}`} />
         <span className="foods__name">
-          {row.name}
+          {renaming !== null ? (
+            <form className="foods__rename" onSubmit={(e) => { e.preventDefault(); rename(); }}>
+              <input value={renaming} onChange={(e) => setRenaming(e.target.value)} autoFocus aria-label={ps.length > 1 ? 'Name für alle Sorten' : 'Name'}
+                onKeyDown={(e) => e.key === 'Escape' && setRenaming(null)} />
+              <button className="iconbtn iconbtn--sm" aria-label="Namen speichern" disabled={!renaming.trim()}><Icon name="check" size={16} /></button>
+              <button type="button" className="iconbtn iconbtn--sm" aria-label="Abbrechen" onClick={() => setRenaming(null)}><Icon name="close" size={16} /></button>
+            </form>
+          ) : title}
+          {open && shared && renaming === null && (
+            <button type="button" className="foods__pen" onClick={() => setRenaming(shared.name)} aria-label={ps.length > 1 ? 'Namen ändern – für alle Sorten' : 'Namen ändern'}>
+              <Icon name="pencil" size={14} />
+            </button>
+          )}
           {ps.length === 1 && brandOf(ps[0]) && <span className="brand">{brandOf(ps[0])}</span>}
           {nothing && <span className="foods__sub">nichts festgelegt</span>}
           {stage === 'haus' && <span className="foods__mark" title="Immer im Haus"><Icon name="home" size={14} /></span>}
@@ -161,7 +197,7 @@ function FoodLine({ row, open, onToggle, products, onTouch }: {
               : 'keine Werte'}
         </span>
         <Icon name="chevron" size={16} />
-      </button>
+      </div>
 
       {open && zeroRow && (
         <div className="foods__body">
@@ -178,7 +214,7 @@ function FoodLine({ row, open, onToggle, products, onTouch }: {
             </p>
           )}
           {ps.map((p) => editing === p.id ? (
-            <ProductForm key={p.id} initial={p} onSave={save} onCancel={() => setEditing(null)} />
+            <ProductForm key={p.id} initial={p} shared={shared} onSave={save} onCancel={() => setEditing(null)} />
           ) : (
             <div key={p.id} className="foods__sort">
               <div className="foods__sorthead">
@@ -189,7 +225,7 @@ function FoodLine({ row, open, onToggle, products, onTouch }: {
                     <Icon name="star" size={18} filled={!!p.favorite} />
                   </button>
                 )}
-                <strong>{ps.length > 1 ? <>{nameOf(p)}{brandOf(p) && <span className="brand">{brandOf(p)}</span>}</> : 'Pro 100 g'}</strong>
+                <strong>{ps.length > 1 ? brandOf(p) ?? `${nameOf(p)} (ohne Marke)` : 'Pro 100 g'}</strong>
                 <span className="product__actions">
                   <button className="iconbtn iconbtn--sm" aria-label={`${p.name} bearbeiten`} onClick={() => setEditing(p.id)}><Icon name="pencil" size={16} /></button>
                   <button className="iconbtn iconbtn--sm" aria-label={`${p.name} entfernen`} onClick={() => remove(p)}><Icon name="trash" size={16} /></button>
@@ -198,23 +234,22 @@ function FoodLine({ row, open, onToggle, products, onTouch }: {
               <span className="small"><strong>{fmt(p.per100g.kcal)} kcal</strong> · {macros(p.per100g)}</span>
               {p.packageAmount && <span className="small muted">Packung {fmt(p.packageAmount)} {p.packageUnit ?? 'g'}{p.packagePrice !== undefined && <> · {euro(p.packagePrice)}</>}</span>}
               {p.shelfDays && <span className="small muted">hält {p.shelfDays === 1 ? '1 Tag' : `${p.shelfDays} Tage`} ab Kauf</span>}
-              {appliesTo(p).length > 0 && (
-                <span className="small muted">
-                  gilt für: {appliesTo(p).join(', ')}
-                  {shownExcludes(p).length > 0 && <> · nicht für: {shownExcludes(p).map(cap).join(', ')}</>}
-                </span>
-              )}
             </div>
           ))}
 
           {addingSort
-            ? <NutritionQuickForm ingredient={row.ingredient} onSave={save} onCancel={() => setAddingSort(false)} />
+            ? <NutritionQuickForm ingredient={row.ingredient} shared={ps.length ? sharedOf(ps) : undefined} onSave={save} onCancel={() => setAddingSort(false)} />
             : (
               <button type="button" className="btn btn--soft btn--sm" onClick={() => setAddingSort(true)}>
                 <Icon name="plus" size={16} /> {ps.length ? 'Weitere Sorte' : 'Nährwerte hinzufügen'}
               </button>
             )}
 
+          {/* „gilt für“ im Stil von „Wie behältst du es im Blick?“ – gemeinsam für alle Sorten, sofort gespeichert */}
+          {shared && (
+            <MatchChips name={shared.name} value={shared}
+              onChange={(m) => saveShared({ ...shared, ...m, excludes: visibleExcludes(shared.name, m) }, ps.length > 1 ? 'Für alle Sorten gespeichert' : 'Gespeichert')} />
+          )}
           <StagePicker name={row.ingredient} onTouch={onTouch} />
         </div>
       )}
