@@ -3,7 +3,7 @@ import PouchDB from 'pouchdb-core';
 import memory from 'pouchdb-adapter-memory';
 import { describe, expect, it } from 'vitest';
 import { PouchRecipeRepository, type RecipeDb } from './pouchRepository';
-import { addExtra, addPantryItem, addToPlan, answerLeftover, applyInventory, clearDoneExtras, importReceipt, importRecipes, markCooked, uncookRecipe, clearCooked, createRecipe, currentLeftoverAsk, currentPantry, eatPreparedPortions, freezePantryItem, initStore, thawPantryItem, togglePlanCooked, removeFromPlan, removePantryItem, setFoodStage, toggleShoppingItem, updatePantryItem } from './store';
+import { addExtra, addPantryItem, addToPlan, answerLeftover, applyInventory, clearDoneExtras, importPantry, importReceipt, importRecipes, markCooked, uncookRecipe, clearCooked, createRecipe, currentLeftoverAsk, currentPantry, eatPreparedPortions, freezePantryItem, initStore, thawPantryItem, togglePlanCooked, removeFromPlan, removePantryItem, setFoodStage, setPantryAmount, toggleShoppingItem, updatePantryItem } from './store';
 import { keyOfName } from '../domain/mealplan';
 import { EXTRA_PREFIX, RESTOCK_PREFIX } from '../domain/restock';
 import { foodTable } from '../services';
@@ -238,5 +238,28 @@ describe('Store: „Heute gekocht“ ohne Wochenplan zurücknehmen', () => {
     expect(currentLeftoverAsk()).toBeNull();
     await settle();
     expect((await repo.list()).find((r) => r.id === curry.id)?.lastCookedAt).toBe(curry.lastCookedAt);
+  });
+});
+
+describe('Store: Menge von Hand – die richtige Meldung', () => {
+  it('letzte Packung angebrochen ist nicht „alle“ (Julias Joghurt), 0 schon; Rückgängig bringt die Packung zurück', async () => {
+    await freshStore('menge');
+    const p = currentPantry();
+    importPantry({ ...p, items: [...p.items, { id: 'j', name: 'Testjoghurt', amount: 1, unit: 'Stück', pack: { amount: 500, unit: 'g' }, addedAt: '2026-09-28T10:00:00.000Z' }] });
+    await settle();
+    // 500 g → 300 g: aus der einen Packung wird ein offener Rest mit neuer ID
+    const { undo, result } = setPantryAmount('j', 300 / 500);
+    expect(result).toBe('angebrochen');
+    const rest = currentPantry().items.filter((i) => i.name === 'Testjoghurt');
+    expect(rest).toMatchObject([{ amount: 300, unit: 'g' }]);
+    expect(rest[0].openedAt).toBeTruthy();
+    undo();
+    expect(currentPantry().items.filter((i) => i.name === 'Testjoghurt')).toMatchObject([{ id: 'j', amount: 1, pack: { amount: 500 } }]);
+    expect(setPantryAmount('j', 0).result).toBe('alle');
+    // offene Ware weniger: nur „geändert“ (sie war schon angebrochen)
+    addPantryItem('Testsahne', 200, 'ml');
+    const s = currentPantry().items.find((i) => i.name === 'Testsahne')!;
+    expect(setPantryAmount(s.id, 150).result).toBe('angebrochen');
+    expect(setPantryAmount(s.id, 100).result).toBe('geändert');
   });
 });

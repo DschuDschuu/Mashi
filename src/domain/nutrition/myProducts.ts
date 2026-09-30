@@ -74,9 +74,10 @@ export const brandOf = (p: Pick<MyProduct, 'name' | 'brand'>): string | undefine
 export const nameOf = (p: Pick<MyProduct, 'name' | 'brand'>): string => (p.brand ? p.name : splitBrand(p.name).name);
 /**
  * Was bei mehreren Sorten einer Zutat für alle gilt – nur gemeinsam einstellbar: der Name (die Sorten
- * unterscheiden sich durch die Marke) und „gilt für“ (ersetzte Einträge, weitere Namen, Ausnahmen).
+ * unterscheiden sich durch die Marke), „gilt für“ (ersetzte Einträge, weitere Namen, Ausnahmen) und
+ * wie lange es ab Kauf hält – Milch hält gleich lang, egal von welcher Marke.
  */
-export interface SharedMatch { name: string; replaces: string[]; names: string[]; excludes: string[] }
+export interface SharedMatch { name: string; replaces: string[]; names: string[]; excludes: string[]; shelfDays?: number }
 
 /**
  * Das Gemeinsame einer Sortengruppe. Weichen alte Sorten voneinander ab: Name vom Favoriten (sonst der
@@ -86,21 +87,25 @@ export interface SharedMatch { name: string; replaces: string[]; names: string[]
 export function sharedOf(ps: readonly MyProduct[]): SharedMatch {
   const first = ps.find((p) => p.favorite) ?? ps[0];
   const uniq = (xs: string[]) => [...new Set(xs)];
+  // vom Favoriten, sonst von der ersten Sorte, die eine hat – nichts Eingetragenes geht verloren
+  const shelfDays = first?.shelfDays ?? ps.find((p) => p.shelfDays)?.shelfDays;
   return {
     name: first ? nameOf(first) : '',
     replaces: uniq(ps.flatMap((p) => p.replaces)),
     names: uniq(ps.flatMap((p) => p.names ?? [])),
     excludes: (first?.excludes ?? []).filter((x) => ps.every((p) => p.excludes?.includes(x))),
+    ...(shelfDays ? { shelfDays } : {}),
   };
 }
 
 /** Das Gemeinsame auf eine Sorte schreiben – die Marke bleibt; steckte sie im Namen („Milch (Weihenstephan)“), kommt sie ins Markenfeld */
 export function withShared(p: MyProduct, s: SharedMatch, now = new Date().toISOString()): MyProduct {
   const brand = brandOf(p);
-  const { names: _n, excludes: _e, ...rest } = p;
+  const { names: _n, excludes: _e, shelfDays: _d, ...rest } = p;
   return {
     ...rest, name: s.name, ...(brand ? { brand } : {}), replaces: s.replaces,
     ...(s.names.length ? { names: s.names } : {}), ...(s.excludes.length ? { excludes: s.excludes } : {}),
+    ...(s.shelfDays ? { shelfDays: s.shelfDays } : {}),
     updatedAt: now,
   };
 }

@@ -5,6 +5,7 @@
    feine Linien-Icons, flache Karten mit zarten Rahmen.
    ───────────────────────────────────────────────────────────── */
 :root {
+  --topbar-h: 52px; /* Höhe der Kopfleiste – für alles, was darunter klebt */
   --bg: #f8f6f1;
   --surface: #ffffff;
   --surface-2: #f1eee8;
@@ -510,6 +511,7 @@ p { margin: 0; }
   .screen { max-width: 1120px; margin: 0 auto; padding: 24px var(--gutter) 48px; gap: 22px; }
   .screen--tabbed { padding-bottom: 48px; }
   .topbar { margin: -24px calc(-1 * var(--gutter)) 0; padding: 12px 20px; }
+  :root { --topbar-h: 68px; } /* 44 px Knopf + 2 × 12 px */
   /* Formulare (KI, eigenes Rezept, Test) nicht über die ganze Breite ziehen */
   .screen:has(> .topbar) { max-width: 760px; }
   .connect { max-width: 480px; padding-top: 72px; }
@@ -1029,7 +1031,9 @@ p { margin: 0; }
   .useup-banner__text > strong::after { content: ':'; }
 }
 /* rote Uhr: läuft heute oder morgen ab */
-.pantry__alarm { display: inline-grid; margin-left: 6px; vertical-align: -2px; color: #c0392b; }
+/* Dringend (heute/morgen): rote Plakette oben rechts, halb über der Zeile – wie die Glühbirne an den Sorten */
+.pantry__item { position: relative; }
+.pantry__alarm { position: absolute; top: -8px; right: -8px; z-index: 3; width: 22px; height: 22px; border-radius: 50%; background: #fbe4e1; color: #a33a2c; border: 1.5px solid #a33a2c; display: grid; place-items: center; box-shadow: 0 0 0 2px var(--surface); pointer-events: none; }
 /* ── Zweispaltig auf dem Tablet (Speisekammer, Preise) ─────────── */
 .split { display: flex; flex-direction: column; gap: 18px; }
 .split__main, .split__side { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
@@ -1139,6 +1143,21 @@ p { margin: 0; }
 .foods__sorthead { display: flex; align-items: center; gap: 6px; }
 .foods__sorthead strong { flex: 1; min-width: 0; }
 .foods__sorthead .variants__star { width: 30px; height: 30px; }
+/* „Hält ab Kauf [ 5 ] Tage“ in der Kachel – gemeinsam für alle Sorten, wie „gilt für“ darüber */
+.shelf-shared__row { display: flex; align-items: center; gap: 8px; }
+.shelf-shared__row input { width: 5.5em; min-height: 40px; padding: 0 10px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface); font: inherit; }
+.shelf-shared__row input[aria-invalid="true"] { border-color: #b4513f; }
+/* gleich unter den Tabs: das Formular zum Hinzufügen – ohne zweiten grauen Kasten im Kasten */
+.add-food { border-color: var(--primary-soft); }
+.add-food > .product-form { background: none; padding: 0; }
+/* „Werte holen“: Knöpfe so breit wie ihr Text (Soft wie „Weitere Sorte“), offen = Petrol */
+.lookup { display: flex; flex-direction: column; gap: 6px; }
+.lookup__ways { display: flex; flex-wrap: wrap; gap: 8px; }
+.lookup__ways .btn.is-on { background: var(--primary); color: var(--on-primary); }
+/* Chips auf dem grauen Formular (Sorte, Bon) weiß – sonst verschwinden sie in der Fläche */
+.product-form .chip:not(.is-on) { background: var(--surface); }
+.add-food > .product-form .chip:not(.is-on) { background: var(--surface-2); }
+.add-food__exists .row-gap { margin-top: 6px; }
 /* Marke als Chip – nur Anzeige, darum ohne Petrol-Füllung wie bei den Auswahl-Chips */
 .foods__brand { flex: 1; min-width: 0; display: flex; }
 .brand-chip {
@@ -1150,7 +1169,8 @@ p { margin: 0; }
 .brand-chip.is-empty { background: transparent; border: 1px dashed var(--ink-3); color: var(--ink-3); font-weight: 600; }
 
 /* Filter als Tabs (wie im Rezept) – gleich breit; kleben unter der festen Kopfzeile, nicht dahinter */
-.foods__tabs { margin-top: -4px; top: 52px; }
+/* klebt direkt unter der Kopfleiste – deren Höhe steht in --topbar-h (Handy 52 px, Tablet 68 px) */
+.foods__tabs { margin-top: -4px; top: var(--topbar-h); }
 .foods__tabs .tab { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 8px 4px 9px; }
 .foods__tabs .tab small { font-size: 0.72rem; font-weight: 600; color: var(--ink-3); }
 .foods__tabs .tab.is-on small { color: var(--primary-press); }
@@ -1289,6 +1309,26 @@ p { margin: 0; }
 .pantry__hit > .pantry__chev { margin-left: -4px; flex: none; }
 .pantry__item--part { padding-left: 28px; background: var(--surface-2); }
 .pantry__item--part .pantry__name { font-size: 0.92rem; color: var(--ink-2); }
+/* Vorgekocht: Name + „1 gegessen“, Menge, ✕ – darunter die Nährwerte über die ganze Breite.
+   Der Zeilen-Knopf liegt unsichtbar über allem, Pille und ✕ darüber (Knöpfe lassen sich nicht schachteln). */
+.pantry__item--dish { position: relative; flex-wrap: wrap; row-gap: 0; column-gap: 6px; }
+/* „1 Portion + 2 Portionen“ darf zweizeilig werden, damit der Name nicht dreizeilig wird */
+.pantry__item--dish > .pantry__qty { max-width: 45%; }
+.pantry__cover { position: absolute; inset: 0; z-index: 1; width: 100%; }
+.pantry__cover:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+.pantry__item--dish > .pantry__name { min-width: 0; min-height: 44px; display: flex; flex-wrap: wrap; align-items: center; column-gap: 6px; row-gap: 4px; padding: 4px 0; }
+.pantry__item--dish .pantry__eat, .pantry__item--dish > .iconbtn { position: relative; z-index: 2; }
+.pantry__item--dish > .pantry__chev { flex: none; margin-left: -4px; }
+/* rechts bündig mit Menge und Datum: 38 px = Pfeil (36 − 4) + Abstand 6 */
+.pantry__dishnut { flex: 1 1 100%; padding: 0 38px 8px 0; margin-top: -2px; font-size: 0.8rem; }
+/* „1 gegessen“ neben der Menge – eigener Knopf, nicht im Zeilen-Knopf (Knöpfe lassen sich nicht schachteln) */
+.pantry__eat { flex: none; min-height: 30px; }
+.pantry__item--group > .pantry__eat { margin-right: 8px; }
+/* Zeile, deren Bearbeiten offen ist, bleibt weiß (sonst sähe sie aus wie ein Teil der Gruppe darüber);
+   das Formular hängt ohne Linie direkt darunter */
+.pantry__item.is-editing + .pantry__item--edit { border-top: 0; }
+/* „gekocht 30.9.“ / „angebrochen 28.9.“ sind kurz – nicht umbrechen */
+.pantry__item--part .pantry__name { white-space: nowrap; }
 /* „Was ist übrig?“ nach dem Kochen */
 .leftover__stepper { display: flex; align-items: center; justify-content: center; gap: 16px; margin: 12px 0; }
 .leftover__count { color: var(--ink-2); }
@@ -1301,7 +1341,7 @@ p { margin: 0; }
 .dishnut__macros { text-align: right; }
 .plan-list__prepared { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
 /* „1 gegessen“ (Plan und Speisekammer) – kleine Pille, damit die Karte flach bleibt */
-.eat-pill { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 999px; background: var(--primary-soft); color: var(--primary-press); font-size: 0.78rem; font-weight: 600; }
+.eat-pill { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; background: var(--primary-soft); color: var(--primary-press); font-size: 0.78rem; font-weight: 600; }
 /* „❄ Hack auftauen“ an der Plan-Karte – dieselbe Pille, mit Schneeflocke */
 .thaw-pill { gap: 3px; align-self: flex-start; }
 /* darunter: wofür das Aufgetaute reicht – mit Knopf, der die Portionen gleich umstellt */
@@ -1406,3 +1446,28 @@ p { margin: 0; }
 .confirm__actions .btn { width: 100%; }
 .btn--danger { background: #b4513f; color: #fff; border-color: transparent; }
 .btn--danger:active:not(:disabled) { background: #963f30; }
+
+/* Aufgeklappter Vorrat (Julia): kurze Liste wie in den Einstellungen – gilt sofort, kein „OK“ */
+.pantry-set { flex-direction: column; align-items: stretch; gap: 0; padding: 4px 14px 12px; }
+.pantry-set > .pantry-set__row, .pantry-set > .switch-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 48px; padding: 6px 0; border-top: 1px solid var(--line); font-weight: 600; }
+.pantry-set > :first-child { border-top: 0; }
+.pantry-set__amount { display: flex; align-items: center; gap: 6px; font-weight: 400; }
+.pantry-set__amount input { width: 90px; min-height: 40px; padding: 0 10px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface); font: inherit; text-align: right; }
+.pantry-set__amount select { min-height: 40px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface); font: inherit; padding: 0 6px; }
+.pantry-set__unit { min-width: 2.6em; }
+.pantry-set__foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
+.pantry-set__remove { display: inline-flex; align-items: center; gap: 4px; color: #a33a2c; font-weight: 600; }
+.pantry-set .pantry-freeze { border-top: 1px solid var(--line); padding-top: 10px; }
+/* Einfrieren: links die Menge, rechts „Abbrechen“ und „Einfrieren“ */
+.pantry-freeze__actions { display: flex; gap: 8px; margin-left: auto; }
+.pantry-freeze .pantry-set__amount input { margin: 0; }
+/* Doppelte Einträge (Julia): beim Öffnen wird die Grenze zwischen zwei Teilen derselben Sorte petrol – als
+   Auflage über der grauen Linie (absolut, 2px über dem 1px-Rand), sie braucht keinen Platz: nichts verschiebt
+   sich. Unter dem geöffneten Teil (zum nächsten) oder über ihm (vom vorigen), nie zum Hauptprodukt. */
+.pantry__item--part.is-editing + .pantry__item--edit + .pantry__item--part::after,
+.pantry__item--part + .pantry__item--part.is-editing::after {
+  content: ""; position: absolute; left: 0; right: 0; top: -1px; height: 2px; background: var(--primary); pointer-events: none;
+}
+/* Ecken: die Karte schneidet nichts ab (die Uhr ragt über den Rand) – darum runden erste und letzte Zeile selbst */
+.pantry > li:first-child { border-top-left-radius: calc(var(--r) - 1px); border-top-right-radius: calc(var(--r) - 1px); }
+.pantry > li:last-child { border-bottom-left-radius: calc(var(--r) - 1px); border-bottom-right-radius: calc(var(--r) - 1px); }

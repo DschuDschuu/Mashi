@@ -10,7 +10,7 @@ import type { FoodTable } from '../domain/nutrition/types';
 import {
   addItem, applyImport, bonKey, deductRecipe, emptyPantry, freezeItem, rememberReceipt, returnTaken, takenBetween, thawItem, type Taken, type ImportRow, type Pantry, type PantryItem, type PantryUnit,
 } from '../domain/pantry';
-import { attachPacks, mergeSamePacks, openItem } from '../domain/packs';
+import { attachPacks, changeAmount, mergeSamePacks, openItem } from '../domain/packs';
 import { addPrepared, eatPrepared } from '../domain/prepared';
 import { currentContent, currentVersion, newId, sameContent, withNewVersion } from '../domain/recipe';
 import { recordSavings, type BonSavings } from '../domain/savings';
@@ -842,6 +842,40 @@ export function assignPantrySorts(assign: readonly { itemIds: string[]; productI
   commitPantry({ ...pantry, items: pantry.items.map((i) => (to.has(i.id) ? { ...i, productId: to.get(i.id) } : i)) });
 }
 
+/**
+ * Eine Änderung, die Einträge teilen kann (Menge, Anbrechen) – mit „Rückgängig“: neu entstandene Teile
+ * weg, der alte Eintrag zurück (wie beim Auftauen). Andere Änderungen in der Zwischenzeit bleiben.
+ */
+function changeWithUndo(id: string, change: (items: PantryItem[]) => PantryItem[]): () => void {
+  const before = pantry.items.find((i) => i.id === id);
+  const known = new Set(pantry.items.map((i) => i.id));
+  commitPantry({ ...pantry, items: change(pantry.items) });
+  const split = pantry.items.filter((i) => !known.has(i.id)).map((i) => i.id);
+  return () => {
+    if (!before) return;
+    const items = pantry.items.filter((i) => !split.includes(i.id)).map((i) => (i.id === id ? before : i));
+    commitPantry({ ...pantry, items: items.some((i) => i.id === id) ? items : [...items, before] });
+  };
+}
+
+export type AmountResult = 'alle' | 'angebrochen' | 'geändert';
+
+/**
+ * Menge von Hand: weniger heißt meistens angebrochen (siehe changeAmount), 0 = alle.
+ * „alle“ nur, wenn weder der Eintrag noch ein neuer Teil übrig ist – die letzte Packung anzubrechen
+ * macht aus „1 × 500 g“ einen offenen Rest mit NEUER ID, der alte Eintrag fällt weg (war der Fehler:
+ * Joghurt angebrochen, Meldung „ist alle“).
+ */
+export function setPantryAmount(id: string, amount: number): { undo: () => void; result: AmountResult } {
+  const wasOpen = !!pantry.items.find((i) => i.id === id)?.openedAt;
+  const known = new Set(pantry.items.map((i) => i.id));
+  const undo = changeWithUndo(id, (items) => changeAmount(items, id, amount, now(), () => newId('v')));
+  // was von diesem Vorrat übrig ist: der Eintrag selbst und neu entstandene Teile (offener Rest)
+  const left = pantry.items.filter((i) => i.id === id || !known.has(i.id));
+  const result: AmountResult = !left.length ? 'alle' : !wasOpen && left.some((i) => i.openedAt) ? 'angebrochen' : 'geändert';
+  return { undo, result };
+}
+
 export function updatePantryItem(id: string, patch: Partial<Pick<PantryItem, 'name' | 'amount' | 'unit' | 'useBy' | 'reduced' | 'productId'>>) {
   // Einheit weg von Stück/Glas (z. B. auf g) → die Packungsgröße passt nicht mehr
   const dropPack = (i: PantryItem) => 'unit' in patch && patch.unit !== 'Stück' && patch.unit !== 'Glas' && i.pack;
@@ -859,15 +893,7 @@ export function freezePantryItem(id: string, amount?: number) {
  * Gibt „Rückgängig“ zurück: wieder gefroren wie vorher, der abgeteilte Teil verschwindet.
  */
 export function thawPantryItem(id: string, amount?: number): () => void {
-  const before = pantry.items.find((i) => i.id === id);
-  const known = new Set(pantry.items.map((i) => i.id));
-  commitPantry({ ...pantry, items: thawItem(pantry.items, id, now(), specialDays('thawed', pantry.shelfDays), amount, () => newId('v')) });
-  const split = pantry.items.filter((i) => !known.has(i.id)).map((i) => i.id);
-  return () => {
-    if (!before) return;
-    const items = pantry.items.filter((i) => !split.includes(i.id)).map((i) => (i.id === id ? before : i));
-    commitPantry({ ...pantry, items: items.some((i) => i.id === id) ? items : [...items, before] });
-  };
+  return changeWithUndo(id, (items) => thawItem(items, id, now(), specialDays('thawed', pantry.shelfDays), amount, () => newId('v')));
 }
 
 /** Entfernen – gibt „Rückgängig“ zurück: legt den Vorrat an dieselbe Stelle zurück. */

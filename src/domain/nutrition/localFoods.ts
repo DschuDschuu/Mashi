@@ -223,3 +223,20 @@ export const localFoodTable: FoodTable = {
     return undefined;
   },
 };
+
+/**
+ * „Gilt für“ für ein neues Produkt aus seinem Namen vorschlagen: kennt die Tabelle den Namen genau,
+ * ersetzt das Produkt diesen Eintrag – bei Fettstufen den seiner Stufe („Milch“ → der 0,1-%-Eintrag,
+ * „Milch 3,5 %“ → Vollmilch). Sonst gilt es für den eigenen Namen („Kimchi“). Ungefähre Treffer
+ * („Pesto Rosso“ → Pesto) zählen nicht: lieber nichts vorschlagen als etwas Falsches.
+ */
+export function guessMatch(name: string): { replaces: string[]; names: string[]; excludes: string[] } {
+  const n = normalizeName(name);
+  if (!n) return { replaces: [], names: [], excludes: [] };
+  const hit = localFoodTable.matchName(name);
+  if (hit?.quality === 'exact') {
+    const id = hit.food.ref.foodId;
+    return { replaces: [levelEntryOf(name, id) ?? id], names: [], excludes: [] };
+  }
+  return { replaces: [], names: [n], excludes: [] };
+}

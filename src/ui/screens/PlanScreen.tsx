@@ -390,7 +390,7 @@ function ThawPill({ needs, recipeId, title, servings }: { needs: ThawNeed[]; rec
   );
 }
 
-/** Gekocht – und wenn etwas übrig ist: „Vorgekocht · noch 3 Portionen“ mit „1 gegessen“ */
+/** Gekocht – und wenn etwas übrig ist: „Vorgekocht · noch 3 Portionen“ mit „1 essen“ (Aktiv wie in der Speisekammer) */
 function PreparedLine({ recipeId }: { recipeId: string }) {
   const pantry = usePantry();
   const { fresh, frozen, items } = preparedOf(pantry, recipeId);
@@ -405,7 +405,7 @@ function PreparedLine({ recipeId }: { recipeId: string }) {
         <button type="button" className="eat-pill" onClick={() => {
           const undo = eatPreparedPortions(next.id, 1);
           toast(fresh > 1 ? `Guten Appetit! Noch ${portions(fresh - 1)}` : 'Aufgegessen', { label: 'Rückgängig', run: undo });
-        }}>1 gegessen</button>
+        }} aria-label="1 Portion essen"><Icon name="cutlery" size={13} /> 1 essen</button>
       )}
     </span>
   );

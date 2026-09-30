@@ -17,8 +17,7 @@ import { toast } from '../toast';
 import { useSwipe } from '../useSwipe';
 import { useSlide } from '../useSlide';
 import { Icon } from './Icon';
-import { ProductForm } from './MyProductsPanel';
-import { NutritionQuickForm } from './NutritionQuickForm';
+import { ProductForm, shelfEstimate } from './MyProductsPanel';
 import { MatchChips, visibleExcludes } from './MatchChips';
 
 const fmt = (n: number) => n.toLocaleString('de-DE', { maximumFractionDigits: 1 });
@@ -34,7 +33,10 @@ const macros = (n: Nutrients) => `KH ${fmt(n.carbs)} · Eiweiß ${fmt(n.protein)
  * „Meine Lebensmittel“ – eine Zeile je Zutat, aufklappbar: eigene Nährwerte und Produkte (auch
  * mehrere Sorten mit Favorit), die Stufe (Nachkaufen, Immer im Haus, Gewürze) als Symbol an der Zeile.
  */
-export function FoodList() {
+export function FoodList({ adding, onAdding }: {
+  /** „Lebensmittel hinzufügen“ offen – der ＋-Knopf sitzt oben in der Kopfleiste (ProductsScreen) */
+  adding: boolean; onAdding: (open: boolean) => void;
+}) {
   const products = useProducts();
   const pantry = usePantry();
   const basics = basicsOf(pantry);
@@ -50,7 +52,11 @@ export function FoodList() {
   const rows = useMemo(() => buildFoodList(products, basics, zero, foodTable, known, keep), [products, basics, zero, known, keep]);
   const [filter, setFilter] = useState<FoodFilter>('produkte');
   const [open, setOpen] = useState<string | null>(null);
-  const [adding, setAdding] = useState(false);
+  /** fertig hinzugefügt – als weitere Sorte gleich die Zeile aufklappen, damit man sie sieht */
+  const addDone = (openKey?: string) => {
+    onAdding(false);
+    if (openKey) { setFilter('produkte'); setOpen(openKey); }
+  };
   const matches = matchesFilter;
   const shown = rows.filter((r) => matches(r, filter));
   // Wischen wie im Rezept: nach links = nächster Tab, nach rechts = vorheriger (am Rand bleibt es stehen)
@@ -78,6 +84,9 @@ export function FoodList() {
           </button>
         ))}
       </div>
+      {/* oben, gleich unter den Tabs – geöffnet über das ＋ in der Kopfleiste */}
+      {/* eigener Schlüssel – „produkte“ trägt schon der Tab-Inhalt daneben (doppelt: React räumt nicht auf) */}
+      {adding && <AddFood key={`neu-${filter}`} tab={filter} rows={rows} onDone={addDone} />}
       <div key={filter} className={`stack ${slide}`} role="tabpanel" {...swipe}>
       <p className="small muted">
         {/* dieselben Linien-Symbole wie an den Karten, keine bunten Emojis */}
@@ -90,8 +99,8 @@ export function FoodList() {
 
       {shown.length === 0 && (
         <p className="small muted">
-          {filter === 'produkte' ? 'Noch keine Produkte – unten hinzufügen, oder bei einem Rezept unter „Nährwerte“ eigene Werte eintragen.'
-            : filter === 'haus' ? 'Noch nichts „immer im Haus“ – unten hinzufügen.' : 'Noch keine Gewürze – unten hinzufügen.'}
+          {filter === 'produkte' ? 'Noch keine Produkte – oben mit ＋ hinzufügen, oder bei einem Rezept unter „Nährwerte“ eigene Werte eintragen.'
+            : filter === 'haus' ? 'Noch nichts „immer im Haus“ – oben mit ＋ hinzufügen.' : 'Noch keine Gewürze – oben mit ＋ hinzufügen.'}
         </p>
       )}
       <ul className="foods">{shown.map(line)}</ul>
@@ -99,12 +108,6 @@ export function FoodList() {
       </div>
 
       {filter === 'produkte' && <DismissedRenames keys={pantry.renameDismissed ?? []} />}
-
-      {adding ? <AddFood tab={filter} onDone={() => setAdding(false)} /> : (
-        <button type="button" className="btn btn--soft" onClick={() => setAdding(true)}>
-          <Icon name="plus" size={18} /> {filter === 'haus' ? 'Zu „Immer im Haus“ hinzufügen' : filter === 'ohne' ? 'Gewürz hinzufügen' : 'Produkt hinzufügen'}
-        </button>
-      )}
     </div>
   );
 }
@@ -143,10 +146,10 @@ function FoodLine({ row, open, onToggle, products, onTouch }: {
     toast('Gespeichert – alle Rezepte rechnen neu');
   };
   /** Name oder „gilt für“ für alle Sorten – sofort gespeichert, mit „Rückgängig“ (wie die Stufen darunter) */
-  const saveShared = (s: SharedMatch, what: string) => {
+  const saveShared = (s: SharedMatch, what: string, recalc = true) => {
     const old = new Map(ps.map((p) => [p.id, p]));
     store([], s);
-    toast(`${what} – alle Rezepte rechnen neu`, { label: 'Rückgängig', run: () => saveProducts(currentProducts().map((x) => old.get(x.id) ?? x)) });
+    toast(recalc ? `${what} – alle Rezepte rechnen neu` : what, { label: 'Rückgängig', run: () => saveProducts(currentProducts().map((x) => old.get(x.id) ?? x)) });
   };
   const rename = () => {
     const n = renaming?.trim();
@@ -237,12 +240,12 @@ function FoodLine({ row, open, onToggle, products, onTouch }: {
               </div>
               <span className="small"><strong>{fmt(p.per100g.kcal)} kcal</strong> · {macros(p.per100g)}</span>
               {p.packageAmount && <span className="small muted">Packung {fmt(p.packageAmount)} {p.packageUnit ?? 'g'}{p.packagePrice !== undefined && <> · {euro(p.packagePrice)}</>}</span>}
-              {p.shelfDays && <span className="small muted">hält {p.shelfDays === 1 ? '1 Tag' : `${p.shelfDays} Tage`} ab Kauf</span>}
             </div>
           ))}
 
+          {/* dasselbe Formular wie „Lebensmittel hinzufügen“ – als Sorte nur Marke, Werte, Packung */}
           {addingSort
-            ? <NutritionQuickForm ingredient={row.ingredient} shared={ps.length ? sharedOf(ps) : undefined} onSave={save} onCancel={() => setAddingSort(false)} />
+            ? <ProductForm shared={ps.length ? sharedOf(ps) : undefined} initial={ps.length ? undefined : { name: row.name }} onSave={save} onCancel={() => setAddingSort(false)} />
             : (
               <button type="button" className="btn btn--soft btn--sm" onClick={() => setAddingSort(true)}>
                 <Icon name="plus" size={16} /> {ps.length ? 'Weitere Sorte' : 'Nährwerte hinzufügen'}
@@ -254,6 +257,12 @@ function FoodLine({ row, open, onToggle, products, onTouch }: {
             <MatchChips name={shared.name} value={shared}
               onChange={(m) => saveShared({ ...shared, ...m, excludes: visibleExcludes(shared.name, m) }, ps.length > 1 ? 'Für alle Sorten gespeichert' : 'Gespeichert')} />
           )}
+          {/* Haltbarkeit ebenso gemeinsam: Milch hält gleich lang, egal von welcher Marke */}
+          {shared && (
+            // key: nach „Rückgängig“ (oder vom anderen Gerät) zeigt das Feld wieder den gespeicherten Wert
+            <SharedShelf key={shared.shelfDays ?? 'leer'} shared={shared} onSave={(d) => saveShared({ ...shared, shelfDays: d },
+              d ? `Hält ${d === 1 ? '1 Tag' : `${d} Tage`} ab Kauf${ps.length > 1 ? ` – alle ${ps.length} Sorten` : ''}` : 'Haltbarkeit schätzt wieder Mashi', false)} />
+          )}
           <StagePicker name={row.ingredient} onTouch={onTouch} />
         </div>
       )}
@@ -261,56 +270,117 @@ function FoodLine({ row, open, onToggle, products, onTouch }: {
   );
 }
 
-/**
- * Neues Lebensmittel – passend zum offenen Tab:
- * Produkte → Name, dann Nährwerte (Foto, Open Food Facts, abtippen) oder Produkt mit Packung.
- * Immer im Haus / Ohne Nährwerte → nur der Name.
- */
-function AddFood({ tab, onDone }: { tab: FoodFilter; onDone: () => void }) {
-  const products = useProducts();
-  const [name, setName] = useState('');
-  const [step, setStep] = useState<'name' | 'werte' | 'produkt'>('name');
-  /** gleich mit „Immer im Haus“ markieren – ohne dafür in den Tab wechseln zu müssen */
-  const [basic, setBasic] = useState(false);
-  /** der Tab entscheidet: immer im Haus oder Gewürz */
-  const ground = tab === 'ohne' ? 'ohne' : 'haus';
-  const n = name.trim();
-  const save = (p: MyProduct) => {
-    saveProducts([...products, p]);
-    if (basic) setFoodStage(n, 'haus');
-    toast(`„${p.name}“ gespeichert${basic ? ' – immer im Haus' : ''} – alle Rezepte rechnen neu`);
-    onDone();
+/** „Hält ab Kauf“ in der Kachel – gemeinsam für alle Sorten; leer = Mashi schätzt. Gespeichert beim Verlassen des Felds. */
+function SharedShelf({ shared, onSave }: { shared: SharedMatch; onSave: (days: number | undefined) => void }) {
+  const shelfCustom = usePantry().shelfDays;
+  const [text, setText] = useState(shared.shelfDays ? String(shared.shelfDays) : '');
+  const [error, setError] = useState(false);
+  const commit = () => {
+    const t = text.trim();
+    const d = t ? Number(t) : undefined;
+    if (d !== undefined && (!Number.isInteger(d) || d < 1 || d > 365)) return setError(true);
+    setError(false);
+    if (d !== shared.shelfDays) onSave(d);
   };
-  const addName = () => {
-    if (!n) return;
-    // über die Stufe – so steht es nie zugleich unter „Nachkaufen“ und hier
-    setFoodStage(n, ground);
-    toast(ground === 'haus' ? `„${n}“ ist jetzt immer im Haus` : `„${n}“ steht jetzt unter „Gewürze“`);
-    onDone();
-  };
-  if (step === 'werte') return <NutritionQuickForm ingredient={n} onSave={save} onCancel={onDone} />;
-  if (step === 'produkt') return <ProductForm initial={{ name: n, names: [normalizeName(n)], replaces: [] }} onSave={save} onCancel={onDone} />;
   return (
-    <div className="panel stack">
-      <label className="field"><span>Welche Zutat?</span>
-        <input value={name} onChange={(e) => setName(e.target.value)} list="ingredient-names" autoFocus
-          placeholder={tab === 'ohne' ? 'z. B. Sumach' : tab === 'haus' ? 'z. B. Haferflocken' : 'z. B. Grünes Pesto'}
-          onKeyDown={(e) => e.key === 'Enter' && tab !== 'produkte' && addName()} />
+    <div className="stage shelf-shared">
+      <label className="shelf-shared__row">
+        <span className="small muted">Hält ab Kauf</span>
+        <input inputMode="numeric" value={text} onChange={(e) => setText(e.target.value)} onBlur={commit}
+          onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+          aria-label="Hält ab Kauf, Tage" aria-invalid={error} />
+        <span className="small muted">Tage</span>
       </label>
-      {tab === 'produkte' && (
-        <button type="button" className={`chip chip--sm${basic ? ' is-on' : ''}`} aria-pressed={basic} onClick={() => setBasic(!basic)}>
-          <Icon name="home" size={14} /> Immer im Haus
-        </button>
-      )}
-      {tab === 'produkte' ? (
-        <div className="row-gap">
-          <button type="button" className="btn btn--primary btn--sm" disabled={!n} onClick={() => setStep('werte')}>Nährwerte hinzufügen</button>
-          <button type="button" className="btn btn--soft btn--sm" disabled={!n} onClick={() => setStep('produkt')}>Produkt mit Packung</button>
-        </div>
-      ) : (
-        <button type="button" className="btn btn--primary btn--sm" disabled={!n} onClick={addName}>Hinzufügen</button>
-      )}
-      <button type="button" className="btn btn--ghost btn--sm" onClick={onDone}>Abbrechen</button>
+      {/* leer: was Mashi stattdessen annimmt („leer = geschätzt 7 Tage“) */}
+      {!text.trim() && <span className="small muted">{shelfEstimate(shared.replaces, shelfCustom)}</span>}
+      {error && <p className="small error" role="alert">Bitte ganze Tage von 1 bis 365 – oder leer lassen.</p>}
+    </div>
+  );
+}
+
+/**
+ * Neues Lebensmittel – ein Formular: Name, darunter „Immer im Haus“ / „Gewürz“, dann Barcode oder
+ * Open Food Facts und alle Felder. Gibt es das Lebensmittel schon, fragt Mashi gleich unter dem Namen,
+ * ob es eine weitere Sorte ist. Gewürz: nur der Name (zählt nicht mit, keine Nährwerte).
+ * @param onDone mit Schlüssel der Zeile, die danach aufgeklappt werden soll
+ */
+function AddFood({ tab, rows, onDone }: { tab: FoodFilter; rows: FoodRow[]; onDone: (openKey?: string) => void }) {
+  const products = useProducts();
+  /** der Tab gibt die Stufe vor – umschaltbar, ohne den Tab zu wechseln */
+  const [stage, setStage] = useState<'haus' | 'ohne' | null>(tab === 'produkte' ? null : tab);
+  /** „Ja, weitere Sorte“ gewählt: zu dieser Zeile */
+  const [sortOf, setSortOf] = useState<FoodRow | null>(null);
+  /** „Nein, neu anlegen“ für genau diesen Namen – dann nicht noch einmal fragen */
+  const [notSort, setNotSort] = useState('');
+  const existing = (n: string) => {
+    const k = normalizeName(n);
+    if (!k || k === notSort) return undefined;
+    return rows.find((r) => r.products.length > 0 && [r.name, r.ingredient, sharedOf(r.products).name].some((x) => normalizeName(x) === k));
+  };
+
+  const saveNew = (p: MyProduct) => {
+    saveProducts([...products, p]);
+    if (stage === 'haus') setFoodStage(p.name, 'haus');
+    toast(`„${p.name}“ gespeichert${stage === 'haus' ? ' – immer im Haus' : ''} – alle Rezepte rechnen neu`);
+    onDone();
+  };
+  const saveSort = (row: FoodRow, p: MyProduct) => {
+    // wie „Weitere Sorte“ in der Kachel: alle Sorten bekommen dasselbe Gemeinsame
+    const s = sharedOf(row.products);
+    const group = new Set(row.products.map((x) => x.id));
+    saveProducts([...products.map((x) => (group.has(x.id) ? withShared(x, s) : x)), withShared(p, s)]);
+    toast(`Weitere Sorte von „${s.name}“ gespeichert – alle Rezepte rechnen neu`);
+    onDone(row.key);
+  };
+  // über die Stufe – so steht es nie zugleich unter „Nachkaufen“ und hier
+  const addStage = (n: string, s: 'haus' | 'ohne') => {
+    setFoodStage(n, s);
+    toast(s === 'haus' ? `„${n}“ ist jetzt immer im Haus` : `„${n}“ steht jetzt unter „Gewürze“`);
+    onDone();
+  };
+
+  if (sortOf) {
+    const s = sharedOf(sortOf.products);
+    return (
+      <div className="panel stack add-food">
+        <strong>Weitere Sorte von „{s.name}“</strong>
+        <ProductForm shared={s} onSave={(p) => saveSort(sortOf, p)} onCancel={() => onDone()} />
+      </div>
+    );
+  }
+  return (
+    <div className="panel stack add-food">
+      <strong>Lebensmittel hinzufügen</strong>
+      <ProductForm key="neu" onSave={saveNew} onCancel={() => onDone()}
+        nameOnly={stage === 'ohne'} onNameOnly={(n) => addStage(n, 'ohne')}
+        onNoValues={stage === 'haus' ? (n) => addStage(n, 'haus') : undefined}
+        afterName={(n) => {
+          const row = stage !== 'ohne' ? existing(n) : undefined;
+          return (
+            <>
+              {row && (
+                <div className="scan-note add-food__exists" role="status">
+                  <p><strong>„{sharedOf(row.products).name}“</strong> gibt es schon{row.products.length > 1 ? ` (${row.products.length} Sorten)` : ''}. Ist das eine weitere Sorte, z. B. eine andere Marke?</p>
+                  <div className="row-gap">
+                    <button type="button" className="btn btn--primary btn--sm" onClick={() => setSortOf(row)}>Ja, weitere Sorte</button>
+                    <button type="button" className="btn btn--ghost btn--sm" onClick={() => setNotSort(normalizeName(n))}>Nein, neu anlegen</button>
+                  </div>
+                </div>
+              )}
+              {/* genau eine Stufe oder keine – wie „Wie behältst du es im Blick?“ in der Kachel */}
+              <div className="chips">
+                <button type="button" className={`chip chip--sm${stage === 'haus' ? ' is-on' : ''}`} aria-pressed={stage === 'haus'} onClick={() => setStage(stage === 'haus' ? null : 'haus')}>
+                  <Icon name="home" size={14} /> Immer im Haus
+                </button>
+                <button type="button" className={`chip chip--sm${stage === 'ohne' ? ' is-on' : ''}`} aria-pressed={stage === 'ohne'} onClick={() => setStage(stage === 'ohne' ? null : 'ohne')}>
+                  <Icon name="leaf" size={14} /> Gewürz
+                </button>
+              </div>
+              {stage === 'ohne' && <p className="small muted">Gewürze & Co. zählen in Rezepten nicht mit – darum ohne Nährwerte.</p>}
+              {stage === 'haus' && <p className="small muted">Nährwerte sind hier freiwillig – leer lassen merkt es nur als „immer im Haus“.</p>}
+            </>
+          );
+        }} />
     </div>
   );
 }

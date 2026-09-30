@@ -35,7 +35,8 @@ export function useUseUp(): {
       keys.size ? recipesFromPantry(rest, recipes, table, recipes.length, keys).filter((m) => m.useUp.length).map((m) => [m.recipe.id, m.useUp]) : [],
     );
     const best = Math.max(0, ...[...usingUp.values()].map((u) => u.length));
-    const idea = best < keys.size ? [...new Set(expiringSoon(rest, table, now).map((e) => e.item.name))].slice(0, 5) : [];
+    // wie useUpKeys ohne Vorgekochtes – „Kein Rezept braucht Joghurt, Linsen-Curry zusammen auf“ ergäbe keinen Sinn
+    const idea = best < keys.size ? [...new Set(expiringSoon(rest, table, now).filter((e) => !e.item.recipeId).map((e) => e.item.name))].slice(0, 5) : [];
     // Für Geplantes zählt die ganze Speisekammer – genau diese Gerichte verbrauchen ja die Reste
     const open = new Set(plan.items.filter((i) => !plan.cooked.includes(i.recipeId)).map((i) => i.recipeId));
     const allKeys = open.size ? useUpKeys(pantry, table, now) : new Map<string, number>();

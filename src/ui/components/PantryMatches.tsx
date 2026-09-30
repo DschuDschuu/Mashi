@@ -44,7 +44,7 @@ export function RecipeIdeaPanel({ idea }: { idea: string[] }) {
   if (!idea.length) return null;
   return (
     <div className="panel useup-idea-panel">
-      <p className="small">Kein Rezept braucht <strong>{idea.join(', ')}</strong> zusammen auf.</p>
+      <p className="small">Kein Rezept braucht <strong>{idea.join(', ')}</strong>{idea.length > 1 ? ' zusammen' : ''} auf.</p>
       <button className="btn btn--soft btn--sm" onClick={() => openRecipeIdea(idea)}><Icon name="sparkles" size={16} /> Passendes Rezept generieren</button>
     </div>
   );

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createMockRecipes } from '../data/mockRecipes';
 import { localFoodTable as T } from './nutrition/localFoods';
 import { addItem, freezeItem, thawFit, thawItem, thawNeeds, deductRecipe, emptyPantry, returnTaken, takenBetween, type Pantry, type PantryItem } from './pantry';
-import { attachPacks, mergeSamePacks, openItem, suggestPantryUnit, packSuggestions } from './packs';
+import { attachPacks, changeAmount, mergeSamePacks, openItem, suggestPantryUnit, packSuggestions } from './packs';
 import { amountLabel } from './pantryLabel';
 import { merge3Pantry } from './syncMerge';
 import { restockNeeds } from './restock';
@@ -317,5 +317,41 @@ describe('Portionen passend zum Aufgetauten', () => {
     const needs = thawNeeds({ recipeId: 'r', taken: takenBetween(block, d.pantry), stock: new Map() }, T);
     // ein Block lässt sich nicht teilen → nur „mehr Portionen“, kein „weniger auftauen“
     expect(thawFit(needs, 4)).toEqual({ up: 6 });
+  });
+});
+
+describe('Menge von Hand ändern: weniger = angebrochen, außer ganze Packungen oder Stücke', () => {
+  const NOW = '2026-09-30T10:00:00.000Z';
+  const base = (x: Partial<PantryItem>): PantryItem => ({ id: 'a', name: 'Testzutat', addedAt: '2026-09-20T10:00:00.000Z', ...x });
+  const one = (items: PantryItem[]) => items.map(({ id: _i, addedAt: _a, boughtAt: _b, ...rest }) => rest);
+
+  it('g/ml ohne Packung: weniger heißt offen, mehr nicht', () => {
+    expect(changeAmount([base({ amount: 1000, unit: 'g' })], 'a', 700, NOW)[0]).toMatchObject({ amount: 700, openedAt: NOW });
+    expect(changeAmount([base({ amount: 500, unit: 'g' })], 'a', 600, NOW)[0].openedAt).toBeUndefined();
+    // schon offen: das Datum bleibt, an dem es geöffnet wurde
+    expect(changeAmount([base({ amount: 500, unit: 'ml', openedAt: '2026-09-28T10:00:00.000Z' })], 'a', 300, NOW)[0].openedAt).toBe('2026-09-28T10:00:00.000Z');
+  });
+
+  it('ganze Packungen oder Stücke weniger: der Rest bleibt zu', () => {
+    const cans = base({ amount: 3, unit: 'Stück', pack: { amount: 400, unit: 'ml' } });
+    expect(changeAmount([cans], 'a', 2, NOW)).toEqual([{ ...cans, amount: 2, check: false }]);
+    expect(changeAmount([base({ amount: 6, unit: 'Stück' })], 'a', 4, NOW)[0].openedAt).toBeUndefined();
+  });
+
+  it('Bruchteil einer Packung: zwei bleiben zu, eine wird zum offenen Rest', () => {
+    const cans = base({ amount: 3, unit: 'Stück', pack: { amount: 400, unit: 'ml' } });
+    const out = changeAmount([cans], 'a', 2.5, NOW, () => 'rest');
+    expect(one(out)).toMatchObject([
+      { amount: 2, unit: 'Stück', pack: { amount: 400, unit: 'ml' } },
+      { amount: 200, unit: 'ml', openedAt: NOW },
+    ]);
+    expect(out[0].openedAt).toBeUndefined();
+    expect(amountLabel(out[0]) + ' + ' + amountLabel(out[1])).toBe('2 × 400 ml + 200 ml offen');
+  });
+
+  it('0 = alle; Vorgekochtes und Eingefrorenes werden nie „angebrochen“', () => {
+    expect(changeAmount([base({ amount: 500, unit: 'g' })], 'a', 0, NOW)).toEqual([]);
+    expect(changeAmount([base({ amount: 3, unit: 'Stück', recipeId: 'r' })], 'a', 2, NOW)[0].openedAt).toBeUndefined();
+    expect(changeAmount([base({ amount: 800, unit: 'g', frozenAt: NOW })], 'a', 400, NOW)[0].openedAt).toBeUndefined();
   });
 });

@@ -132,4 +132,17 @@ describe('Sorten: Name und „gilt für“ gemeinsam', () => {
     expect(out.excludes).toBeUndefined();
     expect(productLabel(out)).toBe('Pesto · Barilla');
   });
+
+  it('Haltbarkeit gilt für alle Sorten: vom Favoriten, sonst von der ersten mit Angabe', () => {
+    const a = sort('a', { brand: 'A' });
+    const b = sort('b', { brand: 'B', shelfDays: 5 });
+    const c = sort('c', { brand: 'C', shelfDays: 9, favorite: true });
+    expect(sharedOf([a, b]).shelfDays).toBe(5);
+    expect(sharedOf([a, b, c]).shelfDays).toBe(9);
+    expect(sharedOf([a]).shelfDays).toBeUndefined();
+    // aufs Gemeinsame geschrieben: alle gleich – und ohne Angabe fällt sie bei allen weg
+    const s = sharedOf([a, b]);
+    expect([a, b, c].map((p) => withShared(p, s, 'T').shelfDays)).toEqual([5, 5, 5]);
+    expect(withShared(b, { ...s, shelfDays: undefined }, 'T').shelfDays).toBeUndefined();
+  });
 });

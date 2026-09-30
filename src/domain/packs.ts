@@ -56,6 +56,32 @@ export function openItem(items: PantryItem[], id: string, now: string, newId = d
   return left > 0 ? items.map((x) => (x.id === id ? { ...x, amount: left, openedAt: now } : x)) : items.filter((x) => x.id !== id);
 }
 
+/**
+ * Menge von Hand geändert (Julia): weniger heißt meistens „etwas herausgenommen“ – dann ist es angebrochen
+ * und hält kürzer. Außer es fehlen ganze Packungen oder Stücke (3 Dosen → 2, 6 Eier → 4): die übrigen
+ * sind weiter zu. Mehr oder gleich viel: nur die Menge. Vertippt? „Angebrochen“ lässt sich wieder ausschalten.
+ * Packungen mit Bruchteil („2,5“ von 3 × 400 ml): 2 bleiben zu, eine wird zum offenen Rest (wie openItem).
+ */
+export function changeAmount(items: PantryItem[], id: string, amount: number, now: string, newId = defaultId): PantryItem[] {
+  const item = items.find((x) => x.id === id);
+  if (!item) return items;
+  // 0 = alle – der Eintrag geht (die Oberfläche bietet „Rückgängig“)
+  if (amount <= 0) return items.filter((x) => x.id !== id);
+  const set = (a: number, extra: Partial<PantryItem> = {}) => items.map((x) => (x.id === id ? { ...x, amount: a, check: false, ...extra } : x));
+  const old = item.amount;
+  // mehr, gleich, ohne alte Menge, eingefroren, Vorgekochtes, schon offen: einfach übernehmen
+  if (old === undefined || amount >= old || item.frozenAt || item.recipeId || item.openedAt) return set(amount);
+  if (item.pack && isCount(item.unit)) {
+    const whole = Math.floor(amount + 1e-9);
+    if (Math.abs(amount - whole) < 1e-9) return set(amount);
+    // die angefangene Packung: „whole + 1“ Packungen, eine davon wird geöffnet, herausgenommen ist der Rest
+    const take = Math.round((1 - (amount - whole)) * item.pack.amount);
+    return openItem(set(whole + 1), id, now, newId, take);
+  }
+  if (isCount(item.unit)) return set(amount);
+  return set(amount, { openedAt: now });
+}
+
 /** „Ganze Packung verwenden?“ – für dieses Mal, das Rezept bleibt. */
 export interface PackSuggestion {
   ingredientId: string;
