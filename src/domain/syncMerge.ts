@@ -102,6 +102,7 @@ export function merge3Pantry(base: Pantry, ours: Pantry, theirs: Pantry): Pantry
     restock: base.restock || ours.restock || theirs.restock
       ? merge3Keyed(base.restock ?? [], ours.restock ?? [], theirs.restock ?? [], (r) => normalizeName(r.name)) : undefined,
     macroGoal: merge3Value(base.macroGoal, ours.macroGoal, theirs.macroGoal),
+    tastes: merge3Value(base.tastes, ours.tastes, theirs.tastes),
     renameDismissed: merge3Set(base.renameDismissed, ours.renameDismissed, theirs.renameDismissed),
     cookLog: Object.keys(cookLog).length ? cookLog : undefined,
     updatedAt: later(ours.updatedAt, theirs.updatedAt)!,

@@ -939,6 +939,13 @@ export function setMacroGoal(goal: MacroGoal) {
   commitPantry({ ...pantry, macroGoal: goal });
 }
 
+/** Vorlieben für die KI – leer = keine */
+export function setTastes(text: string) {
+  const { tastes: _old, ...rest } = pantry;
+  const t = text.trim();
+  commitPantry(t ? { ...rest, tastes: t } : rest);
+}
+
 export function setNoNutrition(names: string[]) {
   commitPantry({ ...pantry, noNutrition: names });
   recipes = [...recipes];

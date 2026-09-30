@@ -1,3 +1,6 @@
+# MANUELLE VARIANTE ohne Coolify (mit SSH, .env und setup.sh).
+# Für Coolify: ../coolify/docker-compose.yml und ../coolify/ANLEITUNG.md.
+#
 # Mashi – eigene CouchDB (getrennt von der Obsidian-LiveSync-CouchDB)
 #
 # Läuft hinter dem bestehenden Traefik (Coolify-Proxy) und bekommt dort automatisch
@@ -41,6 +44,8 @@ services:
       - traefik.http.routers.mashi-db.tls.certresolver=letsencrypt                  # ← Resolver
       - traefik.http.routers.mashi-db.service=mashi-db
       - traefik.http.services.mashi-db.loadbalancer.server.port=5984
+      # Rate-Limit (optional, siehe unten): diese Zeile beim HTTPS-Router einkommentieren
+      # - traefik.http.routers.mashi-db.middlewares=mashi-db-ratelimit
       # HTTP → HTTPS umleiten
       - traefik.http.routers.mashi-db-http.rule=Host(`${MASHI_DB_HOST}`)
       - traefik.http.routers.mashi-db-http.entrypoints=http                         # ← Entrypoint
@@ -48,12 +53,43 @@ services:
       - traefik.http.middlewares.mashi-db-to-https.redirectscheme.scheme=https
       - traefik.http.middlewares.mashi-db-to-https.redirectscheme.permanent=true
       # Optional: Schutz gegen Passwort-Raten. Großzügig gewählt, weil der Abgleich
-      # kurzzeitig viele Anfragen schickt. Zum Aktivieren die zwei Zeilen einkommentieren
-      # und die Middleware-Liste oben um ",mashi-db-ratelimit" ergänzen.
+      # kurzzeitig viele Anfragen schickt. Zum Aktivieren die zwei Zeilen hier UND die
+      # Middleware-Zeile beim HTTPS-Router (mashi-db, oben) einkommentieren – nicht beim
+      # HTTP-Router mashi-db-http, der leitet nur auf HTTPS um.
       # - traefik.http.middlewares.mashi-db-ratelimit.ratelimit.average=50
       # - traefik.http.middlewares.mashi-db-ratelimit.ratelimit.burst=200
-    # Bewusst kein healthcheck: Mit Pflicht-Anmeldung antwortet /_up mit 401, und Traefik
-    # nimmt "unhealthy" markierte Container aus dem Routing.
+    # Kein Healthcheck in der manuellen Variante. Möglich wäre er seit mashi.ini
+    # require_valid_user_except_for_up (/_up ohne Anmeldung) – siehe ../coolify/docker-compose.yml.
+    # Achtung: Traefik nimmt "unhealthy" markierte Container aus dem Routing.
+
+  # KI-Rezepte (optional): Vermittler zu OpenRouter unter https://${MASHI_DB_HOST}/ki/…
+  # Der Schlüssel steht nur in der .env; wer die KI nutzt, muss sich an dieser CouchDB anmelden können.
+  # Ohne OPENROUTER_API_KEY läuft der Container, antwortet aber „nicht eingerichtet“.
+  mashi-ki:
+    build: ../ki
+    container_name: mashi-ki
+    restart: unless-stopped
+    environment:
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OPENROUTER_MODEL: ${OPENROUTER_MODEL:-}
+      COUCHDB_URL: http://mashi-couchdb:5984
+      KI_ALLOWED_ORIGINS: ${KI_ALLOWED_ORIGINS:-https://dschudschuu.github.io}
+      KI_PER_HOUR: ${KI_PER_HOUR:-20}
+      KI_PER_DAY: ${KI_PER_DAY:-60}
+    depends_on:
+      - couchdb
+    networks:
+      - coolify
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=coolify                                              # ← Netzwerkname
+      # gleiche Adresse wie die Datenbank, aber nur der Pfad /ki (längere Regel gewinnt in Traefik)
+      - traefik.http.routers.mashi-ki.rule=Host(`${MASHI_DB_HOST}`) && PathPrefix(`/ki`)
+      - traefik.http.routers.mashi-ki.entrypoints=https                             # ← Entrypoint
+      - traefik.http.routers.mashi-ki.tls=true
+      - traefik.http.routers.mashi-ki.tls.certresolver=letsencrypt                  # ← Resolver
+      - traefik.http.routers.mashi-ki.service=mashi-ki
+      - traefik.http.services.mashi-ki.loadbalancer.server.port=8080
 
 volumes:
   mashi-couchdb-data:

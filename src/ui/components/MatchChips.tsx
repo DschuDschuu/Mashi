@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { fatGroupOf, fatLevel } from '../../domain/nutrition/fatLevels';
 import { appliesAliases, FOOD_CHOICES, normalizeName } from '../../domain/nutrition/localFoods';
 import { Icon } from './Icon';
 
@@ -13,7 +12,7 @@ const cap = (s: string) => s.replace(/(^|[\s-])(\p{L})/gu, (_m, sep: string, ch:
 export const visibleExcludes = (name: string, m: Match) => m.excludes.filter((x) => m.replaces.some((id) => appliesAliases(name, id).includes(x)));
 
 /**
- * „Gilt für diese Zutaten in deinen Rezepten“ – im Stil von „Wie behältst du es im Blick?“: eine Zeile Chips.
+ * „Gilt für diese Zutaten in deinen Rezepten“ – im Stil der Stufen-Chips (Nachkaufen · Im Haus · Gewürze): eine Zeile Chips.
  * Tabellen-Einträge zeigen alle Schreibweisen (antippen = ausnehmen / wieder einschließen), eigene Namen lassen
  * sich entfernen; „+ Zutat“ sucht in der Tabelle oder übernimmt einen freien Namen („Kimchi-Paste“).
  * Gemeinsam genutzt vom Produkt-Formular und der Kachel unter „Meine Lebensmittel“.
@@ -22,12 +21,6 @@ export function MatchChips({ name, value, onChange }: { name: string; value: Mat
   const { replaces, names, excludes } = value;
   const [adding, setAdding] = useState(false);
   const [search, setSearch] = useState('');
-
-  // Milch/Joghurt/Quark: welche anderen Stufen rechnen mit der Tabelle? („Milch 1,5 % und Milch 3,5 %“)
-  const group = replaces.map(fatGroupOf).find(Boolean);
-  const mine = fatLevel(name)?.label ?? group?.plain;
-  const otherLevels = group ? group.ids.map((id) => FOOD_CHOICES.find((c) => c.id === id)).filter(Boolean)
-    .map((c) => fatLevel(c!.name)?.label ?? group.plain).filter((l) => l !== mine).join(' und ') : '';
 
   /** Eine Schreibweise aus- oder wieder einschließen; sind alle aus, fällt der ganze Eintrag weg */
   const toggleAlias = (id: string, alias: string) => {
@@ -68,7 +61,6 @@ export function MatchChips({ name, value, onChange }: { name: string; value: Mat
         )}
       </div>
       {replaces.some((id) => appliesAliases(name, id).some((a) => excludes.includes(a))) && <p className="small muted">Durchgestrichen = ausgenommen: dort rechnet Mashi mit dem Richtwert. Antippen holt es zurück.</p>}
-      {otherLevels && <p className="small muted">{otherLevels} rechnen mit der Tabelle – für eigene Werte leg dafür ein eigenes Produkt an (z. B. „{otherLevels.split(' und ')[0]}“).</p>}
       {adding && (
         <>
           <label className="search">

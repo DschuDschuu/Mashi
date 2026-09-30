@@ -1,14 +1,26 @@
 import { useState } from 'react';
-import { createRecipe } from '../../data/store';
+import { currentMode } from '../../data/connection';
+import { createRecipe, usePantry } from '../../data/store';
+import { basicsOf } from '../../domain/mealplan';
+import { isPrepared } from '../../domain/pantry';
 import { navigate } from '../../router';
 import { recipeAi } from '../../services';
-import { ChipSelect, DevicePicker, Stepper } from '../components/Controls';
+import { KiError } from '../../services/ai/serverAi';
+import { useUseUp } from '../useUseUp';
+import { ChipSelect, DevicePicker, Stepper, Switch } from '../components/Controls';
 import { LineArt } from '../components/RecipeImage';
 import { Icon } from '../components/Icon';
 import { TopBar } from '../components/TopBar';
 
 const WISHES = ['Proteinreich', 'Vegetarisch', 'Low Calorie', 'Koreanisch', 'Meal Prep', 'Comfort Food'];
 const TIMES = [15, 20, 30, 45];
+
+/** erste Zeile der Vorlieben als Hinweis am Schalter – „…“, wenn mehr dasteht */
+function tastesPreview(t: string): string {
+  const first = t.split('\n')[0];
+  const short = first.slice(0, 80);
+  return short + (short.length < t.trim().length ? ' …' : '');
+}
 
 export function AiCreateScreen({ initialPrompt = '' }: { initialPrompt?: string }) {
   const [prompt, setPrompt] = useState(initialPrompt);
@@ -19,6 +31,12 @@ export function AiCreateScreen({ initialPrompt = '' }: { initialPrompt?: string 
   const [time, setTime] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Echte KI: deinen Vorrat als „gern nutzen“ mitschicken (Beispiel-KI im Demo-Modus kann damit nichts anfangen)
+  const real = currentMode() === 'sync';
+  const [withPantry, setWithPantry] = useState(true);
+  const [withTastes, setWithTastes] = useState(true);
+  const pantry = usePantry();
+  const { rest } = useUseUp();
 
   const canGenerate = prompt.trim().length > 0 || wishes.length > 0 || devices.length > 0;
 
@@ -28,12 +46,20 @@ export function AiCreateScreen({ initialPrompt = '' }: { initialPrompt?: string 
     try {
       const draft = await recipeAi.generateRecipe({
         prompt, servings: servings ?? undefined, devices, wishes, maxMinutes: time[0] ? Number(time[0]) : undefined,
+        // frei (nach dem Plan), ohne Vorgekochtes – das ist ein Gericht, keine Zutat
+        ...(real ? {
+          kitchen: {
+            ...(withPantry ? { pantry: rest.items.filter((i) => !isPrepared(i)).map((i) => i.name), basics: [...basicsOf(pantry)] } : {}),
+            ...(withTastes && pantry.tastes ? { tastes: pantry.tastes } : {}),
+          },
+        } : {}),
       });
       // Landet als KI-Idee – nicht im Kochbuch. Der Nutzer entscheidet auf der Detailseite.
       const id = createRecipe(draft, { source: 'ki', status: 'ki_entwurf' });
       navigate(`/rezept/${id}`, { replace: true });
-    } catch {
-      setError('Das hat gerade nicht geklappt. Versuch es bitte noch einmal.');
+    } catch (e) {
+      // vom Server: verständliche Meldung (Limit, ausgelastet, nicht verbunden …)
+      setError(e instanceof KiError ? e.message : 'Das hat gerade nicht geklappt. Versuch es bitte noch einmal.');
       setBusy(false);
     }
   };
@@ -75,6 +101,16 @@ export function AiCreateScreen({ initialPrompt = '' }: { initialPrompt?: string 
         <ChipSelect single options={TIMES.map((t) => ({ value: String(t), label: `≤ ${t} Min.` }))} selected={time} onChange={setTime} />
         <h3 className="small muted">Wünsche</h3>
         <ChipSelect options={WISHES.map((w) => ({ value: w, label: w }))} selected={wishes} onChange={setWishes} />
+        {real && (
+          <Switch checked={withPantry} onChange={setWithPantry} label="Meinen Vorrat einbeziehen"
+            hint="Die KI nutzt gern, was du schon hast – dann musst du weniger einkaufen." />
+        )}
+        {real && (pantry.tastes ? (
+          <Switch checked={withTastes} onChange={setWithTastes} label="Meine Vorlieben einbeziehen"
+            hint={tastesPreview(pantry.tastes)} />
+        ) : (
+          <button type="button" className="link small" onClick={() => navigate('/mehr')}>Vorlieben für die KI festlegen (Einstellungen)</button>
+        ))}
       </div>
 
       {error && <p className="error">{error}</p>}

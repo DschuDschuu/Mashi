@@ -143,3 +143,16 @@ describe('Rezept: „zuletzt gekocht“ zwischen Geräten', () => {
     expect(m).toMatchObject({ lastCookedAt: EVENING, previousCookedAt: OLD, notes: 'mehr Chili' });
   });
 });
+
+describe('Vorlieben für die KI im Abgleich', () => {
+  it('am Handy geändert, am Tablet nicht angefasst → bleibt; beide geändert → eine Fassung, kein Verlust auf null', () => {
+    const base = pantry([], { tastes: 'gern scharf' });
+    const handy = pantry([], { tastes: 'gern scharf, kein Koriander' });
+    expect(merge3Pantry(base, handy, base).tastes).toBe('gern scharf, kein Koriander');
+    expect(merge3Pantry(base, base, handy).tastes).toBe('gern scharf, kein Koriander');
+    // neu eingetragen, andere Seite kennt das Feld noch gar nicht
+    expect(merge3Pantry(pantry([]), handy, pantry([])).tastes).toBe('gern scharf, kein Koriander');
+    const tablet = pantry([], { tastes: 'mild' });
+    expect(['gern scharf, kein Koriander', 'mild']).toContain(merge3Pantry(base, handy, tablet).tastes);
+  });
+});

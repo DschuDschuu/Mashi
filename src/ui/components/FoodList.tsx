@@ -17,7 +17,7 @@ import { toast } from '../toast';
 import { useSwipe } from '../useSwipe';
 import { useSlide } from '../useSlide';
 import { Icon } from './Icon';
-import { ProductForm, shelfEstimate } from './MyProductsPanel';
+import { ProductForm } from './MyProductsPanel';
 import { MatchChips, visibleExcludes } from './MatchChips';
 
 const fmt = (n: number) => n.toLocaleString('de-DE', { maximumFractionDigits: 1 });
@@ -235,7 +235,7 @@ function FoodLine({ row, open, onToggle, products, onTouch }: {
                   : <strong>Pro 100 g</strong>}
                 <span className="product__actions">
                   <button className="iconbtn iconbtn--sm" aria-label={`${p.name} bearbeiten`} onClick={() => setEditing(p.id)}><Icon name="pencil" size={16} /></button>
-                  <button className="iconbtn iconbtn--sm" aria-label={`${p.name} entfernen`} onClick={() => remove(p)}><Icon name="trash" size={16} /></button>
+                  <button className="iconbtn iconbtn--sm iconbtn--danger" aria-label={`${p.name} entfernen`} onClick={() => remove(p)}><Icon name="trash" size={16} /></button>
                 </span>
               </div>
               <span className="small"><strong>{fmt(p.per100g.kcal)} kcal</strong> · {macros(p.per100g)}</span>
@@ -252,7 +252,7 @@ function FoodLine({ row, open, onToggle, products, onTouch }: {
               </button>
             )}
 
-          {/* „gilt für“ im Stil von „Wie behältst du es im Blick?“ – gemeinsam für alle Sorten, sofort gespeichert */}
+          {/* „gilt für“ im Stil der Stufen-Chips – gemeinsam für alle Sorten, sofort gespeichert */}
           {shared && (
             <MatchChips name={shared.name} value={shared}
               onChange={(m) => saveShared({ ...shared, ...m, excludes: visibleExcludes(shared.name, m) }, ps.length > 1 ? 'Für alle Sorten gespeichert' : 'Gespeichert')} />
@@ -272,7 +272,6 @@ function FoodLine({ row, open, onToggle, products, onTouch }: {
 
 /** „Hält ab Kauf“ in der Kachel – gemeinsam für alle Sorten; leer = Mashi schätzt. Gespeichert beim Verlassen des Felds. */
 function SharedShelf({ shared, onSave }: { shared: SharedMatch; onSave: (days: number | undefined) => void }) {
-  const shelfCustom = usePantry().shelfDays;
   const [text, setText] = useState(shared.shelfDays ? String(shared.shelfDays) : '');
   const [error, setError] = useState(false);
   const commit = () => {
@@ -291,8 +290,6 @@ function SharedShelf({ shared, onSave }: { shared: SharedMatch; onSave: (days: n
           aria-label="Hält ab Kauf, Tage" aria-invalid={error} />
         <span className="small muted">Tage</span>
       </label>
-      {/* leer: was Mashi stattdessen annimmt („leer = geschätzt 7 Tage“) */}
-      {!text.trim() && <span className="small muted">{shelfEstimate(shared.replaces, shelfCustom)}</span>}
       {error && <p className="small error" role="alert">Bitte ganze Tage von 1 bis 365 – oder leer lassen.</p>}
     </div>
   );
@@ -367,7 +364,7 @@ function AddFood({ tab, rows, onDone }: { tab: FoodFilter; rows: FoodRow[]; onDo
                   </div>
                 </div>
               )}
-              {/* genau eine Stufe oder keine – wie „Wie behältst du es im Blick?“ in der Kachel */}
+              {/* genau eine Stufe oder keine – wie die Stufen-Chips in der Kachel */}
               <div className="chips">
                 <button type="button" className={`chip chip--sm${stage === 'haus' ? ' is-on' : ''}`} aria-pressed={stage === 'haus'} onClick={() => setStage(stage === 'haus' ? null : 'haus')}>
                   <Icon name="home" size={14} /> Immer im Haus

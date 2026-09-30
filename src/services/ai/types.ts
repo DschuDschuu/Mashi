@@ -1,3 +1,4 @@
+import type { KitchenContext } from '../../domain/aiRecipe';
 import type { RecipeContent } from '../../domain/types';
 
 export interface RecipeRequest {
@@ -7,6 +8,8 @@ export interface RecipeRequest {
   maxMinutes?: number;
   devices?: string[];
   wishes?: string[];
+  /** was bald weg muss, was im Vorrat ist – nur die echte KI nutzt es */
+  kitchen?: KitchenContext;
 }
 
 /**

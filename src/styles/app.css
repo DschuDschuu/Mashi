@@ -6,6 +6,7 @@
    ───────────────────────────────────────────────────────────── */
 :root {
   --topbar-h: 52px; /* Höhe der Kopfleiste – für alles, was darunter klebt */
+  --danger-ink: #a33a2c; /* Löschen/Entfernen: Papierkorb und Text – auf Weiß 6,4 : 1, auf Grau 5,3 : 1 */
   --bg: #f8f6f1;
   --surface: #ffffff;
   --surface-2: #f1eee8;
@@ -1140,6 +1141,22 @@ p { margin: 0; }
 .foods__kcal em { font-style: normal; font-size: 0.72rem; color: var(--ink-3); margin-left: 3px; }
 .foods__body { display: flex; flex-direction: column; gap: 10px; padding: 0 12px 12px; }
 .foods__sort { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; border-radius: var(--r-sm); background: var(--surface-2); }
+/* Aufgeklappte Kachel (Julia: „so wie Salbei vorher, bei allen Farben“): zwei Farben – die Sorten-Karten
+   neutral grau (in jedem Schema gleich), alles zum Antippen in der hellen Schemafarbe. Bei Gelb ist
+   --primary-soft neben Grau fast weiß, darum dort ein kräftigeres Hellgelb – nur hier in der Kachel. */
+.foods__body { --card-neutral: #f1efeb; --tile-soft: var(--primary-soft); }
+:root[data-theme="sonne"] .foods__body { --tile-soft: #fbeeb8; }
+.foods__body .foods__sort, .foods__body .product-form { background: var(--card-neutral); }
+.foods__body .btn--soft:not(.is-on), .foods__body .match .chip:not(.is-on) { background: var(--tile-soft); }
+/* „gilt für“ zeigt vor allem, wofür es gilt – grau wie die Karten; das × sagt „antippen nimmt es aus“.
+   „+ Zutat“ (ein .chip) bleibt farbig: das ist eine Aktion */
+.foods__body .afilter:not(.is-off) { background: var(--card-neutral); }
+/* Stufen (Nachkaufen · Im Haus · Gewürze): ungewählt grau, sonst wirkt die Kachel zu bunt (Julia);
+   gewählt bleibt kräftig in der Schemafarbe (.chip.is-on) */
+.foods__body .stage__options .chip:not(.is-on), .foods__body .restock { background: var(--card-neutral); }
+/* was auf den grauen Karten liegt, wird weiß (Marke, Knöpfe im Bearbeiten-Formular) */
+.foods__body .foods__sort .brand-chip:not(.is-empty),
+.foods__body .product-form .btn--soft:not(.is-on), .foods__body .product-form .chip:not(.is-on) { background: var(--surface); }
 .foods__sorthead { display: flex; align-items: center; gap: 6px; }
 .foods__sorthead strong { flex: 1; min-width: 0; }
 .foods__sorthead .variants__star { width: 30px; height: 30px; }
@@ -1293,6 +1310,13 @@ p { margin: 0; }
 .restock { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: var(--r-sm); background: var(--primary-soft); }
 .restock p { margin: 0; }
 .restock__row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+/* rechts das ✕ zum Löschen/Schließen (statt „Abbrechen“) */
+.restock__line { display: flex; align-items: center; gap: 8px; }
+.restock__line > .restock__row { flex: 1; min-width: 0; }
+.restock__ok { flex: none; margin-left: auto; background: var(--primary); color: var(--on-primary); }
+.restock__ok:disabled { opacity: 0.4; }
+.restock__remove { flex: none; }
+.restock__line > .restock__row + .restock__remove { margin-left: auto; }
 .restock .pantry-amount { flex: 0 0 auto; }
 /* kompakt: Zahl und Einheit direkt hinter „Nachkaufen, wenn weniger als“ */
 .restock .pantry-amount input { width: 3.2rem; padding-left: 8px; padding-right: 8px; text-align: center; }
@@ -1456,8 +1480,14 @@ p { margin: 0; }
 .pantry-set__amount select { min-height: 40px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface); font: inherit; padding: 0 6px; }
 .pantry-set__unit { min-width: 2.6em; }
 .pantry-set__foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
-.pantry-set__remove { display: inline-flex; align-items: center; gap: 4px; color: #a33a2c; font-weight: 600; }
+.pantry-set__remove { display: inline-flex; align-items: center; gap: 4px; color: var(--danger-ink); font-weight: 600; }
+/* Papierkorb-Knöpfe (Julia): nur das Symbol rot, keine Fläche – überall, wo gelöscht wird */
+.iconbtn--danger { color: var(--danger-ink); }
 .pantry-set .pantry-freeze { border-top: 1px solid var(--line); padding-top: 10px; }
+/* Fußleiste mit den Knöpfen weiß (Julia): klarer Abschluss der aufgeklappten Karte, und „Einfrieren“/„Entfernen“
+   wirken auf Weiß kräftiger. Negativer Rand = über die ganze Breite, bis an die Kanten der Karte. */
+.pantry-set > .pantry-set__foot, .pantry-set > .pantry-freeze { background: var(--surface); margin: 10px -14px -12px; padding: 10px 14px 12px; }
+.pantry > li:last-child > .pantry-set__foot, .pantry > li:last-child > .pantry-freeze { border-radius: 0 0 calc(var(--r) - 1px) calc(var(--r) - 1px); }
 /* Einfrieren: links die Menge, rechts „Abbrechen“ und „Einfrieren“ */
 .pantry-freeze__actions { display: flex; gap: 8px; margin-left: auto; }
 .pantry-freeze .pantry-set__amount input { margin: 0; }

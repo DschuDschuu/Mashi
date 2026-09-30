@@ -92,6 +92,8 @@ export interface Pantry {
   renameDismissed?: string[];
   /** Makro-Ziel (Anteil an den Kalorien) – schlägt beim Planen die passendere Sorte vor; fehlt es, gilt 40/30/30 */
   macroGoal?: MacroGoal;
+  /** Vorlieben für die KI („kein Koriander, gern scharf“) – Freitext, geht bei KI-Rezepten mit; gilt auf allen Geräten */
+  tastes?: string;
   /** schon importierte Bons (Einkaufstag|Endbetrag) – warnt vor doppeltem Import */
   receipts?: string[];
   /** deine Richtwerte „hält X Tage“ je Art (Gemüse, Milchprodukte …) – fehlt einer, gilt Mashis Standard */

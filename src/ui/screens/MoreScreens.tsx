@@ -11,6 +11,7 @@ import type { Recipe } from '../../domain/types';
 import { Empty, Section, Switch } from '../components/Controls';
 import { TopBar } from '../components/TopBar';
 import { MacroGoalSettings } from '../components/MacroGoalSettings';
+import { TasteSettings } from '../components/TasteSettings';
 import { Icon } from '../components/Icon';
 import { RecipeImage } from '../components/RecipeImage';
 import { THEMES, updateSettings, useSettings } from '../settings';
@@ -45,7 +46,7 @@ export function MoreScreen() {
                 <RecipeImage image={r.image} size="sm" />
                 <span className="list__title">{currentContent(r).title}</span>
                 <button className="btn btn--soft btn--sm" onClick={() => { restoreRecipe(r.id); toast('Wiederhergestellt'); }}>Zurückholen</button>
-                <button className="iconbtn iconbtn--sm" aria-label="Endgültig löschen"
+                <button className="iconbtn iconbtn--sm iconbtn--danger" aria-label="Endgültig löschen"
                   onClick={async () => {
                     if (await ask({ title: `„${currentContent(r).title}“ endgültig löschen?`, text: 'Es verschwindet auf allen deinen Geräten und kann nicht wiederhergestellt werden.', confirm: 'Endgültig löschen', danger: true })) deleteRecipe(r.id);
                   }}>
@@ -82,6 +83,7 @@ export function MoreScreen() {
           </div>
         </div>
         <MacroGoalSettings />
+        <TasteSettings />
         <button type="button" className="panel link-row" onClick={() => setTour(true)}>
           <Icon name="info" size={20} />
           <span className="link-row__text">

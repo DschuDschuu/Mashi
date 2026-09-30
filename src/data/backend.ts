@@ -4,6 +4,7 @@ import { LocalRecipeRepository } from './localRepository';
 import { PouchRecipeRepository, type RecipeDb } from './pouchRepository';
 import { initStore } from './store';
 import { remoteDb, startSync, testConnection, type SyncConfig, type SyncState } from './sync';
+import { currentMode, MODE_KEY, savedSyncConfig, SYNC_KEY, type Mode } from './connection';
 
 /**
  * Welcher Speicher läuft? Zwei getrennte Welten:
@@ -11,10 +12,9 @@ import { remoteDb, startSync, testConnection, type SyncConfig, type SyncState } 
  * - 'sync': deine echten Rezepte – lokal in IndexedDB und abgeglichen mit deiner CouchDB.
  * Ohne Auswahl zeigt die App den Verbindungs-Bildschirm.
  */
-export type Mode = 'demo' | 'sync';
+export type { Mode } from './connection';
+export { currentMode, savedSyncConfig } from './connection';
 
-const MODE_KEY = 'mashi-mode';
-const SYNC_KEY = 'mashi-sync';
 const LOCAL_DB = 'mashi-recipes';
 
 /**
@@ -24,23 +24,6 @@ const LOCAL_DB = 'mashi-recipes';
 export const DEFAULT_DB_URL: string = import.meta.env.VITE_COUCHDB_URL ?? 'https://mashi.carapaxo.de/mashi';
 
 const remoteFactory = (url: string, opts: PouchDB.Configuration.RemoteDatabaseConfiguration) => new PouchDB(url, opts) as RecipeDb;
-
-function read<T>(key: string): T | null {
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? (JSON.parse(raw) as T) : null;
-  } catch {
-    return null;
-  }
-}
-
-export function currentMode(): Mode | null {
-  return read<Mode>(MODE_KEY);
-}
-
-export function savedSyncConfig(): SyncConfig | null {
-  return read<SyncConfig>(SYNC_KEY);
-}
 
 // ── Sync-Status für die Oberfläche ────────────────────────────────
 
