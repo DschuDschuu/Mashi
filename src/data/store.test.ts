@@ -3,7 +3,7 @@ import PouchDB from 'pouchdb-core';
 import memory from 'pouchdb-adapter-memory';
 import { describe, expect, it } from 'vitest';
 import { PouchRecipeRepository, type RecipeDb } from './pouchRepository';
-import { addExtra, addPantryItem, addToPlan, answerLeftover, applyInventory, clearDoneExtras, importPantry, importReceipt, importRecipes, markCooked, uncookRecipe, clearCooked, createRecipe, currentLeftoverAsk, currentPantry, eatPreparedPortions, freezePantryItem, initStore, thawPantryItem, togglePlanCooked, removeFromPlan, removePantryItem, setFoodStage, setPantryAmount, toggleShoppingItem, updatePantryItem } from './store';
+import { addExtra, addPantryItem, addToPlan, answerLeftover, applyInventory, clearDoneExtras, deleteRecipe, importPantry, importReceipt, importRecipes, regenerateImage, markCooked, uncookRecipe, clearCooked, createRecipe, currentLeftoverAsk, currentPantry, eatPreparedPortions, freezePantryItem, initStore, thawPantryItem, togglePlanCooked, removeFromPlan, removePantryItem, setFoodStage, setPantryAmount, toggleShoppingItem, updatePantryItem } from './store';
 import { keyOfName } from '../domain/mealplan';
 import { EXTRA_PREFIX, RESTOCK_PREFIX } from '../domain/restock';
 import { foodTable } from '../services';
@@ -261,5 +261,17 @@ describe('Store: Menge von Hand – die richtige Meldung', () => {
     const s = currentPantry().items.find((i) => i.name === 'Testsahne')!;
     expect(setPantryAmount(s.id, 150).result).toBe('angebrochen');
     expect(setPantryAmount(s.id, 100).result).toBe('geändert');
+  });
+});
+
+describe('Store: Bild entsteht, Rezept wird inzwischen gelöscht', () => {
+  it('kein Fehler „nicht gefunden“, das Rezept bleibt weg', async () => {
+    await freshStore('bild');
+    const id = createRecipe(createMockRecipes()[0].versions[0].content, { source: 'selbst', status: 'kochbuch' });
+    const pending = regenerateImage(id);
+    deleteRecipe(id); // noch bevor das Bild fertig ist
+    await expect(pending).resolves.toBeUndefined();
+    await settle();
+    expect(currentPantry()).toBeTruthy();
   });
 });

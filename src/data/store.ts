@@ -480,7 +480,10 @@ export function adoptToCookbook(id: string) {
 
 export async function regenerateImage(id: string) {
   const image = await imageProvider.generate(currentContent(get(id)));
-  commit({ ...get(id), image, updatedAt: now() });
+  // Während das Bild entsteht, kann das Rezept gelöscht werden (oder ein anderes Kochbuch geladen) –
+  // dann gibt es nichts mehr zu bebildern. Vorher warf get() hier „nicht gefunden“ ins Leere (im CI rot).
+  const r = recipes.find((x) => x.id === id);
+  if (r) commit({ ...r, image, updatedAt: now() });
 }
 
 /** Eigenes Foto (oder wieder ein Platzhalter). */
