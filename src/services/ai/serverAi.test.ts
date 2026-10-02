@@ -36,3 +36,28 @@ describe('KI über den Mashi-Server', () => {
     await expect(none.generateRecipe({ prompt: 'x' })).rejects.toThrow(/verbinden/);
   });
 });
+
+describe('Älterer Server mit Grenze 8000', () => {
+  it('lehnt er den langen Auftrag ab (400), fragt Mashi einmal mit gekürzten Vorlieben – und bekommt das Rezept', async () => {
+    const sent: number[] = [];
+    const fetchFn = (async (_url: string, init: RequestInit) => {
+      const len = (JSON.parse(init.body as string).prompt as string).length;
+      sent.push(len);
+      return len > 8000 ? res(400, { error: 'auftrag' }) : res(200, { text: JSON.stringify(recipe) });
+    }) as typeof fetch;
+    const ai = serverRecipeAi(() => cfg, fetchFn);
+    const tastes = Array.from({ length: 300 }, (_, i) => `Vorliebe ${i}: etwas Erfundenes`).join('\n');
+    const draft = await ai.generateRecipe({ prompt: 'Abendessen', kitchen: { tastes } });
+    expect(draft.title).toBe('Test-Pfanne');
+    expect(sent).toHaveLength(2);
+    expect(sent[0]).toBeGreaterThan(8000);
+    expect(sent[1]).toBeLessThanOrEqual(8000);
+  });
+
+  it('ein kurzer Auftrag, der trotzdem 400 bekommt, wird nicht wiederholt', async () => {
+    let calls = 0;
+    const ai = serverRecipeAi(() => cfg, (async () => { calls++; return res(400, { error: 'auftrag' }); }) as typeof fetch);
+    await expect(ai.generateRecipe({ prompt: 'kurz' })).rejects.toBeInstanceOf(KiError);
+    expect(calls).toBe(1);
+  });
+});

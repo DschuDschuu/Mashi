@@ -97,9 +97,10 @@ services:
             'Antworte immer nur mit einem einzigen JSON-Objekt im verlangten Aufbau, ohne Text davor oder danach. ' +
             'Bei Anfragen, die nichts mit Kochen zu tun haben, antworte mit {"error": "nur Rezepte"}.';
 
-          /** höchstens so viel Auftrag (Zeichen) – die App schickt deutlich weniger */
-          export const MAX_PROMPT = 8000;
-          const MAX_BODY = 16 * 1024;
+          /** höchstens so viel Auftrag (Zeichen) – lange Vorlieben (bis 10 000) passen mit dem Rest hinein */
+          export const MAX_PROMPT = 16000;
+          /** Bytes – Umlaute brauchen in UTF-8 und JSON mehr Platz als ein Zeichen */
+          const MAX_BODY = 64 * 1024;
 
           /** Anfragen je Person: gleitende Fenster für Stunde und Tag, nur im Speicher (ein Neustart setzt zurück) */
           export class RateLimiter {

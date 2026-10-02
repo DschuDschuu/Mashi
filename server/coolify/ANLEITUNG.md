@@ -22,6 +22,16 @@ Bis der KI-Dienst läuft, stürzt die App nicht ab: Sie zeigt beim Erstellen
 mit 404) bzw. „Auf dem Server fehlt noch der KI-Schlüssel“ (Dienst läuft, Schlüssel fehlt).
 Rezepte, Abgleich und alles andere laufen in beiden Fällen normal weiter.
 
+## Später aktualisieren
+
+Ändert sich der KI-Dienst (neue Fassung von `docker-compose.yml` im Repo), genauso wie oben:
+**bestehende Ressource → Edit Compose File → Inhalt ersetzen → Save → Redeploy.** Umgebungsvariablen,
+Domains und Daten bleiben dabei erhalten.
+
+- **2026-10-02:** Aufträge dürfen jetzt bis 16 000 Zeichen lang sein (vorher 8000), damit lange
+  Vorlieben ganz bei der KI ankommen. Bis zum Update kürzt die App die Vorlieben selbst, wenn der
+  Server ablehnt – es funktioniert also auch vorher, nur mit gekürzten Vorlieben.
+
 ## Dateien
 
 | Datei | Zweck |

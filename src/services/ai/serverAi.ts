@@ -1,4 +1,4 @@
-import { buildRecipePrompt, parseRecipeReply, RecipeReplyError } from '../../domain/aiRecipe';
+import { buildRecipePrompt, OLD_SERVER_PROMPT, parseRecipeReply, RecipeReplyError } from '../../domain/aiRecipe';
 import type { SyncConfig } from '../../data/sync';
 import type { RecipeAiProvider, RecipeDraft, RecipeRequest } from './types';
 
@@ -20,15 +20,22 @@ export function serverRecipeAi(config: () => SyncConfig | null, fetchFn: typeof 
     async generateRecipe(req: RecipeRequest): Promise<RecipeDraft> {
       const cfg = config();
       if (!cfg) throw new KiError('Für echte KI-Rezepte bitte Mashi mit dem Server verbinden.');
-      let res: Response;
-      try {
-        res = await fetchFn(`${new URL(cfg.url).origin}/ki/rezept`, {
-          method: 'POST',
-          headers: { authorization: basic(cfg.username, cfg.password), 'content-type': 'application/json' },
-          body: JSON.stringify({ prompt: buildRecipePrompt(req) }),
-        });
-      } catch {
-        throw new KiError('Der Server ist gerade nicht erreichbar – bist du offline?');
+      const send = async (prompt: string) => {
+        try {
+          return await fetchFn(`${new URL(cfg.url).origin}/ki/rezept`, {
+            method: 'POST',
+            headers: { authorization: basic(cfg.username, cfg.password), 'content-type': 'application/json' },
+            body: JSON.stringify({ prompt }),
+          });
+        } catch {
+          throw new KiError('Der Server ist gerade nicht erreichbar – bist du offline?');
+        }
+      };
+      const full = buildRecipePrompt(req);
+      let res = await send(full);
+      // älterer Server (Grenze 8000): zu langer Auftrag → einmal mit gekürzten Vorlieben, statt zu scheitern
+      if ((res.status === 400 || res.status === 413) && full.length > OLD_SERVER_PROMPT) {
+        res = await send(buildRecipePrompt(req, { maxLength: OLD_SERVER_PROMPT }));
       }
       const body = (await res.json().catch(() => null)) as { text?: string; message?: string } | null;
       // 404: den Vermittler gibt es auf dem Server noch nicht (dann antwortet die CouchDB selbst)

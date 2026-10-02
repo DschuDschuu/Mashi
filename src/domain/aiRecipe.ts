@@ -27,7 +27,17 @@ export interface RecipeAsk {
   devices?: string[];
   wishes?: string[];
   kitchen?: KitchenContext;
+  /** Titel der letzten KI-Ideen – die KI soll sich nicht wiederholen (Julia: „bei allem Gochujang“) */
+  recent?: string[];
 }
+
+/** so viel Vorlieben gehen höchstens mit (der Server nimmt 16 000 Zeichen Auftrag) */
+export const MAX_TASTES = 10000;
+/** Grenze des Servers vor dem Update (8000) – lehnt er ab, kürzt Mashi die Vorlieben darauf und fragt nochmal */
+export const OLD_SERVER_PROMPT = 8000;
+
+/** Vorlieben verdichten: Zeilenenden glätten, mehrere Leerzeilen zu einer – der Inhalt bleibt ganz */
+const compact = (t: string) => t.replace(/\r/g, '').split('\n').map((l) => l.trimEnd()).join('\n').replace(/\n{3,}/g, '\n\n').trim();
 
 const UNITS: Unit[] = ['g', 'kg', 'ml', 'l', 'EL', 'TL', 'Prise', 'Stück', 'Zehe', 'Dose', 'Glas', 'Bund', 'Handvoll', 'cm', 'Messlöffel'];
 /** was Modelle gern schreiben → Mashis Einheit */
@@ -46,10 +56,13 @@ const list = (xs: string[] | undefined) => [...new Set((xs ?? []).map((x) => x.t
  * Der Auftrag an die KI – deutsch, mit genauem Antwortformat. Die Geräte- und Kategorie-IDs
  * stehen dabei, damit die Antwort direkt zu Mashis Katalog passt.
  */
-export function buildRecipePrompt(ask: RecipeAsk): string {
+export function buildRecipePrompt(ask: RecipeAsk, opts: { maxLength?: number } = {}): string {
   const k = ask.kitchen ?? {};
   const lines: string[] = ['Erstelle ein Kochrezept auf Deutsch.'];
+  const nothing = !ask.prompt.trim() && !ask.maxMinutes && !ask.devices?.length && !ask.wishes?.length;
   if (ask.prompt.trim()) lines.push(`Wunsch: ${ask.prompt.trim()}`);
+  // „Überrasch mich“ (Julia): ganz ohne Angaben – dann ausdrücklich freie Wahl
+  else if (nothing) lines.push('Überrasche mich mit einer Idee – Gericht, Küche und Hauptzutat sind frei.');
   if (ask.servings) lines.push(`Portionen: ${ask.servings}`);
   if (ask.maxMinutes) lines.push(`Höchstens ${ask.maxMinutes} Minuten insgesamt (Vorbereitung + Kochen).`);
   if (ask.devices?.length) lines.push(`Vorhandene Geräte, die genutzt werden sollen: ${list(ask.devices)}`);
@@ -57,11 +70,13 @@ export function buildRecipePrompt(ask: RecipeAsk): string {
   if (k.useUp?.length) lines.push(`Muss bald aufgebraucht werden – bitte möglichst alles davon verwenden: ${list(k.useUp)}`);
   if (k.pantry?.length) lines.push(`Außerdem im Vorrat (gern nutzen, damit wenig eingekauft werden muss): ${list(k.pantry)}`);
   if (k.basics?.length) lines.push(`Immer im Haus: ${list(k.basics)}`);
-  // Orientierung, keine Vorgabe: kein Lieblingsgericht nachkochen, sondern etwas im selben Geschmack
-  if (k.tastes?.trim()) lines.push('', 'Vorlieben (daran orientieren, aber kein genanntes Gericht nachkochen):', k.tastes.trim().slice(0, 1500), '');
-  lines.push(
+  const recent = [...new Set((ask.recent ?? []).map((t) => t.trim()).filter(Boolean))].slice(0, 8);
+  if (recent.length) lines.push(`Zuletzt vorgeschlagen – bitte etwas deutlich anderes (andere Hauptzutat, andere Sauce, andere Richtung): ${recent.join('; ')}`);
+
+  const tail = [
     '',
-    'Antworte NUR mit einem JSON-Objekt, ohne Text davor oder danach, genau in diesem Aufbau:',
+    // Vorlieben beschreiben oft ein eigenes Antwortformat (Name, kcal, Austausche …) – das der App geht vor
+    'Antworte NUR mit einem JSON-Objekt, ohne Text davor oder danach – auch wenn oben ein anderes Format beschrieben ist –, genau in diesem Aufbau:',
     '{"title": "…", "description": "ein bis zwei Sätze", "servings": 2, "prepMinutes": 10, "cookMinutes": 20, "difficulty": 1,',
     ' "categories": ["hauptgericht"], "tags": ["Schnell"], "devices": ["herd"],',
     ' "imagePrompt": "kurze Beschreibung des fertigen Gerichts auf Englisch",',
@@ -71,8 +86,27 @@ export function buildRecipePrompt(ask: RecipeAsk): string {
     `difficulty: 1 = einfach, 2 = mittel, 3 = aufwendig. categories aus: ${CATEGORIES.map((c) => c.id).join(', ')}.`,
     `devices aus: ${DEVICES.map((d) => d.id).join(', ')}. timerMinutes nur bei Schritten mit Wartezeit.`,
     'Keine Nährwertangaben – die rechnet die App selbst.',
-  );
-  return lines.join('\n');
+  ];
+
+  // Vorlieben ganz (früher nach 1500 Zeichen abgeschnitten – dann fehlten „kein Fisch“, „kein Koriander“ …).
+  // Als Richtung, nicht als Pflicht: sonst nimmt die KI jedes Mal die auffälligste Lieblingszutat.
+  let tastes = compact(k.tastes ?? '').slice(0, MAX_TASTES);
+  const block = (t: string) => (t ? [
+    '',
+    'Meine Vorlieben (als Richtung – kein genanntes Gericht nachkochen):',
+    t,
+    'Wichtig: Wechsle ab – nicht jedes Rezept braucht dieselbe Lieblingszutat, Sauce oder Küche; nimm jedes Mal eine andere Richtung daraus. Was dort ausgeschlossen ist, gilt immer.',
+  ] : []);
+  const join = (t: string) => [...lines, ...block(t), ...tail].join('\n');
+  let out = join(tastes);
+  // Platz knapp (älterer Server): die Vorlieben kürzen, nicht den Rest – an einem Zeilenende, mit Hinweis
+  if (opts.maxLength && out.length > opts.maxLength && tastes) {
+    const budget = Math.max(0, tastes.length - (out.length - opts.maxLength) - 20);
+    const cut = tastes.slice(0, budget);
+    tastes = cut.slice(0, Math.max(cut.lastIndexOf('\n'), 0) || cut.length).trim() + ' …';
+    out = join(tastes);
+  }
+  return out;
 }
 
 export class RecipeReplyError extends Error {}

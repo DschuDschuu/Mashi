@@ -90,7 +90,7 @@ diesem Server. Er leitet an **OpenRouter** weiter.
 
 - Nutzen darf ihn nur, wer sich an dieser CouchDB anmelden kann (gleiche Anmeldung wie der Abgleich,
   geprüft über `/_session`). Kein zusätzliches Passwort in der App.
-- Nur Rezepte: feste Anweisung an die KI, Grenzen für Auftrag (8000 Zeichen) und Antwort,
+- Nur Rezepte: feste Anweisung an die KI, Grenzen für Auftrag (16 000 Zeichen) und Antwort,
   je Person höchstens `KI_PER_HOUR` / `KI_PER_DAY` Anfragen.
 - Es werden weder Aufträge noch Anmeldungen protokolliert.
 

@@ -20,9 +20,11 @@ export function suggestPantryUnit(
   if (product?.packageUnit === 'Stück') return 'Stück';
   // Produkt mit Packungsgröße: in Packungen zählen – „3 Stück“, die Größe hängt Mashi selbst an
   if (product?.packageAmount) return base?.portions?.Glas ? 'Glas' : 'Stück';
+  // ohne Packungsgröße (Julia): g – außer Gläsern (Pesto), Eiern (zählt man) und Flüssigem (ml).
+  // Ein Stückgewicht in der Tabelle (Karotte ~80 g) heißt nicht, dass man Karotten zählt.
   if (!food) return 'g';
   if (food.portions?.Glas) return 'Glas';
-  if (food.portions?.Stück) return 'Stück';
+  if (food.kind === 'egg') return 'Stück';
   if (food.density !== undefined) return 'ml';
   return 'g';
 }

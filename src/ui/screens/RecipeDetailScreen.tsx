@@ -27,6 +27,7 @@ import { StatusBadge } from '../components/StatusBadge';
 import { euro, formatMinutes, portionCount, relativeDay } from '../format';
 import { useRecipeCost } from '../useCosts';
 import { toast } from '../toast';
+import { formOf, startAgain } from '../kiAgain';
 import { useIsTablet } from '../useMediaQuery';
 import { useNutrition } from '../useNutrition';
 import { useSwipe } from '../useSwipe';
@@ -358,6 +359,14 @@ function StatusAction({ recipe }: { recipe: Recipe }) {
         <div className="status-card tint-sky">
           <p className="status-card__title"><Icon name="sparkles" size={18} />Das ist eine KI-Idee</p>
           <p>Sie ist noch nicht in deinem Kochbuch. Möchtest du sie ausprobieren?</p>
+          {/* gefällt nicht? (Julia) – derselbe Auftrag nochmal oder angepasst; die neue Idee ersetzt diese.
+              Nur, solange Mashi den Auftrag kennt (diese Sitzung, dieses Gerät) */}
+          {formOf(recipe.id) && (
+            <div className="row-gap">
+              <button className="btn btn--soft" onClick={() => startAgain(recipe.id, true)}><Icon name="refresh" size={16} /> Neu überlegen</button>
+              <button className="btn btn--ghost" onClick={() => startAgain(recipe.id, false)}><Icon name="pencil" size={16} /> Auftrag anpassen</button>
+            </div>
+          )}
           <div className="row-gap">
             <button className="btn btn--primary" onClick={() => { setStatus(recipe.id, 'zum_testen'); toast('Zum Testen vorgemerkt'); }}>Zum Testen vormerken</button>
             <button className="btn btn--ghost" onClick={() => { const undo = deleteRecipe(recipe.id); toast('Idee verworfen', { label: 'Rückgängig', run: undo }); goBack('/kochbuch'); }}>Verwerfen</button>

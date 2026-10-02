@@ -66,3 +66,36 @@ describe('KI-Antwort prüfen', () => {
     expect(parseRecipeReply(JSON.stringify(noServings), { servings: 5 }).servings).toBe(5);
   });
 });
+
+describe('KI-Auftrag: lange Vorlieben, Abwechslung, Überraschung', () => {
+  // erfunden: ~6000 Zeichen, das Wichtige steht – wie oft – ganz am Ende
+  const long = Array.from({ length: 120 }, (_, i) => `- Lieblingszutat Nummer ${i} mit etwas Text dazu`).join('\n') + '\n\nNICHT verwenden: Testfisch';
+
+  it('Vorlieben gehen ganz mit – auch das Ende (früher nach 1500 Zeichen abgeschnitten)', () => {
+    expect(long.length).toBeGreaterThan(5000);
+    const p = buildRecipePrompt({ prompt: 'Abendessen', kitchen: { tastes: long } });
+    expect(p).toContain('NICHT verwenden: Testfisch');
+    expect(p).toMatch(/Wechsle ab/);
+    // das App-Format geht vor, auch wenn die Vorlieben ein eigenes beschreiben
+    expect(p).toMatch(/auch wenn oben ein anderes Format beschrieben ist/);
+  });
+
+  it('älterer Server (8000): Vorlieben werden gekürzt, Auftrag und Format bleiben ganz', () => {
+    const huge = long + '\n' + 'x'.repeat(4000);
+    const p = buildRecipePrompt({ prompt: 'Abendessen mit Paprika', kitchen: { tastes: huge } }, { maxLength: 8000 });
+    expect(p.length).toBeLessThanOrEqual(8000);
+    expect(p).toContain('Wunsch: Abendessen mit Paprika');
+    expect(p).toContain('Lieblingszutat Nummer 0');
+    expect(p).toContain(' …');
+    expect(p).toContain('Keine Nährwertangaben');
+  });
+
+  it('die letzten Ideen gehen als „bitte etwas anderes“ mit; ganz ohne Angaben: Überraschung', () => {
+    const p = buildRecipePrompt({ prompt: '', recent: ['Gochujang-Bowl', 'Gochujang-Pasta', 'Gochujang-Bowl'] });
+    expect(p).toContain('bitte etwas deutlich anderes');
+    expect(p).toContain('Gochujang-Bowl; Gochujang-Pasta');
+    expect(p).toMatch(/Überrasche mich/);
+    // mit nur einer Zeit ist es keine freie Überraschung mehr
+    expect(buildRecipePrompt({ prompt: '', maxMinutes: 20 })).not.toMatch(/Überrasche mich/);
+  });
+});

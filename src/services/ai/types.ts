@@ -10,6 +10,8 @@ export interface RecipeRequest {
   wishes?: string[];
   /** was bald weg muss, was im Vorrat ist – nur die echte KI nutzt es */
   kitchen?: KitchenContext;
+  /** Titel der letzten KI-Ideen – damit sie sich nicht wiederholt */
+  recent?: string[];
 }
 
 /**

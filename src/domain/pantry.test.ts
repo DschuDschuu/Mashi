@@ -148,9 +148,12 @@ describe('Was nach dem Wochenplan übrig bleibt', () => {
 
 describe('Einheit beim Eintragen', () => {
   const unit = (name: string, product?: { packageUnit?: 'g' | 'ml' | 'Stück' }) => suggestPantryUnit(localFoodTable.matchName(name)?.food, product);
-  it('Pesto im Glas, Paprika als Stück, Milch in ml, Pasta in g', () => {
+  it('ohne Packungsgröße g – außer Pesto im Glas, Eier als Stück, Milch in ml', () => {
     expect(unit('Grünes Pesto')).toBe('Glas');
-    expect(unit('Paprika')).toBe('Stück');
+    // Stückgewicht in der Tabelle ≠ man zählt es (Julias Karotten)
+    expect(unit('Paprika')).toBe('g');
+    expect(unit('Karotten')).toBe('g');
+    expect(unit('Eier')).toBe('Stück');
     expect(unit('Milch')).toBe('ml');
     expect(unit('Pasta')).toBe('g');
     expect(unit('Unbekanntes Zeug')).toBe('g');
