@@ -121,8 +121,8 @@ function LineEdit({ line, onDone }: { line: BonLine; onDone: (patch: Partial<Bon
   const shown = line.amount === undefined ? undefined : perPiece(line, line.unit) ? line.amount / line.count : line.amount;
   const [amount, setAmount] = useState(field(shown));
   const [price, setPrice] = useState(field(line.price));
-  // Gewicht für den Kilopreis – vom Bon, oder nachgetragen, wenn die Texterkennung es nicht zuordnen konnte (Julia: Kürbis)
-  const [weight, setWeight] = useState(line.weightKg === undefined ? '' : String(line.weightKg).replace('.', ','));
+  // Kilopreis wie auf dem Bon („1,99 EUR/kg“) – Julia trägt lieber den ein als das Gewicht; Mashi rechnet das Gewicht aus
+  const [perKg, setPerKg] = useState(line.weightKg && line.price !== undefined ? field(line.price / line.weightKg) : '');
   // was vom Bon kam (Betrag und „20%“), bleibt erkennbar – geänderter Betrag oder Art: Prozent fällt weg, Mashi rechnet
   const [discounts, setDiscounts] = useState<{ kind: DiscountKind; text: string; from?: LineDiscount }[]>(
     (line.discounts ?? []).map((d) => ({ kind: d.kind, text: field(d.amount), from: d })));
@@ -145,8 +145,11 @@ function LineEdit({ line, onDone }: { line: BonLine; onDone: (patch: Partial<Bon
     if (pr !== undefined && ds.reduce((s, d) => s + d.amount, 0) > pr) return setError('Der Rabatt ist höher als der Preis.');
     if (!name.trim()) return setError('Bitte einen Namen eingeben.');
     const total = a === undefined ? undefined : perPiece({ weightKg: line.weightKg, count: n }, unit) ? a * n : a;
-    const kg = weight.trim() ? parseAmount(weight) : undefined;
-    if (weight.trim() && !(kg! > 0)) return setError('Das Gewicht verstehe ich nicht – z. B. 3,242.');
+    const eurPerKg = perKg.trim() ? parseAmount(perKg) : undefined;
+    if (perKg.trim() && !(eurPerKg! > 0)) return setError('Den Kilopreis verstehe ich nicht – z. B. 1,99.');
+    if (eurPerKg && pr === undefined) return setError('Für den Kilopreis braucht Mashi den Preis auf dem Bon.');
+    // Preis ÷ Kilopreis = Gewicht (6,45 € ÷ 1,99 €/kg = 3,242 kg)
+    const kg = eurPerKg && pr !== undefined ? Math.round((pr / eurPerKg) * 1000) / 1000 : undefined;
     onDone({ name: name.trim(), productId: productId || undefined, count: n, amount: total, unit, price: pr, discounts: ds, weightKg: kg });
   };
 
@@ -202,8 +205,8 @@ function LineEdit({ line, onDone }: { line: BonLine; onDone: (patch: Partial<Bon
           </span>
         </label>
       </div>
-      <label className="field"><span>Gewicht (kg) – für den Kilopreis</span>
-        <input inputMode="decimal" value={weight} onChange={(e) => setWeight(e.target.value)} placeholder="z. B. 3,242" />
+      <label className="field"><span>Kilopreis (€/kg, wie auf dem Bon)</span>
+        <input inputMode="decimal" value={perKg} onChange={(e) => setPerKg(e.target.value)} placeholder="z. B. 1,99" />
       </label>
       <label className="field"><span>Preis auf dem Bon (vor Rabatt, €)</span>
         <input inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} />

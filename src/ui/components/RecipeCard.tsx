@@ -15,8 +15,9 @@ export function RecipeCard({ recipe, wide = false }: { recipe: Recipe; wide?: bo
   const c = currentContent(recipe);
   const n = recipeNutrition(recipe);
   const kcal = kcalLabel(n);
-  // Preis pro Portion statt Portionen (Julia: die stellt man im Rezept ohnehin ein) – fehlen Preise, ist es „ab“
-  const cost = useRecipeCost(c, c.servings);
+  // Preis pro Portion statt Portionen (Julia: die stellt man im Rezept ohnehin ein) – nur, wenn alle Preise bekannt sind
+  const known = useRecipeCost(c, c.servings);
+  const cost = known && !known.missing.length ? known : null;
   // Auf der Karte zählt, was für eine Mahlzeit es ist – genau eine. Geräte und Tags stehen im Rezept.
   const category = c.categories[0] ? categoryInfo(c.categories[0]) : undefined;
 
@@ -44,8 +45,8 @@ export function RecipeCard({ recipe, wide = false }: { recipe: Recipe; wide?: bo
           {/* links Zeit / kcal, rechts Preis pro Portion / Eiweiß – so stehen die Werte in einer Reihe untereinander */}
           <p className="card__meta card__meta--split">
             <span><Icon name="clock" size={13} /> {formatMinutesShort(totalMinutes(c))}</span>
-            <span aria-label={cost ? `${cost.missing.length ? 'ab' : 'ungefähr'} ${euro(cost.perServing)} pro Portion` : undefined}>
-              {cost ? <>{cost.missing.length ? 'ab' : 'ca.'} {euro(cost.perServing)}</> : ' '}
+            <span aria-label={cost ? `ungefähr ${euro(cost.perServing)} pro Portion` : undefined}>
+              {cost ? <>ca. {euro(cost.perServing)}</> : ' '}
             </span>
           </p>
           <p className="card__meta card__meta--split">

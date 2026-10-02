@@ -277,16 +277,22 @@ const header = (
 function CostLine({ content, servings }: { content: RecipeContent; servings: number }) {
   const cost = useRecipeCost(content, servings);
   if (!cost) return null;
+  // fehlen Preise: „ab …“ und welche fehlen – die bekannten stehen aufgeklappt (Julia; auf der Karte dann gar nichts)
+  const partial = cost.missing.length > 0;
   // aufklappbar (Julia): was jede Zutat pro Portion kostet – teuerste zuerst; die Summe ist der Preis pro Portion
   return (
     <details className="cost-line">
+      {/* nur pro Portion (Julia) – die Portionen stellst du oben ein */}
       <summary>
-        <span>ca. <strong>{euro(cost.total)}</strong> · {euro(cost.perServing)} pro Portion</span>
-        {cost.missing.length > 0 && <span className="small muted">ohne {cost.missing.slice(0, 3).join(', ')}{cost.missing.length > 3 ? ' …' : ''} (Preis unbekannt)</span>}
+        <span>{partial ? 'ab' : 'ca.'} <strong>{euro(cost.perServing)}</strong> pro Portion</span>
+        {partial && <span className="small muted">ohne {cost.missing.slice(0, 3).join(', ')}{cost.missing.length > 3 ? ' …' : ''} (Preis unbekannt)</span>}
       </summary>
       <ul className="cost-line__items">
         {cost.items.map((i) => (
           <li key={i.ingredientId}><span>{i.name}</span><span>{euro(i.cost / servings)}</span></li>
+        ))}
+        {cost.missing.map((m) => (
+          <li key={`fehlt-${m}`} className="muted"><span>{m}</span><span className="small">Preis unbekannt</span></li>
         ))}
       </ul>
       <p className="small muted">pro Portion · mit den zuletzt bezahlten Regalpreisen</p>

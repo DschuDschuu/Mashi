@@ -25,13 +25,16 @@ export function NutritionTiles({ n }: { n: NutritionResult }) {
   const ca = n.accuracy === 'geschaetzt' ? 'ca. ' : '';
   const p = n.perServing;
   return (
-    <div className="tiles">
-      <div className="tile"><strong>{ca}{Math.round(p.kcal)}</strong><span>kcal</span></div>
-      <div className="tile"><strong>{gram(p.carbs)}</strong><span>KH</span></div>
-      <div className="tile"><strong>{gram(p.protein)}</strong><span>Eiweiß</span></div>
-      <div className="tile"><strong>{gram(p.fat)}</strong><span>Fett</span></div>
+    <>
+      <div className="tiles">
+        <div className="tile"><strong>{ca}{Math.round(p.kcal)}</strong><span>kcal</span></div>
+        <div className="tile"><strong>{gram(p.carbs)}</strong><span>KH</span></div>
+        <div className="tile"><strong>{gram(p.protein)}</strong><span>Eiweiß</span></div>
+        <div className="tile"><strong>{gram(p.fat)}</strong><span>Fett</span></div>
+      </div>
+      {/* unter dem Kasten, nicht darin (Julia: wirkte im weißen Rahmen fehl am Platz) */}
       <VariantRange n={n} />
-    </div>
+    </>
   );
 }
 
