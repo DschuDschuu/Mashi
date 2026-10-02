@@ -192,3 +192,13 @@ describe('1 Stück = 1 Packung (Produkt mit Packungsgröße)', () => {
     expect(withMyProducts(localFoodTable, [netz]).matchName('Paprika')?.food.portions?.Stück).toBe(150);
   });
 });
+
+describe('Kilopreis vom Bon', () => {
+  it('gewogen, aber als Stück im Vorrat (2 Kürbisse): der Preisverlauf rechnet trotzdem je kg', () => {
+    const [line] = parseReceipt(['EUR', 'Butternuss-Kürbis 3,49 A', '2,345 kg x 1,49 EUR/kg', 'Zu zahlen 3,49'].join('\n'));
+    const p = applyImport(emptyPantry(), [{ line, key: 'butternuss-kürbis', known: false, skip: false, name: 'Kürbis', amount: 2, unit: 'Stück' }], NOW, id);
+    expect(p.items[0]).toMatchObject({ name: 'Kürbis', amount: 2, unit: 'Stück' });
+    expect(p.history![0].unit).toBe('g');
+    expect(p.history![0].perUnit * 1000).toBeCloseTo(3.49 / 2.345);
+  });
+});

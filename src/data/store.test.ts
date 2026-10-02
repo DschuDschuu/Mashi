@@ -3,8 +3,9 @@ import PouchDB from 'pouchdb-core';
 import memory from 'pouchdb-adapter-memory';
 import { describe, expect, it } from 'vitest';
 import { PouchRecipeRepository, type RecipeDb } from './pouchRepository';
-import { addExtra, addPantryItem, editBon, setCategory, addToPlan, answerLeftover, applyInventory, clearDoneExtras, deleteRecipe, importPantry, importReceipt, importRecipes, regenerateImage, markCooked, uncookRecipe, clearCooked, createRecipe, currentLeftoverAsk, currentPantry, eatPreparedPortions, freezePantryItem, initStore, thawPantryItem, togglePlanCooked, removeFromPlan, removePantryItem, setFoodStage, setPantryAmount, toggleShoppingItem, updatePantryItem } from './store';
+import { addExtra, addPantryItem, dropPriceDay, editBon, setCategory, addToPlan, answerLeftover, applyInventory, clearDoneExtras, deleteRecipe, importPantry, importReceipt, importRecipes, regenerateImage, markCooked, uncookRecipe, clearCooked, createRecipe, currentLeftoverAsk, currentPantry, eatPreparedPortions, freezePantryItem, initStore, thawPantryItem, togglePlanCooked, removeFromPlan, removePantryItem, setFoodStage, setPantryAmount, toggleShoppingItem, updatePantryItem } from './store';
 import { keyOfName } from '../domain/mealplan';
+import { emptyPantry } from '../domain/pantry';
 import { EXTRA_PREFIX, RESTOCK_PREFIX } from '../domain/restock';
 import { foodTable } from '../services';
 import { createMockRecipes } from './mockRecipes';
@@ -316,6 +317,28 @@ describe('Store: alter Bon nur für den Preisverlauf', () => {
     expect(p.bons![0].noStock).toBe(true);
     editBon(p.bons![0].id, 0, { count: 3, amount: 1500 });
     expect(currentPantry().items).toEqual([]);
+  });
+});
+
+describe('Store: alten Tag aus dem Preisverlauf löschen mit Rückgängig', () => {
+  it('weg und wieder da', async () => {
+    await freshStore('tag');
+    // wie vor dem Update eingelesen: Preise, Ersparnis, Merker – aber kein Bon gespeichert
+    const day = '2026-09-01T12:00:00.000Z';
+    importPantry({
+      ...emptyPantry(), updatedAt: day,
+      history: [{ name: 'Quark', perUnit: 0.79, unit: 'Stück', date: day }], prices: [{ name: 'Quark', perUnit: 0.79, unit: 'Stück', date: day }],
+      savings: [{ key: '2026-09-01|0.59', date: day, lidlPlus: 0.2, offers: 0 }], receipts: ['2026-09-01|0.59'],
+    });
+    const before = currentPantry();
+    expect(before.history).toHaveLength(1);
+    const undo = dropPriceDay('2026-09-01');
+    expect(currentPantry().history).toEqual([]);
+    expect(currentPantry().savings).toEqual([]);
+    undo();
+    expect(currentPantry().history).toEqual(before.history);
+    expect(currentPantry().savings).toEqual(before.savings);
+    expect(currentPantry().prices).toEqual(before.prices);
   });
 });
 

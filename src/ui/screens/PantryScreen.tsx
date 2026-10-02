@@ -63,6 +63,8 @@ export function PantryScreen() {
     if (tags.length) return tags.join(' · ');
     return normalizeName(nameOf(p)) !== normalizeName(i.name) ? nameOf(p) : undefined;
   };
+  /** Zusatz der Sorte („leicht“) – steht hinter dem Namen */
+  const detailOf = (i: PantryItem) => (i.productId ? products.find((x) => x.id === i.productId)?.detail : undefined);
   const plan = usePlan();
   const [adding, setAdding] = useState(false);
   // Plus-Menü → „Vorrat eintragen“ öffnet das Formular – auch wenn du schon hier bist.
@@ -148,9 +150,11 @@ export function PantryScreen() {
    * die ganze Breite. Ein Knopf darf keinen Knopf enthalten – darum liegt der Zeilen-Knopf unsichtbar
    * über der ganzen Zeile (.pantry__cover) und Pille und ✕ liegen obendrauf.
    */
-  const dishRow = ({ key, recipeId, name, alarm, qty, open, onToggle, label, pill, end }: {
+  const dishRow = ({ key, recipeId, name, alarm, qty, open, onToggle, label, pill, end, date }: {
     key: string; recipeId?: string; name: string; alarm: boolean; qty: ReactNode;
     open: boolean; onToggle: () => void; label: string; pill?: ReactNode; end: ReactNode;
+    /** Datum links unter dem Namen (wie bei den Vorräten) */
+    date?: ReactNode;
   }) => {
     const recipe = recipeId ? recipes.find((r) => r.id === recipeId) : undefined;
     return (
@@ -160,6 +164,7 @@ export function PantryScreen() {
           {name}
           {alarm && <span className="pantry__alarm" role="img" aria-label="läuft heute oder morgen ab"><Icon name="clock" size={12} /></span>}
           {pill}
+          {date}
         </span>
         {qty}
         {end}
@@ -182,9 +187,9 @@ export function PantryScreen() {
             <span className="pantry__qty pantry__qty--stack">
               {quantityLabel(shownOf(i))}
               {plannedNote([i]) && <span className="pantry__planned">{plannedNote([i])}</span>}
-              {shelf && <span className={`pantry__shelf${shelf.urgent ? ' is-urgent' : ''}`}>{shelf.text}</span>}
             </span>
           ),
+          date: shelf && <span className={`pantry__shelf pantry__shelf--left${shelf.urgent ? ' is-urgent' : ''}`}>{shelf.text}</span>,
           end: <span className={`pantry__chev${isEditing ? ' is-open' : ''}`} aria-hidden="true"><Icon name="chevron" size={16} /></span>,
         }),
         ...edit,
@@ -196,17 +201,19 @@ export function PantryScreen() {
           {/* links nur der Name (groß), rechts die freie Menge mit dem Datum darunter */}
           <span className="pantry__name">
             {part ? partLabel(i) : i.name}
+            {/* Zusatz der Sorte („leicht“) direkt hinter dem Namen (Julia) – die Marke nicht */}
+            {!part && detailOf(i) && <span className="pantry__detail">{detailOf(i)}</span>}
             {shelfLabel(i)?.alarm && <span className="pantry__alarm" role="img" aria-label="läuft heute oder morgen ab"><Icon name="clock" size={12} /></span>}
             {i.reduced && !i.frozenAt && <span className="badge tint-peach pantry__mhd">MHD</span>}
-            {/* nur, wenn es etwas Neues sagt (Marke, Sorte) – nicht „Milch“ unter „Milch“ */}
-            {sortLabel(i) && <span className="pantry__sort">{sortLabel(i)}</span>}
+            {/* Marke/Sorte nur in den Teilen einer Gruppe – dort unterscheidet sie die Packungen; sonst bleibt die Zeile flach (Julia) */}
+            {part && sortLabel(i) && <span className="pantry__sort">{sortLabel(i)}</span>}
+            {/* das Datum links unter dem Namen – rechts steht die Menge mit „davon … verplant“ (Julia) */}
+            {shelfLabel(i) && !(part && i.frozenAt && !shelfLabel(i)!.urgent) && <span className={`pantry__shelf pantry__shelf--left${shelfLabel(i)!.urgent ? ' is-urgent' : ''}`}>{shelfLabel(i)!.text}</span>}
           </span>
           <span className="pantry__qty pantry__qty--stack">
             {/* in der Teilzeile sagt links schon „angebrochen“ */}
             {quantityLabel(part ? { ...shownOf(i), openedAt: undefined } : shownOf(i))}
             {plannedNote([i]) && <span className="pantry__planned">{plannedNote([i])}</span>}
-            {/* gefrorener Teil: das Einfrier-Datum steht schon links – rechts nur, wenn es nach Monaten dringend wird */}
-            {shelfLabel(i) && !(part && i.frozenAt && !shelfLabel(i)!.urgent) && <span className={`pantry__shelf${shelfLabel(i)!.urgent ? ' is-urgent' : ''}`}>{shelfLabel(i)!.text}</span>}
           </span>
           {/* Pfeil statt ✕ (Julia): Aufklappen braucht man oft, Entfernen selten – das steht jetzt im Aufgeklappten */}
           <span className={`pantry__chev${isEditing ? ' is-open' : ''}`} aria-hidden="true"><Icon name="chevron" size={16} /></span>
@@ -231,15 +238,15 @@ export function PantryScreen() {
           {clusterLabels(parts.map(shownOf)).map((l, n) => <span key={n} className="pantry__part">{n ? `+ ${l}` : l}</span>)}
         </span>
         {plannedNote(parts) && <span className="pantry__planned">{plannedNote(parts)}</span>}
-        {shelf && <span className={`pantry__shelf${shelf.urgent ? ' is-urgent' : ''}`}>{shelf.text}</span>}
       </span>
     );
+    const shelfLeft = shelf && <span className={`pantry__shelf pantry__shelf--left${shelf.urgent ? ' is-urgent' : ''}`}>{shelf.text}</span>;
     // zwei Einträge desselben Gerichts: wie ein einzelnes, „1 essen“ nimmt, was zuerst weg muss
     if (parts.every(isFreshPrepared)) {
       return [
         dishRow({
           key: k, recipeId: parts[0].recipeId, name: parts[0].name, alarm: parts.some((p) => shelfLabel(p)?.alarm),
-          pill: open ? undefined : <EatPill item={first} />, open, onToggle: () => setExpanded(open ? null : k), label: `${parts[0].name}: ${parts.length} Teile`, qty,
+          pill: open ? undefined : <EatPill item={first} />, open, onToggle: () => setExpanded(open ? null : k), label: `${parts[0].name}: ${parts.length} Teile`, qty, date: shelfLeft,
           end: <span className={`pantry__chev${open ? ' is-open' : ''}`} aria-hidden="true"><Icon name="chevron" size={16} /></span>,
         }),
         ...(open ? parts.flatMap((p) => row(p, true)) : []),
@@ -251,6 +258,7 @@ export function PantryScreen() {
           <span className="pantry__name">
             {parts[0].name}
             {parts.some((p) => shelfLabel(p)?.alarm) && <span className="pantry__alarm" role="img" aria-label="läuft heute oder morgen ab"><Icon name="clock" size={12} /></span>}
+            {shelfLeft}
           </span>
           {qty}
           {/* im Knopf – sonst klappt ein Tipp auf den Pfeil nichts auf */}

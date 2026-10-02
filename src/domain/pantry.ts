@@ -284,6 +284,8 @@ export function priceOf(row: ImportRow, date: string): PriceEntry | undefined {
   const paid = row.line.price;
   if (!paid) return undefined;
   const name = row.name.trim();
+  // gewogen (Kilopreis auf dem Bon): immer je kg – auch wenn der Vorrat „2 Stück“ Kürbis zählt (Julia)
+  if (row.line.weightKg) return { name, perUnit: paid / (row.line.weightKg * 1000), unit: 'g', date };
   const counted = row.unit === 'Stück' || row.unit === 'Glas';
   if (row.amount && !counted) return { name, perUnit: paid / row.amount, unit: 'g', date };
   const pieces = counted && row.amount ? row.amount : row.line.count;

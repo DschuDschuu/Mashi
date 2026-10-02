@@ -1,7 +1,7 @@
 import { productLabel } from '../../domain/nutrition/myProducts';
 import { useProducts } from '../../data/store';
 import { navigate } from '../../router';
-import { linePrice, lineAmount, usePurchases } from '../usePurchases';
+import { linePriceParts, lineAmount, usePurchases } from '../usePurchases';
 import { Icon } from './Icon';
 import { displayPrice, displayUnit } from '../../domain/priceHistory';
 import { euro } from '../format';
@@ -24,21 +24,20 @@ export function LastPurchase({ name, title, productIds, sort }: {
   const latest = [...history].sort((a, b) => a.date.localeCompare(b.date)).pop();
   if (!last && !history.length) return null;
   const which = !sort && last?.line.productId && productIds.length > 1 ? products.find((p) => p.id === last.line.productId) : undefined;
+  // Zeile 1: was – rechts der Preis; Zeile 2: wann – rechts der Weg zur Preis-Seite (Julia)
+  // rechts nur der Preis („2,49 € statt 3,29 €“) – der Grund (Angebot, MHD) steht unten beim Datum, sonst wird es am Handy eng
+  const { price, why } = last ? linePriceParts(last.line) : { price: `${euro(displayPrice(latest!.perUnit, latest!.unit))}/${displayUnit(latest!.unit)}`, why: undefined };
+  const date = new Date((last ?? latest!).date).toLocaleDateString('de-DE');
   return (
     <div className={sort ? 'last-buy last-buy--sort' : 'last-buy'}>
-      {last ? (
-        <p className="small">
-          <strong>Zuletzt gekauft</strong> am {new Date(last.date).toLocaleDateString('de-DE')}
-          {which && <> · {productLabel(which)}</>}
-          {lineAmount(last.line) && <> · {lineAmount(last.line)}</>}
-          <br />
-          <span className="last-buy__price">{linePrice(last.line)}</span>
-        </p>
-      ) : (
-        // ältere Bons (vor dem Speichern der Bons): nur der Regalpreis aus dem Verlauf
-        <p className="small"><strong>Zuletzt gekauft</strong> am {new Date(latest!.date).toLocaleDateString('de-DE')} · {euro(displayPrice(latest!.perUnit, latest!.unit))}/{displayUnit(latest!.unit)}</p>
-      )}
-      <button type="button" className="link small" onClick={() => navigate(foodPricePath(name, title))}>
+      <span className="small last-buy__what">
+        <strong>Zuletzt gekauft</strong>
+        {which && <> · {productLabel(which)}</>}
+        {last && lineAmount(last.line) && <> · {lineAmount(last.line)}</>}
+      </span>
+      <span className="small last-buy__price">{price}</span>
+      <span className="small muted">am {date}{why && <> · {why}</>}</span>
+      <button type="button" className="link small last-buy__link" onClick={() => navigate(foodPricePath(name, title))}>
         Preise &amp; Verlauf <Icon name="chevron" size={14} />
       </button>
     </div>

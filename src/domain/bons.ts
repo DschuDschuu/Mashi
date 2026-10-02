@@ -316,3 +316,29 @@ export function withdrawBonStock(pantry: Pantry, bonId: string, now = new Date()
   }
   return { ...pantry, items, bons: pantry.bons!.map((b) => (b.id === bonId ? { ...b, noStock: true, updatedAt: now } : b)) };
 }
+
+/** Einkaufstage im Preisverlauf ohne gespeicherten Bon (vor dem Update eingelesen) – neueste zuerst */
+export function unsavedDays(pantry: Pantry): { day: string; names: string[] }[] {
+  const saved = new Set((pantry.bons ?? []).map((b) => day(b.date)));
+  const by = new Map<string, Set<string>>();
+  for (const h of pantry.history ?? pantry.prices ?? []) {
+    const d = day(h.date);
+    if (saved.has(d)) continue;
+    by.set(d, (by.get(d) ?? new Set()).add(h.name));
+  }
+  return [...by.entries()].sort(([a], [b]) => b.localeCompare(a)).map(([d, names]) => ({ day: d, names: [...names] }));
+}
+
+/**
+ * Einen solchen Tag ganz löschen (Julia: alter Bon mit falschem Datum) – Preise, Ersparnis und das „schon importiert“
+ * dieses Tages. Danach den Bon mit richtigem Datum (und „Nur für den Preisverlauf“) neu einlesen.
+ */
+export function dropUnsavedDay(pantry: Pantry, d: string): Pantry {
+  if ((pantry.bons ?? []).some((b) => day(b.date) === d)) return pantry; // dafür gibt es den Bon
+  const out = dropDayPrices(pantry, `${d}T12:00:00.000Z`);
+  return {
+    ...out,
+    ...(pantry.savings ? { savings: pantry.savings.filter((s) => !s.key.startsWith(`${d}|`)) } : {}),
+    ...(pantry.receipts ? { receipts: pantry.receipts.filter((k) => !k.startsWith(`${d}|`)) } : {}),
+  };
+}

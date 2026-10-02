@@ -10,7 +10,10 @@ import { PriceChart } from '../components/PriceChart';
 import { euro } from '../format';
 import { CartButton } from '../components/CartButton';
 import { foodPricePath } from '../components/LastPurchase';
-import type { SavedBon } from '../../domain/bons';
+import { unsavedDays, type SavedBon } from '../../domain/bons';
+import { dropPriceDay } from '../../data/store';
+import { ask } from '../confirm';
+import { toast } from '../toast';
 import { bonTitle } from './BonScreen';
 
 const percent = (n: number) => `${n > 0 ? '+' : n < 0 ? '−' : '±'}${Math.abs(n * 100).toLocaleString('de-DE', { maximumFractionDigits: 1 })} %`;
@@ -38,6 +41,7 @@ export function PricesScreen() {
         <div className="split__main">
           <SavingsTiles savings={pantry.savings ?? []} />
           <BonList bons={pantry.bons ?? []} />
+          <OldDays />
         </div>
         <div className="split__side">
           {trends.length === 0 ? (
@@ -131,6 +135,40 @@ function BonList({ bons }: { bons: SavedBon[] }) {
       {newest.length > 5 && (
         <button type="button" className="link small" onClick={() => setAll(!all)}>{all ? 'Weniger zeigen' : `Alle ${newest.length} zeigen`}</button>
       )}
+    </Section>
+  );
+}
+
+/**
+ * Eingelesen vor dem Speichern der Bons (Julia): je Tag, wie viele Preise – löschbar, z. B. wenn der Bon damals
+ * ohne erkanntes Datum am falschen Tag gelandet ist. Danach mit richtigem Datum neu einlesen.
+ */
+function OldDays() {
+  const days = unsavedDays(usePantry());
+  if (!days.length) return null;
+  return (
+    <Section title="Eingelesen vor dem Speichern der Bons">
+      <ul className="bonview">
+        {days.map(({ day, names }) => (
+          <li key={day} className="bonview__line old-day">
+            <span className="old-day__text">
+              <strong>{bonTitle({ date: `${day}T12:00:00.000Z` })}</strong>
+              <span className="small muted">{names.length} {names.length === 1 ? 'Preis' : 'Preise'} · {names.slice(0, 3).join(', ')}{names.length > 3 ? ' …' : ''}</span>
+            </span>
+            <button type="button" className="iconbtn iconbtn--sm iconbtn--danger" aria-label={`Preise vom ${bonTitle({ date: `${day}T12:00:00.000Z` })} löschen`} onClick={async () => {
+              if (!(await ask({
+                title: 'Preise dieses Tages löschen?',
+                text: `${names.length} ${names.length === 1 ? 'Preis' : 'Preise'} und die Ersparnis dieses Tages fallen aus dem Verlauf. Die Speisekammer bleibt, wie sie ist.`,
+                confirm: 'Löschen', danger: true,
+              }))) return;
+              const undo = dropPriceDay(day);
+              toast('Preise gelöscht – jetzt den Bon mit richtigem Datum neu einlesen', { label: 'Rückgängig', run: undo });
+            }}>
+              <Icon name="trash" size={16} />
+            </button>
+          </li>
+        ))}
+      </ul>
     </Section>
   );
 }

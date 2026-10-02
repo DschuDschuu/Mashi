@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addBon, bonFromImport, dropDayPrices, editBonLine, importedOnDay, sameBonOf, withdrawBonStock, MAX_BONS, paidOf, purchasesOf, type SavedBon } from './bons';
+import { addBon, bonFromImport, dropDayPrices, dropUnsavedDay, editBonLine, importedOnDay, sameBonOf, unsavedDays, withdrawBonStock, MAX_BONS, paidOf, purchasesOf, type SavedBon } from './bons';
 import { applyImport, emptyPantry, proposeImport, receiptKey, type Pantry } from './pantry';
 import { parseReceipt } from './receipt';
 import { parseSavings, recordSavings } from './savings';
@@ -165,5 +165,24 @@ describe('Gespeicherte Bons', () => {
     expect(fixed.bons!.find((b) => b.id === 'b2')!.noStock).toBe(true);
     expect(withdrawBonStock(fixed, 'b2', NOW)).toBe(fixed); // zweimal abziehen geht nicht
     expect(item(editBonLine(fixed, 'b2', 1, { count: 2, amount: 500 }, NOW, id), 'Quark')[0].amount).toBe(3);
+  });
+
+  it('Tage ohne gespeicherten Bon: auflisten und ganz löschen – Preise, Ersparnis, „schon importiert“', () => {
+    // vor dem Update eingelesen, ohne Datum → am Tag des Einlesens gelandet
+    const rows = proposeImport(parseReceipt(TEXT), []);
+    const wrongDay = '2026-09-01T12:00:00.000Z';
+    const savings = parseSavings(TEXT);
+    const old = recordSavings({ ...applyImport(emptyPantry(), rows, NOW, id, wrongDay), receipts: ['2026-09-01|5.55'] }, savings, wrongDay);
+    const p = addBon(old, { id: 'neu', date: DAY, lines: [], updatedAt: NOW });
+    expect(unsavedDays(p).map((d) => [d.day, d.names.length])).toEqual([['2026-09-01', 3]]);
+    const items = p.items;
+    const gone = dropUnsavedDay(p, '2026-09-01');
+    expect(unsavedDays(gone)).toEqual([]);
+    expect(gone.prices).toEqual([]);
+    expect(gone.savings).toEqual([]);
+    expect(gone.receipts).toEqual([]);
+    expect(gone.items).toBe(items); // die Speisekammer bleibt
+    // ein Tag mit gespeichertem Bon lässt sich so nicht löschen (dafür gibt es den Bon)
+    expect(dropUnsavedDay(p, '2026-10-02')).toBe(p);
   });
 });

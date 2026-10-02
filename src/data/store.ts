@@ -14,7 +14,7 @@ import { attachPacks, changeAmount, mergeSamePacks, openItem } from '../domain/p
 import { addPrepared, eatPrepared } from '../domain/prepared';
 import { currentContent, currentVersion, newId, sameContent, withNewVersion } from '../domain/recipe';
 import { recordSavings, type BonSavings } from '../domain/savings';
-import { addBon, bonFromImport, dropDayPrices, editBonLine, sameBonOf, withdrawBonStock, type BonLine, type BonLinePatch } from '../domain/bons';
+import { addBon, bonFromImport, dropDayPrices, editBonLine, sameBonOf, withdrawBonStock, dropUnsavedDay, type BonLine, type BonLinePatch } from '../domain/bons';
 import { withCategory, type FoodCategory } from '../domain/categories';
 import { relinkOldImport, renameFood, syncProductNames } from '../domain/renameFood';
 import { specialDays, type ShelfDays } from '../domain/shelfLife';
@@ -875,6 +875,24 @@ export function withdrawBon(bonId: string): () => void {
       ...pantry,
       items: [...pantry.items.filter((i) => !ids.has(i.id)), ...touched],
       bons: (pantry.bons ?? []).map((b) => (b.id === bonId ? (({ noStock: _n, ...rest }) => ({ ...rest, updatedAt: now() }))(b) : b)),
+    });
+  };
+}
+
+/** Tag ohne gespeicherten Bon aus dem Preisverlauf löschen – „Rückgängig“ legt Preise, Ersparnis und Merker zurück */
+export function dropPriceDay(day: string): () => void {
+  const before = { history: pantry.history, prices: pantry.prices, savings: pantry.savings, receipts: pantry.receipts };
+  const next = dropUnsavedDay(pantry, day);
+  if (next === pantry) return () => {};
+  commitPantry(next);
+  return () => {
+    const gone = <T,>(was: T[] | undefined, now: T[] | undefined) => (was ?? []).filter((x) => !(now ?? []).includes(x));
+    commitPantry({
+      ...pantry,
+      history: [...(pantry.history ?? []), ...gone(before.history, next.history)],
+      prices: [...pantry.prices.filter((p) => !gone(next.prices, before.prices).includes(p)), ...gone(before.prices, next.prices)],
+      ...(before.savings ? { savings: [...(pantry.savings ?? []), ...gone(before.savings, next.savings)] } : {}),
+      ...(before.receipts ? { receipts: [...(pantry.receipts ?? []), ...gone(before.receipts, next.receipts)] } : {}),
     });
   };
 }
