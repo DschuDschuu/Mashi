@@ -1501,3 +1501,44 @@ p { margin: 0; }
 /* Ecken: die Karte schneidet nichts ab (die Uhr ragt über den Rand) – darum runden erste und letzte Zeile selbst */
 .pantry > li:first-child { border-top-left-radius: calc(var(--r) - 1px); border-top-right-radius: calc(var(--r) - 1px); }
 .pantry > li:last-child { border-bottom-left-radius: calc(var(--r) - 1px); border-bottom-right-radius: calc(var(--r) - 1px); }
+
+/* ── Kategorien in „Meine Lebensmittel“ (Julia) – Überschrift wie ein ruhiger Abschnitt, kein Kasten ── */
+.foods__group { display: flex; flex-direction: column; gap: 6px; }
+.foods__grouptitle { margin: 6px 2px 0; font-size: 0.82rem; font-weight: 700; color: var(--ink-2); letter-spacing: 0.01em; }
+/* Kategorie in der Kachel: ein grauer Chip (Ändern ist die Ausnahme), aufgeklappt alle zur Wahl */
+.category { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.foods__body .category .chip:not(.is-on) { background: var(--card-neutral); }
+
+/* „Zuletzt gekauft“ in der Kachel – grau wie die Sorten-Karten, darunter der Weg zur Preis-Seite */
+.last-buy { display: flex; flex-direction: column; gap: 0; padding: 8px 10px; border-radius: var(--r-sm); background: var(--card-neutral, var(--surface-2)); }
+.last-buy p { margin: 0; }
+.last-buy__price { font-variant-numeric: tabular-nums; }
+.last-buy .link { align-self: flex-start; padding-bottom: 0; }
+.product-form__bought { display: flex; align-items: center; min-height: 44px; }
+
+/* Gespeicherte Bons und Einkäufe: eine Zeile je Artikel, antippen zum Korrigieren */
+.bonview { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.bonview__line { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-sm); }
+.bonview__line.is-skip { background: var(--surface-2); }
+.bonview__line.is-editing { padding: 12px; }
+.bonview__open {
+  width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 2px 10px;
+  padding: 10px 12px; background: none; border: 0; text-align: left; font: inherit; color: inherit; cursor: pointer;
+}
+.bonview__open:disabled { cursor: default; }
+.bonview__open > svg { grid-row: 1 / span 2; grid-column: 3; color: var(--ink-3); }
+.bonview__name { font-weight: 700; min-width: 0; overflow-wrap: anywhere; }
+.bonview__price { grid-column: 2; font-size: 0.86rem; font-variant-numeric: tabular-nums; text-align: right; }
+.bonview__sub { grid-column: 1 / span 2; min-width: 0; overflow-wrap: anywhere; }
+.bonview__line.is-skip .bonview__name { color: var(--ink-3); text-decoration: line-through; font-weight: 600; }
+.bonedit__discount { display: flex; align-items: center; gap: 6px; }
+.bonedit__discount input { width: 6em; min-width: 0; }
+.bonedit__add { align-self: flex-start; }
+.price-card__name.link { padding: 0; font-size: 1rem; color: var(--ink); text-align: left; }
+/* Handy: Preis („2,49 € statt 3,29 € · Angebot“) in eigener Zeile – sonst bricht der Name um */
+@media (max-width: 520px) {
+  .bonview__open { grid-template-columns: minmax(0, 1fr) auto; }
+  .bonview__price { grid-column: 1; text-align: left; }
+  .bonview__sub { grid-column: 1; }
+  .bonview__open > svg { grid-column: 2; grid-row: 1 / span 3; }
+}

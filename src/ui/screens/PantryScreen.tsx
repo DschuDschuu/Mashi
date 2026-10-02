@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { resolveName } from '../../domain/mealplan';
 import { freeAfterPlan, isCount, plannedPack, plannedFromPacks, recipesFromPantry, type PantryItem, type PantryUnit } from '../../domain/pantry';
 import { suggestPantryUnit } from '../../domain/packs';
 import { daysLabel, daysLeft, frozenSince, specialDays, useByOf } from '../../domain/shelfLife';
@@ -18,7 +17,8 @@ import { Icon } from '../components/Icon';
 import { CartButton } from '../components/CartButton';
 import { PantryTabs, usePantrySwipe } from '../components/PlanTabs';
 import { IngredientNames } from '../components/IngredientNames';
-import { groupByKind } from '../foodGroups';
+import { groupByCategory } from '../../domain/categories';
+import { useCategoryOf } from '../useCategory';
 import { useUseUp } from '../useUseUp';
 import { PantryMatchList, RecipeIdeaPanel } from '../components/PantryMatches';
 import { ShelfSettings } from '../components/ShelfSettings';
@@ -31,7 +31,7 @@ import { BrandNames } from '../components/BrandNames';
 import { NutritionQuickForm } from '../components/NutritionQuickForm';
 import type { FoodEntry } from '../../domain/nutrition/types';
 import { newId } from '../../domain/recipe';
-import { brandOf, nameOf, type MyProduct } from '../../domain/nutrition/myProducts';
+import { nameOf, sortTags, type MyProduct } from '../../domain/nutrition/myProducts';
 import { FOOD_CHOICES, normalizeName } from '../../domain/nutrition/localFoods';
 
 const UNITS: PantryUnit[] = ['g', 'ml', 'Stück', 'Glas'];
@@ -58,8 +58,9 @@ export function PantryScreen() {
   const sortLabel = (i: PantryItem) => {
     const p = i.productId ? products.find((x) => x.id === i.productId) : undefined;
     if (!p) return undefined;
-    const brand = brandOf(p);
-    if (brand) return brand;
+    // Zusatz und Marke („leicht · K-Classic“) – Rinderhack leicht und normal sind zwei Sorten
+    const tags = sortTags(p);
+    if (tags.length) return tags.join(' · ');
     return normalizeName(nameOf(p)) !== normalizeName(i.name) ? nameOf(p) : undefined;
   };
   const plan = usePlan();
@@ -75,7 +76,7 @@ export function PantryScreen() {
   const [editing, setEditing] = useState<string | null>(null);
   const table = useFoodTable();
 
-  const kindOf = (item: PantryItem) => resolveName(item.name, table)?.kind;
+  const categoryOf = useCategoryOf();
   const toCheck = pantry.items.filter((i) => i.check);
   // Nur was nach dem Wochenplan übrig bleibt – bald Ablaufendes zuerst; Eingeplantes nicht noch einmal vorschlagen
   const { rest, keys, idea, planned } = useUseUp();
@@ -122,7 +123,7 @@ export function PantryScreen() {
   const groups = [
     // Vorgekochtes zuerst – es hält am kürzesten und will gegessen werden
     ...(prepared.length ? [{ title: 'Vorgekocht', items: prepared }] : []),
-    ...groupByKind(shown.filter((i) => !i.frozenAt && !i.recipeId), kindOf),
+    ...groupByCategory(shown.filter((i) => !i.frozenAt && !i.recipeId), (i) => categoryOf(i.name)),
     ...(shown.some((i) => i.frozenAt) ? [{ title: 'Gefroren', items: shown.filter((i) => i.frozenAt) }] : []),
   ];
   // Eine Zeile je Lebensmittel: „Joghurt · 4 × 500 g + 400 g offen“ – antippen klappt die Teile auf

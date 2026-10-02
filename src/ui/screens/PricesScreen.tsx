@@ -9,6 +9,9 @@ import { PantryTabs, usePantrySwipe } from '../components/PlanTabs';
 import { PriceChart } from '../components/PriceChart';
 import { euro } from '../format';
 import { CartButton } from '../components/CartButton';
+import { foodPricePath } from '../components/LastPurchase';
+import type { SavedBon } from '../../domain/bons';
+import { bonTitle } from './BonScreen';
 
 const percent = (n: number) => `${n > 0 ? '+' : n < 0 ? '−' : '±'}${Math.abs(n * 100).toLocaleString('de-DE', { maximumFractionDigits: 1 })} %`;
 
@@ -34,6 +37,7 @@ export function PricesScreen() {
       <div className="split split--prices">
         <div className="split__main">
           <SavingsTiles savings={pantry.savings ?? []} />
+          <BonList bons={pantry.bons ?? []} />
         </div>
         <div className="split__side">
           {trends.length === 0 ? (
@@ -73,7 +77,7 @@ function PriceCard({ trend: t }: { trend: PriceTrend }) {
   return (
     <li className="price-card">
       <div className="price-card__head">
-        <span className="price-card__name">{t.name}</span>
+        <button type="button" className="price-card__name link" onClick={() => navigate(foodPricePath(t.name))}>{t.name}</button>
         <span className={`price-card__change is-${t.direction}`}>
           <span aria-hidden="true">{arrow}</span> {percent(t.change)}
           <span className="visually-hidden"> zum vorigen Einkauf</span>
@@ -98,6 +102,36 @@ function PriceCard({ trend: t }: { trend: PriceTrend }) {
         </table>
       </details>
     </li>
+  );
+}
+
+/** Meine Einkäufe (Julia): die gespeicherten Bons, neueste zuerst – antippen zum Ansehen und Korrigieren */
+function BonList({ bons }: { bons: SavedBon[] }) {
+  const [all, setAll] = useState(false);
+  if (!bons.length) return null;
+  const newest = [...bons].reverse();
+  const shown = all ? newest : newest.slice(0, 5);
+  return (
+    <Section title={`Meine Einkäufe (${bons.length})`}>
+      <ul className="bonview">
+        {shown.map((b) => {
+          const saved = b.savings ? b.savings.offers + b.savings.lidlPlus + b.savings.mhd : 0;
+          return (
+            <li key={b.id} className="bonview__line">
+              <button type="button" className="bonview__open" onClick={() => navigate(`/preise/bon/${b.id}`)}>
+                <span className="bonview__name">{bonTitle(b)}</span>
+                <span className="bonview__price">{b.total !== undefined ? euro(b.total) : ''}</span>
+                <span className="small muted bonview__sub">{b.lines.filter((l) => !l.skip).length} Artikel{saved > 0 ? ` · gespart ${euro(saved)}` : ''}</span>
+                <Icon name="chevron" size={14} />
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+      {newest.length > 5 && (
+        <button type="button" className="link small" onClick={() => setAll(!all)}>{all ? 'Weniger zeigen' : `Alle ${newest.length} zeigen`}</button>
+      )}
+    </Section>
   );
 }
 

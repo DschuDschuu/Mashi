@@ -4,6 +4,8 @@ import { basicsKeys, needIn, resolveIngredient, resolveName, type Resolved } fro
 import type { FoodTable } from './nutrition/types';
 import type { ReceiptLine } from './receipt';
 import type { ReceiptSavings } from './savings';
+import type { SavedBon } from './bons';
+import type { FoodCategory } from './categories';
 import { specialDays, useByOf, type ShelfDays } from './shelfLife';
 import { currentContent } from './recipe';
 import type { MealPlan } from './mealplan';
@@ -98,6 +100,10 @@ export interface Pantry {
   receipts?: string[];
   /** deine Richtwerte „hält X Tage“ je Art (Gemüse, Milchprodukte …) – fehlt einer, gilt Mashis Standard */
   shelfDays?: ShelfDays;
+  /** gespeicherte Kassenbons (erkannte Zeilen, kein Foto) – zum Ansehen und Korrigieren, siehe bons.ts */
+  bons?: SavedBon[];
+  /** deine Kategorie je Lebensmittel (Schlüssel: categoryKey) – fehlt einer, ordnet Mashi selbst zu */
+  categories?: Record<string, FoodCategory>;
   updatedAt: string;
 }
 
@@ -190,8 +196,9 @@ export function proposeImport(lines: ReceiptLine[], rules: ReceiptRule[], packag
  * Geprüfte Zeilen übernehmen: Artikel in die Speisekammer, und jede Entscheidung merken –
  * damit der nächste Bon schon ausgefüllt ist. Preise landen im Verlauf.
  * @param paidAt Einkaufsdatum vom Bon – fehlt es, zählt der Import-Zeitpunkt
+ * @param opts.stock false = nichts in den Vorrat (alten Import ersetzen: die Sachen sind schon drin)
  */
-export function applyImport(pantry: Pantry, rows: ImportRow[], now = new Date().toISOString(), newId = defaultId, paidAt = now): Pantry {
+export function applyImport(pantry: Pantry, rows: ImportRow[], now = new Date().toISOString(), newId = defaultId, paidAt = now, opts: { stock?: boolean } = {}): Pantry {
   const rules = new Map(pantry.rules.map((r) => [r.key, r]));
   const prices = new Map((pantry.prices ?? []).map((p) => [receiptKey(p.name), p]));
   // Ältere Speisekammern haben nur die letzten Preise – die sind der Anfang des Verlaufs
@@ -202,29 +209,12 @@ export function applyImport(pantry: Pantry, rows: ImportRow[], now = new Date().
       rules.set(row.key, { key: row.key, skip: true });
       continue;
     }
-    const perPiece = row.line.weightKg === undefined && row.amount !== undefined ? row.amount / row.line.count : undefined;
-    rules.set(row.key, {
-      key: row.key, name: row.name.trim(),
-      // Auch in Stück: „Eier 10er“ = 10 Stück je Packung. Nur 1 Stück je Packung muss man sich nicht merken.
-      ...(perPiece !== undefined && !(row.unit === 'Stück' && perPiece === 1) ? { amount: perPiece } : {}),
-      ...(row.unit ? { unit: row.unit } : {}),
-      ...(row.productId ? { productId: row.productId } : {}),
-    });
-    const name = row.name.trim();
-    const share = frozenShare(row);
-    // Packungsware (nicht lose, Menge in g/ml): „4 × 500 g“ statt 2000 g – dann weiß man, wie viel eine Packung ist
-    const pack: Pack | undefined = row.line.weightKg === undefined && row.amount !== undefined && row.line.count > 0 && (row.unit === 'g' || row.unit === 'ml')
-      ? { amount: Math.round((row.amount / row.line.count) * 10) / 10, unit: row.unit } : undefined;
-    const total = pack ? row.line.count : row.amount;
-    const unit = pack ? 'Stück' as const : row.unit;
-    const part = (f: number) => (total === undefined ? undefined : Math.round(total * f * 10) / 10);
+    rules.set(row.key, ruleOf(row));
+    const st = stockOf(row);
     // Der frische Teil wie gewohnt – Gefrorenes als eigener Eintrag, eingefroren am Einkaufstag
-    if (share < 1) items = addItem(items, { name, amount: part(1 - share), unit, pack, boughtAt: paidAt, reduced: row.reduced, productId: row.productId }, now, newId);
-    if (share > 0) {
-      items = [...items, {
-        id: newId(), name, ...(total !== undefined ? { amount: part(share), unit, ...(pack ? { pack } : {}) } : {}),
-        addedAt: now, boughtAt: paidAt, frozenAt: paidAt, ...(row.reduced ? { reduced: true } : {}), ...(row.productId ? { productId: row.productId } : {}),
-      }];
+    if (opts.stock !== false) {
+      if (st.freshOn) items = addItem(items, { name: st.name, amount: st.fresh, unit: st.unit, pack: st.pack, boughtAt: paidAt, reduced: st.reduced, productId: st.productId }, now, newId);
+      if (st.frozenOn) items = putFrozen(items, st, st.frozen, paidAt, now, newId);
     }
     const price = priceOf(row, paidAt);
     if (price) {
@@ -239,11 +229,58 @@ export function applyImport(pantry: Pantry, rows: ImportRow[], now = new Date().
   return { ...pantry, items, rules: [...rules.values()], prices: [...prices.values()], history };
 }
 
+/** Was Mashi sich von einer Bon-Zeile für den nächsten Bon merkt: Name, Menge je Stück, Produkt */
+export function ruleOf(row: ImportRow): ReceiptRule {
+  const perPiece = row.line.weightKg === undefined && row.amount !== undefined ? row.amount / row.line.count : undefined;
+  return {
+    key: row.key, name: row.name.trim(),
+    // Auch in Stück: „Eier 10er“ = 10 Stück je Packung. Nur 1 Stück je Packung muss man sich nicht merken.
+    ...(perPiece !== undefined && !(row.unit === 'Stück' && perPiece === 1) ? { amount: perPiece } : {}),
+    ...(row.unit ? { unit: row.unit } : {}),
+    ...(row.productId ? { productId: row.productId } : {}),
+  };
+}
+
+/** Was eine Bon-Zeile in die Speisekammer legt – frischer und eingefrorener Teil (Mengen undefined = „vorhanden“) */
+export interface BonStock {
+  name: string;
+  unit?: PantryUnit;
+  pack?: Pack;
+  fresh?: number;
+  frozen?: number;
+  freshOn: boolean;
+  frozenOn: boolean;
+  reduced?: boolean;
+  productId?: string;
+}
+
+export function stockOf(row: ImportRow): BonStock {
+  const share = frozenShare(row);
+  // Packungsware (nicht lose, Menge in g/ml): „4 × 500 g“ statt 2000 g – dann weiß man, wie viel eine Packung ist
+  const pack: Pack | undefined = row.line.weightKg === undefined && row.amount !== undefined && row.line.count > 0 && (row.unit === 'g' || row.unit === 'ml')
+    ? { amount: Math.round((row.amount / row.line.count) * 10) / 10, unit: row.unit } : undefined;
+  const total = pack ? row.line.count : row.amount;
+  const part = (f: number) => (total === undefined ? undefined : Math.round(total * f * 10) / 10);
+  return {
+    name: row.name.trim(), unit: pack ? 'Stück' : row.unit, ...(pack ? { pack } : {}),
+    fresh: part(1 - share), frozen: part(share), freshOn: share < 1, frozenOn: share > 0,
+    ...(row.reduced ? { reduced: true } : {}), ...(row.productId ? { productId: row.productId } : {}),
+  };
+}
+
+/** Gefrorenes als eigener Eintrag – eingefroren am Einkaufstag */
+export function putFrozen(items: PantryItem[], st: BonStock, amount: number | undefined, boughtAt: string, now: string, newId = defaultId): PantryItem[] {
+  return [...items, {
+    id: newId(), name: st.name, ...(amount !== undefined ? { amount, unit: st.unit, ...(st.pack ? { pack: st.pack } : {}) } : {}),
+    addedAt: now, boughtAt, frozenAt: boughtAt, ...(st.reduced ? { reduced: true } : {}), ...(st.productId ? { productId: st.productId } : {}),
+  }];
+}
+
 /**
  * Preis je Gramm oder je Stück aus einer Bon-Zeile: 2 × Mozzarella à 125 g für 1,70 €
  * → 0,0068 €/g. Ohne Menge nur je Stück (Preis ÷ Anzahl).
  */
-function priceOf(row: ImportRow, date: string): PriceEntry | undefined {
+export function priceOf(row: ImportRow, date: string): PriceEntry | undefined {
   const paid = row.line.price;
   if (!paid) return undefined;
   const name = row.name.trim();

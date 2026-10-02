@@ -156,3 +156,40 @@ describe('Vorlieben für die KI im Abgleich', () => {
     expect(['gern scharf, kein Koriander', 'mild']).toContain(merge3Pantry(base, handy, tablet).tastes);
   });
 });
+
+describe('Bons und Kategorien abgleichen', () => {
+  const bon = (id: string, updatedAt: string, name = 'Joghurt') => ({ id, date: T, lines: [{ bon: 'JOGHURT', count: 1, name }], updatedAt });
+
+  it('neuer Bon am Handy, anderer Bon am Tablet korrigiert: beides bleibt', () => {
+    const base = pantry([], { bons: [bon('b1', T)] });
+    const handy = pantry([], { bons: [bon('b1', T), bon('b2', T)] });
+    const tablet = pantry([], { bons: [bon('b1', '2026-09-25T11:00:00.000Z', 'Skyr')] });
+    const out = merge3Pantry(base, handy, tablet).bons!;
+    expect(out.map((b) => [b.id, b.lines[0].name])).toEqual([['b1', 'Skyr'], ['b2', 'Joghurt']]);
+  });
+
+  it('beide denselben Bon korrigiert: die zuletzt geänderte Fassung', () => {
+    const base = pantry([], { bons: [bon('b1', T)] });
+    const handy = pantry([], { bons: [bon('b1', '2026-09-25T12:00:00.000Z', 'Quark')] });
+    const tablet = pantry([], { bons: [bon('b1', '2026-09-25T11:00:00.000Z', 'Skyr')] });
+    expect(merge3Pantry(base, handy, tablet).bons![0].lines[0].name).toBe('Quark');
+  });
+
+  it('Kategorien je Lebensmittel: am Handy eine, am Tablet eine andere → beide', () => {
+    const base = pantry([]);
+    const handy = pantry([], { categories: { 'name:kimchi': 'konserven' } });
+    const tablet = pantry([], { categories: { 'name:tofu': 'fleisch-fisch' } });
+    expect(merge3Pantry(base, handy, tablet).categories).toEqual({ 'name:tofu': 'fleisch-fisch', 'name:kimchi': 'konserven' });
+    // zurück auf automatisch (gelöscht) am Handy, Tablet unverändert → weg
+    const both = pantry([], { categories: { 'name:kimchi': 'konserven' } });
+    expect(merge3Pantry(both, pantry([]), both).categories).toBeUndefined();
+  });
+
+  it('offline ohne gemeinsamen Stand: Bons und Kategorien beider Seiten', () => {
+    const a = pantry([], { bons: [bon('b1', T)], categories: { 'name:kimchi': 'konserven' }, updatedAt: '2026-09-25T12:00:00.000Z' });
+    const b = pantry([], { bons: [bon('b2', T)], categories: { 'name:tofu': 'fleisch-fisch' } });
+    const out = unionPantry(a, b);
+    expect(out.bons!.map((x) => x.id).sort()).toEqual(['b1', 'b2']);
+    expect(out.categories).toEqual({ 'name:tofu': 'fleisch-fisch', 'name:kimchi': 'konserven' });
+  });
+});

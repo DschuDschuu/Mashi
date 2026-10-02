@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { alreadyImported, bonKey, proposeImport, type ImportRow, type PantryUnit } from '../../domain/pantry';
-import { parseReceipt, parseReceiptDate } from '../../domain/receipt';
+import { mergeSameLines, parseReceipt, parseReceiptDate, type ReceiptLine } from '../../domain/receipt';
 import { parseSavings } from '../../domain/savings';
+import { DISCOUNT_LABEL, discountOf } from '../../domain/bons';
 import { formatAmount } from '../../domain/scaling';
 import { normalizeName } from '../../domain/nutrition/localFoods';
-import type { MyProduct } from '../../domain/nutrition/myProducts';
+import { productLabel, type MyProduct } from '../../domain/nutrition/myProducts';
 import { importReceipt, saveProducts, usePantry, useProducts } from '../../data/store';
 import { ProductForm } from '../components/MyProductsPanel';
 import { takeSharedReceipt } from '../../pwa';
@@ -23,6 +24,14 @@ type Stage = 'pick' | 'reading' | 'review';
 type Row = ImportRow & { amountText: string };
 
 const UNITS: PantryUnit[] = ['g', 'ml', 'Stück'];
+
+/** Preis einer Bon-Zeile mit Stück- bzw. Kilopreis: „3 × 0,79 € = 2,37 €“, „982 g · 1,19 €/kg = 1,17 €“ */
+function priceLine(l: ReceiptLine): string {
+  if (l.price === undefined) return l.count > 1 ? `${l.count} ×` : '';
+  if (l.weightKg) return `${formatAmount(l.weightKg * 1000, 'g')} g · ${euro(l.price / l.weightKg)}/kg = ${euro(l.price)}`;
+  if (l.count > 1) return `${l.count} × ${euro(l.price / l.count)} = ${euro(l.price)}`;
+  return euro(l.price);
+}
 
 /** Packungen einer Zeile – lose Ware zählt als eine (alles oder nichts einfrieren). */
 const packs = (r: ImportRow) => (r.line.weightKg === undefined ? r.line.count : 1);
@@ -82,7 +91,8 @@ export function ReceiptImportScreen({ shared }: { shared: boolean }) {
     setError(null);
     setPaidAt(parseReceiptDate(t));
     setSavings(parseSavings(t));
-    setRows(proposeImport(lines, pantry.rules, packageFor).map(toRow));
+    // derselbe Artikel mehrmals einzeln gescannt → eine Zeile mit Anzahl (Julia)
+    setRows(proposeImport(mergeSameLines(lines), pantry.rules, packageFor).map(toRow));
     setStage('review');
   };
 
@@ -126,7 +136,18 @@ export function ReceiptImportScreen({ shared }: { shared: boolean }) {
   };
   const taking = rows.filter((r) => !r.skip).length;
 
+  // schon importiert (z. B. vor dem Speichern der Bons, mit Fehlern): ersetzen statt doppelt
+  const duplicate = stage === 'review' && alreadyImported(pantry, bonKey(paidAt, savings?.total));
+  const [replace, setReplace] = useState(true);
+  const replacing = duplicate && replace;
+
   const apply = () => {
+    if (replacing) {
+      importReceipt(rows.map(fromRow), paidAt, savings, { replace: true });
+      toast(`Bon ersetzt – Preise vom ${paidAt ? new Date(paidAt).toLocaleDateString('de-DE') : 'Einkaufstag'} neu, Vorrat unverändert`);
+      navigate('/preise', { replace: true });
+      return;
+    }
     const { count: n, onList } = importReceipt(rows.map(fromRow), paidAt, savings);
     const frozen = rows.filter((r) => !r.skip && r.freeze).length;
     toast(n
@@ -179,11 +200,15 @@ export function ReceiptImportScreen({ shared }: { shared: boolean }) {
 
       {stage === 'review' && (
         <div className="stack">
-          {alreadyImported(pantry, bonKey(paidAt, savings?.total)) && (
-            <p className="error" role="alert">
-              Diesen Bon ({paidAt && new Date(paidAt).toLocaleDateString('de-DE')}, {savings?.total !== undefined && euro(savings.total)}) hast du schon importiert.
-              Übernimmst du ihn noch einmal, zählen die Mengen doppelt – überspringe dann lieber alles, was schon in der Speisekammer ist.
-            </p>
+          {duplicate && (
+            <div className="scan-note" role="alert">
+              <p>Diesen Bon ({paidAt && new Date(paidAt).toLocaleDateString('de-DE')}, {savings?.total !== undefined && euro(savings.total)}) hast du schon importiert.</p>
+              <label className="bonrow__mhd">
+                <input type="checkbox" checked={replace} onChange={(e) => setReplace(e.target.checked)} />
+                <span><strong>Alten Import ersetzen</strong> – die Preise dieses Tages kommen neu, der Vorrat bleibt, wie er ist</span>
+              </label>
+              {!replace && <p className="small error">Ohne Ersetzen zählen die Mengen doppelt – überspringe dann, was schon in der Speisekammer ist.</p>}
+            </div>
           )}
           <p className="muted">
             {paidAt && <>Einkauf vom <strong>{new Date(paidAt).toLocaleDateString('de-DE')}</strong> · </>}
@@ -201,7 +226,8 @@ export function ReceiptImportScreen({ shared }: { shared: boolean }) {
                   <span className="bonrow__bon">{r.line.name}</span>
                   {r.known && <span className="badge tint-mint">bekannt</span>}
                   <span className="small muted bonrow__meta">
-                    {r.line.weightKg !== undefined ? `${formatAmount(r.line.weightKg * 1000, 'g')} g · ` :r.line.count > 1 ? `${r.line.count} × · ` : ''}{r.line.price !== undefined ? euro(r.line.price) : ''}
+                    {priceLine(r.line)}
+                    {!!r.line.discounts?.length && <> · −{euro(discountOf(r.line))} {[...new Set(r.line.discounts.map((d) => DISCOUNT_LABEL[d.kind]))].join(' + ')}</>}
                   </span>
                 </div>
                 {!r.skip && (
@@ -245,7 +271,7 @@ export function ReceiptImportScreen({ shared }: { shared: boolean }) {
                         <span className="small muted">Mein Produkt:</span>
                         <select value={r.productId ?? ''} onChange={(e) => assign(i, products.find((p) => p.id === e.target.value))}>
                           <option value="">keins</option>
-                          {[...products].sort((a, b) => a.name.localeCompare(b.name, 'de')).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                          {[...products].sort((a, b) => productLabel(a).localeCompare(productLabel(b), 'de')).map((p) => <option key={p.id} value={p.id}>{productLabel(p)}</option>)}
                         </select>
                       </label>
                     )}
@@ -273,7 +299,7 @@ export function ReceiptImportScreen({ shared }: { shared: boolean }) {
             <button className="btn btn--soft" onClick={() => evaluate(text)}>Neu auswerten</button>
           </details>
           <button className="btn btn--primary btn--block btn--lg" onClick={apply} disabled={!rows.length}>
-            {taking ? `${taking} in die Speisekammer` : 'Nur merken, nichts übernehmen'}
+            {replacing ? 'Alten Import ersetzen' : taking ? `${taking} in die Speisekammer` : 'Nur merken, nichts übernehmen'}
           </button>
           <p className="muted small center">Übersprungenes merkt sich Mashi auch – der nächste Bon fragt nicht wieder.</p>
         </div>

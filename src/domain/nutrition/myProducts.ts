@@ -40,6 +40,8 @@ export interface MyProduct {
    * solche Namen werden beim Anzeigen getrennt (siehe splitBrand), gespeichert erst beim nächsten Bearbeiten.
    */
   brand?: string;
+  /** Zusatz zur Sorte (Julia: „leicht“ beim Rinderhack) – steht neben der Marke, auch ohne Marke */
+  detail?: string;
   /**
    * Ausnahmen: Schreibweisen der ersetzten Einträge, für die dieses Produkt NICHT gilt
    * (normalisiert, z. B. „vollmilch“ – deine 0,1-%-Milch soll nicht für Vollmilch rechnen).
@@ -110,11 +112,12 @@ export function withShared(p: MyProduct, s: SharedMatch, now = new Date().toISOS
   };
 }
 
-/** Für Listen und Auswahl: „Pesto verde · K-Classic“ */
-export const productLabel = (p: Pick<MyProduct, 'name' | 'brand'>): string => {
-  const b = brandOf(p);
-  return b ? `${nameOf(p)} · ${b}` : nameOf(p);
-};
+/** Für Listen und Auswahl: „Pesto verde · K-Classic“, „Rinderhack · leicht · K-Classic“ */
+export const productLabel = (p: Pick<MyProduct, 'name' | 'brand' | 'detail'>): string =>
+  [nameOf(p), p.detail, brandOf(p)].filter(Boolean).join(' · ');
+
+/** Was eine Sorte von den anderen unterscheidet – Zusatz und Marke („leicht · K-Classic“) */
+export const sortTags = (p: Pick<MyProduct, 'name' | 'brand' | 'detail'>): string[] => [p.detail, brandOf(p)].filter((x): x is string => !!x);
 
 /** 1 Glas = Packungsgröße des Produkts (in g; ml über die Dichte des ersetzten Eintrags) */
 function glassOf(p: MyProduct, replaced?: FoodEntry): number | undefined {
@@ -292,6 +295,7 @@ export function isValidProduct(v: unknown): v is MyProduct {
     && (p.ean === undefined || typeof p.ean === 'string')
     && (p.shelfDays === undefined || isNum(p.shelfDays))
     && (p.brand === undefined || typeof p.brand === 'string')
+    && (p.detail === undefined || typeof p.detail === 'string')
     && (p.excludes === undefined || (Array.isArray(p.excludes) && p.excludes.every((x) => typeof x === 'string')))
     && !!n && isNum(n.kcal) && isNum(n.protein) && isNum(n.carbs) && isNum(n.fat);
 }

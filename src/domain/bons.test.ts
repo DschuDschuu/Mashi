@@ -1,0 +1,140 @@
+import { describe, expect, it } from 'vitest';
+import { addBon, bonFromImport, dropDayPrices, editBonLine, MAX_BONS, paidOf, purchasesOf, type SavedBon } from './bons';
+import { applyImport, emptyPantry, proposeImport, receiptKey, type Pantry } from './pantry';
+import { parseReceipt } from './receipt';
+import { parseSavings, recordSavings } from './savings';
+
+const DAY = '2026-10-02T12:00:00.000Z';
+const NOW = '2026-10-02T15:00:00.000Z';
+let n = 0;
+const id = () => `id${n++}`;
+
+const TEXT = `EUR
+Rinderhack 500g 3,29 A
+Preisvorteil -0,80
+Speisequark mager 0,79 x 3 2,37 A
+Joghurt 0,99 A
+RABATT 30% -0,30
+Zu zahlen 5,55`;
+
+/** Bon einlesen wie in der App: Vorrat, Preise, Ersparnis – und den Bon aufheben */
+function imported(edit?: (rows: ReturnType<typeof proposeImport>) => void): Pantry {
+  const rows = proposeImport(parseReceipt(TEXT), []);
+  edit?.(rows);
+  const savings = parseSavings(TEXT);
+  const p = applyImport(emptyPantry(), rows, NOW, id, DAY);
+  return recordSavings(addBon(p, bonFromImport(rows, DAY, NOW, 'b1', '2026-10-02|5.55', savings)), savings, DAY);
+}
+const item = (p: Pantry, name: string) => p.items.filter((i) => i.name === name);
+const historyOf = (p: Pantry, name: string) => (p.history ?? []).filter((h) => receiptKey(h.name) === receiptKey(name));
+
+describe('Gespeicherte Bons', () => {
+  it('der Bon kommt mit allen Zeilen, Rabatt je Artikel und Ersparnis', () => {
+    const p = imported();
+    const bon = p.bons![0];
+    expect(bon.lines.map((l) => [l.bon, l.price, paidOf(l)])).toEqual([
+      ['Rinderhack 500g', 3.29, 2.49],
+      ['Speisequark mager', 2.37, 2.37],
+      ['Joghurt', 0.99, 0.69],
+    ]);
+    expect(bon.savings).toEqual({ lidlPlus: 0, offers: 0.8, mhd: 0.3 });
+    expect(bon.total).toBe(5.55);
+  });
+
+  it('derselbe Bon noch einmal ersetzt den alten; nur die neuesten bleiben', () => {
+    const p = imported();
+    const again = addBon(p, { ...p.bons![0], id: 'b2' });
+    expect(again.bons!.map((b) => b.id)).toEqual(['b2']);
+    let many: Pantry = emptyPantry();
+    for (let i = 0; i < MAX_BONS + 3; i++) many = addBon(many, { id: `x${i}`, date: new Date(Date.UTC(2026, 0, 1 + i)).toISOString(), lines: [], updatedAt: NOW } satisfies SavedBon);
+    expect(many.bons).toHaveLength(MAX_BONS);
+    expect(many.bons![0].id).toBe('x3');
+  });
+
+  it('Menge korrigieren: Vorrat um den Unterschied – schon Verbrauchtes bleibt verbraucht', () => {
+    // beim Prüfen vertippt: 5000 statt 500 g
+    const wrong = imported((rows) => { rows[0] = { ...rows[0], name: 'Rinderhack', amount: 5000, unit: 'g' }; });
+    expect(item(wrong, 'Rinderhack')[0]).toMatchObject({ amount: 1, unit: 'Stück', pack: { amount: 5000, unit: 'g' } });
+    const p = editBonLine(wrong, 'b1', 0, { amount: 500 }, NOW, id);
+    expect(item(p, 'Rinderhack')).toHaveLength(1);
+    expect(item(p, 'Rinderhack')[0]).toMatchObject({ amount: 1, pack: { amount: 500, unit: 'g' } });
+    // Preis je g mitgezogen (3,29 € für 500 g – vorher für 5000 g)
+    expect(historyOf(p, 'Rinderhack')[0].perUnit).toBeCloseTo(3.29 / 500);
+    expect(p.prices.find((x) => x.name === 'Rinderhack')!.perUnit).toBeCloseTo(3.29 / 500);
+    // gelernt für den nächsten Bon
+    expect(p.rules.find((r) => r.key === 'rinderhack 500g')).toMatchObject({ name: 'Rinderhack', amount: 500, unit: 'g' });
+  });
+
+  it('lose Menge: 300 g verkocht, dann 5000 → 500 g korrigiert → 200 g übrig', () => {
+    const wrong = imported((rows) => { rows[1] = { ...rows[1], name: 'Quark', amount: 5000, unit: 'g', line: { ...rows[1].line, count: 1 } }; });
+    const used: Pantry = { ...wrong, items: wrong.items.map((i) => (i.name === 'Quark' ? { ...i, amount: 4700, pack: undefined, unit: 'g' } : i)) };
+    const fixed = { ...used, bons: used.bons!.map((b) => ({ ...b, lines: b.lines.map((l, i) => (i === 1 ? { ...l, weightKg: 5 } : l)) })) };
+    const p = editBonLine(fixed, 'b1', 1, { amount: 500 }, NOW, id);
+    expect(item(p, 'Quark')[0]).toMatchObject({ amount: 200, unit: 'g' });
+  });
+
+  it('Zuordnung ändern: was noch da ist, wandert zur anderen Sorte', () => {
+    const p0 = imported((rows) => { rows[0] = { ...rows[0], name: 'Rinderhack', amount: 500, unit: 'g' }; });
+    const p = editBonLine(p0, 'b1', 0, { productId: 'leicht' }, NOW, id);
+    const hack = item(p, 'Rinderhack');
+    expect(hack).toHaveLength(1);
+    expect(hack[0]).toMatchObject({ productId: 'leicht', amount: 1, pack: { amount: 500, unit: 'g' } });
+  });
+
+  it('Zuordnung ändern, aber schon aufgebraucht: es entsteht nichts Neues', () => {
+    const p0 = imported((rows) => { rows[0] = { ...rows[0], name: 'Rinderhack', amount: 500, unit: 'g' }; });
+    const eaten = { ...p0, items: p0.items.filter((i) => i.name !== 'Rinderhack') };
+    expect(item(editBonLine(eaten, 'b1', 0, { productId: 'leicht' }, NOW, id), 'Rinderhack')).toHaveLength(0);
+  });
+
+  it('Anzahl korrigieren: 2 statt 3 Packungen Quark', () => {
+    const p0 = imported((rows) => { rows[1] = { ...rows[1], name: 'Quark', amount: 750, unit: 'g' }; });
+    expect(item(p0, 'Quark')[0]).toMatchObject({ amount: 3, pack: { amount: 250, unit: 'g' } });
+    const p = editBonLine(p0, 'b1', 1, { count: 2, amount: 500 }, NOW, id);
+    expect(item(p, 'Quark')[0]).toMatchObject({ amount: 2, pack: { amount: 250, unit: 'g' } });
+  });
+
+  it('Rabatt korrigieren: Ersparnis von Bon und Monat ziehen mit, der Regalpreis bleibt', () => {
+    const p0 = imported();
+    const p = editBonLine(p0, 'b1', 0, { discounts: [{ kind: 'angebot', amount: 1 }, { kind: 'lidlplus', amount: 0.2 }] }, NOW, id);
+    expect(p.bons![0].savings).toEqual({ lidlPlus: 0.2, offers: 1, mhd: 0.3 });
+    expect(p.savings!.find((s) => s.key === '2026-10-02|5.55')).toMatchObject({ lidlPlus: 0.2, offers: 1, mhd: 0.3 });
+    expect(historyOf(p, 'Rinderhack 500g')[0].perUnit).toBe(historyOf(p0, 'Rinderhack 500g')[0].perUnit);
+  });
+
+  it('zurück auf den alten Stand = wie vorher (so funktioniert „Rückgängig“)', () => {
+    const p0 = imported((rows) => { rows[1] = { ...rows[1], name: 'Quark', amount: 750, unit: 'g' }; });
+    const old = p0.bons![0].lines[1];
+    const changed = editBonLine(p0, 'b1', 1, { count: 2, amount: 500, price: 1.58 }, NOW, id);
+    const back = editBonLine(changed, 'b1', 1, { count: old.count, amount: old.amount, price: old.price }, NOW, id);
+    expect(item(back, 'Quark').map((i) => [i.amount, i.pack])).toEqual(item(p0, 'Quark').map((i) => [i.amount, i.pack]));
+    expect(historyOf(back, 'Quark')).toEqual(historyOf(p0, 'Quark'));
+    expect(back.bons![0].lines[1]).toEqual(old);
+  });
+
+  it('Einkäufe eines Lebensmittels – neueste zuerst, Übersprungenes nicht', () => {
+    const p = imported();
+    const later = addBon(p, { id: 'b9', date: '2026-10-09T12:00:00.000Z', lines: [{ ...p.bons![0].lines[2] }, { ...p.bons![0].lines[2], skip: true }], updatedAt: NOW });
+    expect(purchasesOf(later.bons, (l) => l.name === 'Joghurt').map((x) => [x.bonId, x.index])).toEqual([['b9', 0], ['b1', 2]]);
+  });
+
+  it('alten Import ersetzen: Preise des Tages neu, Vorrat bleibt, andere Bons desselben Tages behalten ihre', () => {
+    // vor dem Update eingelesen: kein Bon gespeichert, Name falsch („Hackfleisch“ statt „Rinderhack“)
+    const rows = proposeImport(parseReceipt(TEXT), []);
+    rows[0] = { ...rows[0], name: 'Hackfleisch' };
+    const old = applyImport(emptyPantry(), rows, NOW, id, DAY);
+    const other: SavedBon = { id: 'x', key: 'anderer', date: DAY, lines: [{ bon: 'Quark', count: 1, name: 'Speisequark mager' }], updatedAt: NOW };
+    const withOther = addBon(old, other);
+    const items = withOther.items;
+    // neu eingelesen, diesmal richtig
+    const fixed = proposeImport(parseReceipt(TEXT), withOther.rules);
+    fixed[0] = { ...fixed[0], name: 'Rinderhack' };
+    const p = applyImport(dropDayPrices(withOther, DAY, '2026-10-02|5.55'), fixed, NOW, id, DAY, { stock: false });
+    expect(p.items).toEqual(items);
+    expect(historyOf(p, 'Hackfleisch')).toEqual([]);
+    expect(p.prices.find((x) => x.name === 'Hackfleisch')).toBeUndefined();
+    expect(historyOf(p, 'Rinderhack')).toHaveLength(1);
+    // vom anderen Bon desselben Tages: bleibt (und wird hier nur aktualisiert)
+    expect(historyOf(p, 'Speisequark mager')).toHaveLength(1);
+  });
+});

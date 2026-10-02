@@ -3,11 +3,15 @@ import { ask } from '../confirm';
 import { basicsOf } from '../../domain/mealplan';
 import { buildFoodList, matchesFilter, type FoodFilter, type FoodRow } from '../../domain/nutrition/foodList';
 import { normalizeName } from '../../domain/nutrition/localFoods';
-import { brandOf, productLabel, sharedOf, withShared, type MyProduct, type SharedMatch } from '../../domain/nutrition/myProducts';
+import { productLabel, sharedOf, sortTags, withShared, type MyProduct, type SharedMatch } from '../../domain/nutrition/myProducts';
+import { groupByCategory } from '../../domain/categories';
+import { useCategoryOf } from '../useCategory';
+import { CategoryPicker } from './CategoryPicker';
+import { LastPurchase } from './LastPurchase';
 import { zeroOf } from '../../domain/nutrition/noNutrition';
 import { averageNutrients } from '../../domain/nutrition/variants';
 import type { Nutrients } from '../../domain/nutrition/types';
-import { currentProducts, dismissRename, saveProducts, setFavoriteVariant, setFoodStage, useFoodTable, usePantry, useProducts, useRecipes } from '../../data/store';
+import { currentProducts, dismissRename, renameFoodEverywhere, saveProducts, setFavoriteVariant, setFoodStage, useFoodTable, usePantry, useProducts, useRecipes } from '../../data/store';
 import { stageOf } from '../../domain/stage';
 import { StagePicker } from './StagePicker';
 import { currentContent } from '../../domain/recipe';
@@ -59,6 +63,9 @@ export function FoodList({ adding, onAdding }: {
   };
   const matches = matchesFilter;
   const shown = rows.filter((r) => matches(r, filter));
+  // in Kategorien wie im Laden (Julia) – dieselben wie in Speisekammer und Einkaufsliste
+  const categoryOf = useCategoryOf();
+  const groups = groupByCategory(shown, (r) => categoryOf(r.ingredient));
   // Wischen wie im Rezept: nach links = nächster Tab, nach rechts = vorheriger (am Rand bleibt es stehen)
   const step = (dir: 1 | -1) => {
     const i = TABS.findIndex(([f]) => f === filter) + dir;
@@ -103,7 +110,12 @@ export function FoodList({ adding, onAdding }: {
             : filter === 'haus' ? 'Noch nichts „immer im Haus“ – oben mit ＋ hinzufügen.' : 'Noch keine Gewürze – oben mit ＋ hinzufügen.'}
         </p>
       )}
-      <ul className="foods">{shown.map(line)}</ul>
+      {groups.map((g) => (
+        <section key={g.id} className="foods__group" aria-label={g.title}>
+          <h3 className="foods__grouptitle">{g.title}</h3>
+          <ul className="foods">{g.items.map(line)}</ul>
+        </section>
+      ))}
 
       </div>
 
@@ -155,7 +167,13 @@ function FoodLine({ row, open, onToggle, products, onTouch }: {
     const n = renaming?.trim();
     setRenaming(null);
     if (!n || !shared || n === shared.name) return;
-    saveShared({ ...shared, name: n }, ps.length > 1 ? `Alle ${ps.length} Sorten heißen jetzt „${n}“` : `Heißt jetzt „${n}“`);
+    // die Sorten selbst – und alles, was den alten Namen trägt (Speisekammer, Bons, Preise …), zieht mit (Julia)
+    const old = new Map(ps.map((p) => [p.id, p]));
+    store([], { ...shared, name: n });
+    const undoPantry = renameFoodEverywhere(shared.name, n, ps.map((p) => p.id));
+    toast(`${ps.length > 1 ? `Alle ${ps.length} Sorten heißen` : 'Heißt'} jetzt „${n}“ – auch in der Speisekammer`, {
+      label: 'Rückgängig', run: () => { saveProducts(currentProducts().map((x) => old.get(x.id) ?? x)); undoPantry(); },
+    });
   };
   const remove = async (p: MyProduct) => {
     if (!(await ask({ title: `„${productLabel(p)}“ entfernen?`, text: 'Die Rezepte rechnen dann wieder mit Richtwerten.', confirm: 'Entfernen', danger: true }))) return;
@@ -188,12 +206,14 @@ function FoodLine({ row, open, onToggle, products, onTouch }: {
               <Icon name="pencil" size={14} />
             </button>
           )}
-          {ps.length === 1 && brandOf(ps[0]) && <span className="brand">{brandOf(ps[0])}</span>}
+          {/* Zusatz („leicht“) und Marke direkt neben dem Namen */}
+          {ps.length === 1 && sortTags(ps[0]).map((t) => <span key={t} className="brand">{t}</span>)}
           {nothing && <span className="foods__sub">nichts festgelegt</span>}
           {stage === 'haus' && <span className="foods__mark" title="Immer im Haus"><Icon name="home" size={14} /></span>}
           {rule && <span className="foods__restock" title={`Nachkaufen unter ${fmt(rule.below)} ${rule.unit}`}><Icon name="refresh" size={13} /></span>}
           {stage === 'ohne' && <span className="foods__mark" title="Gewürz – zählt nicht mit"><Icon name="leaf" size={14} /></span>}
-          {ps.length > 1 && <span className="foods__sub">{ps.length} Sorten{fav ? ` · ★ ${productLabel(fav)}` : ''}</span>}
+          {/* Favorit nicht in der geschlossenen Karte (Julia) – der Stern steht aufgeklappt an der Sorte */}
+          {ps.length > 1 && <span className="foods__sub">{ps.length} Sorten</span>}
         </span>
         <span className="foods__kcal">
           {zeroRow ? ''
@@ -206,7 +226,8 @@ function FoodLine({ row, open, onToggle, products, onTouch }: {
       {open && zeroRow && (
         <div className="foods__body">
           {ps.length > 0 && <p className="small muted">Deine eigenen Werte bleiben gespeichert und zählen wieder, sobald du eine andere Stufe wählst.</p>}
-          <StagePicker name={row.ingredient} onTouch={onTouch} />
+          <CategoryPicker name={row.ingredient} label={title} />
+          <StagePicker name={row.ingredient} label={title} onTouch={onTouch} />
         </div>
       )}
       {open && !zeroRow && (
@@ -217,6 +238,8 @@ function FoodLine({ row, open, onToggle, products, onTouch }: {
               {row.table ? <>Rechnet mit dem Richtwert der Tabelle: {Math.round(row.table.per100g.kcal)} kcal · {macros(row.table.per100g)} pro 100 g.</> : 'Mashi kennt hierfür keine Werte.'}
             </p>
           )}
+          {/* statt des Preisfelds: was du zuletzt wirklich bezahlt hast – und der Weg zur Preis-Seite */}
+          <LastPurchase name={row.ingredient} title={title} productIds={ps.map((p) => p.id)} />
           {ps.map((p) => editing === p.id ? (
             <ProductForm key={p.id} initial={p} shared={shared} onSave={save} onCancel={() => setEditing(null)} />
           ) : (
@@ -229,9 +252,9 @@ function FoodLine({ row, open, onToggle, products, onTouch }: {
                     <Icon name="star" size={18} filled={!!p.favorite} />
                   </button>
                 )}
-                {/* mehrere Sorten: der Name steht schon oben in der Kachel – hier nur die Marke als Chip */}
+                {/* mehrere Sorten: der Name steht schon oben in der Kachel – hier Zusatz und Marke als Chips */}
                 {ps.length > 1
-                  ? <span className="foods__brand">{brandOf(p) ? <span className="brand-chip">{brandOf(p)}</span> : <span className="brand-chip is-empty">ohne Marke</span>}</span>
+                  ? <span className="foods__brand">{sortTags(p).length ? sortTags(p).map((t) => <span key={t} className="brand-chip">{t}</span>) : <span className="brand-chip is-empty">ohne Marke</span>}</span>
                   : <strong>Pro 100 g</strong>}
                 <span className="product__actions">
                   <button className="iconbtn iconbtn--sm" aria-label={`${p.name} bearbeiten`} onClick={() => setEditing(p.id)}><Icon name="pencil" size={16} /></button>
@@ -263,7 +286,8 @@ function FoodLine({ row, open, onToggle, products, onTouch }: {
             <SharedShelf key={shared.shelfDays ?? 'leer'} shared={shared} onSave={(d) => saveShared({ ...shared, shelfDays: d },
               d ? `Hält ${d === 1 ? '1 Tag' : `${d} Tage`} ab Kauf${ps.length > 1 ? ` – alle ${ps.length} Sorten` : ''}` : 'Haltbarkeit schätzt wieder Mashi', false)} />
           )}
-          <StagePicker name={row.ingredient} onTouch={onTouch} />
+          <CategoryPicker name={row.ingredient} label={title} />
+          <StagePicker name={row.ingredient} label={title} onTouch={onTouch} />
         </div>
       )}
     </li>

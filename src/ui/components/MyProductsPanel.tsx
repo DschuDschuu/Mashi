@@ -15,6 +15,7 @@ import { Icon } from './Icon';
 import { NutritionQuickForm } from './NutritionQuickForm';
 import { BrandNames } from './BrandNames';
 import { parseNum, toField, type Values } from './productFields';
+import { purchasesOf } from '../../domain/bons';
 
 /** Was Mashi ohne Angabe schätzt – vom ersetzten Lebensmittel (Mozzarella 7 Tage) */
 export function shelfEstimate(replaces: string[], custom: Parameters<typeof shelfDaysForFood>[2]): string {
@@ -85,6 +86,7 @@ export function ProductForm({ initial, onSave, onCancel, shared, afterName, name
   // Ältere Namen mit Marke in Klammern: getrennt anzeigen – gespeichert wird es beim Speichern
   const [name, setName] = useState(shared?.name ?? (initial?.name ? nameOf({ name: initial.name, brand: initial.brand }) : ''));
   const [brand, setBrand] = useState(initial?.name ? brandOf({ name: initial.name, brand: initial.brand }) ?? '' : '');
+  const [detail, setDetail] = useState(initial?.detail ?? '');
   const [ean, setEan] = useState(initial?.ean);
   const [scanning, setScanning] = useState(false);
   const [scanNote, setScanNote] = useState<string | null>(null);
@@ -110,7 +112,10 @@ export function ProductForm({ initial, onSave, onCancel, shared, afterName, name
   const [packUnit, setPackUnit] = useState<'g' | 'ml' | 'Stück'>(initial?.packageUnit ?? 'g');
   const [packPrice, setPackPrice] = useState(toField(initial?.packagePrice));
   const [shelf, setShelf] = useState(toField(initial?.shelfDays));
-  const shelfCustom = usePantry().shelfDays;
+  const pantry = usePantry();
+  const shelfCustom = pantry.shelfDays;
+  /** diese Sorte gibt es schon vom Kassenbon – dann gilt dessen Preis */
+  const bought = !!initial?.id && purchasesOf(pantry.bons, (l) => l.productId === initial.id).length > 0;
   const [error, setError] = useState<string | null>(null);
   // „Milch“ mit 3,5 g Fett: Stufe in den Namen? (nur Vorschlag – die Rezepte ordnen über den Namen zu)
   const levelName = sortOnly ? undefined : levelNameFromFat(name, parseNum(values.fat));
@@ -137,6 +142,7 @@ export function ProductForm({ initial, onSave, onCancel, shared, afterName, name
       id: initial?.id ?? newId('p'),
       name: name.trim(),
       ...(brand.trim() ? { brand: brand.trim() } : {}),
+      ...(detail.trim() ? { detail: detail.trim() } : {}),
       replaces: match.replaces,
       ...(match.names.length ? { names: match.names } : {}),
       ...(ex.length ? { excludes: ex } : {}),
@@ -293,6 +299,11 @@ export function ProductForm({ initial, onSave, onCancel, shared, afterName, name
             <input value={brand} onChange={(e) => setBrand(e.target.value)} list="brand-names" placeholder="z. B. Milbona" />
           </label>
           <BrandNames />
+          {/* Rinderhack leicht und normal = zwei Sorten eines Lebensmittels (Julia) – der Zusatz steht neben der Marke */}
+          <label className="field">
+            <span>Zusatz (optional)</span>
+            <input value={detail} onChange={(e) => setDetail(e.target.value)} placeholder="z. B. leicht" />
+          </label>
           <p className="small muted">Werte vom Etikett, pro 100 g bzw. 100 ml{onNoValues ? ' – oder leer lassen' : ''}:</p>
           <div className="row-2">{numField('kcal', 'kcal')}{numField('carbs', 'Kohlenhydrate (g)')}</div>
           <div className="row-2">{numField('protein', 'Eiweiß (g)')}{numField('fat', 'Fett (g)')}</div>
@@ -313,9 +324,14 @@ export function ProductForm({ initial, onSave, onCancel, shared, afterName, name
                 </select>
               </span>
             </label>
-            <label className="field"><span>Preis je Packung (€)</span>
-              <input inputMode="decimal" value={packPrice} onChange={(e) => setPackPrice(e.target.value)} placeholder="kommt sonst vom Bon" />
-            </label>
+            {/* schon vom Bon gekauft: der echte Preis steht in der Kachel („Zuletzt gekauft“) – das Feld braucht es dann nicht */}
+            {bought ? (
+              <div className="field"><span>Preis</span><span className="small muted product-form__bought">kommt vom Bon – siehe „Zuletzt gekauft“</span></div>
+            ) : (
+              <label className="field"><span>Preis je Packung (€)</span>
+                <input inputMode="decimal" value={packPrice} onChange={(e) => setPackPrice(e.target.value)} placeholder="z. B. 1,99" />
+              </label>
+            )}
           </div>
           {/* Sorte: Haltbarkeit gilt für alle Sorten – steht in der Kachel */}
           {!sortOnly && (

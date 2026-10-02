@@ -80,6 +80,12 @@ const byName = (x: { name: string }) => x.name.toLocaleLowerCase('de-DE').trim()
 const byNameDay = (x: { name: string; date: string }) => `${byName(x)}|${x.date.slice(0, 10)}`;
 const later = (a: string | undefined, b: string | undefined) => ((a ?? '') > (b ?? '') ? a : b);
 
+/** Zuordnung Schlüssel → Wert eintragsweise (siehe merge3Keyed) – leer = undefined */
+function mergeRecord<T>(base: Record<string, T> = {}, ours: Record<string, T> = {}, theirs: Record<string, T> = {}): Record<string, T> | undefined {
+  const out = Object.fromEntries(merge3Keyed(Object.entries(base), Object.entries(ours), Object.entries(theirs), ([k]) => k));
+  return Object.keys(out).length ? out : undefined;
+}
+
 export function merge3Pantry(base: Pantry, ours: Pantry, theirs: Pantry): Pantry {
   const cookLog = Object.fromEntries(merge3Keyed(
     Object.entries(base.cookLog ?? {}), Object.entries(ours.cookLog ?? {}), Object.entries(theirs.cookLog ?? {}), ([k]) => k,
@@ -103,6 +109,10 @@ export function merge3Pantry(base: Pantry, ours: Pantry, theirs: Pantry): Pantry
       ? merge3Keyed(base.restock ?? [], ours.restock ?? [], theirs.restock ?? [], (r) => normalizeName(r.name)) : undefined,
     macroGoal: merge3Value(base.macroGoal, ours.macroGoal, theirs.macroGoal),
     tastes: merge3Value(base.tastes, ours.tastes, theirs.tastes),
+    // Bons: je Bon – beide denselben korrigiert → die zuletzt geänderte Fassung
+    ...(base.bons || ours.bons || theirs.bons ? { bons: merge3Keyed(base.bons ?? [], ours.bons ?? [], theirs.bons ?? [], (b) => b.id, (_b, o, t) => (o && t ? (o.updatedAt >= t.updatedAt ? o : t) : o ?? t)) } : {}),
+    // Kategorien je Lebensmittel: am Handy Kimchi umgestellt, am Laptop Tofu → beides gilt
+    ...(base.categories || ours.categories || theirs.categories ? { categories: mergeRecord(base.categories, ours.categories, theirs.categories) } : {}),
     renameDismissed: merge3Set(base.renameDismissed, ours.renameDismissed, theirs.renameDismissed),
     cookLog: Object.keys(cookLog).length ? cookLog : undefined,
     updatedAt: later(ours.updatedAt, theirs.updatedAt)!,
@@ -149,6 +159,8 @@ export function unionPantry(a: Pantry, b: Pantry): Pantry {
     savings: unionKeyed(newer.savings ?? [], older.savings ?? [], (s) => s.key),
     receipts: unionSet(newer.receipts, older.receipts),
     restock: newer.restock || older.restock ? unionKeyed(newer.restock ?? [], older.restock ?? [], (r) => normalizeName(r.name)) : undefined,
+    ...(newer.bons || older.bons ? { bons: unionKeyed(newer.bons ?? [], older.bons ?? [], (b) => b.id).sort((a, b) => a.date.localeCompare(b.date)) } : {}),
+    ...(newer.categories || older.categories ? { categories: { ...older.categories, ...newer.categories } } : {}),
     cookLog: Object.keys(cookLog).length ? cookLog : undefined,
   };
 }

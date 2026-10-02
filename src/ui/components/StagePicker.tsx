@@ -28,7 +28,11 @@ const HINT: Record<FoodStage, string> = {
  * Stufen-Chips (ohne Überschrift, Julia) – genau eine Stufe je Lebensmittel: normal · 🏠 immer im Haus ·
  * 🔄 nachkaufen unter X. Dieselbe Auswahl unter „Meine Lebensmittel“ und am Vorrat in der Speisekammer.
  */
-export function StagePicker({ name, onTouch }: { name: string; onTouch?: () => void }) {
+/**
+ * @param name Schlüssel, unter dem die Stufe gespeichert ist (Zutat der Tabelle, z. B. „Magermilch“)
+ * @param label so heißt es in der Kachel („Milch“) – nur für Meldungen; ohne = name
+ */
+export function StagePicker({ name, label = name, onTouch }: { name: string; label?: string; onTouch?: () => void }) {
   const pantry = usePantry();
   const statuses = useRestockStatus();
   const table = useFoodTable();
@@ -47,7 +51,7 @@ export function StagePicker({ name, onTouch }: { name: string; onTouch?: () => v
       if (s === 'nachkaufen') return;
       // Im Haus / Gewürze nochmal → wieder normal (mit Rückgängig)
       const undo = setFoodStage(name, 'normal');
-      toast(`„${name}“ – nichts Besonderes mehr festgelegt`, { label: 'Rückgängig', run: undo });
+      toast(`„${label}“ – nichts Besonderes mehr festgelegt`, { label: 'Rückgängig', run: undo });
       return;
     }
     if (s === 'nachkaufen') {
@@ -57,12 +61,12 @@ export function StagePicker({ name, onTouch }: { name: string; onTouch?: () => v
     }
     setAsking(false);
     const undo = setFoodStage(name, s);
-    toast(s === 'haus' ? `„${name}“ ist jetzt immer im Haus` : `„${name}“ steht jetzt unter „Gewürze“ – zählt nicht mit`, { label: 'Rückgängig', run: undo });
+    toast(s === 'haus' ? `„${label}“ ist jetzt immer im Haus` : `„${label}“ steht jetzt unter „Gewürze“ – zählt nicht mit`, { label: 'Rückgängig', run: undo });
   };
   return (
     <div className="stage">
       {/* onPointerDown: ein offenes Grenzfeld soll nicht erst per Blur speichern und dann gleich umspringen */}
-      <div className="stage__options" role="group" aria-label={`${name}: wie im Blick behalten`}>
+      <div className="stage__options" role="group" aria-label={`${label}: wie im Blick behalten`}>
         {STAGES.map((o) => (
           <button key={o.stage} type="button" aria-pressed={shown === o.stage}
             className={`chip chip--sm${shown === o.stage ? ' is-on' : ''}`} onPointerDown={(e) => e.preventDefault()} onClick={() => pick(o.stage)}>
@@ -71,7 +75,7 @@ export function StagePicker({ name, onTouch }: { name: string; onTouch?: () => v
         ))}
       </div>
       {shown === 'nachkaufen'
-        ? <RestockField key={rule ? `${rule.below}${rule.unit}` : 'neu'} name={name} rule={rule} status={status} onClose={() => setAsking(false)} />
+        ? <RestockField key={rule ? `${rule.below}${rule.unit}` : 'neu'} name={name} label={label} rule={rule} status={status} onClose={() => setAsking(false)} />
         : <p className="small muted stage__hint">{HINT[shown]}</p>}
     </div>
   );
@@ -90,7 +94,7 @@ const counted = (u: PantryUnit) => u === 'Stück' || u === 'Glas';
  * Darunter nur, wenn die Grenze nicht funktionieren kann („Kann nicht zählen …“) – den normalen Stand
  * („Gerade 3 Stück – reicht“) zeigen Speisekammer und Einkaufsliste ohnehin (Julia).
  */
-function RestockField({ name, rule, status, onClose }: { name: string; rule?: RestockRule; status?: RestockStatus; onClose: () => void }) {
+function RestockField({ name, label, rule, status, onClose }: { name: string; label: string; rule?: RestockRule; status?: RestockStatus; onClose: () => void }) {
   const [below, setBelow] = useState(rule ? fmt(rule.below) : '1');
   const [unit, setUnit] = useState<PantryUnit>(rule?.unit ?? 'Stück');
   const n = Number(below.replace(',', '.'));
@@ -100,7 +104,7 @@ function RestockField({ name, rule, status, onClose }: { name: string; rule?: Re
   const confirm = () => {
     if (!valid) return;
     setFoodStage(name, 'nachkaufen', { below: n, unit });
-    toast(`„${name}“ kommt unter ${fmt(n)} ${unit} von selbst auf die Einkaufsliste`);
+    toast(`„${label}“ kommt unter ${fmt(n)} ${unit} von selbst auf die Einkaufsliste`);
     onClose();
   };
   /** ✕: Änderung verwerfen – nichts wird gelöscht */
@@ -113,7 +117,7 @@ function RestockField({ name, rule, status, onClose }: { name: string; rule?: Re
   const remove = () => {
     if (!rule) return;
     const undo = setFoodStage(name, 'normal');
-    toast(`„${name}“ kommt nicht mehr von selbst auf die Liste`, { label: 'Rückgängig', run: undo });
+    toast(`„${label}“ kommt nicht mehr von selbst auf die Liste`, { label: 'Rückgängig', run: undo });
     onClose();
   };
   // von g auf Stück wird aus „250“ keine 250 Stück – dann neu mit 1

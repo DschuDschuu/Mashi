@@ -3,7 +3,7 @@ import PouchDB from 'pouchdb-core';
 import memory from 'pouchdb-adapter-memory';
 import { describe, expect, it } from 'vitest';
 import { PouchRecipeRepository, type RecipeDb } from './pouchRepository';
-import { addExtra, addPantryItem, addToPlan, answerLeftover, applyInventory, clearDoneExtras, deleteRecipe, importPantry, importReceipt, importRecipes, regenerateImage, markCooked, uncookRecipe, clearCooked, createRecipe, currentLeftoverAsk, currentPantry, eatPreparedPortions, freezePantryItem, initStore, thawPantryItem, togglePlanCooked, removeFromPlan, removePantryItem, setFoodStage, setPantryAmount, toggleShoppingItem, updatePantryItem } from './store';
+import { addExtra, addPantryItem, editBon, setCategory, addToPlan, answerLeftover, applyInventory, clearDoneExtras, deleteRecipe, importPantry, importReceipt, importRecipes, regenerateImage, markCooked, uncookRecipe, clearCooked, createRecipe, currentLeftoverAsk, currentPantry, eatPreparedPortions, freezePantryItem, initStore, thawPantryItem, togglePlanCooked, removeFromPlan, removePantryItem, setFoodStage, setPantryAmount, toggleShoppingItem, updatePantryItem } from './store';
 import { keyOfName } from '../domain/mealplan';
 import { EXTRA_PREFIX, RESTOCK_PREFIX } from '../domain/restock';
 import { foodTable } from '../services';
@@ -273,5 +273,34 @@ describe('Store: Bild entsteht, Rezept wird inzwischen gelöscht', () => {
     await expect(pending).resolves.toBeUndefined();
     await settle();
     expect(currentPantry()).toBeTruthy();
+  });
+});
+
+describe('Store: gespeicherter Bon – korrigieren mit Rückgängig', () => {
+  it('Import hebt den Bon auf; Menge ändern zieht den Vorrat mit, Rückgängig stellt alles her', async () => {
+    await freshStore('bon');
+    importReceipt([{ line: { name: 'Haferflocken', count: 2, price: 1.58 }, key: 'haferflocken', known: false, skip: false, name: 'Haferflocken', amount: 1000, unit: 'g' }],
+      '2026-10-02T12:00:00.000Z', { lidlPlus: 0, offers: 0, mhd: 0, total: 1.58 });
+    const bon = currentPantry().bons![0];
+    expect(bon.lines[0]).toMatchObject({ bon: 'Haferflocken', name: 'Haferflocken', count: 2, amount: 1000 });
+    expect(currentPantry().items[0]).toMatchObject({ amount: 2, pack: { amount: 500, unit: 'g' } });
+    const undo = editBon(bon.id, 0, { count: 3, amount: 1500 });
+    expect(currentPantry().items[0]).toMatchObject({ amount: 3, pack: { amount: 500, unit: 'g' } });
+    undo();
+    expect(currentPantry().items[0]).toMatchObject({ amount: 2, pack: { amount: 500, unit: 'g' } });
+    expect(currentPantry().bons![0].lines[0]).toEqual(bon.lines[0]);
+  });
+});
+
+describe('Store: Kategorie ändern mit Rückgängig', () => {
+  it('eigene Wahl gilt, Rückgängig → wieder Mashis Vorschlag', async () => {
+    await freshStore('kat');
+    const undo = setCategory('Kimchi', 'konserven');
+    expect(Object.values(currentPantry().categories ?? {})).toEqual([]); // Kimchi ist schon Konserve – nichts zu merken
+    const undo2 = setCategory('Kimchi', 'sonstiges');
+    expect(Object.values(currentPantry().categories ?? {})).toEqual(['sonstiges']);
+    undo2();
+    undo();
+    expect(currentPantry().categories).toBeUndefined();
   });
 });

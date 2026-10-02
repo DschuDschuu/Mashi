@@ -16,6 +16,8 @@ import { MoreScreen } from './ui/screens/MoreScreens';
 import { PlanScreen } from './ui/screens/PlanScreen';
 import { PantryScreen } from './ui/screens/PantryScreen';
 import { PricesScreen } from './ui/screens/PricesScreen';
+import { BonScreen } from './ui/screens/BonScreen';
+import { FoodPriceScreen } from './ui/screens/FoodPriceScreen';
 import { ShoppingScreen } from './ui/screens/ShoppingScreen';
 import { ReceiptImportScreen } from './ui/screens/ReceiptImportScreen';
 import { RecipeDetailScreen } from './ui/screens/RecipeDetailScreen';
@@ -49,7 +51,11 @@ function resolve(route: Route): { screen: ReactElement; tab?: string; section?: 
     case 'testen': return { screen: <Redirect to="/kochbuch?segment=testen" /> };
     case 'plan': return { screen: <PlanScreen />, tab: '/plan' };
     case 'reste': return { screen: <UseUpScreen />, section: '/' };
-    case 'preise': return { screen: <PricesScreen />, tab: '/speisekammer' };
+    case 'preise':
+      // ein gespeicherter Bon / Preise nur für ein Lebensmittel
+      if (b === 'bon' && c) return { screen: <BonScreen key={c} id={c} />, section: '/speisekammer' };
+      if (b === 'lebensmittel' && c) return { screen: <FoodPriceScreen key={c} name={c} title={route.query.get('t') || c} />, section: '/speisekammer' };
+      return { screen: <PricesScreen />, tab: '/speisekammer' };
     // die Einkaufsliste hängt am Wagen in der Speisekammer
     case 'einkauf': return { screen: <ShoppingScreen />, tab: '/speisekammer' };
     case 'speisekammer':

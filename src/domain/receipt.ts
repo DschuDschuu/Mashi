@@ -13,7 +13,22 @@ export interface ReceiptLine {
   price?: number;
   /** darunter stand „RABATT 20%“ – bei Lidl der Aufkleber für Ware kurz vor dem MHD */
   reduced?: boolean;
+  /** Rabattzeilen direkt darunter („Preisvorteil -0,50“) – price bleibt der Preis davor */
+  discounts?: LineDiscount[];
 }
+
+/** Angebot („Preisvorteil“), Lidl Plus (Rabatt, Coupon) oder MHD-Aufkleber („RABATT 20%“) */
+export type DiscountKind = 'angebot' | 'lidlplus' | 'mhd';
+export interface LineDiscount {
+  kind: DiscountKind;
+  amount: number;
+  /** wie auf dem Bon („RABATT 20%“ → 20) – geht vor dem Ausrechnen, das bei Rundung danebenliegt */
+  percent?: number;
+}
+
+/** Rabattzeile mit Betrag – die Sammelzeilen unten („Gesamter Preisvorteil“) beginnen anders */
+const DISCOUNT = /^(lidl plus rabatt|lidl plus coupon|coupon|preisvorteil|rabatt)\b.*?-?\s*(\d+[.,]\d{2})\s*[A-Z0-9]?$/i;
+const discountKind = (word: string): DiscountKind => (/lidl plus|coupon/i.test(word) ? 'lidlplus' : /^rabatt$/i.test(word) ? 'mhd' : 'angebot');
 
 const NUM = String.raw`\d+[.,]\d{2}`;
 /**
@@ -56,21 +71,27 @@ export function parseReceipt(text: string): ReceiptLine[] {
   // Artikel beginnen nach der Kopfzeile „EUR“ – fehlt sie (z. B. eingefügter Ausschnitt), ab dem Anfang
   const head = lines.findIndex((l) => /^EUR$/i.test(l));
   const out: ReceiptLine[] = [];
+  /** der Artikel direkt darüber – nur dem gehört eine Rabattzeile (Pfand, Leerzeilen o. Ä. dazwischen: keinem) */
+  let last: ReceiptLine | undefined;
 
   for (const line of lines.slice(head + 1)) {
     if (END.test(line)) break;
     const w = line.match(WEIGHT);
     if (w) {
-      const last = out[out.length - 1];
       if (last) last.weightKg = num(w[1]);
       continue;
     }
-    if (MHD_DISCOUNT.test(line)) {
-      const last = out[out.length - 1];
-      if (last) last.reduced = true;
+    const d = line.match(DISCOUNT);
+    if (d || MHD_DISCOUNT.test(line)) {
+      if (last) {
+        if (MHD_DISCOUNT.test(line)) last.reduced = true;
+        const pct = line.match(/(\d{1,2})\s*%/);
+        if (d) last.discounts = [...(last.discounts ?? []), { kind: discountKind(d[1]), amount: num(d[2]), ...(pct ? { percent: Number(pct[1]) } : {}) }];
+      }
       continue;
     }
     const m = line.match(ITEM);
+    last = undefined;
     if (!m) continue; // Adresse, Überschrift, unlesbare Zeile
     const [, rawName, , rawCount, price] = m;
     let name = rawName.trim();
@@ -83,7 +104,30 @@ export function parseReceipt(text: string): ReceiptLine[] {
       count = stray[3] ? Number(stray[3]) : Math.max(1, Math.round(num(price) / num(stray[2])));
     }
     if (NOT_AN_ITEM.test(name) || price.startsWith('-')) continue;
-    out.push({ name, count, price: num(price) });
+    last = { name, count, price: num(price) };
+    out.push(last);
+  }
+  return out;
+}
+
+/**
+ * Derselbe Artikel mehrmals einzeln auf dem Bon („Joghurt 0,99“ zweimal) → eine Zeile mit Anzahl 2 (Julia).
+ * Nur bei gleichem Stückpreis und gleicher Art (lose Ware, MHD-Ware bleiben für sich) – sonst wäre es nicht dasselbe.
+ */
+export function mergeSameLines(lines: readonly ReceiptLine[]): ReceiptLine[] {
+  const out: ReceiptLine[] = [];
+  const unit = (l: ReceiptLine) => (l.price === undefined ? undefined : Math.round((l.price / l.count) * 100));
+  for (const l of lines) {
+    const same = l.weightKg === undefined && !l.reduced
+      ? out.find((o) => o.weightKg === undefined && !o.reduced && o.name.toLocaleLowerCase('de-DE') === l.name.toLocaleLowerCase('de-DE') && unit(o) === unit(l))
+      : undefined;
+    if (!same) {
+      out.push({ ...l, ...(l.discounts ? { discounts: [...l.discounts] } : {}) });
+      continue;
+    }
+    same.count += l.count;
+    if (same.price !== undefined && l.price !== undefined) same.price = Math.round((same.price + l.price) * 100) / 100;
+    if (l.discounts?.length) same.discounts = [...(same.discounts ?? []), ...l.discounts];
   }
   return out;
 }

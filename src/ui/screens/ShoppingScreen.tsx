@@ -8,7 +8,8 @@ import { navigate } from '../../router';
 import { Empty, Section } from '../components/Controls';
 import { Icon } from '../components/Icon';
 import { TopBar } from '../components/TopBar';
-import { groupByKind } from '../foodGroups';
+import { groupByCategory } from '../../domain/categories';
+import { useCategoryOf } from '../useCategory';
 
 type View = 'liste' | 'basics';
 
@@ -29,6 +30,7 @@ export function ShoppingScreen() {
   const shown = all.filter((i) => (view === 'basics' ? i.pantry : !i.pantry));
   const isDone = (i: ShoppingItem) => plan.checked.includes(i.key);
   const open = shown.filter((i) => !isDone(i) && !i.covered);
+  const categoryOf = useCategoryOf();
   const done = shown.filter(isDone);
   const have = shown.filter((i) => i.covered && !isDone(i));
   const count = (v: View) => all.filter((i) => (v === 'basics' ? i.pantry : !i.pantry) && !isDone(i) && !i.covered).length;
@@ -61,7 +63,7 @@ export function ShoppingScreen() {
               {view === 'liste' && <button className="link" onClick={() => navigate('/speisekammer/bon')}>Eingekauft? Kassenbon importieren</button>}
             </p>
           )}
-          {groupByKind(open, (i) => i.kind).map((g) => (
+          {groupByCategory(open, (i) => categoryOf(i.name)).map((g) => (
             <Section key={g.title} title={g.title}>
               <ul className="shopping panel">{g.items.map((i) => <ShoppingRow key={i.key} item={i} checked={false} />)}</ul>
             </Section>

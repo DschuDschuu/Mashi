@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { RecipeContent } from '../types';
 import { computeNutrition } from './engine';
 import { localFoodTable } from './localFoods';
-import { brandOf, nameOf, productLabel, sharedOf, splitBrand, withMyProducts, withShared, type MyProduct } from './myProducts';
+import { brandOf, nameOf, productLabel, sharedOf, sortTags, splitBrand, withMyProducts, withShared, type MyProduct } from './myProducts';
 
 const milk: MyProduct = {
   id: 'p-milch', name: 'Milch 0,1 % (Test)', replaces: ['milch', 'milch-fettarm', 'magermilch'],
@@ -96,6 +96,13 @@ describe('Marke', () => {
     expect([nameOf(old), brandOf(old), productLabel(old)]).toEqual(['Joghurt 0,1 %', 'Hausmarke', 'Joghurt 0,1 % · Hausmarke']);
     const neu = { name: 'Pesto (grün)', brand: 'Beispiel' };
     expect([nameOf(neu), brandOf(neu), productLabel(neu)]).toEqual(['Pesto (grün)', 'Beispiel', 'Pesto (grün) · Beispiel']);
+  });
+
+  it('Zusatz einer Sorte („leicht“) steht vor der Marke – auch ohne Marke', () => {
+    expect(productLabel({ name: 'Rinderhack', detail: 'leicht', brand: 'Beispiel' })).toBe('Rinderhack · leicht · Beispiel');
+    expect(productLabel({ name: 'Rinderhack', detail: 'leicht' })).toBe('Rinderhack · leicht');
+    expect(sortTags({ name: 'Rinderhack', detail: 'leicht', brand: 'Beispiel' })).toEqual(['leicht', 'Beispiel']);
+    expect(sortTags({ name: 'Rinderhack' })).toEqual([]);
   });
 });
 

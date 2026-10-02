@@ -14,6 +14,9 @@ import { attachPacks, changeAmount, mergeSamePacks, openItem } from '../domain/p
 import { addPrepared, eatPrepared } from '../domain/prepared';
 import { currentContent, currentVersion, newId, sameContent, withNewVersion } from '../domain/recipe';
 import { recordSavings, type BonSavings } from '../domain/savings';
+import { addBon, bonFromImport, dropDayPrices, editBonLine, type BonLine, type BonLinePatch } from '../domain/bons';
+import { withCategory, type FoodCategory } from '../domain/categories';
+import { relinkOldImport, renameFood, syncProductNames } from '../domain/renameFood';
 import { specialDays, type ShelfDays } from '../domain/shelfLife';
 import { zeroOf } from '../domain/nutrition/noNutrition';
 import { DEFAULT_MACRO_GOAL, withFavorite, type MacroGoal } from '../domain/nutrition/variants';
@@ -125,6 +128,7 @@ export async function initStore(r: RecipeRepository) {
   emit();
   normalizePacks();
   normalizeStages();
+  normalizeNames();
   repo.onExternalChange?.(scheduleReload);
 }
 
@@ -566,6 +570,8 @@ export function saveProducts(next: MyProduct[]) {
   emit();
   // Packungsgröße neu eingetragen → vorhandener Vorrat zählt ab jetzt in Packungen
   normalizePacks();
+  // umbenannt → der Vorrat dieser Sorte heißt mit
+  normalizeNames();
   productsPending++;
   void tracked(repo.saveProducts(next, base))
     .then((stored) => {
@@ -796,10 +802,19 @@ function commitPantry(next: Omit<Pantry, 'updatedAt'>) {
  * Was jetzt reicht, steht dort unter „Hast du schon“; was ohne Menge kam, wird abgehakt.
  * Hast du zu wenig gekauft, bleibt der Rest auf der Liste.
  */
-export function importReceipt(rows: ImportRow[], paidAt?: string, savings?: BonSavings): { count: number; onList: number } {
+export function importReceipt(rows: ImportRow[], paidAt?: string, savings?: BonSavings, opts: { replace?: boolean } = {}): { count: number; onList: number } {
   const t = now();
-  const next = rememberReceipt(applyImport(pantry, rows, t, () => newId('v'), paidAt ?? t), bonKey(paidAt, savings?.total));
-  commitPantry(savings ? recordSavings(next, savings, paidAt ?? t) : next);
+  const key = bonKey(paidAt, savings?.total);
+  // alten Import ersetzen: Preise dieses Tages neu, der Vorrat ist schon da (kommt nicht doppelt)
+  // … und die Vorräte vom ersten Einlesen bekommen die neue Zuordnung (Name, Sorte)
+  const start = opts.replace ? relinkOldImport(dropDayPrices(pantry, paidAt ?? t, key), rows) : pantry;
+  const next = rememberReceipt(applyImport(start, rows, t, () => newId('v'), paidAt ?? t, { stock: !opts.replace }), key);
+  // den Bon selbst aufheben (nur die Zeilen) – zum Nachsehen und Korrigieren unter „Preise“
+  const kept = addBon(next, bonFromImport(rows, paidAt ?? t, t, newId('b'), key, savings));
+  commitPantry(savings ? recordSavings(kept, savings, paidAt ?? t) : kept);
+  normalizeNames();
+  // ersetzt: die Einkaufsliste hat der erste Import schon abgehakt
+  if (opts.replace) return { count: rows.filter((r) => !r.skip).length, onList: 0 };
 
   const table = currentFoodTable();
   const bought = new Set(rows.filter((r) => !r.skip).map((r) => keyOfName(r.name, table)));
@@ -811,6 +826,44 @@ export function importReceipt(rows: ImportRow[], paidAt?: string, savings?: BonS
   const boughtExtra = (plan.extra ?? []).filter((x) => bought.has(keyOfName(x.name, table)));
   if (boughtExtra.length) commitPlan({ ...plan, extra: (plan.extra ?? []).filter((x) => !boughtExtra.includes(x)) });
   return { count: rows.filter((r) => !r.skip).length, onList: list.filter((i) => i.covered).length + tick.length };
+}
+
+/**
+ * Zeile eines gespeicherten Bons korrigieren – Vorrat, Preisverlauf, Ersparnis und das Gelernte ziehen mit.
+ * „Rückgängig“ ist dieselbe Änderung zurück (auf den alten Stand der Zeile).
+ */
+export function editBon(bonId: string, index: number, patch: BonLinePatch): () => void {
+  const old = pantry.bons?.find((b) => b.id === bonId)?.lines[index];
+  if (!old) return () => {};
+  commitPantry(editBonLine(pantry, bonId, index, patch, now(), () => newId('v')));
+  return () => {
+    const back: Record<keyof BonLinePatch, unknown> = { name: old.name, amount: old.amount, unit: old.unit, productId: old.productId, price: old.price, discounts: old.discounts ?? [], count: old.count };
+    commitPantry(editBonLine(pantry, bonId, index, back as Partial<BonLine>, now(), () => newId('v')));
+  };
+}
+
+/**
+ * Lebensmittel umbenennen – Speisekammer, gelernte Bon-Artikel, Bons, Preise und Stufen ziehen mit (Produkte
+ * benennt FoodList selbst um). Gibt „Rückgängig“ zurück: genau die geänderten Einträge zurück.
+ */
+export function renameFoodEverywhere(from: string, to: string, productIds: readonly string[]): () => void {
+  const { pantry: next, undo } = renameFood(pantry, from, to, productIds);
+  if (next === pantry) return () => {};
+  commitPantry(next);
+  return () => commitPantry(undo(pantry));
+}
+
+/** Kategorie eines Lebensmittels (überall gleich) – Mashis Vorschlag wählen heißt: wieder automatisch */
+export function setCategory(name: string, c: FoodCategory): () => void {
+  const before = pantry.categories;
+  const table = currentFoodTable();
+  const { categories: _old, ...rest } = pantry;
+  const next = withCategory(before, name, c, table);
+  commitPantry(next ? { ...rest, categories: next } : rest);
+  return () => {
+    const { categories: _now, ...r } = pantry;
+    commitPantry(before ? { ...r, categories: before } : r);
+  };
 }
 
 export function addPantryItem(name: string, amount?: number, unit?: PantryUnit, productId?: string) {
@@ -831,6 +884,12 @@ function normalizePacks() {
   // … und doppelte Zeilen derselben Packung zusammen („2 × 500 g“ + „2 × 500 g“)
   const items = mergeSamePacks(attached) ?? attached;
   if (items !== pantry.items) commitPantry({ ...pantry, items });
+}
+
+/** „Meine Lebensmittel“ gibt den Namen vor: Vorrat, Gelerntes und Bons einer Sorte heißen wie sie */
+function normalizeNames() {
+  const next = syncProductNames(pantry, products);
+  if (next) commitPantry(next);
 }
 
 /** Von Hand angebrochen: eine Packung wird zum offenen Rest (hält dann kürzer); take = gleich herausgenommen. */
