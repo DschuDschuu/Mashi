@@ -43,6 +43,8 @@ export interface SavedBon {
   total?: number;
   savings?: Pick<BonSavings, 'lidlPlus' | 'offers' | 'mhd'>;
   lines: BonLine[];
+  /** doppelt eingelesen – die Mengen sind wieder aus dem Vorrat genommen; Korrekturen ändern den Vorrat dann nicht */
+  noStock?: boolean;
   updatedAt: string;
 }
 
@@ -122,7 +124,8 @@ export function editBonLine(pantry: Pantry, bonId: string, index: number, patch:
 
   const before = rowFromLine(old);
   const after = rowFromLine(next);
-  out = { ...out, items: moveStock(out.items, stockOf(before), stockOf(after), bon.date, now, newId) };
+  // doppelt eingelesen und zurückgenommen: nur Preise und Gelerntes
+  if (!bon.noStock) out = { ...out, items: moveStock(out.items, stockOf(before), stockOf(after), bon.date, now, newId) };
   out = { ...out, ...movePrice(out, priceOf(before, bon.date), priceOf(after, bon.date)) };
   out = { ...out, rules: out.rules.map((r) => (r.key === before.key ? ruleOf(after) : r)) };
   return withSavingsDelta(out, bonId, old, next);
@@ -265,4 +268,51 @@ export function dropDayPrices(pantry: Pantry, date: string, key?: string): Pantr
     ...[...touched].map(latest).filter((p): p is PriceEntry => !!p),
   ];
   return { ...pantry, history, prices };
+}
+
+/**
+ * Gibt es für diesen Einkaufstag schon etwas vom Bon – Preise, einen gespeicherten Bon, einen gemerkten Import?
+ * Erkennt einen Bon wieder, wenn die Texterkennung den Endbetrag diesmal anders gelesen hat (Julia: kein Hinweis,
+ * alles doppelt). Unsicher – darum fragt Mashi dann nur nach („derselbe Bon?“).
+ */
+export function importedOnDay(pantry: Pantry, date: string | undefined): boolean {
+  if (!date) return false;
+  const d = day(date);
+  return (pantry.bons ?? []).some((b) => day(b.date) === d)
+    || (pantry.receipts ?? []).some((k) => k.startsWith(`${d}|`))
+    || (pantry.history ?? []).some((h) => day(h.date) === d);
+}
+
+/**
+ * Beim Ersetzen: der schon gespeicherte Bon desselben Einkaufs – gleicher Tag, mindestens die Hälfte gleicher
+ * Artikel (der Endbetrag kann anders gelesen sein). Ein anderer Einkauf am selben Tag bleibt unberührt.
+ */
+export function sameBonOf(pantry: Pantry, date: string, rows: readonly Pick<ImportRow, 'key'>[]): SavedBon | undefined {
+  const keys = new Set(rows.map((r) => r.key));
+  return (pantry.bons ?? [])
+    .filter((b) => day(b.date) === day(date))
+    .map((b) => ({ b, same: b.lines.filter((l) => keys.has(receiptKey(l.bon))).length }))
+    .filter(({ b, same }) => same > 0 && same * 2 >= Math.max(b.lines.length, keys.size))
+    .sort((x, y) => y.same - x.same)[0]?.b;
+}
+
+/**
+ * Doppelt eingelesen (Julia): die Mengen dieses Bons wieder aus dem Vorrat nehmen – nur, was noch da ist.
+ * „Vorhanden“ ohne Menge bleibt (das ist auch der erste Einkauf). Bon und Preise bleiben.
+ */
+export function withdrawBonStock(pantry: Pantry, bonId: string, now = new Date().toISOString()): Pantry {
+  const bon = pantry.bons?.find((b) => b.id === bonId);
+  if (!bon || bon.noStock) return pantry;
+  let items = pantry.items;
+  for (const l of bon.lines) {
+    if (l.skip) continue;
+    const st = stockOf(rowFromLine(l));
+    for (const frozen of [false, true]) {
+      const amount = frozen ? st.frozen : st.fresh;
+      if (!(frozen ? st.frozenOn : st.freshOn) || amount === undefined) continue;
+      const it = findStock(items, st, frozen);
+      if (it?.amount !== undefined) items = setAmount(items, it.id, it.amount - amount);
+    }
+  }
+  return { ...pantry, items, bons: pantry.bons!.map((b) => (b.id === bonId ? { ...b, noStock: true, updatedAt: now } : b)) };
 }

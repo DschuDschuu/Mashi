@@ -3,7 +3,8 @@ import { DISCOUNT_LABEL, type BonLine, type SavedBon } from '../../domain/bons';
 import { productLabel, sortTags } from '../../domain/nutrition/myProducts';
 import type { PantryUnit } from '../../domain/pantry';
 import type { DiscountKind, LineDiscount } from '../../domain/receipt';
-import { editBon, usePantry, useProducts } from '../../data/store';
+import { editBon, usePantry, useProducts, withdrawBon } from '../../data/store';
+import { ask } from '../confirm';
 import { Empty } from '../components/Controls';
 import { Icon } from '../components/Icon';
 import { IngredientNames } from '../components/IngredientNames';
@@ -42,8 +43,14 @@ export function BonScreen({ id }: { id: string }) {
     <main className="screen">
       <TopBar title={`Einkauf vom ${bonTitle(bon)}`} backTo="/preise" />
       <IngredientNames />
+      {/* wie auf der Preise-Seite (Julia): Lidl Plus, Angebote, MHD-Ware – für diesen einen Einkauf */}
+      <div className="savings__tiles">
+        <div className="stat tint-mint"><span className="stat__label">Lidl Plus</span><strong className="stat__value">{euro(bon.savings?.lidlPlus ?? 0)}</strong></div>
+        <div className="stat tint-butter"><span className="stat__label">Angebote</span><strong className="stat__value">{euro(bon.savings?.offers ?? 0)}</strong></div>
+        <div className="stat tint-peach"><span className="stat__label">MHD-Ware</span><strong className="stat__value">{euro(bon.savings?.mhd ?? 0)}</strong></div>
+      </div>
       <p className="muted small">
-        {taken} Artikel{bon.total !== undefined && <> · zu zahlen <strong>{euro(bon.total)}</strong></>}{saved > 0 && <> · gespart <strong>{euro(saved)}</strong></>}
+        {taken} Artikel{bon.total !== undefined && <> · zu zahlen <strong>{euro(bon.total)}</strong></>}{saved > 0 && <> · zusammen gespart <strong>{euro(saved)}</strong></>}
       </p>
       <ul className="bonview">
         {bon.lines.map((l, i) => {
@@ -75,6 +82,20 @@ export function BonScreen({ id }: { id: string }) {
           );
         })}
       </ul>
+      {/* Julia: Bon doppelt eingelesen (nicht wiedererkannt) – die Mengen wieder raus, ohne selbst zu rechnen */}
+      {bon.noStock ? (
+        <p className="small muted">Doppelt eingelesen – die Mengen dieses Bons sind nicht im Vorrat. Korrekturen ändern nur Preise.</p>
+      ) : (
+        <button type="button" className="link small" onClick={async () => {
+          if (!(await ask({
+            title: 'Mengen aus dem Vorrat nehmen?',
+            text: 'Für einen doppelt eingelesenen Bon: Mashi zieht die Mengen dieses Bons ab – nur, was noch da ist. Bon und Preise bleiben.',
+            confirm: 'Abziehen',
+          }))) return;
+          const undo = withdrawBon(bon.id);
+          toast('Mengen dieses Bons aus dem Vorrat genommen', { label: 'Rückgängig', run: undo });
+        }}>Doppelt eingelesen? Mengen aus dem Vorrat nehmen</button>
+      )}
     </main>
   );
 }

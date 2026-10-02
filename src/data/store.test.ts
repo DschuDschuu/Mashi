@@ -304,3 +304,18 @@ describe('Store: Kategorie ändern mit Rückgängig', () => {
     expect(currentPantry().categories).toBeUndefined();
   });
 });
+
+describe('Store: alter Bon nur für den Preisverlauf', () => {
+  it('Preise und Bon kommen an, die Speisekammer bleibt leer – Korrekturen ändern sie auch später nicht', async () => {
+    await freshStore('verlauf');
+    importReceipt([{ line: { name: 'Haferflocken', count: 2, price: 1.58 }, key: 'haferflocken', known: false, skip: false, name: 'Haferflocken', amount: 1000, unit: 'g' }],
+      '2026-08-15T12:00:00.000Z', { lidlPlus: 0, offers: 0, mhd: 0, total: 1.58 }, { historyOnly: true });
+    const p = currentPantry();
+    expect(p.items).toEqual([]);
+    expect(p.history!.map((h) => [h.name, h.date.slice(0, 10)])).toEqual([['Haferflocken', '2026-08-15']]);
+    expect(p.bons![0].noStock).toBe(true);
+    editBon(p.bons![0].id, 0, { count: 3, amount: 1500 });
+    expect(currentPantry().items).toEqual([]);
+  });
+});
+

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addBon, bonFromImport, dropDayPrices, editBonLine, MAX_BONS, paidOf, purchasesOf, type SavedBon } from './bons';
+import { addBon, bonFromImport, dropDayPrices, editBonLine, importedOnDay, sameBonOf, withdrawBonStock, MAX_BONS, paidOf, purchasesOf, type SavedBon } from './bons';
 import { applyImport, emptyPantry, proposeImport, receiptKey, type Pantry } from './pantry';
 import { parseReceipt } from './receipt';
 import { parseSavings, recordSavings } from './savings';
@@ -136,5 +136,34 @@ describe('Gespeicherte Bons', () => {
     expect(historyOf(p, 'Rinderhack')).toHaveLength(1);
     // vom anderen Bon desselben Tages: bleibt (und wird hier nur aktualisiert)
     expect(historyOf(p, 'Speisequark mager')).toHaveLength(1);
+  });
+
+  it('am Tag wiedererkannt – auch wenn der Endbetrag diesmal anders gelesen wurde', () => {
+    const p = imported();
+    expect(importedOnDay(p, '2026-10-02T09:00:00.000Z')).toBe(true);
+    expect(importedOnDay(p, '2026-10-03T12:00:00.000Z')).toBe(false);
+    expect(importedOnDay(p, undefined)).toBe(false);
+    // nur Preise vom Tag (alter Import ohne gespeicherten Bon) reichen auch
+    expect(importedOnDay({ ...emptyPantry(), history: [{ name: 'Quark', perUnit: 1, unit: 'g', date: DAY }] }, DAY)).toBe(true);
+  });
+
+  it('derselbe Einkauf als gespeicherter Bon: gleicher Tag, mindestens die Hälfte gleicher Artikel', () => {
+    const p = addBon(imported(), { id: 'abends', key: 'rewe', date: DAY, lines: [{ bon: 'Kaffee', count: 1, name: 'Kaffee' }], updatedAt: NOW });
+    const rows = proposeImport(parseReceipt(TEXT), []);
+    expect(sameBonOf(p, DAY, rows)?.id).toBe('b1');
+    expect(sameBonOf(p, DAY, [{ key: 'tee' }])).toBeUndefined();
+  });
+
+  it('doppelt eingelesen: Mengen dieses Bons wieder raus – nur, was noch da ist; danach ändern Korrekturen den Vorrat nicht', () => {
+    const once = imported((rows) => { rows[1] = { ...rows[1], name: 'Quark', amount: 750, unit: 'g' }; });
+    // derselbe Bon noch einmal, ohne Wiedererkennung → doppelt
+    const rows = proposeImport(parseReceipt(TEXT), once.rules);
+    const twice = addBon(applyImport(once, rows, NOW, id, DAY), bonFromImport(rows, DAY, NOW, 'b2', 'anders', parseSavings(TEXT)));
+    expect(item(twice, 'Quark')[0].amount).toBe(6);
+    const fixed = withdrawBonStock(twice, 'b2', NOW);
+    expect(item(fixed, 'Quark')[0].amount).toBe(3);
+    expect(fixed.bons!.find((b) => b.id === 'b2')!.noStock).toBe(true);
+    expect(withdrawBonStock(fixed, 'b2', NOW)).toBe(fixed); // zweimal abziehen geht nicht
+    expect(item(editBonLine(fixed, 'b2', 1, { count: 2, amount: 500 }, NOW, id), 'Quark')[0].amount).toBe(3);
   });
 });

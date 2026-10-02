@@ -756,6 +756,20 @@ export function plannedFromPacks(items: readonly PantryItem[], planned: PlannedU
 }
 
 /**
+ * „davon 300 g verplant“ für jede Zeile (Julia: immer wie bei Packungen) – Packungen in g/ml (plannedFromPacks),
+ * lose Menge in ihrer Einheit; gleiche Einheit wird zusammengezählt. 'alles' = ohne Menge, aber verplant.
+ */
+export function plannedOf(items: readonly PantryItem[], planned: PlannedUse): { amount: number; unit: PantryUnit } | 'alles' | undefined {
+  const packs = plannedFromPacks(items, planned);
+  const loose = items.filter((i) => planned.has(i.id) && !plannedPack(i, planned));
+  if (!loose.length) return packs;
+  if (loose.some((i) => i.amount === undefined)) return packs ?? 'alles';
+  const unit = packs?.unit ?? loose[0].unit!;
+  const amount = loose.filter((i) => i.unit === unit).reduce((n, i) => { const p = planned.get(i.id)!; return n + (p === 'all' ? i.amount! : p); }, packs?.amount ?? 0);
+  return amount > 0 ? { amount: Math.round(amount * 10) / 10, unit } : packs;
+}
+
+/**
  * Summe je Vorrat über alle geplanten Gerichte: wie viel verplant ist. 'all' = alles (oder ohne Menge).
  * Die Speisekammer zeigt oben nur, was frei bleibt.
  */

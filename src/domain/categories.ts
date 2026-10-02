@@ -68,7 +68,8 @@ const STRONG: [FoodCategory, RegExp][] = [
 const BY_NAME: [FoodCategory, RegExp][] = [
   ['konserven', /dose|konserve|passiert|eingelegt|gewürzgurke|essiggurke|cornichon|oliven|kimchi|kichererbse|kidney|bohnen|thunfisch|tomatenmark|kokosmilch|mais($|\s)/],
   ['saucen', /sauce|soße|dressing|senf|ketchup|mayo|essig|öl($|\s)|brühe|fond|paste|gewürz|pfeffer|(^|\s)salz|curry|chili|sambal|sriracha|marinade|würze/],
-  ['backen', /mehl|zucker|backpulver|hefe|vanille|schoko|kakao|kuvertüre|honig|sirup|marmelade|konfitüre|nutella|nuss|nüsse|mandel|rosinen|müsli|keks|chips|riegel|gummibär|bonbon/],
+  // Nüsse nur als Nüsse – nicht „Butternuss-Kürbis“ (Julia: landete unter Backen)
+  ['backen', /mehl|zucker|backpulver|hefe|vanille|schoko|kakao|kuvertüre|honig|sirup|marmelade|konfitüre|nutella|(^|[\s-])n(uss|üsse)($|[\s-])|(hasel|wal|erd|para|pekan|cashew)n(uss|üsse)|nussmus|nusscreme|mandel|rosinen|müsli|keks|chips|riegel|gummibär|bonbon/],
 ];
 
 /** Mashis Vorschlag – ohne deine Änderung */

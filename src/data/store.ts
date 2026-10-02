@@ -5,7 +5,7 @@ import { exclusiveStages, stageOf, withStage, type FoodStage } from '../domain/s
 import { emptyPlan, keyOfName, normalizePlan, toggleCooked, type MealPlan } from '../domain/mealplan';
 import { mergeRecipes } from '../domain/merge';
 import { unionPantry, unionPlan } from '../domain/syncMerge';
-import { withMyProducts, type MyProduct } from '../domain/nutrition/myProducts';
+import { nameOf, withMyProducts, type MyProduct } from '../domain/nutrition/myProducts';
 import type { FoodTable } from '../domain/nutrition/types';
 import {
   addItem, applyImport, bonKey, deductRecipe, emptyPantry, freezeItem, rememberReceipt, returnTaken, takenBetween, thawItem, type Taken, type ImportRow, type Pantry, type PantryItem, type PantryUnit,
@@ -14,7 +14,7 @@ import { attachPacks, changeAmount, mergeSamePacks, openItem } from '../domain/p
 import { addPrepared, eatPrepared } from '../domain/prepared';
 import { currentContent, currentVersion, newId, sameContent, withNewVersion } from '../domain/recipe';
 import { recordSavings, type BonSavings } from '../domain/savings';
-import { addBon, bonFromImport, dropDayPrices, editBonLine, type BonLine, type BonLinePatch } from '../domain/bons';
+import { addBon, bonFromImport, dropDayPrices, editBonLine, sameBonOf, withdrawBonStock, type BonLine, type BonLinePatch } from '../domain/bons';
 import { withCategory, type FoodCategory } from '../domain/categories';
 import { relinkOldImport, renameFood, syncProductNames } from '../domain/renameFood';
 import { specialDays, type ShelfDays } from '../domain/shelfLife';
@@ -802,19 +802,24 @@ function commitPantry(next: Omit<Pantry, 'updatedAt'>) {
  * Was jetzt reicht, steht dort unter „Hast du schon“; was ohne Menge kam, wird abgehakt.
  * Hast du zu wenig gekauft, bleibt der Rest auf der Liste.
  */
-export function importReceipt(rows: ImportRow[], paidAt?: string, savings?: BonSavings, opts: { replace?: boolean } = {}): { count: number; onList: number } {
+export function importReceipt(rows: ImportRow[], paidAt?: string, savings?: BonSavings, opts: { replace?: boolean; historyOnly?: boolean } = {}): { count: number; onList: number } {
   const t = now();
   const key = bonKey(paidAt, savings?.total);
   // alten Import ersetzen: Preise dieses Tages neu, der Vorrat ist schon da (kommt nicht doppelt)
   // … und die Vorräte vom ersten Einlesen bekommen die neue Zuordnung (Name, Sorte)
-  const start = opts.replace ? relinkOldImport(dropDayPrices(pantry, paidAt ?? t, key), rows) : pantry;
-  const next = rememberReceipt(applyImport(start, rows, t, () => newId('v'), paidAt ?? t, { stock: !opts.replace }), key);
-  // den Bon selbst aufheben (nur die Zeilen) – zum Nachsehen und Korrigieren unter „Preise“
-  const kept = addBon(next, bonFromImport(rows, paidAt ?? t, t, newId('b'), key, savings));
+  // derselbe Einkauf schon als Bon gespeichert (Endbetrag anders gelesen)? Der fällt weg – der neue ersetzt ihn
+  const old = opts.replace ? sameBonOf(pantry, paidAt ?? t, rows) : undefined;
+  const base = old ? { ...pantry, bons: (pantry.bons ?? []).filter((b) => b.id !== old.id) } : pantry;
+  const start = opts.replace ? relinkOldImport(dropDayPrices(base, paidAt ?? t, key), rows) : pantry;
+  const next = rememberReceipt(applyImport(start, rows, t, () => newId('v'), paidAt ?? t, { stock: !opts.replace && !opts.historyOnly }), key);
+  // den Bon selbst aufheben (nur die Zeilen) – zum Nachsehen und Korrigieren unter „Preise“;
+  // nur für den Verlauf (alter Bon, Julia): ohne Vorrat – Korrekturen ändern dann nur Preise
+  const bon = bonFromImport(rows, paidAt ?? t, t, newId('b'), key, savings);
+  const kept = addBon(next, opts.historyOnly ? { ...bon, noStock: true } : bon);
   commitPantry(savings ? recordSavings(kept, savings, paidAt ?? t) : kept);
   normalizeNames();
-  // ersetzt: die Einkaufsliste hat der erste Import schon abgehakt
-  if (opts.replace) return { count: rows.filter((r) => !r.skip).length, onList: 0 };
+  // ersetzt (die Einkaufsliste hat der erste Import schon abgehakt) oder nur für den Verlauf: Liste bleibt
+  if (opts.replace || opts.historyOnly) return { count: rows.filter((r) => !r.skip).length, onList: 0 };
 
   const table = currentFoodTable();
   const bought = new Set(rows.filter((r) => !r.skip).map((r) => keyOfName(r.name, table)));
@@ -853,6 +858,27 @@ export function renameFoodEverywhere(from: string, to: string, productIds: reado
   return () => commitPantry(undo(pantry));
 }
 
+/**
+ * Doppelt eingelesener Bon: seine Mengen wieder aus dem Vorrat. „Rückgängig“ legt genau die geänderten
+ * Vorräte zurück (andere Änderungen in der Zwischenzeit bleiben).
+ */
+export function withdrawBon(bonId: string): () => void {
+  const before = new Map(pantry.items.map((i) => [i.id, i]));
+  const next = withdrawBonStock(pantry, bonId, now());
+  if (next === pantry) return () => {};
+  const after = new Map(next.items.map((i) => [i.id, i]));
+  const touched = [...before.values()].filter((i) => after.get(i.id) !== i);
+  commitPantry(next);
+  return () => {
+    const ids = new Set(touched.map((i) => i.id));
+    commitPantry({
+      ...pantry,
+      items: [...pantry.items.filter((i) => !ids.has(i.id)), ...touched],
+      bons: (pantry.bons ?? []).map((b) => (b.id === bonId ? (({ noStock: _n, ...rest }) => ({ ...rest, updatedAt: now() }))(b) : b)),
+    });
+  };
+}
+
 /** Kategorie eines Lebensmittels (überall gleich) – Mashis Vorschlag wählen heißt: wieder automatisch */
 export function setCategory(name: string, c: FoodCategory): () => void {
   const before = pantry.categories;
@@ -872,7 +898,8 @@ export function addPantryItem(name: string, amount?: number, unit?: PantryUnit, 
   const p = productId ? products.find((x) => x.id === productId) : undefined;
   const pack = (unit === 'Stück' || unit === 'Glas') && p?.packageAmount && (p.packageUnit === 'g' || p.packageUnit === 'ml' || p.packageUnit === undefined)
     ? { amount: p.packageAmount, unit: p.packageUnit ?? 'g' as const } : undefined;
-  commitPantry({ ...pantry, items: addItem(pantry.items, { name: name.trim(), amount, unit, productId, pack }, now(), () => newId('v')) });
+  // mit Sorte heißt der Vorrat wie sie („Meine Lebensmittel“ gibt den Namen vor) – so zählt er mit dem Vorhandenen zusammen
+  commitPantry({ ...pantry, items: addItem(pantry.items, { name: p ? nameOf(p) : name.trim(), amount, unit, productId, pack }, now(), () => newId('v')) });
   // „700 g“ von etwas mit Packungsgröße → gleich in Packungen (nicht erst beim nächsten Start)
   normalizePacks();
 }
@@ -901,7 +928,9 @@ export function openPantryItem(id: string, take?: number) {
 export function assignPantrySorts(assign: readonly { itemIds: string[]; productId: string }[]) {
   const to = new Map(assign.flatMap((a) => a.itemIds.map((id) => [id, a.productId] as const)));
   if (!to.size) return;
-  commitPantry({ ...pantry, items: pantry.items.map((i) => (to.has(i.id) ? { ...i, productId: to.get(i.id) } : i)) });
+  // mit der Sorte auch ihr Name – „Meine Lebensmittel“ gibt ihn vor
+  const nameOfId = (id: string) => { const p = products.find((x) => x.id === id); return p ? nameOf(p) : undefined; };
+  commitPantry({ ...pantry, items: pantry.items.map((i) => (to.has(i.id) ? { ...i, productId: to.get(i.id), name: nameOfId(to.get(i.id)!) ?? i.name } : i)) });
 }
 
 /**

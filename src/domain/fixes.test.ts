@@ -3,7 +3,7 @@ import { createMockRecipes } from '../data/mockRecipes';
 import { buildShoppingList, resolveIngredient } from './mealplan';
 import { localFoodTable } from './nutrition/localFoods';
 import {
-  alreadyImported, applyImport, bonKey, deductRecipe, emptyPantry, freeAfterPlan, pantryAfterPlan, plannedPack, plannedFromPacks, plannedByDish, plannedUse, proposeImport, rememberReceipt, returnTaken, stockSummary, takenBetween, usedOf,
+  alreadyImported, applyImport, bonKey, deductRecipe, emptyPantry, freeAfterPlan, pantryAfterPlan, plannedPack, plannedFromPacks, plannedOf, plannedByDish, plannedUse, proposeImport, rememberReceipt, returnTaken, stockSummary, takenBetween, usedOf,
   type Pantry, type PantryItem,
 } from './pantry';
 import { amountLabel } from './pantryLabel';
@@ -227,6 +227,21 @@ describe('Verplant aus einer angebrochenen Packung (Fehler: Milch nach dem Koche
     // die Zeile zeigt alle drei Dosen – und was davon verplant ist
     expect(p.items.every((i) => plannedPack(i, planned))).toBe(true);
     expect(plannedFromPacks(p.items, planned)).toEqual({ amount: 533, unit: 'ml' });
+  });
+
+  it('lose Menge wie Packungen (Julia): „davon 300 g verplant“ – auch ganz Verplantes, auch ohne Menge', () => {
+    const r4 = recipe('h', [{ id: '1', name: 'Rinderhack', amount: 300, unit: 'g' }, { id: '2', name: 'Zwiebel', amount: 1, unit: 'Stück' }]);
+    const plan4 = { items: [{ recipeId: 'h', servings: 2 }], checked: [], cooked: [], updatedAt: '' };
+    const p = pantry(item('hack', 'Rinderhack', 800, 'g'), item('zw', 'Zwiebel', undefined, undefined));
+    const planned = plannedUse(p, plan4, [r4], localFoodTable);
+    expect(plannedOf([p.items[0]], planned)).toEqual({ amount: 300, unit: 'g' });
+    expect(plannedOf([p.items[1]], planned)).toBe('alles');
+    // Packungen bleiben wie bisher (in g/ml)
+    const dose = { amount: 400, unit: 'ml' as const };
+    const r5 = recipe('k', [{ id: '1', name: 'Kokosmilch', amount: 150, unit: 'ml' }]);
+    const p5 = pantry(item('a', 'Kokosmilch', 2, 'Stück', { pack: dose }));
+    expect(plannedOf(p5.items, plannedUse(p5, { ...plan4, items: [{ recipeId: 'k', servings: 2 }] }, [r5], localFoodTable))).toEqual({ amount: 150, unit: 'ml' });
+    expect(plannedOf(p.items, new Map())).toBeUndefined();
   });
 
   it('„Für den Wochenplan“ zeigt, was das Gericht braucht – nicht die Packung und nicht den Rest', () => {

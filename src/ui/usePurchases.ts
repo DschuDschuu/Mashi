@@ -42,17 +42,19 @@ export function linePrice(l: BonLine): string {
  * Einkäufe und Preisverlauf eines Lebensmittels – über denselben Schlüssel wie Rezepte und Vorrat
  * („Milch“ im Vorrat = „Magermilch“ in der Tabelle), dazu jede Bon-Zeile, die einer seiner Sorten zugeordnet ist.
  */
-export function usePurchases(name: string, productIds: readonly string[] = []): { purchases: Purchase[]; history: PriceEntry[] } {
+export function usePurchases(name: string, productIds: readonly string[] = [], opts: { byName?: boolean } = {}): { purchases: Purchase[]; history: PriceEntry[] } {
+  // je Sorte (byName: false): nur, was dieser Sorte zugeordnet ist – der Name passt ja auf alle Sorten
+  const byName = opts.byName ?? true;
   const pantry = usePantry();
   const table = useFoodTable();
   const ids = productIds.join('|');
   return useMemo(() => {
     const key = keyOfName(name, table);
     const own = new Set(ids ? ids.split('|') : []);
-    const same = (n: string) => !!key && keyOfName(n, table) === key;
+    const same = (n: string) => byName && !!key && keyOfName(n, table) === key;
     return {
       purchases: purchasesOf(pantry.bons, (l) => (!!l.productId && own.has(l.productId)) || same(l.name)),
       history: (pantry.history ?? pantry.prices ?? []).filter((h) => same(h.name)),
     };
-  }, [name, ids, pantry.bons, pantry.history, pantry.prices, table]);
+  }, [name, ids, byName, pantry.bons, pantry.history, pantry.prices, table]);
 }

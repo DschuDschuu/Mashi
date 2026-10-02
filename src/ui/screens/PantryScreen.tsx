@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { freeAfterPlan, isCount, plannedPack, plannedFromPacks, recipesFromPantry, type PantryItem, type PantryUnit } from '../../domain/pantry';
+import { isCount, plannedOf, recipesFromPantry, type PantryItem, type PantryUnit } from '../../domain/pantry';
 import { suggestPantryUnit } from '../../domain/packs';
 import { daysLabel, daysLeft, frozenSince, specialDays, useByOf } from '../../domain/shelfLife';
 import { formatAmount } from '../../domain/scaling';
@@ -80,14 +80,13 @@ export function PantryScreen() {
   const toCheck = pantry.items.filter((i) => i.check);
   // Nur was nach dem Wochenplan übrig bleibt – bald Ablaufendes zuerst; Eingeplantes nicht noch einmal vorschlagen
   const { rest, keys, idea, planned } = useUseUp();
-  // Oben nur, was frei ist – Verplantes steht in „Für den Wochenplan“ (abgezogen wird erst beim Kochen)
-  const freeOf = (item: PantryItem) => freeAfterPlan(item, planned);
-  // Packungen, von denen ein Teil verplant ist: so zeigen, wie sie im Schrank stehen – darunter „davon 150 ml verplant“
-  // (sonst hieße „2 × 400 ml + 250 ml“: da ist eine offene Dose – dabei ist sie noch zu)
-  const shownOf = (item: PantryItem) => (plannedPack(item, planned) ? item : freeOf(item) ?? item);
+  // Julia: jede Zeile zeigt, was wirklich da ist – darunter „davon 300 g verplant“ (wie bei Packungen),
+  // auch ganz Verplantes bleibt sichtbar. Abgezogen wird erst beim Kochen.
+  const shownOf = (item: PantryItem) => item;
   const plannedNote = (items: PantryItem[]) => {
-    const p = plannedFromPacks(items, planned);
-    return p ? `davon ${packLabel(p)} verplant` : null;
+    const p = plannedOf(items, planned);
+    if (!p) return null;
+    return p === 'alles' ? 'für den Wochenplan verplant' : `davon ${quantityLabel(p)} verplant`;
   };
   const reservedLabel = (item: PantryItem) => {
     const p = planned.get(item.id);
@@ -116,14 +115,13 @@ export function PantryScreen() {
   // … und danach das Ältere zuerst – beim Vorgekochten steht oben, was zuerst gegessen werden muss
   const sorted = [...pantry.items].sort((a, b) => a.name.localeCompare(b.name, 'de') || Number(!a.openedAt) - Number(!b.openedAt) || a.addedAt.localeCompare(b.addedAt));
   // Gefrorenes als eigene Gruppe am Ende – es hält ganz anders als der Rest seiner Art
-  // Ganz Verplantes fällt oben weg; Bearbeiten zeigt aber immer den echten Vorrat
-  // Dosen & Packungen bleiben sichtbar, auch ganz verplant („3 × 400 ml · davon 533 ml verplant“)
-  const shown = sorted.filter((i) => freeOf(i) !== null || plannedPack(i, planned));
+  // alles bleibt sichtbar, auch ganz Verplantes („800 g · davon 800 g verplant“)
+  const shown = sorted;
   const prepared = shown.filter((i) => i.recipeId && !i.frozenAt);
   const groups = [
     // Vorgekochtes zuerst – es hält am kürzesten und will gegessen werden
     ...(prepared.length ? [{ title: 'Vorgekocht', items: prepared }] : []),
-    ...groupByCategory(shown.filter((i) => !i.frozenAt && !i.recipeId), (i) => categoryOf(i.name)),
+    ...groupByCategory(shown.filter((i) => !i.frozenAt && !i.recipeId), (i) => categoryOf(i.name, i.productId)),
     ...(shown.some((i) => i.frozenAt) ? [{ title: 'Gefroren', items: shown.filter((i) => i.frozenAt) }] : []),
   ];
   // Eine Zeile je Lebensmittel: „Joghurt · 4 × 500 g + 400 g offen“ – antippen klappt die Teile auf
@@ -132,7 +130,10 @@ export function PantryScreen() {
     const out: PantryItem[][] = [];
     for (const i of items) {
       const last = out[out.length - 1];
-      if (last && !i.frozenAt && normalizeName(last[0].name) === normalizeName(i.name)) last.push(i);
+      // Gefrorene Zutaten auch (Julia: drei Packungen Hack = eine Zeile) – Gerichte bleiben einzeln, „1 auftauen“ steht an der Zeile
+      const joins = last && normalizeName(last[0].name) === normalizeName(i.name)
+        && (i.frozenAt ? !!last[0].frozenAt && !i.recipeId && !last[0].recipeId : !last[0].frozenAt);
+      if (joins) last.push(i);
       else out.push([i]);
     }
     return out;
@@ -204,7 +205,8 @@ export function PantryScreen() {
             {/* in der Teilzeile sagt links schon „angebrochen“ */}
             {quantityLabel(part ? { ...shownOf(i), openedAt: undefined } : shownOf(i))}
             {plannedNote([i]) && <span className="pantry__planned">{plannedNote([i])}</span>}
-            {shelfLabel(i) && <span className={`pantry__shelf${shelfLabel(i)!.urgent ? ' is-urgent' : ''}`}>{shelfLabel(i)!.text}</span>}
+            {/* gefrorener Teil: das Einfrier-Datum steht schon links – rechts nur, wenn es nach Monaten dringend wird */}
+            {shelfLabel(i) && !(part && i.frozenAt && !shelfLabel(i)!.urgent) && <span className={`pantry__shelf${shelfLabel(i)!.urgent ? ' is-urgent' : ''}`}>{shelfLabel(i)!.text}</span>}
           </span>
           {/* Pfeil statt ✕ (Julia): Aufklappen braucht man oft, Entfernen selten – das steht jetzt im Aufgeklappten */}
           <span className={`pantry__chev${isEditing ? ' is-open' : ''}`} aria-hidden="true"><Icon name="chevron" size={16} /></span>
@@ -485,6 +487,7 @@ const isFreshPrepared = (i: PantryItem) => !!i.recipeId && !i.frozenAt;
 /** Teilzeile einer Gruppe: Vorgekochtes nach Kochtag („gekocht 28.9.“), Packungen offen oder zu */
 function partLabel(i: PantryItem): string {
   if (i.recipeId) return `gekocht ${shortDate(i.addedAt)}`;
+  if (i.frozenAt) return `eingefroren ${shortDate(i.frozenAt)}`;
   return i.openedAt ? `angebrochen ${shortDate(i.openedAt)}` : 'geschlossen';
 }
 

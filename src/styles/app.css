@@ -1136,7 +1136,8 @@ p { margin: 0; }
 .foods__item.is-open .foods__head > svg:last-child { transform: rotate(90deg); }
 .foods__name { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; column-gap: 6px; font-weight: 600; }
 .foods__name svg { color: var(--ink-3); }
-.foods__sub { flex-basis: 100%; font-size: 0.76rem; font-weight: 500; color: var(--ink-2); }
+/* rechts neben dem Namen (Julia: Kachel flacher) – bricht nur um, wenn der Name zu lang ist */
+.foods__sub { font-size: 0.76rem; font-weight: 500; color: var(--ink-2); }
 .foods__kcal { flex: none; font-size: 0.84rem; color: var(--ink-2); white-space: nowrap; }
 .foods__kcal em { font-style: normal; font-size: 0.72rem; color: var(--ink-3); margin-left: 3px; }
 .foods__body { display: flex; flex-direction: column; gap: 10px; padding: 0 12px 12px; }
@@ -1542,3 +1543,10 @@ p { margin: 0; }
   .bonview__sub { grid-column: 1; }
   .bonview__open > svg { grid-column: 2; grid-row: 1 / span 3; }
 }
+/* Sorten-Karte: Zusatz als Text neben dem Stern, Marke als Chip darunter, Werte über die ganze Breite verteilt */
+.foods__sortname { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.foods__sort .foods__brand { margin: 2px 0; }
+.foods__values { display: flex; justify-content: space-between; align-items: baseline; gap: 4px 12px; flex-wrap: wrap; }
+.foods__values > span { margin-left: auto; text-align: right; }
+/* „Zuletzt gekauft“ in der Sorten-Karte: ohne eigenen Kasten, durch eine Linie von den Werten getrennt */
+.last-buy--sort { padding: 6px 0 0; margin-top: 4px; border-top: 1px solid var(--line); border-radius: 0; background: none; }

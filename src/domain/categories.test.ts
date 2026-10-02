@@ -30,6 +30,11 @@ describe('Kategorien wie im Laden', () => {
     expect(guessCategory('Kidneybohnen', T)).toBe('konserven');
     expect(guessCategory('Rinderbrühe', T)).toBe('saucen');
     expect(guessCategory('Erdnussbutter', T)).toBe('backen');
+    expect(guessCategory('Haselnüsse', T)).toBe('backen');
+    expect(guessCategory('Nüsse', T)).toBe('backen');
+    // „nuss“ im Namen ist noch keine Nuss (Julia)
+    expect(guessCategory('Butternuss-Kürbis', T)).toBe('obst-gemuese');
+    expect(guessCategory('Butternusskürbis', T)).toBe('obst-gemuese');
     expect(guessCategory('Zucchini', T)).toBe('obst-gemuese');
     expect(guessCategory('Putenbrust', T)).toBe('fleisch-fisch');
     expect(guessCategory('Spülmittel', T)).toBe('sonstiges');

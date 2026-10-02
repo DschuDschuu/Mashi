@@ -3,11 +3,12 @@ import { ask } from '../confirm';
 import { basicsOf } from '../../domain/mealplan';
 import { buildFoodList, matchesFilter, type FoodFilter, type FoodRow } from '../../domain/nutrition/foodList';
 import { normalizeName } from '../../domain/nutrition/localFoods';
-import { productLabel, sharedOf, sortTags, withShared, type MyProduct, type SharedMatch } from '../../domain/nutrition/myProducts';
+import { brandOf, productLabel, sharedOf, withShared, type MyProduct, type SharedMatch } from '../../domain/nutrition/myProducts';
 import { groupByCategory } from '../../domain/categories';
 import { useCategoryOf } from '../useCategory';
 import { CategoryPicker } from './CategoryPicker';
 import { LastPurchase } from './LastPurchase';
+import { purchasesOf } from '../../domain/bons';
 import { zeroOf } from '../../domain/nutrition/noNutrition';
 import { averageNutrients } from '../../domain/nutrition/variants';
 import type { Nutrients } from '../../domain/nutrition/types';
@@ -206,8 +207,7 @@ function FoodLine({ row, open, onToggle, products, onTouch }: {
               <Icon name="pencil" size={14} />
             </button>
           )}
-          {/* Zusatz („leicht“) und Marke direkt neben dem Namen */}
-          {ps.length === 1 && sortTags(ps[0]).map((t) => <span key={t} className="brand">{t}</span>)}
+          {/* Übersicht nur mit Namen (Julia) – Zusatz und Marke stehen aufgeklappt an der Sorte */}
           {nothing && <span className="foods__sub">nichts festgelegt</span>}
           {stage === 'haus' && <span className="foods__mark" title="Immer im Haus"><Icon name="home" size={14} /></span>}
           {rule && <span className="foods__restock" title={`Nachkaufen unter ${fmt(rule.below)} ${rule.unit}`}><Icon name="refresh" size={13} /></span>}
@@ -238,8 +238,11 @@ function FoodLine({ row, open, onToggle, products, onTouch }: {
               {row.table ? <>Rechnet mit dem Richtwert der Tabelle: {Math.round(row.table.per100g.kcal)} kcal · {macros(row.table.per100g)} pro 100 g.</> : 'Mashi kennt hierfür keine Werte.'}
             </p>
           )}
-          {/* statt des Preisfelds: was du zuletzt wirklich bezahlt hast – und der Weg zur Preis-Seite */}
-          <LastPurchase name={row.ingredient} title={title} productIds={ps.map((p) => p.id)} />
+          {/* statt des Preisfelds: was du zuletzt wirklich bezahlt hast – je Sorte in ihrer Karte (Julia);
+              hier oben nur, wenn keine Sorte einen Bon-Einkauf hat (ältere Bons kennen nur den Namen) */}
+          {!ps.some((p) => purchasesOf(pantry.bons, (l) => l.productId === p.id).length) && (
+            <LastPurchase name={row.ingredient} title={title} productIds={ps.map((p) => p.id)} />
+          )}
           {ps.map((p) => editing === p.id ? (
             <ProductForm key={p.id} initial={p} shared={shared} onSave={save} onCancel={() => setEditing(null)} />
           ) : (
@@ -252,16 +255,19 @@ function FoodLine({ row, open, onToggle, products, onTouch }: {
                     <Icon name="star" size={18} filled={!!p.favorite} />
                   </button>
                 )}
-                {/* mehrere Sorten: der Name steht schon oben in der Kachel – hier Zusatz und Marke als Chips */}
-                {ps.length > 1
-                  ? <span className="foods__brand">{sortTags(p).length ? sortTags(p).map((t) => <span key={t} className="brand-chip">{t}</span>) : <span className="brand-chip is-empty">ohne Marke</span>}</span>
-                  : <strong>Pro 100 g</strong>}
+                {/* der Name steht oben in der Kachel – hier der Zusatz als Text (Julia), die Marke als Chip darunter */}
+                <span className="foods__sortname">{p.detail ?? (ps.length > 1 ? '' : <strong>Pro 100 g</strong>)}</span>
                 <span className="product__actions">
                   <button className="iconbtn iconbtn--sm" aria-label={`${p.name} bearbeiten`} onClick={() => setEditing(p.id)}><Icon name="pencil" size={16} /></button>
                   <button className="iconbtn iconbtn--sm iconbtn--danger" aria-label={`${p.name} entfernen`} onClick={() => remove(p)}><Icon name="trash" size={16} /></button>
                 </span>
               </div>
-              <span className="small"><strong>{fmt(p.per100g.kcal)} kcal</strong> · {macros(p.per100g)}</span>
+              {(brandOf(p) || (ps.length > 1 && !p.detail)) && (
+                <span className="foods__brand">{brandOf(p) ? <span className="brand-chip">{brandOf(p)}</span> : <span className="brand-chip is-empty">ohne Marke</span>}</span>
+              )}
+              {/* kcal links, KH · Eiweiß · Fett rechts */}
+              <span className="small foods__values"><strong>{fmt(p.per100g.kcal)} kcal</strong><span>{macros(p.per100g)}</span></span>
+              <LastPurchase sort name={row.ingredient} title={title} productIds={[p.id]} />
               {p.packageAmount && <span className="small muted">Packung {fmt(p.packageAmount)} {p.packageUnit ?? 'g'}{p.packagePrice !== undefined && <> · {euro(p.packagePrice)}</>}</span>}
             </div>
           ))}

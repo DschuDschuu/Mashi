@@ -13,19 +13,23 @@ export const foodPricePath = (name: string, title = name) => `/preise/lebensmitt
  * „Zuletzt gekauft“ in der Kachel (Julia: statt des Preisfelds) – Datum, Menge, bezahlt und Normalpreis,
  * darunter der Weg zur Preis-Seite nur für dieses Lebensmittel. Ohne Bon nichts.
  */
-export function LastPurchase({ name, title, productIds }: { name: string; title: string; productIds: readonly string[] }) {
-  const { purchases, history } = usePurchases(name, productIds);
+export function LastPurchase({ name, title, productIds, sort }: {
+  name: string; title: string; productIds: readonly string[];
+  /** in der Karte einer Sorte (Julia: Preis je Sorte) – nur deren Einkäufe, ohne eigenen Kasten */
+  sort?: boolean;
+}) {
+  const { purchases, history } = usePurchases(name, productIds, { byName: !sort });
   const products = useProducts();
   const last = purchases[0];
   const latest = [...history].sort((a, b) => a.date.localeCompare(b.date)).pop();
   if (!last && !history.length) return null;
-  const sort = last?.line.productId && productIds.length > 1 ? products.find((p) => p.id === last.line.productId) : undefined;
+  const which = !sort && last?.line.productId && productIds.length > 1 ? products.find((p) => p.id === last.line.productId) : undefined;
   return (
-    <div className="last-buy">
+    <div className={sort ? 'last-buy last-buy--sort' : 'last-buy'}>
       {last ? (
         <p className="small">
           <strong>Zuletzt gekauft</strong> am {new Date(last.date).toLocaleDateString('de-DE')}
-          {sort && <> · {productLabel(sort)}</>}
+          {which && <> · {productLabel(which)}</>}
           {lineAmount(last.line) && <> · {lineAmount(last.line)}</>}
           <br />
           <span className="last-buy__price">{linePrice(last.line)}</span>

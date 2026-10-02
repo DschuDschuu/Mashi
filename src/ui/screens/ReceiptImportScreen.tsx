@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { alreadyImported, bonKey, proposeImport, type ImportRow, type PantryUnit } from '../../domain/pantry';
 import { mergeSameLines, parseReceipt, parseReceiptDate, type ReceiptLine } from '../../domain/receipt';
 import { parseSavings } from '../../domain/savings';
-import { DISCOUNT_LABEL, discountOf } from '../../domain/bons';
+import { DISCOUNT_LABEL, discountOf, importedOnDay } from '../../domain/bons';
 import { formatAmount } from '../../domain/scaling';
 import { normalizeName } from '../../domain/nutrition/localFoods';
 import { productLabel, type MyProduct } from '../../domain/nutrition/myProducts';
@@ -11,6 +11,7 @@ import { ProductForm } from '../components/MyProductsPanel';
 import { takeSharedReceipt } from '../../pwa';
 import { navigate } from '../../router';
 import { Icon } from '../components/Icon';
+import { Stepper } from '../components/Controls';
 import { IngredientNames } from '../components/IngredientNames';
 import { TopBar } from '../components/TopBar';
 import { recognizeText } from '../ocr';
@@ -136,12 +137,25 @@ export function ReceiptImportScreen({ shared }: { shared: boolean }) {
   };
   const taking = rows.filter((r) => !r.skip).length;
 
-  // schon importiert (z. B. vor dem Speichern der Bons, mit Fehlern): ersetzen statt doppelt
-  const duplicate = stage === 'review' && alreadyImported(pantry, bonKey(paidAt, savings?.total));
-  const [replace, setReplace] = useState(true);
+  // schon importiert (z. B. vor dem Speichern der Bons, mit Fehlern): ersetzen statt doppelt.
+  // Sicher am Tag + Endbetrag; nur am Tag (Endbetrag anders gelesen) fragt Mashi nach – Haken dann nicht vorausgewählt
+  const exact = stage === 'review' && alreadyImported(pantry, bonKey(paidAt, savings?.total));
+  const sameDay = stage === 'review' && !exact && importedOnDay(pantry, paidAt);
+  const duplicate = exact || sameDay;
+  const [replaceChoice, setReplace] = useState<boolean | null>(null);
+  const replace = replaceChoice ?? exact;
   const replacing = duplicate && replace;
+  /** alter Bon nur für den Preisverlauf (Julia) – nichts in die Speisekammer */
+  const [historyOnly, setHistoryOnly] = useState(false);
+  const onlyHistory = historyOnly && !replacing;
 
   const apply = () => {
+    if (onlyHistory) {
+      importReceipt(rows.map(fromRow), paidAt, savings, { historyOnly: true });
+      toast(`Bon vom ${paidAt ? new Date(paidAt).toLocaleDateString('de-DE') : 'Einkaufstag'} im Preisverlauf – Speisekammer unverändert`);
+      navigate('/preise', { replace: true });
+      return;
+    }
     if (replacing) {
       importReceipt(rows.map(fromRow), paidAt, savings, { replace: true });
       toast(`Bon ersetzt – Preise vom ${paidAt ? new Date(paidAt).toLocaleDateString('de-DE') : 'Einkaufstag'} neu, Vorrat unverändert`);
@@ -200,9 +214,23 @@ export function ReceiptImportScreen({ shared }: { shared: boolean }) {
 
       {stage === 'review' && (
         <div className="stack">
+          {/* Datum immer änderbar – für alte Bons und wenn die Texterkennung keins (oder ein falsches) gefunden hat */}
+          <label className="field">
+            <span>Einkaufsdatum{!paidAt ? ' (auf dem Bon nicht erkannt)' : ''}</span>
+            <input type="date" value={paidAt?.slice(0, 10) ?? ''} max={new Date().toISOString().slice(0, 10)}
+              onChange={(e) => setPaidAt(e.target.value ? `${e.target.value}T12:00:00.000Z` : undefined)} />
+          </label>
+          {!replacing && (
+            <label className="bonrow__mhd">
+              <input type="checkbox" checked={historyOnly} onChange={(e) => setHistoryOnly(e.target.checked)} />
+              <span><strong>Nur für den Preisverlauf</strong> – nichts in die Speisekammer (z. B. ein alter Bon)</span>
+            </label>
+          )}
           {duplicate && (
             <div className="scan-note" role="alert">
-              <p>Diesen Bon ({paidAt && new Date(paidAt).toLocaleDateString('de-DE')}, {savings?.total !== undefined && euro(savings.total)}) hast du schon importiert.</p>
+              {exact
+                ? <p>Diesen Bon ({paidAt && new Date(paidAt).toLocaleDateString('de-DE')}, {savings?.total !== undefined && euro(savings.total)}) hast du schon importiert.</p>
+                : <p>Vom <strong>{paidAt && new Date(paidAt).toLocaleDateString('de-DE')}</strong> hast du schon einen Bon importiert. Ist das <strong>derselbe</strong>? Dann ersetzen – sonst kommt alles doppelt in die Speisekammer.</p>}
               <label className="bonrow__mhd">
                 <input type="checkbox" checked={replace} onChange={(e) => setReplace(e.target.checked)} />
                 <span><strong>Alten Import ersetzen</strong> – die Preise dieses Tages kommen neu, der Vorrat bleibt, wie er ist</span>
@@ -250,16 +278,17 @@ export function ReceiptImportScreen({ shared }: { shared: boolean }) {
                       <span>MHD-Ware</span>
                       {r.line.reduced && <span className="small muted">· auf dem Bon „RABATT“</span>}
                     </label>
-                    <label className="bonrow__mhd">
-                      <input type="checkbox" checked={!!r.freeze} onChange={(e) => update(i, { freeze: e.target.checked ? packs(r) : undefined })} />
-                      <span>Einfrieren</span>
-                    </label>
-                    {!!r.freeze && packs(r) > 1 && (
-                      <label className="small bonrow__freeze">
-                        <select value={r.freeze} onChange={(e) => update(i, { freeze: Number(e.target.value) })} aria-label="Wie viele Packungen einfrieren">
-                          {Array.from({ length: packs(r) }, (_, n) => n + 1).map((n) => <option key={n} value={n}>{n}</option>)}
-                        </select>
-                        von {packs(r)} · Rest frisch
+                    {/* mehrere Packungen: gleich die Anzahl (Julia: 3 Packungen, 2 einfrieren) – eine: ein Haken */}
+                    {packs(r) > 1 ? (
+                      <span className="small bonrow__freeze">
+                        <span>Einfrieren</span>
+                        <Stepper small min={0} max={packs(r)} value={r.freeze ?? 0} onChange={(n) => update(i, { freeze: n || undefined })} label="Wie viele Packungen einfrieren" />
+                        <span>von {packs(r)}{r.freeze && r.freeze < packs(r) ? ' · Rest frisch' : ''}</span>
+                      </span>
+                    ) : (
+                      <label className="bonrow__mhd">
+                        <input type="checkbox" checked={!!r.freeze} onChange={(e) => update(i, { freeze: e.target.checked ? 1 : undefined })} />
+                        <span>Einfrieren</span>
                       </label>
                     )}
                   </div>
@@ -299,7 +328,7 @@ export function ReceiptImportScreen({ shared }: { shared: boolean }) {
             <button className="btn btn--soft" onClick={() => evaluate(text)}>Neu auswerten</button>
           </details>
           <button className="btn btn--primary btn--block btn--lg" onClick={apply} disabled={!rows.length}>
-            {replacing ? 'Alten Import ersetzen' : taking ? `${taking} in die Speisekammer` : 'Nur merken, nichts übernehmen'}
+            {replacing ? 'Alten Import ersetzen' : onlyHistory ? 'Nur in den Preisverlauf' : taking ? `${taking} in die Speisekammer` : 'Nur merken, nichts übernehmen'}
           </button>
           <p className="muted small center">Übersprungenes merkt sich Mashi auch – der nächste Bon fragt nicht wieder.</p>
         </div>
