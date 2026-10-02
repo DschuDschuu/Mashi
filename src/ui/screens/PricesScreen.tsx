@@ -1,23 +1,21 @@
 import { useMemo, useState } from 'react';
-import { displayPrice, displayUnit, priceTrends, type PriceTrend } from '../../domain/priceHistory';
+import { displayPrice, displayUnit, foodTrends, type FoodTrend, type PriceTrend } from '../../domain/priceHistory';
 import { monthSavings, type ReceiptSavings } from '../../domain/savings';
-import { usePantry, useProducts } from '../../data/store';
+import { keyOfName } from '../../domain/mealplan';
 import { sortTags } from '../../domain/nutrition/myProducts';
+import { receiptKey } from '../../domain/pantry';
+import { useFoodTable, usePantry, useProducts } from '../../data/store';
 import { navigate } from '../../router';
-import { Empty, Section } from '../components/Controls';
+import { Empty } from '../components/Controls';
 import { Icon } from '../components/Icon';
 import { PantryTabs, usePantrySwipe } from '../components/PlanTabs';
-import { PriceChart } from '../components/PriceChart';
+import { PriceLines, SORT_COLORS } from '../components/PriceLines';
 import { euro } from '../format';
 import { CartButton } from '../components/CartButton';
 import { foodPricePath } from '../components/LastPurchase';
-import { unsavedDays, type SavedBon } from '../../domain/bons';
-import { dropPriceDay } from '../../data/store';
-import { ask } from '../confirm';
-import { toast } from '../toast';
-import { bonTitle } from './BonScreen';
 
 const percent = (n: number) => `${n > 0 ? '+' : n < 0 ? '−' : '±'}${Math.abs(n * 100).toLocaleString('de-DE', { maximumFractionDigits: 1 })} %`;
+const arrowOf = (d: PriceTrend['direction']) => (d === 'teurer' ? '▲' : d === 'guenstiger' ? '▼' : '■');
 
 /** eingeklappte Gruppen (teurer / günstiger / gleich) – nur auf diesem Gerät */
 const FOLD_KEY = 'mashi-prices-folded';
@@ -29,13 +27,20 @@ const GROUPS: { key: PriceTrend['direction']; title: string }[] = [
 ];
 
 /**
- * Preise der Artikel, die du regelmäßig kaufst (mindestens zweimal per Kassenbon).
- * Verglichen wird mit dem vorigen Einkauf; das Diagramm zeigt den ganzen Verlauf.
+ * Preise der Lebensmittel, die du regelmäßig kaufst (mindestens zweimal per Kassenbon) – eine Karte je Lebensmittel,
+ * darin je Sorte eine Linie (Julia). Einsortiert nach der zuletzt gekauften Sorte; die Bons stehen im Tab „Einkäufe“.
  */
 export function PricesScreen() {
   const swipe = usePantrySwipe('prices');
   const pantry = usePantry();
-  const trends = useMemo(() => priceTrends(pantry.history ?? pantry.prices ?? []), [pantry]);
+  const table = useFoodTable();
+  const trends = useMemo(() => {
+    // ältere Preise ohne Sorte: über den Bon desselben Tages zuordnen (wie auf der Preis-Seite eines Lebensmittels)
+    const lines = (pantry.bons ?? []).flatMap((b) => b.lines.filter((l) => !l.skip).map((l) => ({ day: b.date.slice(0, 10), l })));
+    const sortOf = (h: { name: string; date: string; productId?: string }) => h.productId
+      ?? lines.find((x) => x.day === h.date.slice(0, 10) && receiptKey(x.l.name) === receiptKey(h.name))?.l.productId;
+    return foodTrends(pantry.history ?? pantry.prices ?? [], (n) => keyOfName(n, table) ?? receiptKey(n), sortOf);
+  }, [pantry, table]);
   const [folded, setFolded] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem(FOLD_KEY) ?? '[]') as string[]; } catch { return []; } });
   const toggleFold = (key: string) => {
     const next = folded.includes(key) ? folded.filter((k) => k !== key) : [...folded, key];
@@ -50,8 +55,6 @@ export function PricesScreen() {
       <div className="split split--prices">
         <div className="split__main">
           <SavingsTiles savings={pantry.savings ?? []} />
-          <BonList bons={pantry.bons ?? []} />
-          <OldDays />
         </div>
         <div className="split__side">
           {trends.length === 0 ? (
@@ -77,7 +80,7 @@ export function PricesScreen() {
                     </button>
                     {open && (
                       <ul className="prices">
-                        {list.map((t) => <PriceCard key={`${t.name}|${t.unit}|${t.productId ?? ''}`} trend={t} />)}
+                        {list.map((t) => <FoodCard key={`${t.key}|${t.unit}`} trend={t} />)}
                       </ul>
                     )}
                   </section>
@@ -92,105 +95,49 @@ export function PricesScreen() {
   );
 }
 
-function PriceCard({ trend: t }: { trend: PriceTrend }) {
-  // je Sorte eine eigene Karte – mit Zusatz/Marke, damit man sie unterscheidet
+/** Ein Lebensmittel: je Sorte Farbe, letzter Preis und ▲/▼ – darunter alle Sorten in einem Diagramm */
+function FoodCard({ trend: t }: { trend: FoodTrend }) {
   const products = useProducts();
-  const sort = t.productId ? products.find((p) => p.id === t.productId) : undefined;
-  const first = t.points[0].perUnit;
-  const sinceFirst = first ? (t.latest - first) / first : 0;
-  const arrow = t.direction === 'teurer' ? '▲' : t.direction === 'guenstiger' ? '▼' : '■';
+  const several = t.sorts.length > 1;
+  const label = (id: string) => {
+    const p = id ? products.find((x) => x.id === id) : undefined;
+    if (p) return sortTags(p).join(' · ') || (several ? 'ohne Zusatz' : t.name);
+    return several ? 'ohne Sorte' : t.name;
+  };
+  const series = t.sorts.map((s, n) => ({ id: s.id, label: label(s.id), color: SORT_COLORS[n % SORT_COLORS.length], points: s.points }));
+  const points = t.sorts.reduce((n, s) => n + s.points.length, 0);
   return (
     <li className="price-card">
       <div className="price-card__head">
-        <button type="button" className="price-card__name link" onClick={() => navigate(foodPricePath(t.name))}>{t.name}{sort && sortTags(sort).map((x) => <span key={x} className="brand">{x}</span>)}</button>
-        <span className={`price-card__change is-${t.direction}`}>
-          <span aria-hidden="true">{arrow}</span> {percent(t.change)}
-          <span className="visually-hidden"> zum vorigen Einkauf</span>
-        </span>
+        <button type="button" className="price-card__name link" onClick={() => navigate(foodPricePath(t.name))}>{t.name}</button>
+        {!several && (
+          <span className={`price-card__change is-${t.direction}`}>
+            <span aria-hidden="true">{arrowOf(t.direction)}</span> {percent(t.change)}
+            <span className="visually-hidden"> zum vorigen Einkauf</span>
+          </span>
+        )}
       </div>
-      <p className="small muted">
-        <strong className="price-card__now">{euro(displayPrice(t.latest, t.unit))}/{displayUnit(t.unit)}</strong>
-        {' · '}{t.points.length} Einkäufe{t.points.length > 2 && <> · seit dem ersten {percent(sinceFirst)}</>}
-      </p>
-      <PriceChart points={t.points} unit={t.unit} label={t.name} />
-      <details className="price-card__table">
-        <summary>Alle Einkäufe</summary>
-        <table>
-          <tbody>
-            {[...t.points].reverse().map((p) => (
-              <tr key={p.date}>
-                <th scope="row">{new Date(p.date).toLocaleDateString('de-DE')}</th>
-                <td>{euro(displayPrice(p.perUnit, t.unit))}/{displayUnit(t.unit)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </details>
-    </li>
-  );
-}
-
-/** Meine Einkäufe (Julia): die gespeicherten Bons, neueste zuerst – antippen zum Ansehen und Korrigieren */
-function BonList({ bons }: { bons: SavedBon[] }) {
-  const [all, setAll] = useState(false);
-  if (!bons.length) return null;
-  const newest = [...bons].reverse();
-  const shown = all ? newest : newest.slice(0, 5);
-  return (
-    <Section title={`Meine Einkäufe (${bons.length})`}>
-      <ul className="bonview">
-        {shown.map((b) => {
-          const saved = b.savings ? b.savings.offers + b.savings.lidlPlus + b.savings.mhd : 0;
-          return (
-            <li key={b.id} className="bonview__line">
-              <button type="button" className="bonview__open" onClick={() => navigate(`/preise/bon/${b.id}`)}>
-                <span className="bonview__name">{bonTitle(b)}</span>
-                <span className="bonview__price">{b.total !== undefined ? euro(b.total) : ''}</span>
-                <span className="small muted bonview__sub">{b.lines.filter((l) => !l.skip).length} Artikel{saved > 0 ? ` · gespart ${euro(saved)}` : ''}</span>
-                <Icon name="chevron" size={14} />
-              </button>
+      {several ? (
+        // je Sorte eine Zeile: Farbpunkt, Name, letzter Preis, ▲/▼
+        <ul className="price-sorts-legend">
+          {t.sorts.map((s, n) => (
+            <li key={s.id}>
+              <span className="price-sorts__dot" style={{ background: series[n].color }} aria-hidden="true" />
+              <span className="price-sorts-legend__name">{series[n].label}</span>
+              <span className="small">{euro(displayPrice(s.latest, t.unit))}/{displayUnit(t.unit)}</span>
+              <span className={`price-card__change is-${s.direction}`}>
+                <span aria-hidden="true">{arrowOf(s.direction)}</span> {percent(s.change)}
+              </span>
             </li>
-          );
-        })}
-      </ul>
-      {newest.length > 5 && (
-        <button type="button" className="link small" onClick={() => setAll(!all)}>{all ? 'Weniger zeigen' : `Alle ${newest.length} zeigen`}</button>
+          ))}
+        </ul>
+      ) : (
+        <p className="small muted">
+          <strong className="price-card__now">{euro(displayPrice(t.sorts[0].latest, t.unit))}/{displayUnit(t.unit)}</strong> · {t.sorts[0].points.length} Einkäufe
+        </p>
       )}
-    </Section>
-  );
-}
-
-/**
- * Eingelesen vor dem Speichern der Bons (Julia): je Tag, wie viele Preise – löschbar, z. B. wenn der Bon damals
- * ohne erkanntes Datum am falschen Tag gelandet ist. Danach mit richtigem Datum neu einlesen.
- */
-function OldDays() {
-  const days = unsavedDays(usePantry());
-  if (!days.length) return null;
-  return (
-    <Section title="Eingelesen vor dem Speichern der Bons">
-      <ul className="bonview">
-        {days.map(({ day, names }) => (
-          <li key={day} className="bonview__line old-day">
-            <span className="old-day__text">
-              <strong>{bonTitle({ date: `${day}T12:00:00.000Z` })}</strong>
-              <span className="small muted">{names.length} {names.length === 1 ? 'Preis' : 'Preise'} · {names.slice(0, 3).join(', ')}{names.length > 3 ? ' …' : ''}</span>
-            </span>
-            <button type="button" className="iconbtn iconbtn--sm iconbtn--danger" aria-label={`Preise vom ${bonTitle({ date: `${day}T12:00:00.000Z` })} löschen`} onClick={async () => {
-              if (!(await ask({
-                title: 'Preise dieses Tages löschen?',
-                text: `${names.length} ${names.length === 1 ? 'Preis' : 'Preise'} und die Ersparnis dieses Tages fallen aus dem Verlauf. Die Speisekammer bleibt, wie sie ist.`,
-                confirm: 'Löschen', danger: true,
-              }))) return;
-              const undo = dropPriceDay(day);
-              toast('Preise gelöscht – jetzt den Bon mit richtigem Datum neu einlesen', { label: 'Rückgängig', run: undo });
-            }}>
-              <Icon name="trash" size={16} />
-            </button>
-          </li>
-        ))}
-      </ul>
-    </Section>
+      {points > 1 && <PriceLines series={series} unit={t.unit} label={t.name} />}
+    </li>
   );
 }
 

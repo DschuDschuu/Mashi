@@ -38,9 +38,24 @@ export function LastPurchase({ name, title, productIds, sort }: {
       <span className="small last-buy__price">{price}</span>
       {/* gewogene Ware: der Kilopreis gleich mit (Julia: Kürbis) */}
       <span className="small muted">am {date}{why && <> · {why}</>}{last && perKg(last.line) && <> · {perKg(last.line)}</>}</span>
-      <button type="button" className="link small last-buy__link" onClick={() => navigate(foodPricePath(name, title))}>
-        Preise &amp; Verlauf <Icon name="chevron" size={14} />
-      </button>
+      {/* je Sorte kein eigener Knopf – die Preis-Seite zeigt alle Sorten in einem Diagramm (Julia) */}
+      {!sort && <PriceLink name={name} title={title} />}
     </div>
   );
+}
+
+/** „Preise & Verlauf“ – einmal je Lebensmittel */
+export function PriceLink({ name, title }: { name: string; title: string }) {
+  return (
+    <button type="button" className="link small last-buy__link" onClick={() => navigate(foodPricePath(name, title))}>
+      Preise &amp; Verlauf <Icon name="chevron" size={14} />
+    </button>
+  );
+}
+
+/** Der Knopf allein (unter den Sorten-Karten) – nur, wenn es überhaupt Preise gibt */
+export function FoodPriceLink({ name, title, productIds }: { name: string; title: string; productIds: readonly string[] }) {
+  const { purchases, history } = usePurchases(name, productIds);
+  if (!purchases.length && !history.length) return null;
+  return <div className="last-buy__alone"><PriceLink name={name} title={title} /></div>;
 }

@@ -7,7 +7,7 @@ import { brandOf, productLabel, sharedOf, withShared, type MyProduct, type Share
 import { groupByCategory } from '../../domain/categories';
 import { useCategoryOf } from '../useCategory';
 import { CategoryPicker } from './CategoryPicker';
-import { LastPurchase } from './LastPurchase';
+import { FoodPriceLink, LastPurchase } from './LastPurchase';
 import { purchasesOf } from '../../domain/bons';
 import { zeroOf } from '../../domain/nutrition/noNutrition';
 import { averageNutrients } from '../../domain/nutrition/variants';
@@ -186,6 +186,8 @@ function FoodLine({ row, open, onToggle, products, onTouch }: {
   const table = useFoodTable();
   const { stage, rule } = stageOf(row.ingredient, pantry, table);
   const nothing = !ps.length && stage === 'normal' && !row.zero;
+  /** mindestens eine Sorte mit Bon-Einkauf – dann steht „Zuletzt gekauft“ je Sorte, sonst einmal oben */
+  const sortBought = ps.some((p) => purchasesOf(pantry.bons, (l) => l.productId === p.id).length > 0);
   const zeroRow = !!row.zero;
 
   return (
@@ -240,9 +242,7 @@ function FoodLine({ row, open, onToggle, products, onTouch }: {
           )}
           {/* statt des Preisfelds: was du zuletzt wirklich bezahlt hast – je Sorte in ihrer Karte (Julia);
               hier oben nur, wenn keine Sorte einen Bon-Einkauf hat (ältere Bons kennen nur den Namen) */}
-          {!ps.some((p) => purchasesOf(pantry.bons, (l) => l.productId === p.id).length) && (
-            <LastPurchase name={row.ingredient} title={title} productIds={ps.map((p) => p.id)} />
-          )}
+          {!sortBought && <LastPurchase name={row.ingredient} title={title} productIds={ps.map((p) => p.id)} />}
           {ps.map((p) => editing === p.id ? (
             <ProductForm key={p.id} initial={p} shared={shared} onSave={save} onCancel={() => setEditing(null)} />
           ) : (
@@ -272,6 +272,8 @@ function FoodLine({ row, open, onToggle, products, onTouch }: {
             </div>
           ))}
 
+          {/* einmal je Lebensmittel (Julia) – die Preis-Seite zeigt alle Sorten in einem Diagramm */}
+          {sortBought && <FoodPriceLink name={row.ingredient} title={title} productIds={ps.map((p) => p.id)} />}
           {/* dasselbe Formular wie „Lebensmittel hinzufügen“ – als Sorte nur Marke, Werte, Packung */}
           {addingSort
             ? <ProductForm shared={ps.length ? sharedOf(ps) : undefined} initial={ps.length ? undefined : { name: row.name }} onSave={save} onCancel={() => setAddingSort(false)} />

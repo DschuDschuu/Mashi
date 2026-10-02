@@ -1,10 +1,12 @@
 import { navigate } from '../../router';
 import { useSwipe } from '../useSwipe';
 
-type Active = 'pantry' | 'prices';
+type Active = 'pantry' | 'prices' | 'bons';
 const ORDER: { key: Active; label: string; path: string }[] = [
   { key: 'pantry', label: 'Vorräte', path: '/speisekammer' },
   { key: 'prices', label: 'Preise', path: '/preise' },
+  // Kassenbons im eigenen Tab (Julia: nahmen auf der Preise-Seite viel Platz weg)
+  { key: 'bons', label: 'Einkäufe', path: '/einkaeufe' },
 ];
 
 /** Umschalter im Tab „Speisekammer“: Vorräte und Preise – beides kommt vom Kassenbon. */

@@ -7,6 +7,9 @@ const H = 150;
 const PAD = { left: 46, right: 14, top: 22, bottom: 24 };
 const shortDate = (iso: string) => new Date(iso).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit' });
 
+/** je Sorte eine Farbe – gut unterscheidbar, passend zu den Farben der App */
+export const SORT_COLORS = ['#3f8f88', '#c0703f', '#6a74c9', '#b4527b', '#5f8f3e', '#8a6d3b'];
+
 export interface PriceSeries { id: string; label: string; color: string; points: PricePoint[] }
 
 /**

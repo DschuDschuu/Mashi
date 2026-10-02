@@ -154,13 +154,13 @@ export function ReceiptImportScreen({ shared }: { shared: boolean }) {
     if (onlyHistory) {
       importReceipt(rows.map(fromRow), paidAt, savings, { historyOnly: true });
       toast(`Bon vom ${paidAt ? new Date(paidAt).toLocaleDateString('de-DE') : 'Einkaufstag'} im Preisverlauf – Speisekammer unverändert`);
-      navigate('/preise', { replace: true });
+      navigate('/einkaeufe', { replace: true });
       return;
     }
     if (replacing) {
       importReceipt(rows.map(fromRow), paidAt, savings, { replace: true });
       toast(`Bon ersetzt – Preise vom ${paidAt ? new Date(paidAt).toLocaleDateString('de-DE') : 'Einkaufstag'} neu, Vorrat unverändert`);
-      navigate('/preise', { replace: true });
+      navigate('/einkaeufe', { replace: true });
       return;
     }
     const { count: n, onList } = importReceipt(rows.map(fromRow), paidAt, savings);

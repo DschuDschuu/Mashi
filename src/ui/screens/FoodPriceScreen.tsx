@@ -9,14 +9,11 @@ import { useFoodTable, useProducts } from '../../data/store';
 import { navigate } from '../../router';
 import { Empty, Section } from '../components/Controls';
 import { Icon } from '../components/Icon';
-import { PriceLines } from '../components/PriceLines';
+import { PriceLines, SORT_COLORS } from '../components/PriceLines';
 import { TopBar } from '../components/TopBar';
 import { euro } from '../format';
 import { lineAmount, linePrice, perKg, productIdsOfName, usePurchases } from '../usePurchases';
 import { bonTitle } from './BonScreen';
-
-/** je Sorte eine Farbe – gut unterscheidbar, passend zu den Farben der App */
-const COLORS = ['#3f8f88', '#c0703f', '#6a74c9', '#b4527b', '#5f8f3e', '#8a6d3b'];
 
 /**
  * Preise nur für ein Lebensmittel (Julia, aus der Kachel „Zuletzt gekauft“): wie oft gekauft, was gespart,
@@ -55,7 +52,7 @@ export function FoodPriceScreen({ name, title }: { name: string; title: string }
     const sortList = order.map((id, n) => {
       const p = id ? products.find((x) => x.id === id) : undefined;
       const label = p ? (sortTags(p).join(' · ') || (order.length > 1 ? 'ohne Zusatz' : title)) : 'ohne Sorte';
-      return { id, label, color: COLORS[n % COLORS.length] };
+      return { id, label, color: SORT_COLORS[n % SORT_COLORS.length] };
     });
     const of = (u: 'g' | 'Stück') => sortList
       .map((x) => ({ ...x, points: [...(days.get(`${u}|${x.id}`)?.values() ?? [])].sort((a, b) => a.date.localeCompare(b.date)) }))
@@ -87,19 +84,6 @@ export function FoodPriceScreen({ name, title }: { name: string; title: string }
         <Empty icon="cart"><span>Noch kein Einkauf per Kassenbon.</span></Empty>
       ) : (
         <>
-          {sorts.length > 1 && (
-            <div className="chips price-sorts" role="group" aria-label="Sorten zeigen">
-              {sorts.map((x) => {
-                const on = !hidden.includes(x.id);
-                return (
-                  <button key={x.id} type="button" className={`chip chip--sm${on ? ' is-on' : ''}`} aria-pressed={on}
-                    onClick={() => setHidden(on ? [...hidden, x.id] : hidden.filter((h) => h !== x.id))}>
-                    <span className="price-sorts__dot" style={{ background: x.color }} aria-hidden="true" /> {x.label}
-                  </button>
-                );
-              })}
-            </div>
-          )}
           <div className="savings__tiles">
             <div className="stat tint-sky">
               <span className="stat__label">Einkäufe</span>
@@ -128,6 +112,20 @@ export function FoodPriceScreen({ name, title }: { name: string; title: string }
             </Section>
           ))}
 
+          {/* unter dem Diagramm (Julia) – blendet Sorten im Diagramm, in den Kacheln und bei den Einkäufen aus */}
+          {sorts.length > 1 && (
+            <div className="chips price-sorts" role="group" aria-label="Sorten zeigen">
+              {sorts.map((x) => {
+                const on = !hidden.includes(x.id);
+                return (
+                  <button key={x.id} type="button" className={`chip chip--sm${on ? ' is-on' : ''}`} aria-pressed={on}
+                    onClick={() => setHidden(on ? [...hidden, x.id] : hidden.filter((h) => h !== x.id))}>
+                    <span className="price-sorts__dot" style={{ background: x.color }} aria-hidden="true" /> {x.label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
           {shownPurchases.length > 0 && (
             <Section title="Alle Einkäufe">
               <ul className="bonview">

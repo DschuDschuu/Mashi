@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { PriceEntry } from './cost';
 import { applyImport, emptyPantry, proposeImport } from './pantry';
-import { priceTrends } from './priceHistory';
+import { foodTrends, priceTrends } from './priceHistory';
 import { parseReceipt, parseReceiptDate } from './receipt';
 
 const e = (name: string, perUnit: number, date: string, unit: 'g' | 'Stück' = 'g'): PriceEntry => ({ name, perUnit, unit, date: `${date}T12:00:00.000Z` });
@@ -57,5 +57,23 @@ describe('Verlauf je Sorte', () => {
     const t = priceTrends([e(0.0066, '2026-09-01', 'normal'), e(0.008, '2026-09-01', 'leicht'), e(0.007, '2026-09-08', 'normal'), e(0.0078, '2026-09-08', 'leicht')]);
     expect(t.map((x) => [x.productId, x.points.length])).toEqual(expect.arrayContaining([['normal', 2], ['leicht', 2]]));
     expect(t).toHaveLength(2);
+  });
+});
+
+describe('Verläufe je Lebensmittel mit Sorten', () => {
+  const e = (name: string, perUnit: number, date: string, productId?: string) => ({ name, perUnit, unit: 'g' as const, date, ...(productId ? { productId } : {}) });
+  it('eine Karte je Lebensmittel, eine Linie je Sorte – einsortiert nach der zuletzt gekauften Sorte', () => {
+    const t = foodTrends([
+      e('Hähnchen', 0.01, '2026-09-01', 'bio'), e('Hähnchen', 0.012, '2026-09-20', 'bio'),
+      e('Hähnchen', 0.006, '2026-09-05', 'normal'), e('Hähnchen', 0.005, '2026-09-25', 'normal'),
+      e('Quark', 0.003, '2026-09-01'),
+    ], (n) => n, (x) => x.productId);
+    expect(t).toHaveLength(1); // Quark nur einmal gekauft
+    expect(t[0].sorts.map((s) => [s.id, s.direction])).toEqual([['bio', 'teurer'], ['normal', 'guenstiger']]);
+    expect(t[0].direction).toBe('guenstiger'); // „normal“ zuletzt gekauft
+  });
+  it('ältere Preise ohne Sorte: über sortOf zugeordnet, sonst „ohne Sorte“', () => {
+    const t = foodTrends([e('Milch', 0.001, '2026-09-01'), e('Milch', 0.0011, '2026-09-08')], (n) => n, () => undefined);
+    expect(t[0].sorts.map((s) => s.id)).toEqual(['']);
   });
 });

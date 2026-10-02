@@ -1562,8 +1562,8 @@ p { margin: 0; }
 /* Sorten-Karte: Marken-Chip näher an die Überschrift, mehr Luft zu den Kalorien (Julia) */
 .foods__sort .foods__brand { margin: -4px 0 6px; }
 /* Preis-Seite: Sorten als Chips mit Farbpunkt (wie die Linie im Diagramm) */
-.price-sorts { margin-bottom: 4px; }
-.price-sorts__dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 2px; vertical-align: -1px; }
+.price-sorts { margin: -4px 0 4px; }
+.price-sorts__dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 2px; vertical-align: -1px; box-shadow: 0 0 0 2px var(--surface); }
 /* Sortenwahl: was von der Sorte da ist (Julia) – kräftiger als die Nährwerte darunter */
 .variants__stock { color: var(--primary-text); font-weight: 600; }
 .variants__unsorted { margin: 0 0 4px; }
@@ -1586,3 +1586,8 @@ details.cost-line[open] > summary::after { transform: rotate(-90deg); }
 .cost-line__items { list-style: none; margin: 8px 0 4px; padding: 0; display: flex; flex-direction: column; gap: 2px; }
 .cost-line__items li { display: flex; justify-content: space-between; gap: 10px; font-size: 0.9rem; }
 .cost-line__items li span:last-child { font-variant-numeric: tabular-nums; color: var(--ink); }
+/* Preise-Übersicht: je Sorte eine Zeile mit Farbpunkt, Preis und ▲/▼ */
+.price-sorts-legend { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.price-sorts-legend li { display: flex; align-items: center; gap: 8px; }
+.price-sorts-legend__name { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: 0.9rem; }
+.last-buy__alone { display: flex; justify-content: flex-end; margin-top: -4px; }

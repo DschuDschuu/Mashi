@@ -33,7 +33,7 @@ export function BonScreen({ id }: { id: string }) {
   if (!bon) {
     return (
       <main className="screen">
-        <TopBar title="Kassenbon" backTo="/preise" />
+        <TopBar title="Kassenbon" backTo="/einkaeufe" />
         <Empty icon="cart"><span>Diesen Bon gibt es nicht mehr – Mashi hebt die letzten 100 auf.</span></Empty>
       </main>
     );
@@ -42,7 +42,7 @@ export function BonScreen({ id }: { id: string }) {
   const saved = bon.savings ? bon.savings.offers + bon.savings.lidlPlus + bon.savings.mhd : 0;
   return (
     <main className="screen">
-      <TopBar title={`Einkauf vom ${bonTitle(bon)}`} backTo="/preise" />
+      <TopBar title={`Einkauf vom ${bonTitle(bon)}`} backTo="/einkaeufe" />
       <IngredientNames />
       {/* wie auf der Preise-Seite (Julia): Lidl Plus, Angebote, MHD-Ware – für diesen einen Einkauf */}
       <div className="savings__tiles">

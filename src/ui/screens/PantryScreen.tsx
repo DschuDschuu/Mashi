@@ -2,10 +2,9 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { isCount, plannedOf, recipesFromPantry, type PantryItem, type PantryUnit } from '../../domain/pantry';
 import { suggestPantryUnit } from '../../domain/packs';
 import { daysLabel, daysLeft, frozenSince, specialDays, useByOf } from '../../domain/shelfLife';
-import { formatAmount } from '../../domain/scaling';
 import {
   eatPreparedPortions,
-  addPantryItem, answerPantryCheck, assignPantrySorts, currentPantry, currentProducts, forgetReceiptRule, freezePantryItem, removePantryItem, setPantryAmount, thawPantryItem, updatePantryItem,
+  addPantryItem, answerPantryCheck, assignPantrySorts, currentPantry, currentProducts, freezePantryItem, removePantryItem, setPantryAmount, thawPantryItem, updatePantryItem,
   saveProducts, useFoodTable, usePantry, usePlan, useProducts, useRecipes,
 } from '../../data/store';
 import { currentContent } from '../../domain/recipe';
@@ -23,7 +22,6 @@ import { useUseUp } from '../useUseUp';
 import { PantryMatchList, RecipeIdeaPanel } from '../components/PantryMatches';
 import { ShelfSettings } from '../components/ShelfSettings';
 import { ProductsLink } from '../components/ProductsLink';
-import { TileSummary } from '../components/TileSummary';
 import { toast } from '../toast';
 import { BarcodeScanner } from '../components/BarcodeScanner';
 import { SortPicker, useSortOptions } from '../components/SortPicker';
@@ -324,21 +322,6 @@ export function PantryScreen() {
             <ProductsLink />
             <ShelfSettings />
 
-            {pantry.rules.length > 0 && (
-              <details className="panel fold learned">
-                <TileSummary icon="clipboard" title={`Gelernte Bon-Artikel (${pantry.rules.length})`} text="So übersetzt Mashi deine Kassenbons" />
-                <p className="muted small">Falsch gelernt? „Vergessen“ – beim nächsten Bon fragt Mashi wieder.</p>
-                <ul className="learned__list">
-                  {[...pantry.rules].sort((a, b) => a.key.localeCompare(b.key, 'de')).map((r) => (
-                    <li key={r.key}>
-                      <span className="learned__bon">{r.key}</span>
-                      <span className="small muted">{r.skip ? 'wird übersprungen' : `→ ${r.name}${r.amount ? ` · ${formatAmount(r.amount, 'g')} ${r.unit} je Stück` : ''}`}</span>
-                      <button className="link link--muted" onClick={() => forgetReceiptRule(r.key)}>Vergessen</button>
-                    </li>
-                  ))}
-                </ul>
-              </details>
-            )}
 
             {/* ganz unten (Julia): seltener gebraucht – wann du willst, kein Rhythmus */}
             <button className="panel link-row" onClick={() => navigate('/speisekammer/inventur')}>

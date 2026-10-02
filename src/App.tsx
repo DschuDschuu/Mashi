@@ -17,6 +17,7 @@ import { PlanScreen } from './ui/screens/PlanScreen';
 import { PantryScreen } from './ui/screens/PantryScreen';
 import { PricesScreen } from './ui/screens/PricesScreen';
 import { BonScreen } from './ui/screens/BonScreen';
+import { ReceiptsScreen } from './ui/screens/ReceiptsScreen';
 import { FoodPriceScreen } from './ui/screens/FoodPriceScreen';
 import { ShoppingScreen } from './ui/screens/ShoppingScreen';
 import { ReceiptImportScreen } from './ui/screens/ReceiptImportScreen';
@@ -56,6 +57,7 @@ function resolve(route: Route): { screen: ReactElement; tab?: string; section?: 
       if (b === 'bon' && c) return { screen: <BonScreen key={c} id={c} />, section: '/speisekammer' };
       if (b === 'lebensmittel' && c) return { screen: <FoodPriceScreen key={c} name={c} title={route.query.get('t') || c} />, section: '/speisekammer' };
       return { screen: <PricesScreen />, tab: '/speisekammer' };
+    case 'einkaeufe': return { screen: <ReceiptsScreen />, tab: '/speisekammer' };
     // die Einkaufsliste hängt am Wagen in der Speisekammer
     case 'einkauf': return { screen: <ShoppingScreen />, tab: '/speisekammer' };
     case 'speisekammer':
