@@ -103,7 +103,7 @@ export function addBon(pantry: Pantry, bon: SavedBon): Pantry {
   return { ...pantry, bons };
 }
 
-export type BonLinePatch = Partial<Pick<BonLine, 'name' | 'amount' | 'unit' | 'productId' | 'price' | 'discounts' | 'count'>>;
+export type BonLinePatch = Partial<Pick<BonLine, 'name' | 'amount' | 'unit' | 'productId' | 'price' | 'discounts' | 'count' | 'weightKg'>>;
 
 /**
  * Eine Zeile eines gespeicherten Bons ändern – und alles, was daraus entstanden ist, mit:
@@ -194,7 +194,7 @@ const day = (iso: string) => iso.slice(0, 10);
 /** Preisverlauf: der Eintrag dieses Tages wird ersetzt; „zuletzt bezahlt“ je Artikel neu aus dem Verlauf */
 function movePrice(pantry: Pantry, before: PriceEntry | undefined, after: PriceEntry | undefined): Pick<Pantry, 'history' | 'prices'> {
   let history = [...(pantry.history ?? pantry.prices ?? [])];
-  const at = (p: PriceEntry) => (h: PriceEntry) => receiptKey(h.name) === receiptKey(p.name) && day(h.date) === day(p.date);
+  const at = (p: PriceEntry) => (h: PriceEntry) => receiptKey(h.name) === receiptKey(p.name) && day(h.date) === day(p.date) && h.productId === p.productId;
   if (before) history = history.filter((h) => !at(before)(h));
   if (after) history = [...history.filter((h) => !at(after)(h)), after];
   const keys = new Set([before, after].filter((p): p is PriceEntry => !!p).map((p) => receiptKey(p.name)));

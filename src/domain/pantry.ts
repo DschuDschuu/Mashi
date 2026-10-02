@@ -221,7 +221,8 @@ export function applyImport(pantry: Pantry, rows: ImportRow[], now = new Date().
       const key = receiptKey(price.name);
       // Ein nachträglich importierter alter Bon überschreibt keinen neueren Preis
       if ((prices.get(key)?.date ?? '') <= price.date) prices.set(key, price);
-      const same = history.findIndex((h) => receiptKey(h.name) === key && h.date.slice(0, 10) === price.date.slice(0, 10));
+      // derselbe Artikel am selben Tag – je Sorte (leicht und normal am selben Tag bleiben beide)
+      const same = history.findIndex((h) => receiptKey(h.name) === key && h.date.slice(0, 10) === price.date.slice(0, 10) && h.productId === price.productId);
       if (same >= 0) history[same] = price;
       else history.push(price);
     }
@@ -284,12 +285,13 @@ export function priceOf(row: ImportRow, date: string): PriceEntry | undefined {
   const paid = row.line.price;
   if (!paid) return undefined;
   const name = row.name.trim();
+  const sort = row.productId ? { productId: row.productId } : {};
   // gewogen (Kilopreis auf dem Bon): immer je kg – auch wenn der Vorrat „2 Stück“ Kürbis zählt (Julia)
-  if (row.line.weightKg) return { name, perUnit: paid / (row.line.weightKg * 1000), unit: 'g', date };
+  if (row.line.weightKg) return { name, perUnit: paid / (row.line.weightKg * 1000), unit: 'g', date, ...sort };
   const counted = row.unit === 'Stück' || row.unit === 'Glas';
-  if (row.amount && !counted) return { name, perUnit: paid / row.amount, unit: 'g', date };
+  if (row.amount && !counted) return { name, perUnit: paid / row.amount, unit: 'g', date, ...sort };
   const pieces = counted && row.amount ? row.amount : row.line.count;
-  return { name, perUnit: paid / pieces, unit: 'Stück', date };
+  return { name, perUnit: paid / pieces, unit: 'Stück', date, ...sort };
 }
 
 export const samePack = (a?: Pack, b?: Pack) => a?.amount === b?.amount && a?.unit === b?.unit;

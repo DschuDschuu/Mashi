@@ -94,3 +94,26 @@ export function matchesFilter(r: FoodRow, f: FoodFilter): boolean {
   if (f === 'haus') return !r.zero && !!r.basic;
   return !r.zero && !r.basic;
 }
+
+/**
+ * Gibt es dieses Lebensmittel schon (mit Sorten)? Für „weitere Sorte?“ beim Anlegen – auch vom Bon (Julia: Name
+ * „Rinderhack leicht 500g“ fand „Rinderhack“ nicht). Der Reihe nach: gleicher Name; der Name enthält einen
+ * vorhandenen als ganze Wörter (der längste gewinnt); dasselbe Lebensmittel laut Tabelle („Hackfleisch“).
+ * @param skip ausgeschlossen („Nein, neu anlegen“ gewählt)
+ */
+export function findFoodRow(rows: readonly FoodRow[], name: string, table: FoodTable, skip = ''): FoodRow | undefined {
+  const k = normalizeName(name);
+  if (!k || k === skip) return undefined;
+  const withSorts = rows.filter((r) => r.products.length > 0);
+  const namesOf = (r: FoodRow) => [r.name, r.ingredient, ...r.products.map((p) => nameOf(p))].map(normalizeName).filter(Boolean);
+  const exact = withSorts.find((r) => namesOf(r).includes(k));
+  if (exact) return exact;
+  const words = ` ${k.replace(/[-/]/g, ' ')} `;
+  const contained = withSorts
+    .map((r) => ({ r, len: Math.max(0, ...namesOf(r).filter((n) => words.includes(` ${n.replace(/[-/]/g, ' ')} `)).map((n) => n.length)) }))
+    .filter((x) => x.len > 0)
+    .sort((a, b) => b.len - a.len)[0];
+  if (contained) return contained.r;
+  const key = table.matchName(name)?.food.ref.foodId;
+  return key ? withSorts.find((r) => r.products.some((p) => p.replaces.includes(key))) : undefined;
+}

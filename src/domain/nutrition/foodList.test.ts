@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildFoodList, matchesFilter } from './foodList';
+import { buildFoodList, findFoodRow, matchesFilter } from './foodList';
 import { localFoodTable } from './localFoods';
 import type { MyProduct } from './myProducts';
 
@@ -66,5 +66,20 @@ describe('Meine Lebensmittel – eine Liste', () => {
   it('sortiert alphabetisch – jede Zutat genau einmal', () => {
     expect(rows.map((r) => r.name)).toEqual([...rows.map((r) => r.name)].sort((a, b) => a.localeCompare(b, 'de')));
     expect(new Set(rows.map((r) => r.key)).size).toBe(rows.length);
+  });
+});
+
+describe('Gibt es das Lebensmittel schon? (weitere Sorte)', () => {
+  const p = (id: string, name: string, replaces: string[] = []): MyProduct => ({ id, name, replaces, per100g: { kcal: 1, protein: 0, carbs: 0, fat: 0 }, updatedAt: '2026-10-02T12:00:00.000Z' });
+  const rows = buildFoodList([p('h', 'Rinderhack', ['rinderhack']), p('m', 'Milch', ['magermilch'])], [], [], localFoodTable);
+  const find = (n: string) => findFoodRow(rows, n, localFoodTable)?.products[0].id;
+  it('gleicher Name, Name vom Bon mit Zusatz, dasselbe Lebensmittel laut Tabelle', () => {
+    expect(find('Rinderhack')).toBe('h');
+    expect(find('Rinderhack leicht 500g')).toBe('h');
+    expect(find('Hackfleisch')).toBe('h');
+  });
+  it('nur ganze Wörter – Kokosmilch ist keine Milch-Sorte; „Nein, neu anlegen“ gilt', () => {
+    expect(find('Kokosmilch')).toBeUndefined();
+    expect(findFoodRow(rows, 'Rinderhack', localFoodTable, 'rinderhack')).toBeUndefined();
   });
 });

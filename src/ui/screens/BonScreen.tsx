@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { DISCOUNT_LABEL, type BonLine, type SavedBon } from '../../domain/bons';
-import { productLabel, sortTags } from '../../domain/nutrition/myProducts';
+import { productLabel, sortTags, type MyProduct } from '../../domain/nutrition/myProducts';
+import { NewProduct } from '../components/NewProduct';
 import type { PantryUnit } from '../../domain/pantry';
 import type { DiscountKind, LineDiscount } from '../../domain/receipt';
 import { editBon, usePantry, useProducts, withdrawBon } from '../../data/store';
@@ -11,7 +12,7 @@ import { IngredientNames } from '../components/IngredientNames';
 import { TopBar } from '../components/TopBar';
 import { euro } from '../format';
 import { toast } from '../toast';
-import { lineAmount, linePrice } from '../usePurchases';
+import { lineAmount, linePrice, perKg } from '../usePurchases';
 import { parseAmount } from './PantryScreen';
 
 const UNITS: PantryUnit[] = ['g', 'ml', 'Stück'];
@@ -53,7 +54,8 @@ export function BonScreen({ id }: { id: string }) {
         {taken} Artikel{bon.total !== undefined && <> · zu zahlen <strong>{euro(bon.total)}</strong></>}{saved > 0 && <> · zusammen gespart <strong>{euro(saved)}</strong></>}
       </p>
       <ul className="bonview">
-        {bon.lines.map((l, i) => {
+        {/* Übersprungenes unten (Julia) – i bleibt die Stelle im Bon (für Korrekturen) */}
+        {bon.lines.map((l, i) => [l, i] as const).sort(([a], [b]) => Number(!!a.skip) - Number(!!b.skip)).map(([l, i]) => {
           const p = l.productId ? products.find((x) => x.id === l.productId) : undefined;
           return editing === i ? (
             <li key={i} className="bonview__line is-editing">
@@ -74,7 +76,7 @@ export function BonScreen({ id }: { id: string }) {
                 </span>
                 <span className="bonview__price">{linePrice(l)}</span>
                 <span className="small muted bonview__sub">
-                  {l.skip ? 'übersprungen' : [l.bon, lineAmount(l), l.freeze ? 'eingefroren' : '', l.reduced ? 'MHD-Ware' : ''].filter(Boolean).join(' · ')}
+                  {l.skip ? 'übersprungen' : [l.bon, lineAmount(l), perKg(l), l.freeze ? 'eingefroren' : '', l.reduced ? 'MHD-Ware' : ''].filter(Boolean).join(' · ')}
                 </span>
                 {!l.skip && <Icon name="pencil" size={14} />}
               </button>
@@ -100,6 +102,12 @@ export function BonScreen({ id }: { id: string }) {
   );
 }
 
+/** Packungsgröße, die ein neues Produkt aus dieser Zeile vorausgefüllt bekommt (je Stück; lose Ware: keine) */
+function packOfLine(l: BonLine): Partial<MyProduct> {
+  if (l.weightKg !== undefined || l.amount === undefined || (l.unit !== 'g' && l.unit !== 'ml')) return {};
+  return { packageAmount: Math.round((l.amount / l.count) * 10) / 10, packageUnit: l.unit };
+}
+
 /** Menge je Stück zeigen, wenn mehrere gekauft – wie bei der Bon-Prüfung */
 const perPiece = (l: Pick<BonLine, 'weightKg' | 'count'>, unit?: PantryUnit) => l.weightKg === undefined && l.count > 1 && unit !== 'Stück';
 
@@ -113,10 +121,13 @@ function LineEdit({ line, onDone }: { line: BonLine; onDone: (patch: Partial<Bon
   const shown = line.amount === undefined ? undefined : perPiece(line, line.unit) ? line.amount / line.count : line.amount;
   const [amount, setAmount] = useState(field(shown));
   const [price, setPrice] = useState(field(line.price));
+  // Gewicht für den Kilopreis – vom Bon, oder nachgetragen, wenn die Texterkennung es nicht zuordnen konnte (Julia: Kürbis)
+  const [weight, setWeight] = useState(line.weightKg === undefined ? '' : String(line.weightKg).replace('.', ','));
   // was vom Bon kam (Betrag und „20%“), bleibt erkennbar – geänderter Betrag oder Art: Prozent fällt weg, Mashi rechnet
   const [discounts, setDiscounts] = useState<{ kind: DiscountKind; text: string; from?: LineDiscount }[]>(
     (line.discounts ?? []).map((d) => ({ kind: d.kind, text: field(d.amount), from: d })));
   const [error, setError] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
   const loose = line.weightKg !== undefined;
 
   const save = () => {
@@ -134,7 +145,9 @@ function LineEdit({ line, onDone }: { line: BonLine; onDone: (patch: Partial<Bon
     if (pr !== undefined && ds.reduce((s, d) => s + d.amount, 0) > pr) return setError('Der Rabatt ist höher als der Preis.');
     if (!name.trim()) return setError('Bitte einen Namen eingeben.');
     const total = a === undefined ? undefined : perPiece({ weightKg: line.weightKg, count: n }, unit) ? a * n : a;
-    onDone({ name: name.trim(), productId: productId || undefined, count: n, amount: total, unit, price: pr, discounts: ds });
+    const kg = weight.trim() ? parseAmount(weight) : undefined;
+    if (weight.trim() && !(kg! > 0)) return setError('Das Gewicht verstehe ich nicht – z. B. 3,242.');
+    onDone({ name: name.trim(), productId: productId || undefined, count: n, amount: total, unit, price: pr, discounts: ds, weightKg: kg });
   };
 
   return (
@@ -155,6 +168,21 @@ function LineEdit({ line, onDone }: { line: BonLine; onDone: (patch: Partial<Bon
           </select>
         </label>
       )}
+      {/* nachträglich ein eigenes Lebensmittel (oder eine weitere Sorte) anlegen – Julia; Speichern übernimmt es,
+          auch ins Gelernte für den nächsten Bon */}
+      {creating ? (
+        <NewProduct name={name.trim() || line.bon} bonName={line.bon} pack={packOfLine(line)} onDone={(p) => {
+          setCreating(false);
+          if (!p) return;
+          setProductId(p.id);
+          setName(p.name);
+          toast(`„${productLabel(p)}“ angelegt – mit „Speichern“ hängt die Zeile daran`);
+        }} />
+      ) : !productId && (
+        <button type="button" className="link small bonedit__add" onClick={() => setCreating(true)}>
+          <Icon name="plus" size={14} /> Als neues Produkt anlegen
+        </button>
+      )}
       <div className="row-2">
         {!loose && (
           <label className="field"><span>Anzahl</span>
@@ -174,6 +202,9 @@ function LineEdit({ line, onDone }: { line: BonLine; onDone: (patch: Partial<Bon
           </span>
         </label>
       </div>
+      <label className="field"><span>Gewicht (kg) – für den Kilopreis</span>
+        <input inputMode="decimal" value={weight} onChange={(e) => setWeight(e.target.value)} placeholder="z. B. 3,242" />
+      </label>
       <label className="field"><span>Preis auf dem Bon (vor Rabatt, €)</span>
         <input inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} />
       </label>

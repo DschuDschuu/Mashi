@@ -49,3 +49,19 @@ export const euro = (n: number) => n.toLocaleString('de-DE', { style: 'currency'
 
 /** „980 g“, „3 Stück“ – oder „vorhanden“, wenn die Menge unbekannt ist. */
 export const quantityLabel = (item: Pick<PantryItem, 'amount' | 'unit' | 'pack' | 'openedAt' | 'recipeId'>) => amountLabel(item);
+
+/** Teile einer Vorrats-Zeile (Speisekammer, Sortenwahl): erst das Offene (je Einheit zusammengezählt), dann die Packungen und der Rest */
+export function stockLabels(parts: readonly PantryItem[]): string[] {
+  const opened = parts.filter((p) => p.openedAt && p.amount !== undefined && (p.unit === 'g' || p.unit === 'ml'));
+  const units = [...new Set(opened.map((p) => p.unit))];
+  const openLabels = units.map((u) => quantityLabel({ amount: opened.filter((p) => p.unit === u).reduce((n, p) => n + p.amount!, 0), unit: u, openedAt: 'offen' }));
+  // gleich große Packungen zusammen – auch von verschiedenen Marken: „2 × 400 ml“ statt „1 × 400 ml + 1 × 400 ml“
+  const rest = parts.filter((p) => !opened.includes(p));
+  const packed = rest.filter((p) => p.pack && p.amount !== undefined && (p.unit === 'Stück' || p.unit === 'Glas'));
+  const sizes = [...new Map(packed.map((p) => [`${p.unit}|${p.pack!.amount}|${p.pack!.unit}`, p])).entries()];
+  const packLabels = sizes.map(([key, first]) => quantityLabel({
+    ...first, openedAt: undefined,
+    amount: packed.filter((p) => `${p.unit}|${p.pack!.amount}|${p.pack!.unit}` === key).reduce((n, p) => n + p.amount!, 0),
+  }));
+  return [...openLabels, ...packLabels, ...rest.filter((p) => !packed.includes(p)).map((p) => quantityLabel(p))];
+}

@@ -19,7 +19,7 @@ describe('Was kostet ein Gericht?', () => {
       { id: '2', name: 'Eier', amount: 2, unit: 'Stück' },        // 2 × 0,25 = 0,50
     ]);
     const cost = recipeCost(c, 2, localFoodTable, [price('Hähnchenbrust', 0.0112, 'g'), price('Eier', 0.25, 'Stück')]);
-    expect(cost).toEqual({ total: 4.98, perServing: 2.49, missing: [] });
+    expect(cost).toMatchObject({ total: 4.98, perServing: 2.49, missing: [] });
   });
 
   it('rechnet auf die gekochten Portionen um', () => {
@@ -35,7 +35,7 @@ describe('Was kostet ein Gericht?', () => {
       { id: '4', name: 'Salz' },
     ]);
     const cost = recipeCost(c, 2, localFoodTable, [price('Nudeln', 0.004, 'g')]); // „Nudeln“ = „Pasta“
-    expect(cost).toEqual({ total: 1, perServing: 0.5, missing: ['Paprika'] });
+    expect(cost).toMatchObject({ total: 1, perServing: 0.5, missing: ['Paprika'] });
   });
 
   it('ohne einen einzigen bekannten Preis: keine Angabe statt „0 €“', () => {
@@ -48,13 +48,20 @@ describe('Was kostet ein Gericht?', () => {
     expect(cost?.total).toBe(0.4);
   });
 
+  it('Aufschlüsselung je Zutat – teuerste zuerst, Summe = Gesamtpreis', () => {
+    const c = content([{ id: '1', name: 'Paprika', amount: 300, unit: 'g' }, { id: '2', name: 'Rinderhack', amount: 500, unit: 'g' }]);
+    const cost = recipeCost(c, 2, localFoodTable, [price('Paprika', 0.5, 'Stück'), price('Rinderhack', 0.0066, 'g')])!;
+    expect(cost.items.map((i) => [i.ingredientId, i.cost])).toEqual([['2', 3.3], ['1', 1]]);
+    expect(cost.items.reduce((n, i) => n + i.cost, 0)).toBeCloseTo(cost.total);
+  });
+
   it('Stückpreis, Rezept in Gramm: über das Stückgewicht (Paprika ≈ 150 g)', () => {
     const c = content([{ id: '1', name: 'Paprika', amount: 300, unit: 'g' }]);
     expect(recipeCost(c, 2, localFoodTable, [price('Paprika', 0.5, 'Stück')])?.total).toBe(1);
   });
 
   it('Wochenplan: Summe der bekannten Gerichte, Unbekannte werden gezählt statt verschwiegen', () => {
-    expect(sumCosts([{ total: 4.98, perServing: 2.49, missing: ['Paprika'] }, null, { total: 1.2, perServing: 0.6, missing: ['Paprika'] }]))
+    expect(sumCosts([{ total: 4.98, perServing: 2.49, missing: ['Paprika'], items: [] }, null, { total: 1.2, perServing: 0.6, missing: ['Paprika'], items: [] }]))
       .toEqual({ total: 6.18, missing: ['Paprika'], unknown: 1 });
   });
 });

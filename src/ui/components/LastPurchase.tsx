@@ -1,7 +1,7 @@
 import { productLabel } from '../../domain/nutrition/myProducts';
 import { useProducts } from '../../data/store';
 import { navigate } from '../../router';
-import { linePriceParts, lineAmount, usePurchases } from '../usePurchases';
+import { linePriceParts, lineAmount, perKg, usePurchases } from '../usePurchases';
 import { Icon } from './Icon';
 import { displayPrice, displayUnit } from '../../domain/priceHistory';
 import { euro } from '../format';
@@ -36,7 +36,8 @@ export function LastPurchase({ name, title, productIds, sort }: {
         {last && lineAmount(last.line) && <> · {lineAmount(last.line)}</>}
       </span>
       <span className="small last-buy__price">{price}</span>
-      <span className="small muted">am {date}{why && <> · {why}</>}</span>
+      {/* gewogene Ware: der Kilopreis gleich mit (Julia: Kürbis) */}
+      <span className="small muted">am {date}{why && <> · {why}</>}{last && perKg(last.line) && <> · {perKg(last.line)}</>}</span>
       <button type="button" className="link small last-buy__link" onClick={() => navigate(foodPricePath(name, title))}>
         Preise &amp; Verlauf <Icon name="chevron" size={14} />
       </button>

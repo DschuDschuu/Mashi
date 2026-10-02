@@ -111,6 +111,8 @@ export function ProductForm({ initial, onSave, onCancel, shared, afterName, name
   const [packAmount, setPackAmount] = useState(toField(initial?.packageAmount));
   const [packUnit, setPackUnit] = useState<'g' | 'ml' | 'Stück'>(initial?.packageUnit ?? 'g');
   const [packPrice, setPackPrice] = useState(toField(initial?.packagePrice));
+  /** weitere Größen als Liste („1000, 1400“) */
+  const [moreSizes, setMoreSizes] = useState((initial?.packageSizes ?? []).map((n) => toField(n)).join('; '));
   const [shelf, setShelf] = useState(toField(initial?.shelfDays));
   const pantry = usePantry();
   const shelfCustom = pantry.shelfDays;
@@ -135,6 +137,9 @@ export function ProductForm({ initial, onSave, onCancel, shared, afterName, name
     const amount = parseNum(packAmount);
     const price = parseNum(packPrice);
     if (price !== undefined && !amount) return setError('Für den Preis braucht Mashi die Packungsgröße.');
+    // getrennt mit „;“, Leerzeichen oder „, “ – ein Komma ohne Leerzeichen ist das Dezimalkomma (1,5)
+    const sizes = moreSizes.split(/[;\s]+|,(?=\s)/).map((x) => parseNum(x)).filter((n): n is number => n !== undefined && n > 0 && n !== amount);
+    if (sizes.length && !amount) return setError('Für weitere Größen braucht Mashi zuerst die übliche Packungsgröße.');
     const shelfDays = parseNum(shelf);
     if (!sortOnly && shelf.trim() && (!shelfDays || shelfDays > 365 || !Number.isInteger(shelfDays))) return setError('Haltbarkeit bitte in ganzen Tagen (1 bis 365).');
     const ex = visibleExcludes(name, match);
@@ -150,6 +155,7 @@ export function ProductForm({ initial, onSave, onCancel, shared, afterName, name
       per100g: { ...initial?.per100g, ...extra, kcal, protein, carbs, fat },
       ...(ean ? { ean } : {}),
       ...(amount ? { packageAmount: amount, packageUnit: packUnit } : {}),
+      ...(amount && sizes.length ? { packageSizes: [...new Set(sizes)] } : {}),
       ...(amount && price !== undefined ? { packagePrice: price } : {}),
       // Sorte: die Haltbarkeit kommt aus der Kachel (gemeinsam), siehe withShared
       ...(sortOnly ? (shared?.shelfDays ? { shelfDays: shared.shelfDays } : {}) : shelfDays ? { shelfDays } : {}),
@@ -333,6 +339,9 @@ export function ProductForm({ initial, onSave, onCancel, shared, afterName, name
               </label>
             )}
           </div>
+          <label className="field"><span>Weitere Größen (optional, gleiche Einheit)</span>
+            <input value={moreSizes} onChange={(e) => setMoreSizes(e.target.value)} placeholder="z. B. 1000; 1400" />
+          </label>
           {/* Sorte: Haltbarkeit gilt für alle Sorten – steht in der Kachel */}
           {!sortOnly && (
             <label className="field"><span>Hält ab Kauf (Tage, optional)</span>

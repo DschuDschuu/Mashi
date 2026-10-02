@@ -37,7 +37,7 @@ import { FOOD_CHOICES, normalizeName } from '../../domain/nutrition/localFoods';
 const UNITS: PantryUnit[] = ['g', 'ml', 'Stück', 'Glas'];
 
 
-import { quantityLabel } from '../format';
+import { quantityLabel, stockLabels } from '../format';
 import { packLabel } from '../../domain/pantryLabel';
 export { quantityLabel }; // auch von hier erreichbar (Reste-Ansicht)
 
@@ -89,11 +89,6 @@ export function PantryScreen() {
     const p = plannedOf(items, planned);
     if (!p) return null;
     return p === 'alles' ? 'für den Wochenplan verplant' : `davon ${quantityLabel(p)} verplant`;
-  };
-  const reservedLabel = (item: PantryItem) => {
-    const p = planned.get(item.id);
-    if (p === undefined) return undefined;
-    return p === 'all' ? 'Alles davon ist für den Wochenplan reserviert.' : `Davon ${quantityLabel({ amount: p, unit: item.unit, pack: item.pack })} für den Wochenplan reserviert.`;
   };
   const matches = useMemo(() => {
     const planned = new Set(plan.items.map((i) => i.recipeId));
@@ -174,7 +169,7 @@ export function PantryScreen() {
   };
   const row = (i: PantryItem, part = false) => {
     const isEditing = editing === i.id;
-    const edit = isEditing ? [<EditRow key={`${i.id}~edit`} item={i} estimate={useByOf({ ...i, useBy: undefined }, table, pantry.shelfDays)} reserved={reservedLabel(i)} onDone={() => setEditing(null)} />] : [];
+    const edit = isEditing ? [<EditRow key={`${i.id}~edit`} item={i} estimate={useByOf({ ...i, useBy: undefined }, table, pantry.shelfDays)} onDone={() => setEditing(null)} />] : [];
     // Vorgekochtes – frisch („1 essen“) und eingefroren („1 auftauen“) in derselben Kachel
     if (!part && i.recipeId) {
       const shelf = shelfLabel(i);
@@ -235,7 +230,7 @@ export function PantryScreen() {
       <span className="pantry__qty pantry__qty--stack">
         {/* Offenes vorne und zusammengefasst („1,2 l offen + 7 × 1 l“) – aufgeklappt stehen die Teile einzeln */}
         <span className="pantry__parts">
-          {clusterLabels(parts.map(shownOf)).map((l, n) => <span key={n} className="pantry__part">{n ? `+ ${l}` : l}</span>)}
+          {stockLabels(parts.map(shownOf)).map((l, n) => <span key={n} className="pantry__part">{n ? `+ ${l}` : l}</span>)}
         </span>
         {plannedNote(parts) && <span className="pantry__planned">{plannedNote(parts)}</span>}
       </span>
@@ -539,7 +534,7 @@ function ThawPill({ item }: { item: PantryItem }) {
  * Name, Sorte, Stufe und „Verbrauchen bis“ gibt es hier nicht mehr – eingetragen wird, was da ist.
  */
 /** @param onDone nach Einfrieren, Auftauen, Entfernen: der Eintrag wandert oder geht – dann zuklappen */
-function EditRow({ item, estimate, reserved, onDone }: { item: PantryItem; estimate?: Date; reserved?: string; onDone: () => void }) {
+function EditRow({ item, estimate, onDone }: { item: PantryItem; estimate?: Date; onDone: () => void }) {
   const prep = !!item.recipeId;
   /** Packungen („3 × 400 ml“): die Menge als Gesamtmenge in ml/g – 150 ml genommen = 1050 eintragen */
   const packed = !!item.pack && isCount(item.unit);
@@ -595,7 +590,7 @@ function EditRow({ item, estimate, reserved, onDone }: { item: PantryItem; estim
 
   return (
     <li className="pantry__item pantry__item--edit pantry-set">
-      {reserved && <p className="small muted pantry-reserved">{reserved} Hier steht der ganze Vorrat.</p>}
+      {/* „davon … verplant“ steht schon oben in der Zeile (Julia) – hier nicht noch einmal */}
       {prep ? (
         <>
           {/* keine Portionen-Zeile (Julia): weniger wird es über „1 essen“ in der Zeile */}
@@ -675,18 +670,3 @@ function fromTable(offer: { name: string; brand: string }, food: FoodEntry): MyP
   return { id: newId('p'), name: offer.name, brand: offer.brand, replaces: [], names: [normalizeName(offer.name)], per100g: food.per100g, updatedAt: new Date().toISOString() };
 }
 
-/** Teile einer Zeile: erst das Offene (je Einheit zusammengezählt), dann die Packungen und der Rest */
-function clusterLabels(parts: PantryItem[]): string[] {
-  const opened = parts.filter((p) => p.openedAt && p.amount !== undefined && (p.unit === 'g' || p.unit === 'ml'));
-  const units = [...new Set(opened.map((p) => p.unit))];
-  const openLabels = units.map((u) => quantityLabel({ amount: opened.filter((p) => p.unit === u).reduce((n, p) => n + p.amount!, 0), unit: u, openedAt: 'offen' }));
-  // gleich große Packungen zusammen – auch von verschiedenen Marken: „2 × 400 ml“ statt „1 × 400 ml + 1 × 400 ml“
-  const rest = parts.filter((p) => !opened.includes(p));
-  const packed = rest.filter((p) => p.pack && p.amount !== undefined && (p.unit === 'Stück' || p.unit === 'Glas'));
-  const sizes = [...new Map(packed.map((p) => [`${p.unit}|${p.pack!.amount}|${p.pack!.unit}`, p])).entries()];
-  const packLabels = sizes.map(([key, first]) => quantityLabel({
-    ...first, openedAt: undefined,
-    amount: packed.filter((p) => `${p.unit}|${p.pack!.amount}|${p.pack!.unit}` === key).reduce((n, p) => n + p.amount!, 0),
-  }));
-  return [...openLabels, ...packLabels, ...rest.filter((p) => !packed.includes(p)).map((p) => quantityLabel(p))];
-}

@@ -1,17 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { alreadyImported, bonKey, proposeImport, type ImportRow, type PantryUnit } from '../../domain/pantry';
 import { mergeSameLines, parseReceipt, parseReceiptDate, type ReceiptLine } from '../../domain/receipt';
 import { parseSavings } from '../../domain/savings';
 import { DISCOUNT_LABEL, discountOf, importedOnDay } from '../../domain/bons';
 import { formatAmount } from '../../domain/scaling';
-import { normalizeName } from '../../domain/nutrition/localFoods';
-import { productLabel, sharedOf, withShared, type MyProduct } from '../../domain/nutrition/myProducts';
-import { buildFoodList, type FoodRow } from '../../domain/nutrition/foodList';
-import { basicsOf } from '../../domain/mealplan';
-import { zeroOf } from '../../domain/nutrition/noNutrition';
-import { foodTable } from '../../services';
-import { importReceipt, saveProducts, usePantry, useProducts } from '../../data/store';
-import { ProductForm } from '../components/MyProductsPanel';
+import { packSizesOf, productLabel, type MyProduct } from '../../domain/nutrition/myProducts';
+import { importReceipt, usePantry, useProducts } from '../../data/store';
+import { NewProduct } from '../components/NewProduct';
 import { takeSharedReceipt } from '../../pwa';
 import { navigate } from '../../router';
 import { Icon } from '../components/Icon';
@@ -29,58 +24,6 @@ type Stage = 'pick' | 'reading' | 'review';
 type Row = ImportRow & { amountText: string };
 
 const UNITS: PantryUnit[] = ['g', 'ml', 'Stück'];
-
-/**
- * Neues Produkt aus einer Bon-Zeile – wie unter „Meine Lebensmittel“ (Julia): gibt es das Lebensmittel schon,
- * fragt Mashi gleich unter dem Namen „weitere Sorte?“; dann nur Zusatz, Marke, Werte, Packung.
- */
-function NewProduct({ row: r, onDone }: { row: Row; onDone: (p?: MyProduct) => void }) {
-  const products = useProducts();
-  const pantry = usePantry();
-  const rows = useMemo(() => buildFoodList(products, basicsOf(pantry), zeroOf(pantry), foodTable), [products, pantry]);
-  const [sortOf, setSortOf] = useState<FoodRow | null>(null);
-  const [notSort, setNotSort] = useState('');
-  const existing = (n: string) => {
-    const k = normalizeName(n);
-    if (!k || k === notSort) return undefined;
-    return rows.find((x) => x.products.length > 0 && [x.name, x.ingredient, sharedOf(x.products).name].some((y) => normalizeName(y) === k));
-  };
-  if (sortOf) {
-    const shared = sharedOf(sortOf.products);
-    return (
-      <div className="stack stack--tight">
-        <strong>Weitere Sorte von „{shared.name}“</strong>
-        <ProductForm shared={shared} initial={packOf(r)} onCancel={() => onDone()} onSave={(p) => {
-          // wie „Weitere Sorte“ in der Kachel: alle Sorten bekommen dasselbe Gemeinsame
-          const group = new Set(sortOf.products.map((x) => x.id));
-          const sort = withShared(p, shared);
-          saveProducts([...products.map((x) => (group.has(x.id) ? withShared(x, shared) : x)), sort]);
-          toast(`Weitere Sorte von „${shared.name}“ angelegt`);
-          onDone(sort);
-        }} />
-      </div>
-    );
-  }
-  return (
-    <ProductForm
-      initial={{ name: r.name.trim() || r.line.name, names: [normalizeName(r.line.name)], replaces: [], ...packOf(r) }}
-      onSave={(p) => { saveProducts([...products, p]); toast(`„${p.name}“ angelegt`); onDone(p); }}
-      onCancel={() => onDone()}
-      afterName={(n) => {
-        const hit = existing(n);
-        return hit && (
-          <div className="scan-note add-food__exists" role="status">
-            <p><strong>„{sharedOf(hit.products).name}“</strong> gibt es schon{hit.products.length > 1 ? ` (${hit.products.length} Sorten)` : ''}. Ist das eine weitere Sorte, z. B. leicht oder eine andere Marke?</p>
-            <div className="row-gap">
-              <button type="button" className="btn btn--primary btn--sm" onClick={() => setSortOf(hit)}>Ja, weitere Sorte</button>
-              <button type="button" className="btn btn--ghost btn--sm" onClick={() => setNotSort(normalizeName(n))}>Nein, neu anlegen</button>
-            </div>
-          </div>
-        );
-      }}
-    />
-  );
-}
 
 /** Preis einer Bon-Zeile mit Stück- bzw. Kilopreis: „3 × 0,79 € = 2,37 €“, „982 g · 1,19 €/kg = 1,17 €“ */
 function priceLine(l: ReceiptLine): string {
@@ -149,7 +92,9 @@ export function ReceiptImportScreen({ shared }: { shared: boolean }) {
     setPaidAt(parseReceiptDate(t));
     setSavings(parseSavings(t));
     // derselbe Artikel mehrmals einzeln gescannt → eine Zeile mit Anzahl (Julia)
-    setRows(proposeImport(mergeSameLines(lines), pantry.rules, packageFor).map(toRow));
+    // was Mashi von früher als „überspringen“ kennt, gleich nach unten (Julia) – beim Prüfen selbst Übersprungenes bleibt stehen
+    const proposed = proposeImport(mergeSameLines(lines), pantry.rules, packageFor).map(toRow);
+    setRows([...proposed.filter((r) => !r.skip), ...proposed.filter((r) => r.skip)]);
     setStage('review');
   };
 
@@ -327,6 +272,26 @@ export function ReceiptImportScreen({ shared }: { shared: boolean }) {
                     {perPiece(r) && <span className="small muted">× {r.line.count} gekauft</span>}
                   </div>
                 )}
+                {/* Sorte mit mehreren Packungsgrößen (Julia: Hähnchen) – die Größe dieses Einkaufs per Chip */}
+                {!r.skip && r.line.weightKg === undefined && (() => {
+                  const p = r.productId ? products.find((x) => x.id === r.productId) : undefined;
+                  const sizes = p ? packSizesOf(p) : [];
+                  if (sizes.length < 2) return null;
+                  const unit = p!.packageUnit ?? 'g';
+                  return (
+                    <div className="chips bonrow__sizes" role="group" aria-label="Packungsgröße">
+                      {sizes.map((n) => {
+                        const on = parseAmount(r.amountText) === n && (r.unit ?? 'g') === unit;
+                        return (
+                          <button key={n} type="button" className={`chip chip--sm${on ? ' is-on' : ''}`} aria-pressed={on}
+                            onClick={() => update(i, { amountText: String(n).replace('.', ','), unit })}>
+                            {formatAmount(n, unit)} {unit}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
                 {!r.skip && (
                   <div className="bonrow__flags">
                     <label className="bonrow__mhd">
@@ -366,7 +331,7 @@ export function ReceiptImportScreen({ shared }: { shared: boolean }) {
                   </div>
                 )}
                 {creating === i && (
-                  <NewProduct row={r} onDone={(p) => { if (p) assign(i, p); setCreating(null); }} />
+                  <NewProduct name={r.name.trim() || r.line.name} bonName={r.line.name} pack={packOf(r)} onDone={(p) => { if (p) assign(i, p); setCreating(null); }} />
                 )}
                 <button className="link bonrow__skip" onClick={() => update(i, { skip: !r.skip })}>
                   {r.skip ? 'Doch übernehmen' : 'Überspringen'}

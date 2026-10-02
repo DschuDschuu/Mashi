@@ -842,7 +842,7 @@ export function editBon(bonId: string, index: number, patch: BonLinePatch): () =
   if (!old) return () => {};
   commitPantry(editBonLine(pantry, bonId, index, patch, now(), () => newId('v')));
   return () => {
-    const back: Record<keyof BonLinePatch, unknown> = { name: old.name, amount: old.amount, unit: old.unit, productId: old.productId, price: old.price, discounts: old.discounts ?? [], count: old.count };
+    const back: Record<keyof BonLinePatch, unknown> = { name: old.name, amount: old.amount, unit: old.unit, productId: old.productId, price: old.price, discounts: old.discounts ?? [], count: old.count, weightKg: old.weightKg };
     commitPantry(editBonLine(pantry, bonId, index, back as Partial<BonLine>, now(), () => newId('v')));
   };
 }

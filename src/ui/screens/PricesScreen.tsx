@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import { displayPrice, displayUnit, priceTrends, type PriceTrend } from '../../domain/priceHistory';
 import { monthSavings, type ReceiptSavings } from '../../domain/savings';
-import { usePantry } from '../../data/store';
+import { usePantry, useProducts } from '../../data/store';
+import { sortTags } from '../../domain/nutrition/myProducts';
 import { navigate } from '../../router';
 import { Empty, Section } from '../components/Controls';
 import { Icon } from '../components/Icon';
@@ -18,6 +19,9 @@ import { bonTitle } from './BonScreen';
 
 const percent = (n: number) => `${n > 0 ? '+' : n < 0 ? '−' : '±'}${Math.abs(n * 100).toLocaleString('de-DE', { maximumFractionDigits: 1 })} %`;
 
+/** eingeklappte Gruppen (teurer / günstiger / gleich) – nur auf diesem Gerät */
+const FOLD_KEY = 'mashi-prices-folded';
+
 const GROUPS: { key: PriceTrend['direction']; title: string }[] = [
   { key: 'teurer', title: 'Teurer geworden' },
   { key: 'guenstiger', title: 'Günstiger geworden' },
@@ -32,6 +36,12 @@ export function PricesScreen() {
   const swipe = usePantrySwipe('prices');
   const pantry = usePantry();
   const trends = useMemo(() => priceTrends(pantry.history ?? pantry.prices ?? []), [pantry]);
+  const [folded, setFolded] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem(FOLD_KEY) ?? '[]') as string[]; } catch { return []; } });
+  const toggleFold = (key: string) => {
+    const next = folded.includes(key) ? folded.filter((k) => k !== key) : [...folded, key];
+    setFolded(next);
+    try { localStorage.setItem(FOLD_KEY, JSON.stringify(next)); } catch { /* privater Modus – dann eben nicht gemerkt */ }
+  };
 
   return (
     <main className="screen screen--tabbed" {...swipe}>
@@ -57,12 +67,20 @@ export function PricesScreen() {
               {GROUPS.map((g) => {
                 const list = trends.filter((t) => t.direction === g.key);
                 if (!list.length) return null;
+                const open = !folded.includes(g.key);
                 return (
-                  <Section key={g.key} title={`${g.title} (${list.length})`}>
-                    <ul className="prices">
-                      {list.map((t) => <PriceCard key={`${t.name}|${t.unit}`} trend={t} />)}
-                    </ul>
-                  </Section>
+                  // einklappbar (Julia) – gemerkt auf diesem Gerät
+                  <section key={g.key} className="section price-group">
+                    <button type="button" className="price-group__head" aria-expanded={open} onClick={() => toggleFold(g.key)}>
+                      <h2>{g.title} ({list.length})</h2>
+                      <span className={`pantry__chev${open ? ' is-open' : ''}`} aria-hidden="true"><Icon name="chevron" size={18} /></span>
+                    </button>
+                    {open && (
+                      <ul className="prices">
+                        {list.map((t) => <PriceCard key={`${t.name}|${t.unit}|${t.productId ?? ''}`} trend={t} />)}
+                      </ul>
+                    )}
+                  </section>
                 );
               })}
               <p className="muted small center">Regalpreise vom Kassenbon – Rabatte und Coupons zählen nicht mit, damit du echte Preiserhöhungen siehst.</p>
@@ -75,13 +93,16 @@ export function PricesScreen() {
 }
 
 function PriceCard({ trend: t }: { trend: PriceTrend }) {
+  // je Sorte eine eigene Karte – mit Zusatz/Marke, damit man sie unterscheidet
+  const products = useProducts();
+  const sort = t.productId ? products.find((p) => p.id === t.productId) : undefined;
   const first = t.points[0].perUnit;
   const sinceFirst = first ? (t.latest - first) / first : 0;
   const arrow = t.direction === 'teurer' ? '▲' : t.direction === 'guenstiger' ? '▼' : '■';
   return (
     <li className="price-card">
       <div className="price-card__head">
-        <button type="button" className="price-card__name link" onClick={() => navigate(foodPricePath(t.name))}>{t.name}</button>
+        <button type="button" className="price-card__name link" onClick={() => navigate(foodPricePath(t.name))}>{t.name}{sort && sortTags(sort).map((x) => <span key={x} className="brand">{x}</span>)}</button>
         <span className={`price-card__change is-${t.direction}`}>
           <span aria-hidden="true">{arrow}</span> {percent(t.change)}
           <span className="visually-hidden"> zum vorigen Einkauf</span>

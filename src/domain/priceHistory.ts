@@ -13,6 +13,8 @@ export interface PricePoint {
 
 export interface PriceTrend {
   name: string;
+  /** je Sorte ein eigener Verlauf (ältere Preise ohne Sorte: undefined) */
+  productId?: string;
   unit: 'g' | 'Stück';
   points: PricePoint[];
   latest: number;
@@ -25,10 +27,10 @@ export interface PriceTrend {
 const SAME = 0.005;
 
 export function priceTrends(history: PriceEntry[], minPurchases = 2): PriceTrend[] {
-  const groups = new Map<string, { name: string; unit: 'g' | 'Stück'; byDay: Map<string, PricePoint> }>();
+  const groups = new Map<string, { name: string; unit: 'g' | 'Stück'; productId?: string; byDay: Map<string, PricePoint> }>();
   for (const e of history) {
-    const key = `${receiptKey(e.name)}|${e.unit}`;
-    const g = groups.get(key) ?? { name: e.name, unit: e.unit, byDay: new Map() };
+    const key = `${receiptKey(e.name)}|${e.unit}|${e.productId ?? ''}`;
+    const g = groups.get(key) ?? { name: e.name, unit: e.unit, ...(e.productId ? { productId: e.productId } : {}), byDay: new Map() };
     // Derselbe Tag zweimal (Bon doppelt importiert) zählt einmal – der zuletzt eingetragene gewinnt
     g.byDay.set(e.date.slice(0, 10), { date: e.date, perUnit: e.perUnit });
     g.name = e.name;
@@ -43,7 +45,7 @@ export function priceTrends(history: PriceEntry[], minPurchases = 2): PriceTrend
       const previous = points[points.length - 2]?.perUnit ?? latest;
       const change = previous ? (latest - previous) / previous : 0;
       const direction: PriceTrend['direction'] = change > SAME ? 'teurer' : change < -SAME ? 'guenstiger' : 'gleich';
-      return { name: g.name, unit: g.unit, points, latest, change, direction };
+      return { name: g.name, unit: g.unit, ...(g.productId ? { productId: g.productId } : {}), points, latest, change, direction };
     })
     .filter((t) => t.points.length >= minPurchases)
     .sort((a, b) => order[a.direction] - order[b.direction] || Math.abs(b.change) - Math.abs(a.change) || a.name.localeCompare(b.name, 'de'));

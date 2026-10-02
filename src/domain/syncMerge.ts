@@ -77,7 +77,8 @@ function combineItem(b: PantryItem | undefined, o: PantryItem | undefined, t: Pa
 }
 
 const byName = (x: { name: string }) => x.name.toLocaleLowerCase('de-DE').trim();
-const byNameDay = (x: { name: string; date: string }) => `${byName(x)}|${x.date.slice(0, 10)}`;
+/** ein Preis je Artikel, Tag und Sorte */
+const byNameDay = (x: { name: string; date: string; productId?: string }) => `${byName(x)}|${x.date.slice(0, 10)}|${x.productId ?? ''}`;
 const later = (a: string | undefined, b: string | undefined) => ((a ?? '') > (b ?? '') ? a : b);
 
 /** Zuordnung Schlüssel → Wert eintragsweise (siehe merge3Keyed) – leer = undefined */

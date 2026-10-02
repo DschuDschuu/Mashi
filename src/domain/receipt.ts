@@ -36,8 +36,8 @@ const NUM = String.raw`\d+[.,]\d{2}`;
  * Die Texterkennung liest den Steuerbuchstaben gern als Ziffer: „1,70 A“ → „1,704“, „1,50 B“ → „1,50 8“.
  */
 const ITEM = new RegExp(String.raw`^(.+?)\s+(?:(${NUM})\s*x\s*(\d+)\s+)?(-?${NUM})(?:\d|\s*[A-Z0-9]{1,2})?$`);
-/** „0,982 kg x 1,19 EUR/kg“ */
-const WEIGHT = new RegExp(String.raw`^(\d+[.,]\d{3})\s*kg\s*x\s*${NUM}\s*EUR\s*/\s*kg`, 'i');
+/** „0,982 kg x 1,19 EUR/kg“ – Gewicht und Kilopreis */
+const WEIGHT = new RegExp(String.raw`^(\d+[.,]\d{3})\s*kg\s*x\s*(${NUM})\s*EUR\s*/\s*kg`, 'i');
 /**
  * „RABATT 20%“ direkt unter einem Artikel (bei loser Ware unter der Gewichtszeile) = reduzierte
  * MHD-Ware. „Lidl Plus Rabatt“ beginnt anders und zählt nicht. Das Minus verschluckt die
@@ -73,12 +73,29 @@ export function parseReceipt(text: string): ReceiptLine[] {
   const out: ReceiptLine[] = [];
   /** der Artikel direkt darüber – nur dem gehört eine Rabattzeile (Pfand, Leerzeilen o. Ä. dazwischen: keinem) */
   let last: ReceiptLine | undefined;
+  /**
+   * Gewichtszeile, die (noch) zu keinem Artikel passt: Gewicht × Kilopreis ist nicht der Preis darüber –
+   * dann gehört sie wohl zum Artikel darunter (Julia: Kürbis-Gewicht landete bei der Milch darüber).
+   * Passt auch der nicht, bleibt es beim Artikel darüber (wie bisher).
+   */
+  let pending: { kg: number; total: number; prev?: ReceiptLine } | undefined;
+  const fits = (l: ReceiptLine | undefined, total: number) => !!l && l.weightKg === undefined && l.price !== undefined && Math.abs(l.price - total) <= 0.02;
+  const settle = (next?: ReceiptLine) => {
+    if (!pending) return;
+    const to = fits(next, pending.total) ? next : pending.prev;
+    if (to && to.weightKg === undefined) to.weightKg = pending.kg;
+    pending = undefined;
+  };
 
   for (const line of lines.slice(head + 1)) {
     if (END.test(line)) break;
     const w = line.match(WEIGHT);
     if (w) {
-      if (last) last.weightKg = num(w[1]);
+      settle();
+      const kg = num(w[1]);
+      const total = Math.round(kg * num(w[2]) * 100) / 100;
+      if (fits(last, total)) last!.weightKg = kg;
+      else pending = { kg, total, prev: last };
       continue;
     }
     const d = line.match(DISCOUNT);
@@ -105,8 +122,10 @@ export function parseReceipt(text: string): ReceiptLine[] {
     }
     if (NOT_AN_ITEM.test(name) || price.startsWith('-')) continue;
     last = { name, count, price: num(price) };
+    settle(last);
     out.push(last);
   }
+  settle();
   return out;
 }
 

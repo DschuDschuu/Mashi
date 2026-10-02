@@ -202,3 +202,14 @@ describe('Kilopreis vom Bon', () => {
     expect(p.history![0].perUnit * 1000).toBeCloseTo(3.49 / 2.345);
   });
 });
+
+describe('Preise je Sorte (Julia: fair vergleichen)', () => {
+  it('leicht und normal am selben Tag: beide Preise bleiben, je Sorte ein Verlauf', () => {
+    const line = (name: string, price: number) => ({ name, count: 1, price });
+    const p = applyImport(emptyPantry(), [
+      { line: line('Rinderhack 500g', 3.29), key: 'rinderhack 500g', known: false, skip: false, name: 'Rinderhack', amount: 500, unit: 'g', productId: 'normal' },
+      { line: line('Rinderhack leicht 500g', 3.99), key: 'rinderhack leicht 500g', known: false, skip: false, name: 'Rinderhack', amount: 500, unit: 'g', productId: 'leicht' },
+    ], NOW, id);
+    expect(p.history!.map((h) => [h.productId, Math.round(h.perUnit * 500 * 100) / 100])).toEqual([['normal', 3.29], ['leicht', 3.99]]);
+  });
+});

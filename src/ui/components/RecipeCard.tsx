@@ -3,7 +3,8 @@ import { currentContent, totalMinutes } from '../../domain/recipe';
 import type { Recipe } from '../../domain/types';
 import { toggleFavorite } from '../../data/store';
 import { navigate } from '../../router';
-import { formatMinutesShort, kcalLabel } from '../format';
+import { euro, formatMinutesShort, kcalLabel } from '../format';
+import { useRecipeCost } from '../useCosts';
 import { recipeNutrition } from '../useNutrition';
 import { Icon } from './Icon';
 import { RecipeImage } from './RecipeImage';
@@ -14,6 +15,8 @@ export function RecipeCard({ recipe, wide = false }: { recipe: Recipe; wide?: bo
   const c = currentContent(recipe);
   const n = recipeNutrition(recipe);
   const kcal = kcalLabel(n);
+  // Preis pro Portion statt Portionen (Julia: die stellt man im Rezept ohnehin ein) – fehlen Preise, ist es „ab“
+  const cost = useRecipeCost(c, c.servings);
   // Auf der Karte zählt, was für eine Mahlzeit es ist – genau eine. Geräte und Tags stehen im Rezept.
   const category = c.categories[0] ? categoryInfo(c.categories[0]) : undefined;
 
@@ -38,10 +41,12 @@ export function RecipeCard({ recipe, wide = false }: { recipe: Recipe; wide?: bo
         <h3 className="card__title">{c.title}</h3>
         {/* Unten verankert – auch leere Zeilen behalten ihre Höhe, damit nebeneinander nichts springt */}
         <div className="card__bottom">
-          {/* links Zeit / kcal, rechts Portionen / Eiweiß – so stehen die Werte in einer Reihe untereinander */}
+          {/* links Zeit / kcal, rechts Preis pro Portion / Eiweiß – so stehen die Werte in einer Reihe untereinander */}
           <p className="card__meta card__meta--split">
             <span><Icon name="clock" size={13} /> {formatMinutesShort(totalMinutes(c))}</span>
-            <span><Icon name="users" size={13} /> {c.servings} Port.</span>
+            <span aria-label={cost ? `${cost.missing.length ? 'ab' : 'ungefähr'} ${euro(cost.perServing)} pro Portion` : undefined}>
+              {cost ? <>{cost.missing.length ? 'ab' : 'ca.'} {euro(cost.perServing)}</> : ' '}
+            </span>
           </p>
           <p className="card__meta card__meta--split">
             {n.perServing ? <><span>{kcal}</span><span>{Math.round(n.perServing.protein)} g Eiweiß</span></> : ' '}

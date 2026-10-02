@@ -53,8 +53,8 @@ export function renameFood(pantry: Pantry, from: string, to: string, productIds:
       })),
     } : {}),
     // Preise kennen nur den Namen
-    ...(pantry.history ? { history: pantry.history.map((h) => mark(`h:${h.date}`, h)) } : {}),
-    prices: (pantry.prices ?? []).map((h) => mark(`p:${h.date}`, h)),
+    ...(pantry.history ? { history: pantry.history.map((h) => mark(`h:${h.date}|${h.productId ?? ''}`, h)) } : {}),
+    prices: (pantry.prices ?? []).map((h) => mark(`p:${h.date}|${h.productId ?? ''}`, h)),
     ...(pantry.restock ? { restock: pantry.restock.map((r) => mark(`s:${r.below}${r.unit}`, r)) } : {}),
     ...(basicsOf(pantry).some((b) => sameName(b, from)) ? { basics: basicsOf(pantry).map((b, n) => mark(`b:${n}`, { name: b }).name) } : {}),
     ...(zeroOf(pantry).some((b) => sameName(b, from)) ? { noNutrition: zeroOf(pantry).map((b, n) => mark(`z:${n}`, { name: b }).name) } : {}),
@@ -67,8 +67,8 @@ export function renameFood(pantry: Pantry, from: string, to: string, productIds:
     ...(p.bons ? {
       bons: p.bons.map((b) => ({ ...b, lines: b.lines.map((l, n) => (lines.has(`${b.id}|${n}`) && l.name === to ? { ...l, name: was.get(`l:${b.id}|${n}`)! } : l)) })),
     } : {}),
-    ...(p.history ? { history: p.history.map((h) => back(`h:${h.date}`, h)) } : {}),
-    prices: (p.prices ?? []).map((h) => back(`p:${h.date}`, h)),
+    ...(p.history ? { history: p.history.map((h) => back(`h:${h.date}|${h.productId ?? ''}`, h)) } : {}),
+    prices: (p.prices ?? []).map((h) => back(`p:${h.date}|${h.productId ?? ''}`, h)),
     ...(p.restock ? { restock: p.restock.map((r) => back(`s:${r.below}${r.unit}`, r)) } : {}),
     ...(p.basics && next.basics !== pantry.basics ? { basics: p.basics.map((b, n) => back(`b:${n}`, { name: b }).name) } : {}),
     ...(p.noNutrition && next.noNutrition !== pantry.noNutrition ? { noNutrition: p.noNutrition.map((b, n) => back(`z:${n}`, { name: b }).name) } : {}),

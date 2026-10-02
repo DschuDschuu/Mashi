@@ -29,6 +29,8 @@ export interface MyProduct {
   /** Packungsgröße, z. B. 125 g – füllt beim Kassenbon die Menge je Stück aus */
   packageAmount?: number;
   packageUnit?: 'g' | 'ml' | 'Stück';
+  /** weitere Packungsgrößen derselben Sorte (Julia: Hähnchen gibt es in mehreren Größen) – gleiche Einheit */
+  packageSizes?: number[];
   /** Preis je Packung in Euro (von Hand; Preise vom Kassenbon kommen automatisch) */
   packagePrice?: number;
   /** Barcode (EAN), falls per Scan angelegt – erkennt das Produkt beim nächsten Scan wieder */
@@ -111,6 +113,10 @@ export function withShared(p: MyProduct, s: SharedMatch, now = new Date().toISOS
     updatedAt: now,
   };
 }
+
+/** Alle Packungsgrößen einer Sorte – die erste ist die übliche (packageAmount) */
+export const packSizesOf = (p: Pick<MyProduct, 'packageAmount' | 'packageSizes'>): number[] =>
+  [...new Set([p.packageAmount, ...(p.packageSizes ?? [])].filter((n): n is number => !!n && n > 0))];
 
 /** Für Listen und Auswahl: „Pesto verde · K-Classic“, „Rinderhack · leicht · K-Classic“ */
 export const productLabel = (p: Pick<MyProduct, 'name' | 'brand' | 'detail'>): string =>
@@ -219,7 +225,10 @@ function buildTable(base: FoodTable, products: MyProduct[]): FoodTable {
   const byName = new Map<string, MyProduct[]>();
   for (const p of products) for (const n of new Set((p.names ?? []).map(normalizeName))) push(byName, n, p);
   // Ein Produkt passt immer auch auf seinen eigenen Namen („Frischkäse Balance“)
-  const byOwnName = new Map(products.flatMap((p) => [[normalizeName(p.name), p], [normalizeName(nameOf(p)), p]] as const));
+  // Sorten heißen gleich („Rinderhack“ + Zusatz „leicht“) – darum je Name ALLE Produkte, nicht nur das letzte
+  // (Julia: Sortenwahl fehlte, das Rezept rechnete mit irgendeiner Sorte)
+  const byOwnName = new Map<string, MyProduct[]>();
+  for (const p of products) for (const n of new Set([normalizeName(p.name), normalizeName(nameOf(p))])) push(byOwnName, n, p);
   /** Eigene Produkte statt des Tabelleneintrags – ohne die, die diese Schreibweise ausnehmen */
   const swap = (food: FoodEntry, alias?: string, raw?: string, name?: string): FoodEntry => {
     const ps = byReplaced.get(food.ref.foodId)?.filter((p) => !p.excludes?.some((x) => x === alias || x === raw)
@@ -267,11 +276,13 @@ function buildTable(base: FoodTable, products: MyProduct[]): FoodTable {
       // „Milch (1,5 %)“ normalisiert zu „milch“ – die Stufe entscheidet, nicht dein Standard-Produkt „Milch“
       const otherLevel = !!m?.specific && m.alias !== n;
       if (own && !otherLevel) return { food: asGroup(own, n, m?.quality === 'exact' ? m.food : undefined), quality: 'exact' };
-      const self = otherLevel ? undefined : byOwnName.get(n);
-      if (self) {
+      const selves = otherLevel ? undefined : byOwnName.get(n);
+      if (selves?.length) {
         // Umrechnungen (Dichte, Stückgewicht) vom ersetzten Eintrag behalten, wenn der Name dorthin führt
-        const replaced = m && self.replaces.includes(m.food.ref.foodId) ? m.food : undefined;
-        return { food: asEntry(self, replaced), quality: 'exact' };
+        const replaced = m && selves.every((x) => x.replaces.includes(m.food.ref.foodId)) ? m.food : undefined;
+        // mehrere Sorten: als Gruppe (Sortenwahl, Durchschnitt oder Favorit) – Schlüssel wie über die Tabelle
+        if (selves.length > 1) return { food: asGroup(selves, replaced?.ref.foodId ?? n, replaced), quality: 'exact' };
+        return { food: asEntry(selves[0], replaced), quality: 'exact' };
       }
       return m && { food: swap(m.food, m.alias ?? n, n, name), quality: m.quality, ...(m.alias ? { alias: m.alias } : {}), ...(m.specific ? { specific: true } : {}) };
     },
@@ -292,6 +303,7 @@ export function isValidProduct(v: unknown): v is MyProduct {
     && (p.packageAmount === undefined || isNum(p.packageAmount))
     && (p.packagePrice === undefined || isNum(p.packagePrice))
     && (p.packageUnit === undefined || ['g', 'ml', 'Stück'].includes(p.packageUnit as string))
+    && (p.packageSizes === undefined || (Array.isArray(p.packageSizes) && p.packageSizes.every(isNum)))
     && (p.ean === undefined || typeof p.ean === 'string')
     && (p.shelfDays === undefined || isNum(p.shelfDays))
     && (p.brand === undefined || typeof p.brand === 'string')

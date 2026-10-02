@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { RecipeContent } from '../types';
 import { computeNutrition } from './engine';
 import { localFoodTable } from './localFoods';
-import { brandOf, nameOf, productLabel, sharedOf, sortTags, splitBrand, withMyProducts, withShared, type MyProduct } from './myProducts';
+import { brandOf, nameOf, packSizesOf, productLabel, sharedOf, sortTags, splitBrand, withMyProducts, withShared, type MyProduct } from './myProducts';
 
 const milk: MyProduct = {
   id: 'p-milch', name: 'Milch 0,1 % (Test)', replaces: ['milch', 'milch-fettarm', 'magermilch'],
@@ -151,5 +151,28 @@ describe('Sorten: Name und „gilt für“ gemeinsam', () => {
     const s = sharedOf([a, b]);
     expect([a, b, c].map((p) => withShared(p, s, 'T').shelfDays)).toEqual([5, 5, 5]);
     expect(withShared(b, { ...s, shelfDays: undefined }, 'T').shelfDays).toBeUndefined();
+  });
+});
+
+describe('Packungsgrößen je Sorte', () => {
+  it('übliche Größe zuerst, weitere dahinter, ohne Doppelte', () => {
+    expect(packSizesOf({ packageAmount: 1200, packageSizes: [1000, 1400, 1200] })).toEqual([1200, 1000, 1400]);
+    expect(packSizesOf({})).toEqual([]);
+  });
+});
+
+describe('Sorten mit gleichem Namen (Julia: Sortenwahl fehlte)', () => {
+  const sort = (id: string, fat: number, detail?: string): MyProduct => ({
+    id, name: 'Rinderhack', ...(detail ? { detail } : {}), replaces: ['rinderhack'], per100g: { kcal: 100 + fat * 9, protein: 20, carbs: 0, fat }, updatedAt: '2026-10-02T12:00:00.000Z',
+  });
+  it('„Rinderhack“ im Rezept findet BEIDE Sorten – als Gruppe mit Durchschnitt, nicht nur die letzte', () => {
+    const table = withMyProducts(localFoodTable, [sort('normal', 20), sort('leicht', 8, 'leicht')]);
+    const food = table.matchName('Rinderhack')!.food;
+    expect(food.variants?.map((v) => v.id).sort()).toEqual(['leicht', 'normal']);
+    expect(food.per100g.fat).toBe(14);
+  });
+  it('eine Sorte: wie bisher das Produkt selbst', () => {
+    const table = withMyProducts(localFoodTable, [sort('normal', 20)]);
+    expect(table.matchName('Rinderhack')!.food.ref.foodId).toBe('normal');
   });
 });

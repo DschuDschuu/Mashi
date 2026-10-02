@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { macroShares, needsAsking, pickFor, type VariantChoice } from '../../domain/nutrition/variants';
 import type { RecipeContent } from '../../domain/types';
-import { assignPantrySorts, setFavoriteVariant, useMacroGoal } from '../../data/store';
+import { assignPantrySorts, setFavoriteVariant, useMacroGoal, usePantry } from '../../data/store';
+import type { PantryItem } from '../../domain/pantry';
+import { stockLabels } from '../format';
 import { toast } from '../toast';
 import { Icon } from './Icon';
 import { choicesFor } from '../useNutrition';
@@ -25,6 +27,14 @@ export function VariantSheet({ choices, pick, title = 'Welche Sorte nimmst du?',
 }) {
   const ref = useSheet(onClose);
   const goal = useMacroGoal();
+  const items = usePantry().items;
+  /** „Im Vorrat: 1 × 500 g + 200 g offen“ je Sorte (Julia) – Gefrorenes für sich, Vorgekochtes zählt nicht */
+  const stockOf = (match: (i: PantryItem) => boolean) => {
+    const mine = items.filter((i) => !i.recipeId && (i.amount === undefined || i.amount > 0) && match(i));
+    const fresh = stockLabels(mine.filter((i) => !i.frozenAt)).join(' + ');
+    const frozen = stockLabels(mine.filter((i) => i.frozenAt)).join(' + ');
+    return [fresh, frozen && `${frozen} gefroren`].filter(Boolean).join(' · ');
+  };
   const asking = choices.filter((c) => c.options.length > 1);
   const [value, setValue] = useState(() => (preselect ? pick : Object.fromEntries(Object.entries(pick).filter(([id]) => !asking.some((c) => c.ingredientId === id)))));
   /** Favoriten im Blatt sofort sichtbar – gespeichert wird direkt (gilt für alle Rezepte) */
@@ -47,6 +57,10 @@ export function VariantSheet({ choices, pick, title = 'Welche Sorte nimmst du?',
         {asking.map((c) => (
           <fieldset key={c.ingredientId} className="variants__group">
             <legend>{c.name}</legend>
+            {/* von Hand eingetragen, ohne Sorte – darum fragt Mashi überhaupt */}
+            {c.unsortedItemIds.length > 0 && (
+              <p className="small muted variants__unsorted">Ohne Sorte im Vorrat: {stockOf((i) => c.unsortedItemIds.includes(i.id)) || 'vorhanden'}</p>
+            )}
             {c.options.map((o) => {
               const s = macroShares(o.per100g);
               return (
@@ -57,15 +71,21 @@ export function VariantSheet({ choices, pick, title = 'Welche Sorte nimmst du?',
                   )}
                   <input type="radio" name={c.ingredientId} checked={value[c.ingredientId] === o.id}
                     onChange={() => setValue({ ...value, [c.ingredientId]: o.id })} />
+                  {/* zwei Zeilen (Julia): Name – rechts die Menge; Nährwerte – rechts der Stern */}
                   <span className="variants__text">
-                    <span>{o.name}</span>
-                    <span className="small muted">{Math.round(o.per100g.kcal)} kcal · KH {pct(s.carbs)} % · Eiweiß {pct(s.protein)} % · Fett {pct(s.fat)} %</span>
+                    <span className="variants__row">
+                      <span className="variants__name">{o.name}</span>
+                      <span className="small variants__stock">{stockOf((i) => i.productId === o.id) || 'nicht im Vorrat'}</span>
+                    </span>
+                    <span className="variants__row">
+                    <span className="small muted">{Math.round(o.per100g.kcal)} kcal · KH {pct(s.carbs)} · Eiweiß {pct(s.protein)} · Fett {pct(s.fat)} %</span>
+                    <button type="button" className={`variants__star${favs[c.ingredientId] === o.id ? ' is-on' : ''}`}
+                      aria-pressed={favs[c.ingredientId] === o.id} aria-label={favs[c.ingredientId] === o.id ? `${o.name}: Favorit zurücknehmen` : `${o.name} als Favorit`}
+                      onClick={(e) => { e.preventDefault(); toggleFavorite(c, o.id, o.name); }}>
+                      <Icon name="star" size={20} filled={favs[c.ingredientId] === o.id} />
+                    </button>
+                    </span>
                   </span>
-                  <button type="button" className={`variants__star${favs[c.ingredientId] === o.id ? ' is-on' : ''}`}
-                    aria-pressed={favs[c.ingredientId] === o.id} aria-label={favs[c.ingredientId] === o.id ? `${o.name}: Favorit zurücknehmen` : `${o.name} als Favorit`}
-                    onClick={(e) => { e.preventDefault(); toggleFavorite(c, o.id, o.name); }}>
-                    <Icon name="star" size={20} filled={favs[c.ingredientId] === o.id} />
-                  </button>
                 </label>
               );
             })}

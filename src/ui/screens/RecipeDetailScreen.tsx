@@ -277,11 +277,20 @@ const header = (
 function CostLine({ content, servings }: { content: RecipeContent; servings: number }) {
   const cost = useRecipeCost(content, servings);
   if (!cost) return null;
+  // aufklappbar (Julia): was jede Zutat pro Portion kostet – teuerste zuerst; die Summe ist der Preis pro Portion
   return (
-    <p className="cost-line">
-      <span>ca. <strong>{euro(cost.total)}</strong> · {euro(cost.perServing)} pro Portion</span>
-      {cost.missing.length > 0 && <span className="small muted">ohne {cost.missing.slice(0, 3).join(', ')}{cost.missing.length > 3 ? ' …' : ''} (Preis unbekannt)</span>}
-    </p>
+    <details className="cost-line">
+      <summary>
+        <span>ca. <strong>{euro(cost.total)}</strong> · {euro(cost.perServing)} pro Portion</span>
+        {cost.missing.length > 0 && <span className="small muted">ohne {cost.missing.slice(0, 3).join(', ')}{cost.missing.length > 3 ? ' …' : ''} (Preis unbekannt)</span>}
+      </summary>
+      <ul className="cost-line__items">
+        {cost.items.map((i) => (
+          <li key={i.ingredientId}><span>{i.name}</span><span>{euro(i.cost / servings)}</span></li>
+        ))}
+      </ul>
+      <p className="small muted">pro Portion · mit den zuletzt bezahlten Regalpreisen</p>
+    </details>
   );
 }
 

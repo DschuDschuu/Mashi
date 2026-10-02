@@ -185,4 +185,16 @@ describe('Gespeicherte Bons', () => {
     // ein Tag mit gespeichertem Bon lässt sich so nicht löschen (dafür gibt es den Bon)
     expect(dropUnsavedDay(p, '2026-10-02')).toBe(p);
   });
+
+  it('Gewicht nachtragen: Kürbis bleibt „2 Stück“ im Vorrat, der Preisverlauf rechnet ab jetzt je kg', () => {
+    const rows = proposeImport(parseReceipt(['EUR', 'Butternuss-Kürbis 3,23 x 2 6,45 A', 'Zu zahlen 6,45'].join('\n')), []);
+    rows[0] = { ...rows[0], name: 'Kürbis', amount: 2, unit: 'Stück' };
+    const p0 = addBon(applyImport(emptyPantry(), rows, NOW, id, DAY), bonFromImport(rows, DAY, NOW, 'k', 'k'));
+    expect(historyOf(p0, 'Kürbis')[0].unit).toBe('Stück');
+    const p = editBonLine(p0, 'k', 0, { weightKg: 3.242 }, NOW, id);
+    expect(item(p, 'Kürbis')[0]).toMatchObject({ amount: 2, unit: 'Stück' });
+    expect(historyOf(p, 'Kürbis')).toHaveLength(1);
+    expect(historyOf(p, 'Kürbis')[0].unit).toBe('g');
+    expect(historyOf(p, 'Kürbis')[0].perUnit * 1000).toBeCloseTo(6.45 / 3.242);
+  });
 });

@@ -16,6 +16,8 @@ export interface PriceEntry {
   unit: 'g' | 'Stück';
   /** wann bezahlt – der neueste Preis gewinnt */
   date: string;
+  /** welche Sorte (Julia: Preise je Sorte, damit es fair bleibt) – ältere Einträge haben keine */
+  productId?: string;
 }
 
 export interface Cost {
@@ -23,6 +25,8 @@ export interface Cost {
   perServing: number;
   /** Zutaten ohne bekannten Preis (Grundvorrat wie Salz und Öl zählt hier nicht) */
   missing: string[];
+  /** je Zutat, was sie für diese Portionen kostet – teuerste zuerst (Julia: Aufschlüsselung an der Kosten-Zeile) */
+  items: { ingredientId: string; name: string; cost: number }[];
 }
 
 /** Preise aus „Meine Produkte“: Preis je Packung ÷ Packungsgröße. */
@@ -49,6 +53,7 @@ export function recipeCost(content: RecipeContent, servings: number, table: Food
   let total = 0;
   let priced = 0;
   const missing: string[] = [];
+  const items: Cost['items'] = [];
   for (const ing of content.ingredients) {
     const need = resolveIngredient(ing, factor, table);
     if (!need || need.food?.negligible) continue;
@@ -59,10 +64,11 @@ export function recipeCost(content: RecipeContent, servings: number, table: Food
       continue;
     }
     total += qty * price.perUnit;
+    items.push({ ingredientId: ing.id, name: ing.name, cost: round(qty * price.perUnit) });
     priced++;
   }
   if (!priced) return null;
-  return { total: round(total), perServing: round(total / servings), missing: [...new Set(missing)] };
+  return { total: round(total), perServing: round(total / servings), missing: [...new Set(missing)], items: items.sort((a, b) => b.cost - a.cost) };
 }
 
 /** Wie viel davon das Rezept braucht – in der Einheit des Preises. */

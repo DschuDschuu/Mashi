@@ -95,6 +95,23 @@ Zu zahlen 3,57`);
   });
 });
 
+describe('Gewichtszeile über den Preis zuordnen (Julia: Kürbis)', () => {
+  const W = '3,242 kg x 1,99 EUR/kg'; // 3,242 × 1,99 = 6,45 €
+  it('darunter (wie bisher)', () => {
+    expect(parseReceipt(['EUR', 'Milch 0,99 A', 'Butternuss-Kürbis 6,45 A', W, 'Zu zahlen'].join('\n')).map((l) => [l.name, l.weightKg])).toEqual([['Milch', undefined], ['Butternuss-Kürbis', 3.242]]);
+  });
+  it('darüber: gehört zum Artikel darunter, dessen Preis passt – nicht zur Milch', () => {
+    expect(parseReceipt(['EUR', 'Milch 0,99 A', W, 'Butternuss-Kürbis 6,45 A', 'Zu zahlen'].join('\n')).map((l) => [l.name, l.weightKg])).toEqual([['Milch', undefined], ['Butternuss-Kürbis', 3.242]]);
+  });
+  it('zwei Kürbisse, je mit Gewicht darüber', () => {
+    const lines = parseReceipt(['EUR', W, 'Butternuss-Kürbis 6,45 A', '1,500 kg x 1,99 EUR/kg', 'Butternuss-Kürbis 2,99 A', 'Zu zahlen'].join('\n'));
+    expect(lines.map((l) => l.weightKg)).toEqual([3.242, 1.5]);
+  });
+  it('passt nirgends (Preis verlesen): bleibt beim Artikel darüber', () => {
+    expect(parseReceipt(['EUR', 'Bananen 1,20 A', '0,982 kg x 1,19 EUR/kg', 'Zu zahlen'].join('\n'))[0].weightKg).toBe(0.982);
+  });
+});
+
 describe('Gleiche Zeilen zusammenfassen', () => {
   it('derselbe Artikel zweimal einzeln → eine Zeile mit Anzahl; anderer Preis, MHD und lose Ware bleiben für sich', () => {
     const lines = parseReceipt(['EUR', 'Joghurt 0,99 A', 'Butter 1,99 A', 'joghurt 0,99 A', 'Preisvorteil -0,20', 'Joghurt 0,79 A',

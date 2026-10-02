@@ -50,3 +50,12 @@ describe('Preisverlauf', () => {
     expect(priceTrends(p.history!).map((t) => t.direction)).toEqual(['teurer']); // 1,19 → 1,29
   });
 });
+
+describe('Verlauf je Sorte', () => {
+  it('gleicher Name, zwei Sorten → zwei Verläufe', () => {
+    const e = (perUnit: number, date: string, productId?: string) => ({ name: 'Rinderhack', perUnit, unit: 'g' as const, date, ...(productId ? { productId } : {}) });
+    const t = priceTrends([e(0.0066, '2026-09-01', 'normal'), e(0.008, '2026-09-01', 'leicht'), e(0.007, '2026-09-08', 'normal'), e(0.0078, '2026-09-08', 'leicht')]);
+    expect(t.map((x) => [x.productId, x.points.length])).toEqual(expect.arrayContaining([['normal', 2], ['leicht', 2]]));
+    expect(t).toHaveLength(2);
+  });
+});

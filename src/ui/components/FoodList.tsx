@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { ask } from '../confirm';
 import { basicsOf } from '../../domain/mealplan';
-import { buildFoodList, matchesFilter, type FoodFilter, type FoodRow } from '../../domain/nutrition/foodList';
+import { buildFoodList, findFoodRow, matchesFilter, type FoodFilter, type FoodRow } from '../../domain/nutrition/foodList';
 import { normalizeName } from '../../domain/nutrition/localFoods';
 import { brandOf, productLabel, sharedOf, withShared, type MyProduct, type SharedMatch } from '../../domain/nutrition/myProducts';
 import { groupByCategory } from '../../domain/categories';
@@ -339,11 +339,7 @@ function AddFood({ tab, rows, onDone }: { tab: FoodFilter; rows: FoodRow[]; onDo
   const [sortOf, setSortOf] = useState<FoodRow | null>(null);
   /** „Nein, neu anlegen“ für genau diesen Namen – dann nicht noch einmal fragen */
   const [notSort, setNotSort] = useState('');
-  const existing = (n: string) => {
-    const k = normalizeName(n);
-    if (!k || k === notSort) return undefined;
-    return rows.find((r) => r.products.length > 0 && [r.name, r.ingredient, sharedOf(r.products).name].some((x) => normalizeName(x) === k));
-  };
+  const existing = (n: string) => findFoodRow(rows, n, foodTable, notSort);
 
   const saveNew = (p: MyProduct) => {
     saveProducts([...products, p]);
