@@ -1629,3 +1629,10 @@ details.cost-line[open] > summary::after { transform: rotate(-90deg); }
 .price-legend__marks { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 2px; }
 .price-legend__ring { display: inline-block; width: 9px; height: 9px; border-radius: 50%; border: 2px solid var(--ink-3); }
 .price-legend__diamond { display: inline-block; width: 8px; height: 8px; background: var(--ink-3); transform: rotate(45deg); }
+
+/* Vorgekocht: rechts oben „1 Portion“, darunter das Datum – links nur Name und „1 essen“ (Julia) */
+.pantry__item--dish { align-items: flex-start; }
+.pantry__dishright { display: flex; flex-direction: column; align-items: flex-end; flex: none; max-width: 45%; padding-top: 10px; position: relative; pointer-events: none; }
+.pantry__dishright > .pantry__qty { max-width: none; padding: 0; }
+.pantry__dishright > .pantry__shelf { text-align: right; flex-basis: auto; }
+.pantry__item--dish > .pantry__chev { padding-top: 12px; }

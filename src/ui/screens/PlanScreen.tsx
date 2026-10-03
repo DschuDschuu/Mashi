@@ -99,7 +99,8 @@ export function PlanScreen() {
                   {cooked && <PreparedLine recipeId={recipe.id} />}
                   {/* mit den „nur dieses Mal“-Mengen (Julia: überall dieselbe Zahl) */}
                   <DishNutrition content={asCooked(currentContent(recipe), servings, amounts)} own={variants} recipeId={cooked ? undefined : recipe.id} />
-                  {costs.get(recipe.id) && <span className="small muted">ca. {euro(costs.get(recipe.id)!.total)}</span>}
+                  {/* pro Portion, nur wenn alle Preise bekannt sind – sonst nichts (Julia, wie auf der Rezeptkarte) */}
+                  {costs.get(recipe.id) && !costs.get(recipe.id)!.missing.length && <span className="small muted">ca. {euro(costs.get(recipe.id)!.perServing)} pro Portion</span>}
                 </div>
                 {/* eigene Zeile über die ganze Karte – neben dem Portionen-Regler wäre sie zu schmal */}
                 {!cooked && <ThawPill needs={thawOf(recipe.id)} recipeId={recipe.id} title={currentContent(recipe).title} servings={servings} />}

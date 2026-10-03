@@ -160,11 +160,11 @@ export function PantryScreen() {
           {name}
           {alarm && <span className="pantry__alarm" role="img" aria-label="läuft heute oder morgen ab"><Icon name="clock" size={12} /></span>}
           {pill}
-          {date}
         </span>
-        {qty}
+        {/* rechts oben die Portionen, das Datum darunter (Julia: spart eine Zeile links) */}
+        <span className="pantry__dishright">{qty}{date}</span>
         {end}
-        {recipe && <DishNutrition content={cooked ? asCooked(currentContent(recipe), cooked.servings, cooked.amounts) : currentContent(recipe)} own={cooked?.variants} full className="pantry__dishnut" />}
+        {recipe && <DishNutrition content={cooked ? asCooked(currentContent(recipe), cooked.servings, cooked.amounts) : currentContent(recipe)} own={cooked?.variants} sorts={false} full className="pantry__dishnut" />}
       </li>
     );
   };
