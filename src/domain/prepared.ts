@@ -2,9 +2,21 @@
 import { defaultId, type Pantry, type PantryItem } from './pantry';
 
 /** Übrige Portionen nach dem Kochen als Vorgekochtes eintragen (hält im Kühlschrank kurz, einfrierbar). */
-export function addPrepared(items: PantryItem[], recipe: { id: string; title: string }, portions: number, now: string, newId = defaultId): { items: PantryItem[]; item?: PantryItem } {
+export function addPrepared(
+  items: PantryItem[], recipe: { id: string; title: string }, portions: number, now: string, newId = defaultId,
+  /** wie gekocht (Mengen, Sorten) – nur, wenn es vom Rezept abweicht */
+  cooked?: PantryItem['cooked'],
+): { items: PantryItem[]; item?: PantryItem } {
   if (!(portions > 0)) return { items };
-  const item: PantryItem = { id: newId(), name: recipe.title, amount: portions, unit: 'Stück', addedAt: now, boughtAt: now, recipeId: recipe.id };
+  const differs = !!cooked && (Object.keys(cooked.amounts ?? {}).length > 0 || Object.keys(cooked.variants ?? {}).length > 0);
+  const item: PantryItem = {
+    id: newId(), name: recipe.title, amount: portions, unit: 'Stück', addedAt: now, boughtAt: now, recipeId: recipe.id,
+    ...(differs ? { cooked: {
+      servings: cooked!.servings,
+      ...(Object.keys(cooked!.amounts ?? {}).length ? { amounts: cooked!.amounts } : {}),
+      ...(Object.keys(cooked!.variants ?? {}).length ? { variants: cooked!.variants } : {}),
+    } } : {}),
+  };
   return { items: [...items, item], item };
 }
 

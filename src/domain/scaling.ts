@@ -11,6 +11,18 @@ export function scaleIngredients(content: RecipeContent, servings: number): Ingr
   );
 }
 
+/**
+ * Das Rezept, wie es wirklich gekocht wird: auf die Portionen umgerechnet, „nur dieses Mal“-Mengen eingesetzt
+ * (Julia: 3 statt 1 Paprika). Für Nährwerte pro Portion – Plan-Karte, Kochmodus, Reste in der Speisekammer.
+ */
+export function asCooked(content: RecipeContent, servings: number, amounts: Readonly<Record<string, number>> = {}): RecipeContent {
+  if (servings === content.servings && !Object.keys(amounts).length) return content;
+  return {
+    ...content, servings,
+    ingredients: scaleIngredients(content, servings).map((i) => (i.id in amounts ? { ...i, amount: amounts[i.id] } : i)),
+  };
+}
+
 const FRACTIONS: [number, string][] = [
   [0, ''], [0.25, '¼'], [1 / 3, '⅓'], [0.5, '½'], [2 / 3, '⅔'], [0.75, '¾'], [1, ''],
 ];

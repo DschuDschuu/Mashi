@@ -4,7 +4,7 @@ import { leftoverSuggestions, pantryAfterPlan } from '../../domain/pantry';
 import { packSuggestions } from '../../domain/packs';
 import { packLabel } from '../../domain/pantryLabel';
 import { currentContent } from '../../domain/recipe';
-import { formatAmount, formatQuantity, formatUnitAmount, scaleIngredients } from '../../domain/scaling';
+import { asCooked, formatAmount, formatQuantity, formatUnitAmount, scaleIngredients } from '../../domain/scaling';
 import { orderByUse } from '../../domain/stepIngredients';
 import type { Ingredient } from '../../domain/types';
 import { markCooked, setPlanAmounts, useFoodTable, usePantry, usePlan, useRecipe, useRecipes } from '../../data/store';
@@ -156,7 +156,8 @@ export function CookModeScreen({ id, servings, variants }: { id: string; serving
           </button>
         )}
       </header>
-      <DishNutrition content={c} own={own} className="cook__nutri" />
+      {/* mit den Mengen von gerade (3 statt 1 Paprika) – wie Plan-Karte und Reste */}
+      <DishNutrition content={asCooked(c, servings ?? c.servings, amounts)} own={own} className="cook__nutri" />
 
       {(wide || showIngredients) && (
         <div className="cook__ingredients">

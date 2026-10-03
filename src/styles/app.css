@@ -1525,6 +1525,7 @@ p { margin: 0; }
 .bonview__open > svg { grid-row: 1 / span 2; grid-column: 3; color: var(--ink-3); }
 .bonview__name { font-weight: 700; min-width: 0; overflow-wrap: anywhere; }
 .bonview__price { grid-column: 2; font-size: 0.86rem; font-variant-numeric: tabular-nums; text-align: right; }
+.bonview__price--big { font-size: 1rem; font-weight: 700; color: var(--ink); }
 .bonview__sub { grid-column: 1 / span 2; min-width: 0; overflow-wrap: anywhere; }
 .bonview__line.is-skip .bonview__name { color: var(--ink-3); text-decoration: line-through; font-weight: 600; }
 .bonedit__discount { display: flex; align-items: center; gap: 6px; }
@@ -1558,7 +1559,6 @@ p { margin: 0; }
 /* Sorten-Karte: Marken-Chip näher an die Überschrift, mehr Luft zu den Kalorien (Julia) */
 .foods__sort .foods__brand { margin: -4px 0 6px; }
 /* Preis-Seite: Sorten als Chips mit Farbpunkt (wie die Linie im Diagramm) */
-.price-sorts { margin: -4px 0 4px; }
 .price-sorts__dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 2px; vertical-align: -1px; box-shadow: 0 0 0 2px var(--surface); }
 /* Sortenwahl: was von der Sorte da ist (Julia) – kräftiger als die Nährwerte darunter */
 .variants__stock { color: var(--primary-text); font-weight: 600; }
@@ -1612,3 +1612,20 @@ details.cost-line[open] > summary::after { transform: rotate(-90deg); }
 @container (max-width: 640px) { .plan-amounts { padding-left: 0; } }
 /* Kochmodus: „Nur dieses Mal: 3 Paprika statt 1 · Anpassen“ */
 .cook__chosen { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 6px 2px; color: var(--ink-2); }
+
+/* Produktformular: weitere Packungsgrößen je Zeile – Feld + Einheit, Papierkorb rechts */
+.product-form__size { display: flex; align-items: flex-end; gap: 8px; }
+.product-form__size > .field { flex: 1; min-width: 0; max-width: 16rem; }
+.product-form__size .pantry-amount { align-items: center; }
+.product-form__size .pantry-amount input { flex: 1; width: auto; min-width: 0; }
+.product-form__size > .iconbtn { margin-bottom: 6px; }
+.product-form__unit { padding: 0 10px; color: var(--ink-3); font-size: 0.9rem; }
+
+/* Preis-Seite: Legende statt Chips (Julia: weniger Platz) – Farbpunkt + Name, antippen blendet die Linie aus */
+.price-legend { display: flex; flex-wrap: wrap; gap: 2px 14px; margin-top: 6px; }
+.price-legend__item { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0; border: 0; background: none; color: var(--ink-2); font: inherit; font-size: 0.85rem; cursor: pointer; }
+.price-legend__item.is-off { color: var(--ink-3); text-decoration: line-through; opacity: 0.6; }
+.price-legend__item.is-off .price-sorts__dot { background: var(--line) !important; }
+.price-legend__marks { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 2px; }
+.price-legend__ring { display: inline-block; width: 9px; height: 9px; border-radius: 50%; border: 2px solid var(--ink-3); }
+.price-legend__diamond { display: inline-block; width: 8px; height: 8px; background: var(--ink-3); transform: rotate(45deg); }

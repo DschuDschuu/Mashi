@@ -113,7 +113,8 @@ export function ProductForm({ initial, onSave, onCancel, shared, afterName, name
   const [packUnit, setPackUnit] = useState<'g' | 'ml' | 'Stück'>(initial?.packageUnit ?? 'g');
   const [packPrice, setPackPrice] = useState(toField(initial?.packagePrice));
   /** weitere Größen als Liste („1000, 1400“) */
-  const [moreSizes, setMoreSizes] = useState((initial?.packageSizes ?? []).map((n) => toField(n)).join('; '));
+  /** weitere Größen derselben Sorte – je eine Zeile (Julia: statt „1000; 1400“ in einem Feld) */
+  const [moreSizes, setMoreSizes] = useState<string[]>((initial?.packageSizes ?? []).map((n) => toField(n)));
   const [shelf, setShelf] = useState(toField(initial?.shelfDays));
   const pantry = usePantry();
   const shelfCustom = pantry.shelfDays;
@@ -141,7 +142,9 @@ export function ProductForm({ initial, onSave, onCancel, shared, afterName, name
     const price = parseNum(packPrice);
     if (price !== undefined && !amount) return setError('Für den Preis braucht Mashi die Packungsgröße.');
     // getrennt mit „;“, Leerzeichen oder „, “ – ein Komma ohne Leerzeichen ist das Dezimalkomma (1,5)
-    const sizes = moreSizes.split(/[;\s]+|,(?=\s)/).map((x) => parseNum(x)).filter((n): n is number => n !== undefined && n > 0 && n !== amount);
+    const typed = moreSizes.filter((x) => x.trim());
+    if (typed.some((x) => !(parseNum(x)! > 0))) return setError('Weitere Größe bitte als Zahl, z. B. 1000 – oder die Zeile entfernen.');
+    const sizes = typed.map((x) => parseNum(x)!).filter((n) => n !== amount);
     if (sizes.length && !amount) return setError('Für weitere Größen braucht Mashi zuerst die übliche Packungsgröße.');
     const shelfDays = parseNum(shelf);
     if (!sortOnly && shelf.trim() && (!shelfDays || shelfDays > 365 || !Number.isInteger(shelfDays))) return setError('Haltbarkeit bitte in ganzen Tagen (1 bis 365).');
@@ -344,9 +347,26 @@ export function ProductForm({ initial, onSave, onCancel, shared, afterName, name
               </label>
             )}
           </div>
-          <label className="field"><span>Weitere Größen (optional, gleiche Einheit)</span>
-            <input value={moreSizes} onChange={(e) => setMoreSizes(e.target.value)} placeholder="z. B. 1000; 1400" />
-          </label>
+          {/* je weitere Größe eine Zeile (Julia: Hähnchen gibt es in 400 g und 1 kg) – gleiche Einheit wie oben */}
+          {moreSizes.map((x, i) => (
+            <div key={i} className="product-form__size">
+              <label className="field"><span>Weitere Größe</span>
+                <span className="pantry-amount">
+                  <input inputMode="decimal" value={x} onChange={(e) => setMoreSizes(moreSizes.map((y, n) => (n === i ? e.target.value : y)))}
+                    placeholder="z. B. 1000" autoFocus={!x} />
+                  <span className="product-form__unit">{packUnit}</span>
+                </span>
+              </label>
+              <button type="button" className="iconbtn iconbtn--sm iconbtn--danger" aria-label="Größe entfernen" onClick={() => setMoreSizes(moreSizes.filter((_, n) => n !== i))}>
+                <Icon name="trash" size={16} />
+              </button>
+            </div>
+          ))}
+          {parseNum(packAmount) ? (
+            <button type="button" className="link small bonedit__add" onClick={() => setMoreSizes([...moreSizes, ''])}>
+              <Icon name="plus" size={14} /> Weitere Größe
+            </button>
+          ) : null}
           {/* Sorte: Haltbarkeit gilt für alle Sorten – steht in der Kachel */}
           {!sortOnly && (
             <label className="field"><span>Hält ab Kauf (Tage, optional)</span>

@@ -8,6 +8,7 @@ import {
   useFoodTable, usePantry, usePlan, useProducts, useRecipes,
 } from '../../data/store';
 import { currentContent } from '../../domain/recipe';
+import { asCooked } from '../../domain/scaling';
 import { DishNutrition } from '../components/DishNutrition';
 import { navigate, useRoute } from '../../router';
 import { foodTable } from '../../services';
@@ -142,8 +143,11 @@ export function PantryScreen() {
    * die ganze Breite. Ein Knopf darf keinen Knopf enthalten – darum liegt der Zeilen-Knopf unsichtbar
    * über der ganzen Zeile (.pantry__cover) und Pille und ✕ liegen obendrauf.
    */
-  const dishRow = ({ key, recipeId, name, alarm, qty, open, onToggle, label, pill, end, date }: {
-    key: string; recipeId?: string; name: string; alarm: boolean; qty: ReactNode;
+  const dishRow = ({ key, recipeId, cooked, name, alarm, qty, open, onToggle, label, pill, end, date }: {
+    key: string; recipeId?: string;
+    /** so gekocht (Mengen, Sorten) – die Nährwerte pro Portion rechnen damit */
+    cooked?: PantryItem['cooked'];
+    name: string; alarm: boolean; qty: ReactNode;
     open: boolean; onToggle: () => void; label: string; pill?: ReactNode; end: ReactNode;
     /** Datum links unter dem Namen (wie bei den Vorräten) */
     date?: ReactNode;
@@ -160,7 +164,7 @@ export function PantryScreen() {
         </span>
         {qty}
         {end}
-        {recipe && <DishNutrition content={currentContent(recipe)} own={undefined} full className="pantry__dishnut" />}
+        {recipe && <DishNutrition content={cooked ? asCooked(currentContent(recipe), cooked.servings, cooked.amounts) : currentContent(recipe)} own={cooked?.variants} full className="pantry__dishnut" />}
       </li>
     );
   };
@@ -172,7 +176,7 @@ export function PantryScreen() {
       const shelf = shelfLabel(i);
       return [
         dishRow({
-          key: i.id, recipeId: i.recipeId, name: i.name, alarm: !!shelf?.alarm,
+          key: i.id, recipeId: i.recipeId, cooked: i.cooked, name: i.name, alarm: !!shelf?.alarm,
           pill: i.frozenAt ? <ThawPill item={i} /> : <EatPill item={i} />,
           open: isEditing, onToggle: () => setEditing(isEditing ? null : i.id), label: `${i.name} bearbeiten`,
           qty: (
@@ -237,7 +241,8 @@ export function PantryScreen() {
     if (parts.every(isFreshPrepared)) {
       return [
         dishRow({
-          key: k, recipeId: parts[0].recipeId, name: parts[0].name, alarm: parts.some((p) => shelfLabel(p)?.alarm),
+          // Nährwerte des Teils, das als Nächstes gegessen wird
+          key: k, recipeId: parts[0].recipeId, cooked: first.cooked, name: parts[0].name, alarm: parts.some((p) => shelfLabel(p)?.alarm),
           pill: open ? undefined : <EatPill item={first} />, open, onToggle: () => setExpanded(open ? null : k), label: `${parts[0].name}: ${parts.length} Teile`, qty, date: shelfLeft,
           end: <span className={`pantry__chev${open ? ' is-open' : ''}`} aria-hidden="true"><Icon name="chevron" size={16} /></span>,
         }),

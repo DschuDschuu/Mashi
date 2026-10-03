@@ -5,6 +5,7 @@ import { recipeCost, sumCosts } from '../../domain/cost';
 import { suggestRecipes, type ShoppingItem, type Suggestion } from '../../domain/mealplan';
 import { ingredientCompletions, longNotCooked, searchRecipes } from '../../domain/recipeSearch';
 import { currentContent } from '../../domain/recipe';
+import { asCooked } from '../../domain/scaling';
 import type { Recipe } from '../../domain/types';
 import { preparedOf } from '../../domain/prepared';
 import { thawFit, thawNeeds, type ThawNeed } from '../../domain/pantry';
@@ -96,7 +97,8 @@ export function PlanScreen() {
                 {/* eigene Zeile unter Bild und Titel – sonst bleibt neben dem Portionen-Regler nur ein schmaler Streifen */}
                 <div className="plan-list__meta">
                   {cooked && <PreparedLine recipeId={recipe.id} />}
-                  <DishNutrition content={currentContent(recipe)} own={variants} recipeId={cooked ? undefined : recipe.id} />
+                  {/* mit den „nur dieses Mal“-Mengen (Julia: überall dieselbe Zahl) */}
+                  <DishNutrition content={asCooked(currentContent(recipe), servings, amounts)} own={variants} recipeId={cooked ? undefined : recipe.id} />
                   {costs.get(recipe.id) && <span className="small muted">ca. {euro(costs.get(recipe.id)!.total)}</span>}
                 </div>
                 {/* eigene Zeile über die ganze Karte – neben dem Portionen-Regler wäre sie zu schmal */}

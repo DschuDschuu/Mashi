@@ -239,6 +239,9 @@ export interface LeftoverAsk {
   servings: number;
   /** im Wochenplan gekocht → „Gekocht“ zurücknehmen nimmt die Reste wieder weg */
   planned: boolean;
+  /** so gekocht – die Reste rechnen ihre Nährwerte damit */
+  amounts?: Record<string, number>;
+  variants?: Record<string, string>;
 }
 
 /** für Tests und Nicht-React-Code */
@@ -248,9 +251,9 @@ export function useLeftoverAsk(): LeftoverAsk | null {
   return useSyncExternalStore(subscribe, () => leftoverAsk);
 }
 
-function askLeftover(r: Recipe, servings: number, planned: boolean) {
+function askLeftover(r: Recipe, servings: number, planned: boolean, amounts: Record<string, number> = {}, variants?: Record<string, string>) {
   if (servings <= 1) return; // eine Portion gekocht – bleibt nichts übrig
-  leftoverAsk = { recipeId: r.id, title: currentContent(r).title, servings, planned };
+  leftoverAsk = { recipeId: r.id, title: currentContent(r).title, servings, planned, amounts, ...(variants ? { variants } : {}) };
   emit();
 }
 
@@ -260,7 +263,8 @@ export function answerLeftover(portions: number) {
   leftoverAsk = null;
   emit();
   if (!ask || !(portions > 0)) return;
-  const { items, item } = addPrepared(pantry.items, { id: ask.recipeId, title: ask.title }, portions, now(), () => newId('v'));
+  const { items, item } = addPrepared(pantry.items, { id: ask.recipeId, title: ask.title }, portions, now(), () => newId('v'),
+    { servings: ask.servings, amounts: ask.amounts, variants: ask.variants });
   if (item) leftoverOf.set(ask.recipeId, item.id);
   // im Plan gekocht: beim Zurücknehmen von „Gekocht“ verschwinden die Reste wieder (wie Angebrochenes)
   const log = ask.planned && plan.cooked.includes(ask.recipeId) && item
@@ -347,7 +351,7 @@ export function markCooked(id: string, servings?: number, amounts: Record<string
   const cookedServings = servings ?? planned?.servings ?? currentContent(r).servings;
   // immer mitschreiben, was genommen wurde – auch ohne Plan lässt sich „Heute gekocht“ so später zurücknehmen
   const result = consume(r, cookedServings, amounts, true, variants ?? planned?.variants);
-  askLeftover(r, cookedServings, !!planned);
+  askLeftover(r, cookedServings, !!planned, amounts, variants ?? planned?.variants);
   return {
     ...result,
     undo: () => {
@@ -775,7 +779,7 @@ export function togglePlanCooked(recipeId: string): CookedResult | null {
   commit(stampCooked(r));
   const item = next.items.find((i) => i.recipeId === recipeId)!;
   const result = consume(r, item.servings, item.amounts ?? {}, true, item.variants);
-  askLeftover(r, item.servings, true);
+  askLeftover(r, item.servings, true, item.amounts ?? {}, item.variants);
   return {
     ...result,
     undo: () => {

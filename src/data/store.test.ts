@@ -359,3 +359,17 @@ describe('Store: „nur dieses Mal“-Mengen im Wochenplan ändern (Julia)', () 
     expect((await repo.loadPlan()).items[0]).not.toHaveProperty('amounts');
   });
 });
+
+describe('Store: Reste rechnen mit den Mengen von beim Kochen (Julia)', () => {
+  it('mit 3 statt 1 Paprika eingeplant und gekocht → die Reste-Portion weiß das', async () => {
+    await freshStore('reste-mengen');
+    const rid = createRecipe({
+      title: 'Paprika-Pfanne', description: '', servings: 2, prepMinutes: 0, cookMinutes: 0, difficulty: 1,
+      ingredients: [{ id: 'p', name: 'Paprika', amount: 1, unit: 'Stück' }], steps: [], categories: [], tags: [], devices: [],
+    }, { source: 'selbst', status: 'kochbuch' });
+    addToPlan(rid, 2, {}, { p: 3 });
+    togglePlanCooked(rid);
+    answerLeftover(1);
+    expect(currentPantry().items.find((i) => i.recipeId === rid)?.cooked).toEqual({ servings: 2, amounts: { p: 3 } });
+  });
+});

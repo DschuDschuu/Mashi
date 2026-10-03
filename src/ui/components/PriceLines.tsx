@@ -10,11 +10,19 @@ const shortDate = (iso: string) => new Date(iso).toLocaleDateString('de-DE', { d
 /** je Sorte eine Farbe – gut unterscheidbar, passend zu den Farben der App */
 export const SORT_COLORS = ['#3f8f88', '#c0703f', '#6a74c9', '#b4527b', '#5f8f3e', '#8a6d3b'];
 
-export interface PriceSeries { id: string; label: string; color: string; points: PricePoint[] }
+/** ein Punkt im Diagramm – bezahlt mit Rabatt (Ring) oder MHD-Ware (Raute), Julia: „Bezahlt“-Ansicht */
+export interface ChartPoint extends PricePoint {
+  mark?: 'rabatt' | 'mhd';
+  /** im Tooltip statt „Rabatt“/„MHD“: welche Art („Angebot + Lidl Plus“, „MHD −20 %“) – Julia */
+  why?: string;
+}
+
+export interface PriceSeries { id: string; label: string; color: string; points: ChartPoint[] }
 
 /**
- * Preisverlauf mehrerer Sorten in EINEM Diagramm (Julia: je Sorte eine Farbe, per Chip ein- und ausblendbar –
- * die Chips stehen darüber, hier nur die sichtbaren Linien). Tippen rastet am nächsten Einkauf ein.
+ * Preisverlauf mehrerer Linien in EINEM Diagramm (Julia: je Sorte bzw. Packungsgröße eine Farbe, per Legende ein- und
+ * ausblendbar – die Legende steht darunter, hier nur die sichtbaren Linien). Tippen rastet am nächsten Einkauf ein;
+ * der Tooltip nennt Datum, Preis und – in „Bezahlt“ – die Art des Rabatts.
  */
 export function PriceLines({ series, unit, label }: { series: PriceSeries[]; unit: 'g' | 'Stück'; label: string }) {
   const [active, setActive] = useState<{ s: number; i: number } | null>(null);
@@ -47,8 +55,10 @@ export function PriceLines({ series, unit, label }: { series: PriceSeries[]; uni
   const tip = active && series[active.s]?.points[active.i] ? (() => {
     const s = series[active.s];
     const p = s.points[active.i];
-    const text = `${shortDate(p.date)} · ${money(p)}${series.length > 1 ? ` · ${s.label}` : ''}`;
-    const w = text.length * 5.4 + 14;
+    const why = p.why ? ` · ${p.why}` : p.mark === 'mhd' ? ' · MHD' : p.mark === 'rabatt' ? ' · Rabatt' : '';
+    // ohne Linienname (Julia) – die Farbe sagt ihn, und mit der Rabatt-Art würde es zu lang
+    const text = `${shortDate(p.date)} · ${money(p)}${why}`;
+    const w = Math.min(text.length * 5.4 + 14, W - 4);
     return { px: x(p.date), text, w, left: Math.min(Math.max(x(p.date) - w / 2, 2), W - w - 2) };
   })() : null;
 
@@ -70,9 +80,17 @@ export function PriceLines({ series, unit, label }: { series: PriceSeries[]; uni
             <path d={s.points.map((p, i) => `${i ? 'L' : 'M'}${x(p.date).toFixed(1)},${y(p).toFixed(1)}`).join(' ')}
               fill="none" stroke={s.color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
           )}
-          {s.points.map((p, i) => (
-            <circle key={i} cx={x(p.date)} cy={y(p)} r={active?.s === si && active.i === i ? 5 : 4} fill={s.color} stroke="var(--surface)" strokeWidth={2} />
-          ))}
+          {s.points.map((p, i) => {
+            const r = active?.s === si && active.i === i ? 5 : 4;
+            // MHD-Ware: Raute · Rabatt: Ring · sonst voller Punkt
+            if (p.mark === 'mhd') {
+              const cx = x(p.date), cy = y(p), d = r + 1.5;
+              return <path key={i} d={`M${cx},${cy - d} L${cx + d},${cy} L${cx},${cy + d} L${cx - d},${cy} Z`} fill={s.color} stroke="var(--surface)" strokeWidth={1.5} />;
+            }
+            return p.mark === 'rabatt'
+              ? <circle key={i} cx={x(p.date)} cy={y(p)} r={r} fill="var(--surface)" stroke={s.color} strokeWidth={2.5} />
+              : <circle key={i} cx={x(p.date)} cy={y(p)} r={r} fill={s.color} stroke="var(--surface)" strokeWidth={2} />;
+          })}
         </g>
       ))}
       {tip && (

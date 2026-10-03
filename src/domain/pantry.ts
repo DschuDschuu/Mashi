@@ -49,6 +49,11 @@ export interface PantryItem {
    * „Pesto-Pasta · 3 Portionen“ darf beim nächsten Pesto-Rezept nicht abgezogen werden.
    */
   recipeId?: string;
+  /**
+   * Vorgekocht: so wurde es gekocht – Portionen, „nur dieses Mal“-Mengen und gewählte Sorten. Die Nährwerte
+   * pro Portion rechnen damit (Julia: mit 3 statt 1 Paprika gekocht, auch die Reste so).
+   */
+  cooked?: { servings: number; amounts?: Record<string, number>; variants?: Record<string, string> };
 }
 
 /** Vorgekochtes (Portionen eines Rezepts) – kein Zutatenvorrat */
