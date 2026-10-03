@@ -210,6 +210,11 @@ function FoodLine({ row, open, onToggle, products, onTouch }: {
   /** mindestens eine Sorte mit Bon-Einkauf – dann steht „Zuletzt gekauft“ je Sorte, sonst einmal oben */
   const sortBought = ps.some((p) => purchasesOf(pantry.bons, (l) => l.productId === p.id).length > 0);
   const zeroRow = !!row.zero;
+  /**
+   * Die einzige Sorte zeigt nichts (Julia): keine Werte – auch nicht aus der Tabelle –, keine Marke, kein Zusatz,
+   * keine Packung, kein Einkauf. Dann kein grauer Kasten; Werte über „Nährwerte eintragen“, Entfernen unten in der Kachel.
+   */
+  const bare = ps.length === 1 && !!ps[0].noValues && !valuesOf(ps[0], tableOf(ps[0])) && !brandOf(ps[0]) && !ps[0].detail && !ps[0].packageAmount && !sortBought;
 
   return (
     <li className={`foods__item${open ? ' is-open' : ''}`}>
@@ -266,7 +271,7 @@ function FoodLine({ row, open, onToggle, products, onTouch }: {
           {!sortBought && <LastPurchase name={row.ingredient} title={title} productIds={ps.map((p) => p.id)} />}
           {ps.map((p) => editing === p.id ? (
             <ProductForm key={p.id} initial={p} shared={shared} onSave={save} onCancel={() => setEditing(null)} />
-          ) : (
+          ) : bare ? null : (
             <div key={p.id} className="foods__sort">
               <div className="foods__sorthead">
                 {ps.length > 1 && (
@@ -340,6 +345,10 @@ function FoodLine({ row, open, onToggle, products, onTouch }: {
           )}
           <CategoryPicker name={row.ingredient} label={title} />
           <StagePicker name={row.ingredient} label={title} onTouch={onTouch} />
+          {/* ohne grauen Kasten fehlt dessen Papierkorb – darum hier */}
+          {bare && editing === null && (
+            <button type="button" className="link pantry-set__remove" onClick={() => remove(ps[0])}><Icon name="trash" size={14} /> Lebensmittel entfernen</button>
+          )}
         </div>
       )}
     </li>

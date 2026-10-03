@@ -4,7 +4,8 @@ import { productLabel, sortTags, type MyProduct } from '../../domain/nutrition/m
 import { NewProduct } from '../components/NewProduct';
 import type { PantryUnit } from '../../domain/pantry';
 import type { DiscountKind, LineDiscount } from '../../domain/receipt';
-import { editBon, usePantry, useProducts, withdrawBon } from '../../data/store';
+import { editBon, includeBon, useFoodTable, usePantry, useProducts, withdrawBon } from '../../data/store';
+import { suggestPantryUnit } from '../../domain/packs';
 import { ask } from '../confirm';
 import { Empty } from '../components/Controls';
 import { Icon } from '../components/Icon';
@@ -59,26 +60,33 @@ export function BonScreen({ id }: { id: string }) {
           const p = l.productId ? products.find((x) => x.id === l.productId) : undefined;
           return editing === i ? (
             <li key={i} className="bonview__line is-editing">
-              <LineEdit line={l} onDone={(patch) => {
+              <LineEdit line={l} include={l.skip ? { stockable: !bon.noStock } : undefined} onDone={(patch, toStock) => {
                 setEditing(null);
                 if (!patch) return;
+                if (l.skip) {
+                  // übersprungen → nachträglich aufnehmen (Julia: wegen des Preises)
+                  const undo = includeBon(bon.id, i, patch, !!toStock);
+                  toast(toStock ? 'Aufgenommen – Preis im Verlauf, Menge in der Speisekammer' : 'Aufgenommen – Preis im Verlauf', { label: 'Rückgängig', run: undo });
+                  return;
+                }
                 const undo = editBon(bon.id, i, patch);
-                toast('Geändert – Vorrat und Preise ziehen mit', { label: 'Rückgängig', run: undo });
+                toast(l.priceOnly ? 'Geändert – Preise ziehen mit' : 'Geändert – Vorrat und Preise ziehen mit', { label: 'Rückgängig', run: undo });
               }} />
             </li>
           ) : (
             <li key={i} className={`bonview__line${l.skip ? ' is-skip' : ''}`}>
-              <button type="button" className="bonview__open" disabled={l.skip} onClick={() => setEditing(i)}
-                aria-label={l.skip ? `${l.bon} – übersprungen` : `${l.name} ändern`}>
+              <button type="button" className="bonview__open" onClick={() => setEditing(i)}
+                aria-label={l.skip ? `${l.bon} – übersprungen, nachträglich aufnehmen` : `${l.name} ändern`}>
                 <span className="bonview__name">
                   {l.skip ? l.bon : l.name}
                   {p && sortTags(p).map((t) => <span key={t} className="brand">{t}</span>)}
                 </span>
                 <span className="bonview__price">{linePrice(l)}</span>
                 <span className="small muted bonview__sub">
-                  {l.skip ? 'übersprungen' : [l.bon, lineAmount(l), perKg(l), l.freeze ? 'eingefroren' : '', l.reduced ? 'MHD-Ware' : ''].filter(Boolean).join(' · ')}
+                  {l.skip ? 'übersprungen – antippen zum Aufnehmen'
+                    : [l.bon, lineAmount(l), perKg(l), l.freeze ? 'eingefroren' : '', l.reduced ? 'MHD-Ware' : '', l.priceOnly ? 'nur Preis' : ''].filter(Boolean).join(' · ')}
                 </span>
-                {!l.skip && <Icon name="pencil" size={14} />}
+                <Icon name={l.skip ? 'plus' : 'pencil'} size={14} />
               </button>
             </li>
           );
@@ -112,14 +120,28 @@ function packOfLine(l: BonLine): Partial<MyProduct> {
 const perPiece = (l: Pick<BonLine, 'weightKg' | 'count'>, unit?: PantryUnit) => l.weightKg === undefined && l.count > 1 && unit !== 'Stück';
 
 /** Eine Zeile korrigieren – onDone(null) = abgebrochen */
-function LineEdit({ line, onDone }: { line: BonLine; onDone: (patch: Partial<BonLine> | null) => void }) {
+/**
+ * @param include übersprungene Zeile nachträglich aufnehmen: „Aufnehmen“ statt „Speichern“ und der Haken
+ *   „Auch in die Speisekammer“ (standardmäßig aus – Julias Wahl; nicht bei doppelt eingelesenen Bons)
+ */
+function LineEdit({ line, include, onDone }: {
+  line: BonLine; include?: { stockable: boolean }; onDone: (patch: Partial<BonLine> | null, toStock?: boolean) => void;
+}) {
+  const [toStock, setToStock] = useState(false);
   const products = useProducts();
   const [name, setName] = useState(line.name);
   const [productId, setProductId] = useState(line.productId ?? '');
   const [count, setCount] = useState(String(line.count));
-  const [unit, setUnit] = useState<PantryUnit>(line.unit ?? 'g');
+  const table = useFoodTable();
+  // übersprungene Zeilen haben noch keine Einheit: Stück, wo die Tabelle ein Stückgewicht kennt (Pak Choi), sonst wie beim Einlesen
+  const firstUnit: PantryUnit = line.unit ?? (line.skip
+    ? (table.matchName(line.name)?.food.portions?.Stück ? 'Stück' : suggestPantryUnit(table.matchName(line.name)?.food))
+    : 'g');
+  const [unit, setUnit] = useState<PantryUnit>(firstUnit);
+
   const shown = line.amount === undefined ? undefined : perPiece(line, line.unit) ? line.amount / line.count : line.amount;
-  const [amount, setAmount] = useState(field(shown));
+  // in Stück ist die Menge die Anzahl (2 Pak Choi auf dem Bon = 2 Stück) – vorausgefüllt, sonst vertippt man sich leicht
+  const [amount, setAmount] = useState(field(shown ?? (line.skip && firstUnit === 'Stück' ? line.count : undefined)));
   const [price, setPrice] = useState(field(line.price));
   // Kilopreis wie auf dem Bon („1,99 EUR/kg“) – Julia trägt lieber den ein als das Gewicht; Mashi rechnet das Gewicht aus
   const [perKg, setPerKg] = useState(line.perKg !== undefined ? field(line.perKg) : line.weightKg && line.price !== undefined ? field(line.price / line.weightKg) : '');
@@ -150,7 +172,7 @@ function LineEdit({ line, onDone }: { line: BonLine; onDone: (patch: Partial<Bon
     if (eurPerKg && pr === undefined) return setError('Für den Kilopreis braucht Mashi den Preis auf dem Bon.');
     // Preis ÷ Kilopreis = Gewicht (6,45 € ÷ 1,99 €/kg = 3,242 kg)
     const kg = eurPerKg && pr !== undefined ? Math.round((pr / eurPerKg) * 1000) / 1000 : undefined;
-    onDone({ name: name.trim(), productId: productId || undefined, count: n, amount: total, unit, price: pr, discounts: ds, weightKg: kg, perKg: eurPerKg });
+    onDone({ name: name.trim(), productId: productId || undefined, count: n, amount: total, unit, price: pr, discounts: ds, weightKg: kg, perKg: eurPerKg }, toStock);
   };
 
   return (
@@ -227,9 +249,15 @@ function LineEdit({ line, onDone }: { line: BonLine; onDone: (patch: Partial<Bon
       <button type="button" className="link small bonedit__add" onClick={() => setDiscounts([...discounts, { kind: 'angebot', text: '' }])}>
         <Icon name="plus" size={14} /> Rabatt
       </button>
+      {include?.stockable && (
+        <label className="bonrow__mhd">
+          <input type="checkbox" checked={toStock} onChange={(e) => setToStock(e.target.checked)} />
+          <span><strong>Auch in die Speisekammer</strong> – sonst nur der Preis (bei älteren Bons meist schon verbraucht)</span>
+        </label>
+      )}
       {error && <p className="error" role="alert">{error}</p>}
       <div className="row-gap">
-        <button type="button" className="btn btn--primary" onClick={save}>Speichern</button>
+        <button type="button" className="btn btn--primary" onClick={save}>{include ? 'Aufnehmen' : 'Speichern'}</button>
         <button type="button" className="btn btn--ghost" onClick={() => onDone(null)}>Abbrechen</button>
       </div>
     </div>

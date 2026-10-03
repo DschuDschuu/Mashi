@@ -3,6 +3,7 @@ import { ask } from '../confirm';
 import { createBackup, parseBackup, type ParsedBackup } from '../../domain/backup';
 import type { MyProduct } from '../../domain/nutrition/myProducts';
 import { currentContent } from '../../domain/recipe';
+import { isInCookbook } from '../../domain/status';
 import { disconnect, leaveDemo, savedSyncConfig, uploadPending, useSyncState } from '../../data/backend';
 import { deleteRecipe, importPantry, importPlan, importProducts, importRecipes, isDemo, resetDemoData, restoreRecipe, usePantry, usePlan, useProducts, useRecipes } from '../../data/store';
 import type { MealPlan } from '../../domain/mealplan';
@@ -255,7 +256,8 @@ function BackupPanel({ recipes }: { recipes: Recipe[] }) {
       <input ref={input} type="file" accept="application/json,.json,text/plain,.txt" hidden onChange={(e) => onFile(e.target.files?.[0])} />
       {error && <p className="error" role="alert">{error}</p>}
       {sharing
-        ? <SharePicker recipes={recipes.filter((r) => !r.archivedAt)} onClose={() => setSharing(false)} />
+        // nur dein Kochbuch: keine KI-Ideen, die du nicht zum Testen gespeichert hast (Julia) – die Sicherung hat weiter alles
+        ? <SharePicker recipes={recipes.filter((r) => !r.archivedAt && isInCookbook(r.status))} onClose={() => setSharing(false)} />
         : <button className="btn btn--soft" onClick={() => setSharing(true)}><Icon name="share" size={18} /> Rezepte teilen …</button>}
 
       {preview && (

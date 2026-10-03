@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addBon, bonFromImport, dropDayPrices, dropUnsavedDay, editBonLine, importedOnDay, sameBonOf, unsavedDays, withdrawBonStock, MAX_BONS, paidOf, purchasesOf, type SavedBon } from './bons';
+import { addBon, bonFromImport, dropDayPrices, dropUnsavedDay, editBonLine, includeBonLine, importedOnDay, sameBonOf, unsavedDays, withdrawBonStock, MAX_BONS, paidOf, purchasesOf, type SavedBon } from './bons';
 import { applyImport, emptyPantry, proposeImport, receiptKey, type Pantry } from './pantry';
 import { parseReceipt } from './receipt';
 import { parseSavings, recordSavings } from './savings';
@@ -196,5 +196,39 @@ describe('Gespeicherte Bons', () => {
     expect(historyOf(p, 'Kürbis')).toHaveLength(1);
     expect(historyOf(p, 'Kürbis')[0].unit).toBe('g');
     expect(historyOf(p, 'Kürbis')[0].perUnit * 1000).toBeCloseTo(6.45 / 3.242);
+  });
+});
+
+describe('Übersprungene Zeile nachträglich aufnehmen (Julia: wegen des Preises)', () => {
+  // beim Einlesen übersprungen: der Joghurt
+  const skipped = () => imported((rows) => { rows[2] = { ...rows[2], skip: true }; });
+
+  it('nur der Preis: Verlauf und Gelerntes, Vorrat bleibt – die Zeile ist „nur Preis“', () => {
+    const before = skipped();
+    expect(item(before, 'Joghurt')).toHaveLength(0);
+    expect(historyOf(before, 'Joghurt')).toHaveLength(0);
+    const p = includeBonLine(before, 'b1', 2, { name: 'Joghurt', amount: 500, unit: 'g' }, false, NOW, id);
+    expect(item(p, 'Joghurt')).toHaveLength(0);
+    expect(historyOf(p, 'Joghurt')[0].perUnit).toBeCloseTo(0.99 / 500);
+    expect(p.bons![0].lines[2]).toMatchObject({ name: 'Joghurt', priceOnly: true });
+    expect(p.bons![0].lines[2].skip).toBeUndefined();
+    // beim nächsten Bon nicht mehr überspringen
+    expect(p.rules.find((r) => r.key === 'joghurt')).toMatchObject({ name: 'Joghurt', amount: 500, unit: 'g' });
+    expect(p.rules.find((r) => r.key === 'joghurt')!.skip).toBeUndefined();
+    // Ersparnis unverändert (zählte beim Einlesen schon)
+    expect(p.bons![0].savings).toEqual(before.bons![0].savings);
+    // spätere Korrektur der Menge bucht nichts in den Vorrat
+    expect(item(editBonLine(p, 'b1', 2, { amount: 1000 }, NOW, id), 'Joghurt')).toHaveLength(0);
+  });
+
+  it('mit Haken: auch in die Speisekammer', () => {
+    const p = includeBonLine(skipped(), 'b1', 2, { name: 'Joghurt', amount: 500, unit: 'g' }, true, NOW, id);
+    expect(item(p, 'Joghurt')[0]).toMatchObject({ amount: 1, unit: 'Stück', pack: { amount: 500, unit: 'g' }, boughtAt: DAY });
+    expect(p.bons![0].lines[2].priceOnly).toBeUndefined();
+  });
+
+  it('nicht übersprungene Zeilen bleiben unberührt', () => {
+    const p = imported();
+    expect(includeBonLine(p, 'b1', 0, { name: 'X' }, true, NOW, id)).toBe(p);
   });
 });

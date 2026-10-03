@@ -14,7 +14,7 @@ import { attachPacks, changeAmount, mergeSamePacks, openItem } from '../domain/p
 import { addPrepared, eatPrepared } from '../domain/prepared';
 import { currentContent, currentVersion, newId, sameContent, withNewVersion } from '../domain/recipe';
 import { recordSavings, type BonSavings } from '../domain/savings';
-import { addBon, bonFromImport, dropDayPrices, editBonLine, sameBonOf, withdrawBonStock, dropUnsavedDay, type BonLine, type BonLinePatch } from '../domain/bons';
+import { addBon, bonFromImport, dropDayPrices, editBonLine, includeBonLine, sameBonOf, withdrawBonStock, dropUnsavedDay, type BonLine, type BonLinePatch } from '../domain/bons';
 import { withCategory, type FoodCategory } from '../domain/categories';
 import { relinkOldImport, renameFood, syncProductNames } from '../domain/renameFood';
 import { specialDays, type ShelfDays } from '../domain/shelfLife';
@@ -882,6 +882,18 @@ export function editBon(bonId: string, index: number, patch: BonLinePatch): () =
     const back: Record<keyof BonLinePatch, unknown> = { name: old.name, amount: old.amount, unit: old.unit, productId: old.productId, price: old.price, discounts: old.discounts ?? [], count: old.count, weightKg: old.weightKg, perKg: old.perKg };
     commitPantry(editBonLine(pantry, bonId, index, back as Partial<BonLine>, now(), () => newId('v')));
   };
+}
+
+/**
+ * Übersprungene Bon-Zeile nachträglich aufnehmen (siehe includeBonLine). „Rückgängig“ gleich danach (Toast):
+ * Bon, Gelerntes und Preise zurück – und der Vorrat, falls die Zeile dort eingebucht wurde.
+ */
+export function includeBon(bonId: string, index: number, patch: BonLinePatch, toStock: boolean): () => void {
+  const before = pantry;
+  const next = includeBonLine(pantry, bonId, index, patch, toStock, now(), () => newId('v'));
+  if (next === pantry) return () => {};
+  commitPantry(next);
+  return () => commitPantry({ ...pantry, bons: before.bons, rules: before.rules, history: before.history, prices: before.prices, ...(toStock ? { items: before.items } : {}) });
 }
 
 /**

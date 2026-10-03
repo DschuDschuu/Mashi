@@ -21,7 +21,6 @@ import { useCategoryOf } from '../useCategory';
 import { useUseUp } from '../useUseUp';
 import { PantryMatchList, RecipeIdeaPanel } from '../components/PantryMatches';
 import { ShelfSettings } from '../components/ShelfSettings';
-import { ProductsLink } from '../components/ProductsLink';
 import { toast } from '../toast';
 import { BarcodeScanner } from '../components/BarcodeScanner';
 import { SortPicker, useSortOptions } from '../components/SortPicker';
@@ -319,7 +318,6 @@ export function PantryScreen() {
           {/* Abgesetzt: das sind Einstellungen, keine Vorräte – eigener Kopf, zurückhaltender Stil */}
           <section className="manage" aria-labelledby="manage-title">
             <h2 className="manage__title" id="manage-title">Verwalten</h2>
-            <ProductsLink />
             <ShelfSettings />
 
 

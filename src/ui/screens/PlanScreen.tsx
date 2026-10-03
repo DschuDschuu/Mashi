@@ -22,7 +22,7 @@ import { UseUpBadge } from '../components/UseUpBadge';
 import { PlannedGroup } from '../components/PlannedGroup';
 import { Icon, type IconName } from '../components/Icon';
 import { RecipeImage } from '../components/RecipeImage';
-import { amountsText, useMorePrompt, usePlannedMore, UseMoreSheet } from '../components/UseMoreSheet';
+import { amountsText, moreLabel, useMorePrompt, usePlannedMore, UseMoreSheet } from '../components/UseMoreSheet';
 import { StatusBadge } from '../components/StatusBadge';
 import { euro, portionCount, recipeCount, relativeDay } from '../format';
 import { usePricing } from '../useCosts';
@@ -381,7 +381,7 @@ function PlanAmounts({ recipe, servings, amounts }: { recipe: Recipe; servings: 
     <div className="plan-amounts">
       {chosen ? (
         <>
-          <span className="small">Nur dieses Mal: {amountsText(amounts, base)}</span>
+          <span className="small">{amountsText(amounts, base)}</span>
           {offer.length > 0
             ? <button type="button" className="chip chip--sm" onClick={() => setOpen(true)}><Icon name="pencil" size={13} /> Ändern</button>
             // nichts mehr im Vorrat, das man mehr verwenden könnte – nur zurück auf das Rezept
@@ -389,7 +389,8 @@ function PlanAmounts({ recipe, servings, amounts }: { recipe: Recipe; servings: 
         </>
       ) : (
         <button type="button" className="chip chip--sm plan-amounts__soon" onClick={() => setOpen(true)}>
-          <Icon name="clock" size={13} /> Läuft bald ab: {offer.map((u) => u.name).join(', ')} – mehr verwenden?
+          {/* kurz (Julia): die Uhr sagt „läuft bald ab“, das Blatt nennt dann das Datum */}
+          <Icon name="clock" size={13} /> {moreLabel(offer.map((u) => u.name))}
         </button>
       )}
       {open && <UseMoreSheet uses={offer} initial={amounts} onClose={() => setOpen(false)} onDone={save} />}

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { leftoverSuggestions, pantryAfterPlan, type Leftover } from '../../domain/pantry';
 import { packLabel } from '../../domain/pantryLabel';
-import { formatUnitAmount, scaleIngredients } from '../../domain/scaling';
+import { formatAmount, formatUnitAmount, scaleIngredients } from '../../domain/scaling';
 import { currentContent } from '../../domain/recipe';
 import type { Ingredient, Recipe, RecipeContent } from '../../domain/types';
 import { useFoodTable, usePantry, usePlan, useRecipes } from '../../data/store';
@@ -96,10 +96,19 @@ export function usePlannedMore(recipe: Recipe | undefined, servings: number | un
   }, [recipe, servings, pantry, plan, recipes, table]);
 }
 
-/** „3 Paprika statt 1“ – die geänderten Mengen in einem Satz */
+/** Zutatenname ohne Klammer-Zusatz – „Paprika (rot oder bunt)“ → „Paprika“ (kurz genug für die Plan-Karte) */
+export const shortName = (name: string) => name.replace(/\s*\([^)]*\)/g, '').trim() || name;
+
+/** „Paprika: 3 Stück statt 1“ – die geänderten Mengen, kurz (Julia: muss in die Karte passen) */
 export function amountsText(amounts: Record<string, number>, base: Ingredient[]): string {
   return base.filter((i) => i.id in amounts && i.amount !== undefined)
-    .map((i) => `${formatUnitAmount(amounts[i.id], i.unit)} ${i.name} statt ${formatUnitAmount(i.amount!, i.unit)}`).join(' · ');
+    .map((i) => `${shortName(i.name)}: ${formatUnitAmount(amounts[i.id], i.unit)} statt ${formatAmount(i.amount!, i.unit)}`).join(' · ');
+}
+
+/** „Mehr Paprika verwenden?“ · „Mehr Paprika & Spinat verwenden?“ · ab drei „Mehr von 3 Zutaten verwenden?“ */
+export function moreLabel(names: string[]): string {
+  const n = [...new Set(names.map(shortName))];
+  return n.length > 2 ? `Mehr von ${n.length} Zutaten verwenden?` : `Mehr ${n.join(' & ')} verwenden?`;
 }
 
 /**

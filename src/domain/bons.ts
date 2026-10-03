@@ -33,6 +33,11 @@ export interface BonLine {
   reduced?: boolean;
   /** so viele Packungen gleich eingefroren */
   freeze?: number;
+  /**
+   * Nachträglich aufgenommen, nur für den Preis (Julia: übersprungene Zeile wegen des Preises) – stand nie in der
+   * Speisekammer; Korrekturen an der Zeile ändern dann auch keinen Vorrat
+   */
+  priceOnly?: boolean;
 }
 
 export interface SavedBon {
@@ -117,21 +122,52 @@ export function editBonLine(pantry: Pantry, bonId: string, index: number, patch:
   const bon = pantry.bons?.find((b) => b.id === bonId);
   const old = bon?.lines[index];
   if (!bon || !old) return pantry;
-  const merged: BonLine = { ...old, ...patch };
-  // ohne Menge auch ohne Einheit („vorhanden“); leere Felder ganz weg
-  const next = Object.fromEntries(Object.entries(merged).filter(([k, v]) => v !== undefined && !(k === 'unit' && merged.amount === undefined)
-    && !(k === 'productId' && !v) && !(k === 'discounts' && !(v as LineDiscount[]).length))) as unknown as BonLine;
-  const lines = bon.lines.map((l, i) => (i === index ? next : l));
-  let out: Pantry = { ...pantry, bons: (pantry.bons ?? []).map((b) => (b.id === bonId ? { ...b, lines, updatedAt: now } : b)) };
+  const next = cleanLine({ ...old, ...patch });
+  let out = withLine(pantry, bonId, index, next, now);
   if (old.skip) return out; // stand nie im Vorrat
 
   const before = rowFromLine(old);
   const after = rowFromLine(next);
-  // doppelt eingelesen und zurückgenommen: nur Preise und Gelerntes
-  if (!bon.noStock) out = { ...out, items: moveStock(out.items, stockOf(before), stockOf(after), bon.date, now, newId) };
+  // doppelt eingelesen und zurückgenommen bzw. nur für den Preis aufgenommen: nur Preise und Gelerntes
+  if (!bon.noStock && !old.priceOnly) out = { ...out, items: moveStock(out.items, stockOf(before), stockOf(after), bon.date, now, newId) };
   out = { ...out, ...movePrice(out, priceOf(before, bon.date), priceOf(after, bon.date)) };
   out = { ...out, rules: out.rules.map((r) => (r.key === before.key ? ruleOf(after) : r)) };
   return withSavingsDelta(out, bonId, old, next);
+}
+
+/** ohne Menge auch ohne Einheit („vorhanden“); leere Felder ganz weg */
+function cleanLine(merged: BonLine): BonLine {
+  return Object.fromEntries(Object.entries(merged).filter(([k, v]) => v !== undefined && !(k === 'unit' && merged.amount === undefined)
+    && !(k === 'productId' && !v) && !(k === 'discounts' && !(v as LineDiscount[]).length))) as unknown as BonLine;
+}
+
+function withLine(pantry: Pantry, bonId: string, index: number, line: BonLine, now: string): Pantry {
+  return { ...pantry, bons: (pantry.bons ?? []).map((b) => (b.id === bonId ? { ...b, lines: b.lines.map((l, i) => (i === index ? line : l)), updatedAt: now } : b)) };
+}
+
+/**
+ * Übersprungene Zeile nachträglich aufnehmen (Julia: wegen des Preises). Der Preis kommt in den Verlauf, und Mashi
+ * merkt sich den Artikel für den nächsten Bon (nicht mehr überspringen). In die Speisekammer nur, wenn du es willst –
+ * bei älteren Bons ist es meist schon verbraucht (Julias Wahl: Haken, standardmäßig aus).
+ * Die Ersparnis bleibt: Rabatte übersprungener Zeilen zählten beim Einlesen schon mit.
+ */
+export function includeBonLine(pantry: Pantry, bonId: string, index: number, patch: BonLinePatch, toStock: boolean, now = new Date().toISOString(), newId = defaultId): Pantry {
+  const bon = pantry.bons?.find((b) => b.id === bonId);
+  const old = bon?.lines[index];
+  if (!bon || !old?.skip) return pantry;
+  const stock = toStock && !bon.noStock;
+  const { skip: _s, priceOnly: _p, ...rest } = { ...old, ...patch };
+  const next = cleanLine({ ...rest, ...(stock ? {} : { priceOnly: true }) });
+  let out = withLine(pantry, bonId, index, next, now);
+  const row = rowFromLine(next);
+  if (stock) {
+    const st = stockOf(row);
+    if (st.freshOn) out = { ...out, items: put(out.items, st, st.fresh, false, bon.date, now, newId) };
+    if (st.frozenOn) out = { ...out, items: put(out.items, st, st.frozen, true, bon.date, now, newId) };
+  }
+  out = { ...out, ...movePrice(out, undefined, priceOf(row, bon.date)) };
+  const rule = ruleOf(row);
+  return { ...out, rules: [...out.rules.filter((r) => r.key !== rule.key), rule] };
 }
 
 /** Vorrat umbuchen: was der alte Stand eingebucht hat, gegen den neuen tauschen */
@@ -308,7 +344,7 @@ export function withdrawBonStock(pantry: Pantry, bonId: string, now = new Date()
   if (!bon || bon.noStock) return pantry;
   let items = pantry.items;
   for (const l of bon.lines) {
-    if (l.skip) continue;
+    if (l.skip || l.priceOnly) continue;
     const st = stockOf(rowFromLine(l));
     for (const frozen of [false, true]) {
       const amount = frozen ? st.frozen : st.fresh;

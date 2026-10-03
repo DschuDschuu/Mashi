@@ -185,7 +185,7 @@ export function CookModeScreen({ id, servings, variants }: { id: string; serving
 
       {chosenLeftovers.length > 0 && (
         <div className="cook__chosen" role="status">
-          <span className="small">Nur dieses Mal: {amountsText(Object.fromEntries(chosenLeftovers.map((l) => [l.ingredientId, amounts[l.ingredientId]])), base)}</span>
+          <span className="small">{amountsText(Object.fromEntries(chosenLeftovers.map((l) => [l.ingredientId, amounts[l.ingredientId]])), base)}</span>
           <button className="chip chip--sm" onClick={() => setPickLeftovers('chosen')}><Icon name="pencil" size={13} /> Anpassen</button>
         </div>
       )}
