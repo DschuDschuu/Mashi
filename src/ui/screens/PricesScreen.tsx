@@ -11,14 +11,19 @@ import { Icon } from '../components/Icon';
 import { PantryTabs, usePantrySwipe } from '../components/PlanTabs';
 import { PriceLines, SORT_COLORS } from '../components/PriceLines';
 import { euro } from '../format';
-import { CartButton } from '../components/CartButton';
+import { FoodsButton } from '../components/FoodsButton';
+import { groupByCategory } from '../../domain/categories';
+import { useCategoryOf } from '../useCategory';
 import { foodPricePath } from '../components/LastPurchase';
 
-const percent = (n: number) => `${n > 0 ? '+' : n < 0 ? '−' : '±'}${Math.abs(n * 100).toLocaleString('de-DE', { maximumFractionDigits: 1 })} %`;
+/** Änderung in Prozent – unter 0,5 % (Rundung auf dem Bon) „±0 %“, wie die Gruppe „gleich geblieben“ */
+const percent = (n: number) => (Math.abs(n) < 0.005 ? '±0 %'
+  : `${n > 0 ? '+' : '−'}${Math.abs(n * 100).toLocaleString('de-DE', { maximumFractionDigits: 1 })} %`);
 const arrowOf = (d: PriceTrend['direction']) => (d === 'teurer' ? '▲' : d === 'guenstiger' ? '▼' : '■');
 
-/** eingeklappte Gruppen (teurer / günstiger / gleich) – nur auf diesem Gerät */
+/** eingeklappte Gruppen (teurer / günstiger / gleich bzw. Kategorien) – nur auf diesem Gerät */
 const FOLD_KEY = 'mashi-prices-folded';
+const VIEW_KEY = 'mashi-prices-view';
 
 const GROUPS: { key: PriceTrend['direction']; title: string }[] = [
   { key: 'teurer', title: 'Teurer geworden' },
@@ -41,6 +46,13 @@ export function PricesScreen() {
       ?? lines.find((x) => x.day === h.date.slice(0, 10) && receiptKey(x.l.name) === receiptKey(h.name))?.l.productId;
     return foodTrends(pantry.history ?? pantry.prices ?? [], (n) => keyOfName(n, table) ?? receiptKey(n), sortOf);
   }, [pantry, table]);
+  // Umschalter (Julia): nach Preisänderung (teurer/günstiger/gleich) oder nach Kategorie – gemerkt auf diesem Gerät
+  const [view, setView] = useState<'aenderung' | 'kategorie'>(() => { try { return localStorage.getItem(VIEW_KEY) === 'kategorie' ? 'kategorie' : 'aenderung'; } catch { return 'aenderung'; } });
+  const pickView = (v: 'aenderung' | 'kategorie') => { setView(v); try { localStorage.setItem(VIEW_KEY, v); } catch { /* egal */ } };
+  const categoryOf = useCategoryOf();
+  const groups: { key: string; title: string; list: FoodTrend[] }[] = view === 'kategorie'
+    ? groupByCategory(trends, (t) => categoryOf(t.name)).map((g) => ({ key: g.id, title: g.title, list: g.items }))
+    : GROUPS.map((g) => ({ key: g.key, title: g.title, list: trends.filter((t) => t.direction === g.key) }));
   const [folded, setFolded] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem(FOLD_KEY) ?? '[]') as string[]; } catch { return []; } });
   const toggleFold = (key: string) => {
     const next = folded.includes(key) ? folded.filter((k) => k !== key) : [...folded, key];
@@ -50,7 +62,7 @@ export function PricesScreen() {
 
   return (
     <main className="screen screen--tabbed" {...swipe}>
-      <header className="page-head"><h1>Preise</h1><CartButton /></header>
+      <header className="page-head"><h1>Preise</h1><FoodsButton /></header>
       <PantryTabs active="prices" />
       <div className="split split--prices">
         <div className="split__main">
@@ -67,9 +79,14 @@ export function PricesScreen() {
             </Empty>
           ) : (
             <>
-              {GROUPS.map((g) => {
-                const list = trends.filter((t) => t.direction === g.key);
+              <div className="segments price-view" role="tablist" aria-label="Preise sortieren">
+                {([['aenderung', 'nach Preisänderung'], ['kategorie', 'nach Kategorie']] as const).map(([v, label]) => (
+                  <button key={v} role="tab" aria-selected={view === v} className={`segment${view === v ? ' is-on' : ''}`} onClick={() => pickView(v)}>{label}</button>
+                ))}
+              </div>
+              {groups.map(({ key, title, list }) => {
                 if (!list.length) return null;
+                const g = { key, title };
                 const open = !folded.includes(g.key);
                 return (
                   // einklappbar (Julia) – gemerkt auf diesem Gerät

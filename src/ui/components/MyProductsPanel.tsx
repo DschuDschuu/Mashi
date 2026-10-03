@@ -6,7 +6,7 @@ import { MatchChips, visibleExcludes, type Match } from './MatchChips';
 import type { NutritionResult } from '../../domain/nutrition/types';
 import { newId } from '../../domain/recipe';
 import { shelfDaysForFood } from '../../domain/shelfLife';
-import { saveProducts, usePantry, useProducts } from '../../data/store';
+import { addProduct, usePantry, useProducts } from '../../data/store';
 import type { ScannedProduct } from '../../domain/nutrition/openFoodFacts';
 import { barcodeLookup } from '../../services';
 import { BarcodeScanner } from './BarcodeScanner';
@@ -35,15 +35,14 @@ const fmt = (n: number) => n.toLocaleString('de-DE', { maximumFractionDigits: 1 
  * als eigenes Produkt anzulegen (Werte vom Etikett). Danach rechnen alle Rezepte damit.
  */
 export function UnknownIngredients({ n }: { n: NutritionResult }) {
-  const products = useProducts();
   const [open, setOpen] = useState<string | null>(null);
   const unknown = [...new Set(n.items.filter((i) => i.status === 'unmatched').map((i) => i.name))];
   if (!unknown.length) return null;
 
-  const save = (p: MyProduct) => {
-    saveProducts([...products, p]);
+  const save = (p: MyProduct, ingredient: string) => {
+    const saved = addProduct(p, ingredient);
     setOpen(null);
-    toast(`„${p.name}“ angelegt – alle Rezepte rechnen neu`);
+    toast(saved.id === p.id ? `„${p.name}“ angelegt – alle Rezepte rechnen neu` : `Nährwerte für „${saved.name}“ gespeichert – alle Rezepte rechnen neu`);
   };
 
   return (
@@ -54,7 +53,7 @@ export function UnknownIngredients({ n }: { n: NutritionResult }) {
       </p>
       {unknown.map((name) =>
         open === name ? (
-          <NutritionQuickForm key={name} ingredient={name} onSave={save} onCancel={() => setOpen(null)} />
+          <NutritionQuickForm key={name} ingredient={name} onSave={(p) => save(p, name)} onCancel={() => setOpen(null)} />
         ) : (
           <div key={name} className="row-between">
             <span>{name}</span>
@@ -98,11 +97,13 @@ export function ProductForm({ initial, onSave, onCancel, shared, afterName, name
   const [searching, setSearching] = useState(false);
   const [query, setQuery] = useState('');
   const [hits, setHits] = useState<ScannedProduct[] | null>(null);
+  // ohne eigene Werte gespeichert: Felder leer (nicht „0“)
+  const own = initial?.noValues ? undefined : initial?.per100g;
   const [values, setValues] = useState<Values>({
-    kcal: toField(initial?.per100g?.kcal),
-    protein: toField(initial?.per100g?.protein),
-    carbs: toField(initial?.per100g?.carbs),
-    fat: toField(initial?.per100g?.fat),
+    kcal: toField(own?.kcal),
+    protein: toField(own?.protein),
+    carbs: toField(own?.carbs),
+    fat: toField(own?.fat),
   });
   /** neu und noch nichts festgelegt: „gilt für“ folgt dem Namen (null), bis du an den Chips etwas änderst */
   const follows = !initial?.id && !sortOnly && !initial?.replaces?.length;
@@ -130,9 +131,11 @@ export function ProductForm({ initial, onSave, onCancel, shared, afterName, name
     const carbs = parseNum(values.carbs);
     const fat = parseNum(values.fat);
     // Immer im Haus ohne Werte: nur die Stufe, kein Produkt
-    if (onNoValues && !ean && [values.kcal, values.protein, values.carbs, values.fat].every((v) => !v.trim())) return onNoValues(name.trim());
-    if (kcal === undefined || protein === undefined || carbs === undefined || fat === undefined) {
-      return setError(`Bitte alle vier Werte vom Etikett eintragen (pro 100 g)${onNoValues ? ' – oder alle leer lassen' : ''}.`);
+    const empty = [values.kcal, values.protein, values.carbs, values.fat].every((v) => !v.trim());
+    if (onNoValues && !ean && empty) return onNoValues(name.trim());
+    // alle leer: ohne eigene Werte – Mashi rechnet mit der Tabelle (Julia: „Meine Lebensmittel“ auch ohne Etikett)
+    if (!empty && (kcal === undefined || protein === undefined || carbs === undefined || fat === undefined)) {
+      return setError('Bitte alle vier Werte vom Etikett eintragen (pro 100 g) – oder alle leer lassen, dann rechnet Mashi mit der Tabelle.');
     }
     const amount = parseNum(packAmount);
     const price = parseNum(packPrice);
@@ -152,7 +155,9 @@ export function ProductForm({ initial, onSave, onCancel, shared, afterName, name
       ...(match.names.length ? { names: match.names } : {}),
       ...(ex.length ? { excludes: ex } : {}),
       // Zusatzwerte vom Etikett (Zucker, Salz …) behalten – das Formular zeigt nur die vier Hauptwerte
-      per100g: { ...initial?.per100g, ...extra, kcal, protein, carbs, fat },
+      ...(empty
+        ? { per100g: { kcal: 0, protein: 0, carbs: 0, fat: 0 }, noValues: true }
+        : { per100g: { ...own, ...extra, kcal: kcal!, protein: protein!, carbs: carbs!, fat: fat! } }),
       ...(ean ? { ean } : {}),
       ...(amount ? { packageAmount: amount, packageUnit: packUnit } : {}),
       ...(amount && sizes.length ? { packageSizes: [...new Set(sizes)] } : {}),
@@ -202,7 +207,7 @@ export function ProductForm({ initial, onSave, onCancel, shared, afterName, name
       return;
     }
     setEan(code);
-    const existing = !!initial?.per100g;
+    const existing = !!own;
     setScanNote(existing ? 'Barcode hinterlegt – deine Werte bleiben, wie sie sind.' : 'Suche bei Open Food Facts …');
     try {
       const found = await barcodeLookup.find(code);
@@ -248,7 +253,7 @@ export function ProductForm({ initial, onSave, onCancel, shared, afterName, name
               <div className="lookup__ways">
                 <button type="button" className="btn btn--soft btn--sm" onClick={() => setScanning(true)}>
                   {/* kurz – das Kamera-Symbol sagt „scannen“; so passen beide am Handy in eine Zeile */}
-                  <Icon name="camera" size={16} /> {initial?.per100g ? 'Barcode hinterlegen' : 'Barcode'}
+                  <Icon name="camera" size={16} /> {own ? 'Barcode hinterlegen' : 'Barcode'}
                 </button>
                 <button type="button" className={`btn btn--soft btn--sm${searching ? ' is-on' : ''}`} aria-expanded={searching}
                   onClick={() => { setSearching(!searching); if (!query) setQuery(name); }}>
@@ -310,7 +315,7 @@ export function ProductForm({ initial, onSave, onCancel, shared, afterName, name
             <span>Zusatz (optional)</span>
             <input value={detail} onChange={(e) => setDetail(e.target.value)} placeholder="z. B. leicht" />
           </label>
-          <p className="small muted">Werte vom Etikett, pro 100 g bzw. 100 ml{onNoValues ? ' – oder leer lassen' : ''}:</p>
+          <p className="small muted">Werte vom Etikett, pro 100 g bzw. 100 ml – oder leer lassen{onNoValues ? '' : ', dann rechnet Mashi mit der Tabelle'}:</p>
           <div className="row-2">{numField('kcal', 'kcal')}{numField('carbs', 'Kohlenhydrate (g)')}</div>
           <div className="row-2">{numField('protein', 'Eiweiß (g)')}{numField('fat', 'Fett (g)')}</div>
           {levelName && (

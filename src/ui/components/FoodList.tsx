@@ -2,8 +2,10 @@ import { useMemo, useState } from 'react';
 import { ask } from '../confirm';
 import { basicsOf } from '../../domain/mealplan';
 import { buildFoodList, findFoodRow, matchesFilter, type FoodFilter, type FoodRow } from '../../domain/nutrition/foodList';
-import { normalizeName } from '../../domain/nutrition/localFoods';
-import { brandOf, productLabel, sharedOf, withShared, type MyProduct, type SharedMatch } from '../../domain/nutrition/myProducts';
+import { normalizeName, PROVIDER } from '../../domain/nutrition/localFoods';
+import { estimateDays, setShelfDays } from '../../domain/shelfLife';
+import { adoptCandidates } from '../../domain/adoptFoods';
+import { brandOf, fillOrAdd, productLabel, sharedOf, valuesOf, withShared, type MyProduct, type SharedMatch } from '../../domain/nutrition/myProducts';
 import { groupByCategory } from '../../domain/categories';
 import { useCategoryOf } from '../useCategory';
 import { CategoryPicker } from './CategoryPicker';
@@ -12,7 +14,7 @@ import { purchasesOf } from '../../domain/bons';
 import { zeroOf } from '../../domain/nutrition/noNutrition';
 import { averageNutrients } from '../../domain/nutrition/variants';
 import type { Nutrients } from '../../domain/nutrition/types';
-import { currentProducts, dismissRename, renameFoodEverywhere, saveProducts, setFavoriteVariant, setFoodStage, useFoodTable, usePantry, useProducts, useRecipes } from '../../data/store';
+import { addProduct, currentPantry, currentProducts, dismissRename, setPantryShelfDays, renameFoodEverywhere, saveProducts, setFavoriteVariant, setFoodStage, useFoodTable, usePantry, useProducts, useRecipes } from '../../data/store';
 import { stageOf } from '../../domain/stage';
 import { StagePicker } from './StagePicker';
 import { currentContent } from '../../domain/recipe';
@@ -53,7 +55,9 @@ export function FoodList({ adding, onAdding }: {
   const [touched, setTouched] = useState<string[]>([]);
   const touch = (name: string) => setTouched((t) => (t.includes(name) ? t : [...t, name]));
   const restock = useMemo(() => pantry.restock ?? [], [pantry.restock]);
-  const keep = useMemo(() => [...touched, ...restock.map((r) => r.name)], [touched, restock]);
+  // eigene Haltbarkeit fürs Lebensmittel (früher auf der Seite „Haltbarkeit“) – steht jetzt in dessen Kachel, also sichtbar
+  const ownShelf = useMemo(() => Object.keys(pantry.shelfDays?.foods ?? {}).map((id) => foodTable.byRef({ provider: PROVIDER, foodId: id })?.name).filter((n): n is string => !!n), [pantry.shelfDays]);
+  const keep = useMemo(() => [...touched, ...restock.map((r) => r.name), ...ownShelf], [touched, restock, ownShelf]);
   const rows = useMemo(() => buildFoodList(products, basics, zero, foodTable, known, keep), [products, basics, zero, known, keep]);
   const [filter, setFilter] = useState<FoodFilter>('produkte');
   const [open, setOpen] = useState<string | null>(null);
@@ -105,6 +109,8 @@ export function FoodList({ adding, onAdding }: {
             : <>Gewürze & Co.: immer da und zählen in Rezepten nicht mit (keine Nährwerte). Auf der Einkaufsliste unter „Basics“.</>}
       </p>
 
+      {filter === 'produkte' && <AdoptFoods />}
+
       {shown.length === 0 && (
         <p className="small muted">
           {filter === 'produkte' ? 'Noch keine Produkte – oben mit ＋ hinzufügen, oder bei einem Rezept unter „Nährwerte“ eigene Werte eintragen.'
@@ -136,7 +142,14 @@ function FoodLine({ row, open, onToggle, products, onTouch }: {
   const [addingSort, setAddingSort] = useState(false);
   const ps = row.products;
   const fav = ps.find((p) => p.favorite);
-  const values = ps.length === 1 ? ps[0].per100g : fav ? fav.per100g : ps.length ? averageNutrients(ps.map((p) => p.per100g)) : row.table?.per100g;
+  // Sorten ohne eigene Werte rechnen mit der Tabelle (siehe valuesOf) – kennt die sie nicht, zählen sie nicht mit
+  const tableOf = (p: MyProduct) => (p.replaces[0] ? foodTable.byRef({ provider: PROVIDER, foodId: p.replaces[0] }) : undefined) ?? foodTable.matchName(row.ingredient)?.food;
+  const known = ps.map((p) => valuesOf(p, tableOf(p))).filter((v): v is Nutrients => !!v);
+  const favValues = fav && valuesOf(fav, tableOf(fav));
+  const values = !ps.length ? row.table?.per100g : favValues ?? (known.length > 1 ? averageNutrients(known) : known[0]);
+  const average = ps.length > 1 && !favValues && known.length > 1;
+  /** nur Richtwerte der Tabelle – keine Sorte hat eigene Werte */
+  const tableOnly = ps.every((p) => p.noValues);
   // Name und „gilt für“ gelten für alle Sorten – direkt in der Kachel einstellbar: Stift oben, Chips unten
   const shared = ps.length ? sharedOf(ps) : undefined;
   const title = shared?.name || row.name;
@@ -185,7 +198,15 @@ function FoodLine({ row, open, onToggle, products, onTouch }: {
   const pantry = usePantry();
   const table = useFoodTable();
   const { stage, rule } = stageOf(row.ingredient, pantry, table);
-  const nothing = !ps.length && stage === 'normal' && !row.zero;
+  /** was Mashi ohne deinen Wert schätzt – und der Tabelleneintrag, an dem dein Wert ohne eigenes Produkt hängt */
+  const estimate = estimateDays(row.ingredient, foodTable, pantry.shelfDays);
+  const saveFoodShelf = (id: string, d: number | undefined) => {
+    const old = currentPantry().shelfDays;
+    setPantryShelfDays(setShelfDays(old, { food: id }, d));
+    toast(d ? `${title} hält ${d === 1 ? '1 Tag' : `${d} Tage`} ab Kauf` : 'Haltbarkeit schätzt wieder Mashi', { label: 'Rückgängig', run: () => setPantryShelfDays(old ?? {}) });
+  };
+  // eine eigene Haltbarkeit ist auch etwas Festgelegtes (früher auf der Seite „Haltbarkeit“)
+  const nothing = !ps.length && stage === 'normal' && !row.zero && !(estimate.id && pantry.shelfDays?.foods?.[estimate.id]);
   /** mindestens eine Sorte mit Bon-Einkauf – dann steht „Zuletzt gekauft“ je Sorte, sonst einmal oben */
   const sortBought = ps.some((p) => purchasesOf(pantry.bons, (l) => l.productId === p.id).length > 0);
   const zeroRow = !!row.zero;
@@ -219,7 +240,7 @@ function FoodLine({ row, open, onToggle, products, onTouch }: {
         </span>
         <span className="foods__kcal">
           {zeroRow ? ''
-            : values ? <>{ps.length > 1 && !fav ? 'Ø ' : ''}{Math.round(values.kcal)} kcal{!ps.length && <em> Tabelle</em>}</>
+            : values ? <>{average ? 'Ø ' : ''}{Math.round(values.kcal)} kcal{tableOnly && <em> Tabelle</em>}</>
               : 'keine Werte'}
         </span>
         <Icon name="chevron" size={16} />
@@ -256,7 +277,7 @@ function FoodLine({ row, open, onToggle, products, onTouch }: {
                   </button>
                 )}
                 {/* der Name steht oben in der Kachel – hier der Zusatz als Text (Julia), die Marke als Chip darunter */}
-                <span className="foods__sortname">{p.detail ?? (ps.length > 1 ? '' : <strong>Pro 100 g</strong>)}</span>
+                <span className="foods__sortname">{p.detail ?? (ps.length > 1 || p.noValues ? '' : <strong>Pro 100 g</strong>)}</span>
                 <span className="product__actions">
                   <button className="iconbtn iconbtn--sm" aria-label={`${p.name} bearbeiten`} onClick={() => setEditing(p.id)}><Icon name="pencil" size={16} /></button>
                   <button className="iconbtn iconbtn--sm iconbtn--danger" aria-label={`${p.name} entfernen`} onClick={() => remove(p)}><Icon name="trash" size={16} /></button>
@@ -266,7 +287,18 @@ function FoodLine({ row, open, onToggle, products, onTouch }: {
                 <span className="foods__brand">{brandOf(p) ? <span className="brand-chip">{brandOf(p)}</span> : <span className="brand-chip is-empty">ohne Marke</span>}</span>
               )}
               {/* kcal links, KH · Eiweiß · Fett rechts */}
-              <span className="small foods__values"><strong>{fmt(p.per100g.kcal)} kcal</strong><span>{macros(p.per100g)}</span></span>
+              {p.noValues
+                // Reihenfolge (Julia): eigene Werte → Tabelle → keine. Nachgeschaut, nicht kopiert – so bleibt sichtbar, woher die Zahl kommt
+                ? (() => {
+                  const t = valuesOf(p, tableOf(p));
+                  return t
+                    ? <>
+                      <span className="small muted">Nährwerte aus der Tabelle</span>
+                      <span className="small foods__values"><strong>{fmt(t.kcal)} kcal</strong><span>{macros(t)}</span></span>
+                    </>
+                    : <span className="small muted">Keine Nährwerte bekannt</span>;
+                })()
+                : <span className="small foods__values"><strong>{fmt(p.per100g.kcal)} kcal</strong><span>{macros(p.per100g)}</span></span>}
               <LastPurchase sort name={row.ingredient} title={title} productIds={[p.id]} />
               {p.packageAmount && <span className="small muted">Packung {fmt(p.packageAmount)} {p.packageUnit ?? 'g'}{p.packagePrice !== undefined && <> · {euro(p.packagePrice)}</>}</span>}
             </div>
@@ -278,9 +310,17 @@ function FoodLine({ row, open, onToggle, products, onTouch }: {
           {addingSort
             ? <ProductForm shared={ps.length ? sharedOf(ps) : undefined} initial={ps.length ? undefined : { name: row.name }} onSave={save} onCancel={() => setAddingSort(false)} />
             : (
-              <button type="button" className="btn btn--soft btn--sm" onClick={() => setAddingSort(true)}>
-                <Icon name="plus" size={16} /> {ps.length ? 'Weitere Sorte' : 'Nährwerte hinzufügen'}
-              </button>
+              <div className="row-gap">
+                {/* die einzige Sorte hat noch keine Werte: die füllen, statt eine zweite anzulegen */}
+                {ps.length === 1 && ps[0].noValues && editing === null && (
+                  <button type="button" className="btn btn--soft btn--sm" onClick={() => setEditing(ps[0].id)}>
+                    <Icon name="pencil" size={16} /> {valuesOf(ps[0], tableOf(ps[0])) ? 'Eigene Werte eintragen' : 'Nährwerte eintragen'}
+                  </button>
+                )}
+                <button type="button" className="btn btn--soft btn--sm" onClick={() => setAddingSort(true)}>
+                  <Icon name="plus" size={16} /> {ps.length ? 'Weitere Sorte' : 'Nährwerte hinzufügen'}
+                </button>
+              </div>
             )}
 
           {/* „gilt für“ im Stil der Stufen-Chips – gemeinsam für alle Sorten, sofort gespeichert */}
@@ -288,11 +328,15 @@ function FoodLine({ row, open, onToggle, products, onTouch }: {
             <MatchChips name={shared.name} value={shared}
               onChange={(m) => saveShared({ ...shared, ...m, excludes: visibleExcludes(shared.name, m) }, ps.length > 1 ? 'Für alle Sorten gespeichert' : 'Gespeichert')} />
           )}
-          {/* Haltbarkeit ebenso gemeinsam: Milch hält gleich lang, egal von welcher Marke */}
-          {shared && (
+          {/* Haltbarkeit in jeder Kachel (Julia) – mit eigenen Sorten gemeinsam für alle (Milch hält gleich lang, egal von
+              welcher Marke), sonst als dein Wert fürs Lebensmittel (früher auf der Seite „Haltbarkeit“) */}
+          {shared ? (
             // key: nach „Rückgängig“ (oder vom anderen Gerät) zeigt das Feld wieder den gespeicherten Wert
-            <SharedShelf key={shared.shelfDays ?? 'leer'} shared={shared} onSave={(d) => saveShared({ ...shared, shelfDays: d },
+            <ShelfField key={shared.shelfDays ?? 'leer'} value={shared.shelfDays} estimate={estimate.days} onSave={(d) => saveShared({ ...shared, shelfDays: d },
               d ? `Hält ${d === 1 ? '1 Tag' : `${d} Tage`} ab Kauf${ps.length > 1 ? ` – alle ${ps.length} Sorten` : ''}` : 'Haltbarkeit schätzt wieder Mashi', false)} />
+          ) : estimate.id && (
+            <ShelfField key={pantry.shelfDays?.foods?.[estimate.id] ?? 'leer'} value={pantry.shelfDays?.foods?.[estimate.id]} estimate={estimate.days}
+              onSave={(d) => saveFoodShelf(estimate.id!, d)} />
           )}
           <CategoryPicker name={row.ingredient} label={title} />
           <StagePicker name={row.ingredient} label={title} onTouch={onTouch} />
@@ -302,26 +346,31 @@ function FoodLine({ row, open, onToggle, products, onTouch }: {
   );
 }
 
-/** „Hält ab Kauf“ in der Kachel – gemeinsam für alle Sorten; leer = Mashi schätzt. Gespeichert beim Verlassen des Felds. */
-function SharedShelf({ shared, onSave }: { shared: SharedMatch; onSave: (days: number | undefined) => void }) {
-  const [text, setText] = useState(shared.shelfDays ? String(shared.shelfDays) : '');
+/**
+ * „Hält ab Kauf“ in der Kachel; leer = Mashis Schätzung (steht grau im Feld und darunter).
+ * Gespeichert beim Verlassen des Felds.
+ */
+function ShelfField({ value, estimate, onSave }: { value?: number; estimate?: number; onSave: (days: number | undefined) => void }) {
+  const [text, setText] = useState(value ? String(value) : '');
   const [error, setError] = useState(false);
   const commit = () => {
     const t = text.trim();
     const d = t ? Number(t) : undefined;
     if (d !== undefined && (!Number.isInteger(d) || d < 1 || d > 365)) return setError(true);
     setError(false);
-    if (d !== shared.shelfDays) onSave(d);
+    if (d !== value) onSave(d);
   };
+  const guess = estimate === undefined ? 'hält lange (keine Erinnerung)' : estimate === 1 ? '1 Tag' : `${estimate} Tage`;
   return (
     <div className="stage shelf-shared">
       <label className="shelf-shared__row">
         <span className="small muted">Hält ab Kauf</span>
-        <input inputMode="numeric" value={text} onChange={(e) => setText(e.target.value)} onBlur={commit}
+        <input inputMode="numeric" value={text} placeholder={estimate === undefined ? '–' : String(estimate)} onChange={(e) => setText(e.target.value)} onBlur={commit}
           onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
           aria-label="Hält ab Kauf, Tage" aria-invalid={error} />
         <span className="small muted">Tage</span>
       </label>
+      <p className="small muted">{value ? `Dein Wert – Mashi schätzt ${guess}` : `Leer = Mashis Schätzung: ${guess}`}</p>
       {error && <p className="small error" role="alert">Bitte ganze Tage von 1 bis 365 – oder leer lassen.</p>}
     </div>
   );
@@ -344,7 +393,7 @@ function AddFood({ tab, rows, onDone }: { tab: FoodFilter; rows: FoodRow[]; onDo
   const existing = (n: string) => findFoodRow(rows, n, foodTable, notSort);
 
   const saveNew = (p: MyProduct) => {
-    saveProducts([...products, p]);
+    addProduct(p);
     if (stage === 'haus') setFoodStage(p.name, 'haus');
     toast(`„${p.name}“ gespeichert${stage === 'haus' ? ' – immer im Haus' : ''} – alle Rezepte rechnen neu`);
     onDone();
@@ -353,8 +402,10 @@ function AddFood({ tab, rows, onDone }: { tab: FoodFilter; rows: FoodRow[]; onDo
     // wie „Weitere Sorte“ in der Kachel: alle Sorten bekommen dasselbe Gemeinsame
     const s = sharedOf(row.products);
     const group = new Set(row.products.map((x) => x.id));
-    saveProducts([...products.map((x) => (group.has(x.id) ? withShared(x, s) : x)), withShared(p, s)]);
-    toast(`Weitere Sorte von „${s.name}“ gespeichert – alle Rezepte rechnen neu`);
+    // die einzige Sorte hat noch keine Werte? Dann füllt sich die (siehe fillOrAdd)
+    const { products: next, saved } = fillOrAdd(products.map((x) => (group.has(x.id) ? withShared(x, s) : x)), withShared(p, s), row.products);
+    saveProducts(next);
+    toast(saved.id === p.id ? `Weitere Sorte von „${s.name}“ gespeichert – alle Rezepte rechnen neu` : `Nährwerte für „${s.name}“ gespeichert – alle Rezepte rechnen neu`);
     onDone(row.key);
   };
   // über die Stufe – so steht es nie zugleich unter „Nachkaufen“ und hier
@@ -406,6 +457,32 @@ function AddFood({ tab, rows, onDone }: { tab: FoodFilter; rows: FoodRow[]; onDo
             </>
           );
         }} />
+    </div>
+  );
+}
+
+/**
+ * „Aus Vorrat & Bons übernehmen“ (Julia): was du hast oder gekauft hast, bekommt eine Kachel – ohne eigene
+ * Nährwerte (rechnet weiter mit der Tabelle). Nur sichtbar, solange es etwas zu übernehmen gibt.
+ */
+function AdoptFoods() {
+  const pantry = usePantry();
+  const table = useFoodTable();
+  const candidates = useMemo(() => adoptCandidates(pantry.items, pantry.bons, table, [...basicsOf(pantry), ...zeroOf(pantry)]),
+    [pantry, table]);
+  if (!candidates.length) return null;
+  const names = candidates.map((p) => p.name);
+  const adopt = async () => {
+    const list = names.length > 12 ? `${names.slice(0, 12).join(', ')} und ${names.length - 12} weitere` : names.join(', ');
+    if (!(await ask({ title: `${names.length} Lebensmittel übernehmen?`, text: `${list}. Nährwerte kommen aus der Tabelle (wo sie es kennt) – eigene Werte, Haltbarkeit, Packung und Sorten stellst du dann in der Kachel ein.`, confirm: 'Übernehmen' }))) return;
+    const ids = new Set(candidates.map((p) => p.id));
+    saveProducts([...currentProducts(), ...candidates]);
+    toast(`${names.length} Lebensmittel übernommen`, { label: 'Rückgängig', run: () => saveProducts(currentProducts().filter((p) => !ids.has(p.id))) });
+  };
+  return (
+    <div className="scan-note adopt-foods" role="status">
+      <p className="small"><strong>{names.length === 1 ? '1 Lebensmittel' : `${names.length} Lebensmittel`} aus Vorrat & Bons</strong> {names.length === 1 ? 'hat' : 'haben'} noch keine Kachel – z. B. {names.slice(0, 3).join(', ')}.</p>
+      <button type="button" className="btn btn--soft btn--sm" onClick={adopt}><Icon name="plus" size={16} /> Alle übernehmen</button>
     </div>
   );
 }

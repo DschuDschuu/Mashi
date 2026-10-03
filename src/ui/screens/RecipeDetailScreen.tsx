@@ -26,6 +26,7 @@ import { StepIngredients } from '../components/StepIngredients';
 import { StatusBadge } from '../components/StatusBadge';
 import { euro, formatMinutes, portionCount, relativeDay } from '../format';
 import { useRecipeCost } from '../useCosts';
+import { splitBrand } from '../../domain/nutrition/myProducts';
 import { toast } from '../toast';
 import { formOf, startAgain } from '../kiAgain';
 import { useIsTablet } from '../useMediaQuery';
@@ -33,6 +34,7 @@ import { useNutrition } from '../useNutrition';
 import { useSwipe } from '../useSwipe';
 import { useSlide } from '../useSlide';
 import { RenamePanel } from '../components/RenamePanel';
+import { useMorePrompt } from '../components/UseMoreSheet';
 import { useVariantPrompt } from '../components/VariantSheet';
 
 // Vier kurze Tabs passen auch aufs schmale Handy (375 px) – die Infos stehen unter „Notizen“
@@ -274,6 +276,9 @@ const header = (
 }
 
 /** Was das Gericht kostet – aus Kassenbon-Preisen und „Meine Produkte“. Nichts bekannt → nichts anzeigen. */
+/** Zutat ohne Marke („Pesto (K-Classic)“, „Pesto · K-Classic“ → „Pesto“) – Julia: Marke muss in den Kosten nicht dran */
+const plainName = (n: string) => splitBrand(n.split(' · ')[0]).name;
+
 function CostLine({ content, servings }: { content: RecipeContent; servings: number }) {
   const cost = useRecipeCost(content, servings);
   if (!cost) return null;
@@ -285,14 +290,14 @@ function CostLine({ content, servings }: { content: RecipeContent; servings: num
       {/* nur pro Portion (Julia) – die Portionen stellst du oben ein */}
       <summary>
         <span>{partial ? 'ab' : 'ca.'} <strong>{euro(cost.perServing)}</strong> pro Portion</span>
-        {partial && <span className="small muted">ohne {cost.missing.slice(0, 3).join(', ')}{cost.missing.length > 3 ? ' …' : ''} (Preis unbekannt)</span>}
+        {partial && <span className="small muted">ohne {cost.missing.slice(0, 3).map(plainName).join(', ')}{cost.missing.length > 3 ? ' …' : ''} (Preis unbekannt)</span>}
       </summary>
       <ul className="cost-line__items">
         {cost.items.map((i) => (
-          <li key={i.ingredientId}><span>{i.name}</span><span>{euro(i.cost / servings)}</span></li>
+          <li key={i.ingredientId}><span>{plainName(i.name)}</span><span>{euro(i.cost / servings)}</span></li>
         ))}
         {cost.missing.map((m) => (
-          <li key={`fehlt-${m}`} className="muted"><span>{m}</span><span className="small">Preis unbekannt</span></li>
+          <li key={`fehlt-${m}`} className="muted"><span>{plainName(m)}</span><span className="small">Preis unbekannt</span></li>
         ))}
       </ul>
       <p className="small muted">pro Portion · mit den zuletzt bezahlten Regalpreisen</p>
@@ -346,6 +351,7 @@ function CookedButton({ recipe, servings }: { recipe: Recipe; servings: number }
 function PlanButton({ recipe, servings }: { recipe: Recipe; servings: number }) {
   const inPlan = usePlan().items.find((i) => i.recipeId === recipe.id);
   const prompt = useVariantPrompt();
+  const more = useMorePrompt();
   if (inPlan) {
     return (
       <button className="plan-chip is-on" onClick={() => navigate('/plan')}>
@@ -355,13 +361,15 @@ function PlanButton({ recipe, servings }: { recipe: Recipe; servings: number }) 
   }
   return (
     <>
-      <button className="plan-chip" onClick={() => prompt.ask(currentContent(recipe), undefined, (pick) => {
-        addToPlan(recipe.id, servings, pick);
-        toast(`Eingeplant: ${portionCount(servings)}`);
-      })}>
+      <button className="plan-chip" onClick={() => prompt.ask(currentContent(recipe), undefined, (pick) =>
+        more.ask(currentContent(recipe), servings, (amounts) => {
+          addToPlan(recipe.id, servings, pick, amounts);
+          toast(`Eingeplant: ${portionCount(servings)}`);
+        }))}>
         <Icon name="calendar" size={16} /> Zum Wochenplan ({portionCount(servings)})
       </button>
       {prompt.sheet}
+      {more.sheet}
     </>
   );
 }

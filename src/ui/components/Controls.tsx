@@ -4,14 +4,14 @@ import { DEVICES } from '../../domain/catalog';
 import { deviceIcon } from '../catalogIcons';
 import { Icon, type IconName } from './Icon';
 
-export function Stepper({ value, min = 1, max = 24, onChange, label, small = false }: { value: number; min?: number; max?: number; onChange: (v: number) => void; label: string; small?: boolean }) {
+export function Stepper({ value, min = 1, max = 24, step = 1, onChange, label, small = false }: { value: number; min?: number; max?: number; step?: number; onChange: (v: number) => void; label: string; small?: boolean }) {
   return (
     <div className={`stepper${small ? ' stepper--sm' : ''}`} role="group" aria-label={label}>
-      <button type="button" onClick={() => onChange(Math.max(min, value - 1))} disabled={value <= min} aria-label="Weniger">
+      <button type="button" onClick={() => onChange(Math.max(min, value - step))} disabled={value <= min} aria-label="Weniger">
         <Icon name="minus" size={18} />
       </button>
-      <output aria-live="polite">{value}</output>
-      <button type="button" onClick={() => onChange(Math.min(max, value + 1))} disabled={value >= max} aria-label="Mehr">
+      <output aria-live="polite">{value.toLocaleString('de-DE', { maximumFractionDigits: 1 })}</output>
+      <button type="button" onClick={() => onChange(Math.min(max, value + step))} disabled={value >= max} aria-label="Mehr">
         <Icon name="plus" size={18} />
       </button>
     </div>

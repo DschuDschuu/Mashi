@@ -11,9 +11,10 @@ import { thawFit, thawNeeds, type ThawNeed } from '../../domain/pantry';
 import { packLabel } from '../../domain/pantryLabel';
 import { specialDays } from '../../domain/shelfLife';
 import {
-  addToPlan, clearCooked, eatPreparedPortions, removeFromPlan, setPlanServings, thawPantryItem, togglePlanCooked, useFoodTable, usePantry, usePlan, useRecipes,
+  addToPlan, clearCooked, eatPreparedPortions, removeFromPlan, setPlanAmounts, setPlanServings, thawPantryItem, togglePlanCooked, useFoodTable, usePantry, usePlan, useRecipes,
 } from '../../data/store';
 import { navigate } from '../../router';
+import { CartButton } from '../components/CartButton';
 import { Empty, Section, Stepper } from '../components/Controls';
 import { useMissing } from '../useShoppingCount';
 import { useSheet } from '../useSheet';
@@ -21,6 +22,7 @@ import { UseUpBadge } from '../components/UseUpBadge';
 import { PlannedGroup } from '../components/PlannedGroup';
 import { Icon, type IconName } from '../components/Icon';
 import { RecipeImage } from '../components/RecipeImage';
+import { amountsText, useMorePrompt, usePlannedMore, UseMoreSheet } from '../components/UseMoreSheet';
 import { StatusBadge } from '../components/StatusBadge';
 import { euro, portionCount, recipeCount, relativeDay } from '../format';
 import { usePricing } from '../useCosts';
@@ -59,9 +61,14 @@ export function PlanScreen() {
   // was ein Gericht vorher auftauen muss – aus derselben Reservierung wie „Für den Wochenplan“
   const thawOf = (recipeId: string) => { const d = dishes.find((x) => x.recipeId === recipeId); return d ? thawNeeds(d, table) : []; };
 
+  // wie „Zum Wochenplan“ im Rezept: läuft etwas daraus bald ab, erst fragen, wie viel davon
+  const more = useMorePrompt();
   const add = (r: Recipe) => {
-    if (addToPlan(r.id)) toast(`„${currentContent(r).title}“ eingeplant`);
+    const c = currentContent(r);
     setPicking(false);
+    more.ask(c, c.servings, (amounts) => {
+      if (addToPlan(r.id, c.servings, {}, amounts)) toast(`„${c.title}“ eingeplant`);
+    });
   };
 
   const planList = (
@@ -71,7 +78,7 @@ export function PlanScreen() {
           <Empty icon="calendar">Wähle ein Gericht – Mashi schlägt dir dann Rezepte mit ähnlichen Zutaten vor. So kaufst du weniger ein und es bleibt nichts übrig.</Empty>
         ) : (
           <ul className="list plan-list">
-            {items.map(({ recipe, servings, cooked, variants }) => (
+            {items.map(({ recipe, servings, cooked, variants, amounts }) => (
               <li key={recipe.id} className={`list__item${cooked ? ' is-cooked' : ''}`}>
                 <button className={`plan-cooked${cooked ? ' is-on' : ''}`} onClick={() => cookedToast(togglePlanCooked(recipe.id))}
                   aria-pressed={cooked} aria-label={cooked ? `${currentContent(recipe).title}: doch noch nicht gekocht` : `${currentContent(recipe).title} gekocht`}>
@@ -94,6 +101,7 @@ export function PlanScreen() {
                 </div>
                 {/* eigene Zeile über die ganze Karte – neben dem Portionen-Regler wäre sie zu schmal */}
                 {!cooked && <ThawPill needs={thawOf(recipe.id)} recipeId={recipe.id} title={currentContent(recipe).title} servings={servings} />}
+                {!cooked && <PlanAmounts recipe={recipe} servings={servings} amounts={amounts ?? {}} />}
                 <div className="plan-list__servings">
                   <span className="small muted" aria-hidden="true">Portionen</span>
                   <Stepper small value={servings} onChange={(v) => setPlanServings(recipe.id, v)} label={`Portionen ${currentContent(recipe).title}`} />
@@ -149,11 +157,13 @@ export function PlanScreen() {
   return (
     <main className="screen screen--tabbed">
       {/* die Einkaufsliste sitzt jetzt oben rechts in der Speisekammer; hier führt „Fehlt noch“ hin */}
-      <header className="page-head"><h1>Wochenplan</h1></header>
+      {/* Wagen hier statt in der Speisekammer (Julia): einkaufen gehört zum Plan */}
+      <header className="page-head"><h1>Wochenplan</h1><CartButton /></header>
       <div className="plan-layout">
         <div className="plan-layout__main">{planList}</div>
         <div className="plan-layout__side">{sideList}</div>
       </div>
+      {more.sheet}
       {picking && <RecipePicker recipes={recipes.filter(plannable)} planned={plan.items.map((i) => i.recipeId)} suggestions={suggestions} onPick={add} onClose={() => setPicking(false)} />}
     </main>
   );
@@ -349,6 +359,44 @@ function MissingPanel({ items }: { items: ShoppingItem[] }) {
  * „❄ Rinderhack auftauen“ – Verplantes liegt nur gefroren da. Ohne feste Tage weiß Mashi nicht, wann gekocht
  * wird, also steht der Hinweis, bis aufgetaut ist. Antippen taut genau das Gebrauchte auf (2 von 3 Packungen).
  */
+/**
+ * „3 Paprika statt 1 · ändern“ (Julia: solange es im Wochenplan steht, noch anpassbar) – oder, wenn noch nichts
+ * gewählt ist und etwas aus dem Rezept bald abläuft: „Läuft bald ab: Paprika – mehr verwenden?“.
+ */
+function PlanAmounts({ recipe, servings, amounts }: { recipe: Recipe; servings: number; amounts: Record<string, number> }) {
+  const { uses, base } = usePlannedMore(recipe, servings);
+  const [open, setOpen] = useState(false);
+  const chosen = Object.keys(amounts).length > 0;
+  // ändern: was es zu verwenden gibt – gewählt oder bald ablaufend; gewöhnliche Reste fragt erst der Kochmodus
+  const offer = uses.filter((u) => u.ingredientId in amounts || u.until);
+  if (!chosen && !offer.length) return null;
+  const title = currentContent(recipe).title;
+  const save = (next: Record<string, number>) => {
+    setOpen(false);
+    setPlanAmounts(recipe.id, next);
+    toast(Object.keys(next).length ? `„${title}“: ${amountsText(next, base)}` : `„${title}“ wieder wie im Rezept`,
+      { label: 'Rückgängig', run: () => setPlanAmounts(recipe.id, amounts) });
+  };
+  return (
+    <div className="plan-amounts">
+      {chosen ? (
+        <>
+          <span className="small">Nur dieses Mal: {amountsText(amounts, base)}</span>
+          {offer.length > 0
+            ? <button type="button" className="chip chip--sm" onClick={() => setOpen(true)}><Icon name="pencil" size={13} /> Ändern</button>
+            // nichts mehr im Vorrat, das man mehr verwenden könnte – nur zurück auf das Rezept
+            : <button type="button" className="chip chip--sm" onClick={() => save({})}>Wie im Rezept</button>}
+        </>
+      ) : (
+        <button type="button" className="chip chip--sm plan-amounts__soon" onClick={() => setOpen(true)}>
+          <Icon name="clock" size={13} /> Läuft bald ab: {offer.map((u) => u.name).join(', ')} – mehr verwenden?
+        </button>
+      )}
+      {open && <UseMoreSheet uses={offer} initial={amounts} onClose={() => setOpen(false)} onDone={save} />}
+    </div>
+  );
+}
+
 function ThawPill({ needs, recipeId, title, servings }: { needs: ThawNeed[]; recipeId: string; title: string; servings: number }) {
   const pantry = usePantry();
   if (!needs.length) return null;

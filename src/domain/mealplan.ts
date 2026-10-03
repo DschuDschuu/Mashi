@@ -15,6 +15,8 @@ export interface PlanItem {
   servings: number;
   /** gewählte Sorte je Zutat (Zutat-ID → „Mein Produkt“), z. B. welches Pesto – siehe variants.ts */
   variants?: Record<string, string>;
+  /** Mengen nur für dieses Mal je Zutat-ID (für diese Portionen) – z. B. alle 4 Paprika, die morgen ablaufen (Julia) */
+  amounts?: Record<string, number>;
 }
 
 export interface MealPlan {
@@ -27,6 +29,8 @@ export interface MealPlan {
   buy?: string[];
   /** eigene Einträge auf der Einkaufsliste – selbst getippt („Spülmittel“) oder aus der Inventur („auffüllen“) */
   extra?: ExtraItem[];
+  /** abgehakt und von der Liste genommen („Abgehaktes entfernen“, Julia) – Einträge vom Wochenplan (ShoppingItem.key) */
+  hidden?: string[];
   updatedAt: string;
 }
 

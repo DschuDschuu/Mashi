@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { FOOD_CHOICES } from '../../domain/nutrition/localFoods';
+import { navigate } from '../../router';
 import type { FoodKind } from '../../domain/nutrition/types';
 import { setShelfDays, shelfOverview, SPECIAL_DAYS, type Special } from '../../domain/shelfLife';
 import { setPantryShelfDays, usePantry } from '../../data/store';
@@ -22,26 +23,27 @@ const SPECIAL: { key: Special; label: string; unit: string }[] = [
   { key: 'prepared', label: 'Vorgekochtes hält', unit: 'Tage' },
 ];
 
-const days = (n: number | undefined) => (n === undefined ? 'hält lange' : n === 1 ? '1 Tag' : `${n} Tage`);
 
 /**
- * „Hält X Tage ab Kauf“ selbst einstellen – je Art und je Lebensmittel.
- * Die Lebensmittel stehen mit ihrem Wert dabei: Tomaten haben einen eigenen Richtwert,
- * der Wert für „Gemüse“ gilt nur für alle anderen. So ist nichts versteckt.
+ * „Hält X Tage ab Kauf“ selbst einstellen – hier nur je Art und die Sonderfälle (MHD-Ware, Angebrochenes …).
+ * Einzelne Lebensmittel stellst du in ihrer Kachel unter „Meine Lebensmittel“ ein (Julia: dort ist alles zu einem
+ * Lebensmittel an einer Stelle). Lebensmittel mit eigenem Richtwert (Spinat 3, Zwiebeln 21) folgen der Art nicht.
  */
 export function ShelfSettings() {
   const pantry = usePantry();
   const groups = shelfOverview(FOOD_CHOICES, pantry.shelfDays);
   const save = (target: { kind: FoodKind } | { food: string } | { special: Special }, value: number | undefined) =>
     setPantryShelfDays(setShelfDays(pantry.shelfDays, target, value));
-  const own = Object.keys(pantry.shelfDays?.foods ?? {}).length + Object.keys(pantry.shelfDays?.kinds ?? {}).length
-    + SPECIAL.filter((s) => pantry.shelfDays?.[s.key]).length;
+  const ownFoods = Object.keys(pantry.shelfDays?.foods ?? {}).length;
+  const own = Object.keys(pantry.shelfDays?.kinds ?? {}).length + SPECIAL.filter((s) => pantry.shelfDays?.[s.key]).length;
+  // „Frische Teigwaren“ hat keinen Wert für die Art – nur einzelne Lebensmittel, und die stehen in ihren Kacheln
+  const kinds = groups.filter((g) => g.kind !== 'staple');
 
   return (
     <details className="panel fold shelf">
       <TileSummary icon="clock" title="Haltbarkeit"
         text={own ? `Wie lange Frisches hält · ${own} eigene ${own === 1 ? 'Wert' : 'Werte'}` : 'Wie lange Frisches hält – für „Bald verbrauchen“'} />
-      <p className="muted small">Gilt ab dem Kauf, wenn am Vorrat kein Datum steht. Leer lassen = Mashis Richtwert (grau). Einzelne Produkte stellst du unter „Meine Lebensmittel“ ein.</p>
+      <p className="muted small">Gilt ab dem Kauf, wenn am Vorrat kein Datum steht. Leer lassen = Mashis Richtwert (grau).</p>
 
       <div className="shelf__special">
         {SPECIAL.map((s) => (
@@ -52,38 +54,27 @@ export function ShelfSettings() {
         ))}
       </div>
 
-      <div className="shelf__groups">
-        {groups.map((g) => {
-          const mine = g.foods.filter((f) => f.own).length + (g.own ? 1 : 0);
-          return (
-            <details key={g.kind} className="shelf__group">
-              <summary>
-                <Icon name={KIND[g.kind].icon} size={18} />
-                <span className="shelf__group-name">{KIND[g.kind].label}{mine > 0 && <small className="muted"> · {mine} eigene</small>}</span>
-                <span className="shelf__pill">{g.kind === 'staple' ? `${g.foods.length} Sorten` : days(g.days)}</span>
-                <Icon name="chevron" size={16} className="shelf__chevron" />
-              </summary>
-              <div className="shelf__rows">
-                {g.kind !== 'staple' && (
-                  <DaysRow label={g.foods.length ? 'Alle anderen' : 'Alle'} own={pantry.shelfDays?.kinds?.[g.kind]} standard={g.standard}
-                    onSave={(v) => save({ kind: g.kind }, v)} />
-                )}
-                {g.foods.map((f) => (
-                  <DaysRow key={f.id} label={f.name} own={f.own ? f.days : undefined} standard={f.standard} onSave={(v) => save({ food: f.id }, v)} />
-                ))}
-              </div>
-            </details>
-          );
-        })}
+      <div className="shelf__rows">
+        {kinds.map((g) => (
+          <DaysRow key={g.kind} icon={KIND[g.kind].icon} label={KIND[g.kind].label} own={pantry.shelfDays?.kinds?.[g.kind]} standard={g.standard}
+            onSave={(v) => save({ kind: g.kind }, v)} />
+        ))}
       </div>
+      <p className="small muted">
+        Gilt für alles dieser Art ohne eigenen Richtwert. Einzelne Lebensmittel stellst du in ihrer Kachel ein
+        {ownFoods > 0 && <> – {ownFoods === 1 ? '1 hat' : `${ownFoods} haben`} einen eigenen Wert</>}.
+      </p>
+      <button type="button" className="btn btn--soft btn--sm" onClick={() => navigate('/produkte')}>
+        <Icon name="apple" size={16} /> Meine Lebensmittel
+      </button>
     </details>
   );
 }
 
-function DaysRow({ label, own, standard, onSave }: { label: string; own?: number; standard?: number; onSave: (days: number | undefined) => void }) {
+function DaysRow({ label, icon, own, standard, onSave }: { label: string; icon?: IconName; own?: number; standard?: number; onSave: (days: number | undefined) => void }) {
   return (
     <label className="shelf__row">
-      <span>{label}{standard === undefined && !own && <span className="small muted"> · hält lange</span>}</span>
+      <span>{icon && <Icon name={icon} size={16} />} {label}{standard === undefined && !own && <span className="small muted"> · hält lange</span>}</span>
       <DaysField own={own} standard={standard} unit="Tage" label={label} onSave={onSave} />
     </label>
   );

@@ -5,7 +5,7 @@ import { exclusiveStages, stageOf, withStage, type FoodStage } from '../domain/s
 import { emptyPlan, keyOfName, normalizePlan, toggleCooked, type MealPlan } from '../domain/mealplan';
 import { mergeRecipes } from '../domain/merge';
 import { unionPantry, unionPlan } from '../domain/syncMerge';
-import { nameOf, withMyProducts, type MyProduct } from '../domain/nutrition/myProducts';
+import { fillOrAdd, nameOf, productsFor, withMyProducts, type MyProduct } from '../domain/nutrition/myProducts';
 import type { FoodTable } from '../domain/nutrition/types';
 import {
   addItem, applyImport, bonKey, deductRecipe, emptyPantry, freezeItem, rememberReceipt, returnTaken, takenBetween, thawItem, type Taken, type ImportRow, type Pantry, type PantryItem, type PantryUnit,
@@ -560,6 +560,17 @@ export function importProducts(incoming: MyProduct[]): number {
 }
 
 /**
+ * Neues Produkt speichern – gibt es das Lebensmittel bisher nur ohne Werte, füllt sich dessen Sorte (siehe fillOrAdd).
+ * @param forName unter diesem Namen gesucht (die Zutat im Rezept, der Name im Vorrat)
+ */
+export function addProduct(p: MyProduct, forName = p.name): MyProduct {
+  const all = currentProducts();
+  const { products: next, saved } = fillOrAdd(all, p, productsFor(forName, currentFoodTable(), all));
+  saveProducts(next);
+  return saved;
+}
+
+/**
  * „Meine Produkte“ speichern. Danach bekommt die Rezeptliste bewusst eine NEUE Identität
  * (gleiche Rezepte): So rechnen auch alle Rezeptkarten ihre Nährwerte neu.
  */
@@ -604,15 +615,25 @@ function commitPlan(next: Omit<MealPlan, 'updatedAt'>) {
 }
 
 /** Gibt false zurück, wenn das Rezept schon im Plan steht. */
-export function addToPlan(recipeId: string, servings = currentContent(get(recipeId)).servings, variants: Record<string, string> = {}): boolean {
+export function addToPlan(recipeId: string, servings = currentContent(get(recipeId)).servings, variants: Record<string, string> = {}, amounts: Record<string, number> = {}): boolean {
   if (plan.items.some((i) => i.recipeId === recipeId)) return false;
-  commitPlan({ ...plan, items: [...plan.items, { recipeId, servings, ...(Object.keys(variants).length ? { variants } : {}) }] });
+  commitPlan({ ...plan, items: [...plan.items, { recipeId, servings, ...(Object.keys(variants).length ? { variants } : {}), ...(Object.keys(amounts).length ? { amounts } : {}) }] });
   return true;
 }
 
 /** Welche Sorte ein geplantes Gericht nimmt (z. B. welches Pesto) – auf der Plan-Karte umwählbar */
 export function setPlanVariants(recipeId: string, variants: Record<string, string>) {
   commitPlan({ ...plan, items: plan.items.map((i) => (i.recipeId === recipeId ? { ...i, variants } : i)) });
+}
+
+/**
+ * „Nur dieses Mal“-Mengen eines geplanten Gerichts ändern (Julia: im Wochenplan und im Kochmodus anpassbar) –
+ * leer = wieder wie im Rezept. Die Reservierung in der Speisekammer rechnet sofort damit.
+ */
+export function setPlanAmounts(recipeId: string, amounts: Record<string, number>) {
+  const item = plan.items.find((i) => i.recipeId === recipeId);
+  if (!item || JSON.stringify(item.amounts ?? {}) === JSON.stringify(amounts)) return;
+  commitPlan({ ...plan, items: plan.items.map((i) => (i.recipeId === recipeId ? (({ amounts: _a, ...rest }) => (Object.keys(amounts).length ? { ...rest, amounts } : rest))(i) : i)) });
 }
 
 /** Aus dem Plan nehmen – gibt „Rückgängig“ zurück (gleiche Stelle, Portionen und Gekocht-Haken). */
@@ -630,7 +651,8 @@ export function removeFromPlan(recipeId: string): () => void {
 }
 
 export function setPlanServings(recipeId: string, servings: number) {
-  commitPlan({ ...plan, items: plan.items.map((i) => (i.recipeId === recipeId ? { ...i, servings } : i)) });
+  // „nur dieses Mal“-Mengen gelten für die alten Portionen – bei anderen Portionen fallen sie weg
+  commitPlan({ ...plan, items: plan.items.map((i) => (i.recipeId === recipeId ? (({ amounts: _a, ...rest }) => ({ ...rest, servings }))(i) : i)) });
 }
 
 // ── Eigene Einträge auf der Einkaufsliste ──────────────────────────
@@ -649,6 +671,21 @@ export function removeExtra(name: string) {
 }
 
 /** „Erledigtes entfernen“: abgehakte eigene Einträge von der Liste – gibt „Rückgängig“ zurück. */
+/**
+ * „Abgehaktes entfernen“ (Julia): eigene Einträge, die abgehakt sind, fliegen raus; abgehakte Sachen vom Wochenplan
+ * verschwinden von der Liste (bleiben abgehakt). „Rückgängig“ holt alles zurück.
+ */
+export function clearChecked(): () => void {
+  const before = { extra: plan.extra, checked: plan.checked, hidden: plan.hidden };
+  clearDoneExtras();
+  const fromPlan = plan.checked.filter((k) => !k.startsWith(EXTRA_PREFIX));
+  if (fromPlan.length) commitPlan({ ...plan, hidden: [...new Set([...(plan.hidden ?? []), ...fromPlan])] });
+  return () => {
+    const { hidden: _h, ...rest } = plan;
+    commitPlan({ ...rest, extra: before.extra, checked: before.checked, ...(before.hidden ? { hidden: before.hidden } : {}) });
+  };
+}
+
 export function clearDoneExtras(): () => void {
   const before = { extra: plan.extra, checked: plan.checked };
   const table = currentFoodTable();
@@ -737,7 +774,7 @@ export function togglePlanCooked(recipeId: string): CookedResult | null {
   const r = get(recipeId);
   commit(stampCooked(r));
   const item = next.items.find((i) => i.recipeId === recipeId)!;
-  const result = consume(r, item.servings, {}, true, item.variants);
+  const result = consume(r, item.servings, item.amounts ?? {}, true, item.variants);
   askLeftover(r, item.servings, true);
   return {
     ...result,
@@ -842,7 +879,7 @@ export function editBon(bonId: string, index: number, patch: BonLinePatch): () =
   if (!old) return () => {};
   commitPantry(editBonLine(pantry, bonId, index, patch, now(), () => newId('v')));
   return () => {
-    const back: Record<keyof BonLinePatch, unknown> = { name: old.name, amount: old.amount, unit: old.unit, productId: old.productId, price: old.price, discounts: old.discounts ?? [], count: old.count, weightKg: old.weightKg };
+    const back: Record<keyof BonLinePatch, unknown> = { name: old.name, amount: old.amount, unit: old.unit, productId: old.productId, price: old.price, discounts: old.discounts ?? [], count: old.count, weightKg: old.weightKg, perKg: old.perKg };
     commitPantry(editBonLine(pantry, bonId, index, back as Partial<BonLine>, now(), () => newId('v')));
   };
 }
@@ -1095,7 +1132,12 @@ function normalizeStages() {
  */
 let tidying = false;
 function tidyRestockChecks() {
-  if (tidying || !plan.checked.length) return;
+  if (tidying) return;
+  // ausgeblendet (Abgehaktes entfernt) gilt nur, solange es abgehakt auf der Liste steht – danach wieder sichtbar
+  if (!plan.checked.length) {
+    if (plan.hidden?.length) { const { hidden: _h, ...rest } = plan; commitPlan(rest); }
+    return;
+  }
   tidying = true;
   try {
     const onList = new Set(shoppingList(plan, recipes, currentFoodTable(), pantry, products).map((i) => i.key));
@@ -1115,7 +1157,12 @@ function tidyRestockChecks() {
       // sonst steht es nicht mehr auf der Liste (Gericht gekocht oder entfernt) → Haken weg
     }
     const checked = [...new Set(next)];
-    if (checked.length !== plan.checked.length || checked.some((k, i) => k !== plan.checked[i])) commitPlan({ ...plan, checked });
+    const hidden = (plan.hidden ?? []).filter((k) => checked.includes(k));
+    const hiddenChanged = hidden.length !== (plan.hidden ?? []).length;
+    if (checked.length !== plan.checked.length || checked.some((k, i) => k !== plan.checked[i]) || hiddenChanged) {
+      const { hidden: _h, ...rest } = plan;
+      commitPlan({ ...rest, checked, ...(hidden.length ? { hidden } : {}) });
+    }
   } finally {
     tidying = false;
   }

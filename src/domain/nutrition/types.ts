@@ -43,6 +43,8 @@ export interface FoodEntry {
   variants?: FoodVariant[];
   /** davon dein Favorit (★) – dann sind per100g seine Werte, keine Spanne */
   favoriteId?: string;
+  /** eigenes Lebensmittel ohne Nährwerte, das auch die Tabelle nicht kennt – per100g sind Nullen und zählen nicht */
+  noValues?: boolean;
 }
 
 /** Eine Sorte = ein eigenes Produkt („Pesto verde (K-Classic)“) */

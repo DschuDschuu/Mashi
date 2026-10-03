@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createMockRecipes } from '../data/mockRecipes';
 import { localFoodTable } from './nutrition/localFoods';
-import { addItem, applyImport, deductRecipe, emptyPantry, pantryAfterPlan, proposeImport, recipesFromPantry, type Pantry } from './pantry';
+import { addItem, applyImport, deductRecipe, emptyPantry, leftoverSuggestions, pantryAfterPlan, proposeImport, recipesFromPantry, type Pantry } from './pantry';
 import { suggestPantryUnit } from './packs';
 import { parseReceipt } from './receipt';
 import { buildShoppingList, type MealPlan } from './mealplan';
@@ -194,6 +194,16 @@ describe('1 Stück = 1 Packung (Produkt mit Packungsgröße)', () => {
 });
 
 describe('Kilopreis vom Bon', () => {
+  it('zweimal 1,99 €/kg: im Verlauf derselbe Preis (nicht Preis ÷ Gewicht, das wegen Rundung schwankt)', () => {
+    const bon = (text: string, date: string, p = emptyPantry()) => {
+      const [line] = parseReceipt(text);
+      return applyImport(p, [{ line, key: 'bananen', known: false, skip: false, name: 'Bananen', amount: Math.round(line.weightKg! * 1000), unit: 'g' }], NOW, id, date);
+    };
+    const p1 = bon(['EUR', 'Bananen 2,37 A', '1,190 kg x 1,99 EUR/kg', 'Zu zahlen'].join('\n'), '2026-09-01T12:00:00.000Z');
+    const p2 = bon(['EUR', 'Bananen 1,79 A', '0,898 kg x 1,99 EUR/kg', 'Zu zahlen'].join('\n'), '2026-09-08T12:00:00.000Z', p1);
+    expect(p2.history!.map((h) => h.perUnit * 1000)).toEqual([1.99, 1.99]);
+  });
+
   it('gewogen, aber als Stück im Vorrat (2 Kürbisse): der Preisverlauf rechnet trotzdem je kg', () => {
     const [line] = parseReceipt(['EUR', 'Butternuss-Kürbis 3,49 A', '2,345 kg x 1,49 EUR/kg', 'Zu zahlen 3,49'].join('\n'));
     const p = applyImport(emptyPantry(), [{ line, key: 'butternuss-kürbis', known: false, skip: false, name: 'Kürbis', amount: 2, unit: 'Stück' }], NOW, id);
@@ -211,5 +221,44 @@ describe('Preise je Sorte (Julia: fair vergleichen)', () => {
       { line: line('Rinderhack leicht 500g', 3.99), key: 'rinderhack leicht 500g', known: false, skip: false, name: 'Rinderhack', amount: 500, unit: 'g', productId: 'leicht' },
     ], NOW, id);
     expect(p.history!.map((h) => [h.productId, Math.round(h.perUnit * 500 * 100) / 100])).toEqual([['normal', 3.29], ['leicht', 3.99]]);
+  });
+});
+
+describe('Läuft bald ab – mehr davon verwenden?', () => {
+  const at = new Date('2026-09-24T10:00:00');
+  const day = (n: number) => new Date(2026, 8, 24 + n, 12).toISOString();
+  const soon = (name: string, amount: number, unit: 'g' | 'Stück', inDays: number, more: object = {}): Pantry => ({
+    ...emptyPantry(), items: [{ id: id(), name, amount, unit, addedAt: NOW, useBy: day(inDays), ...more }],
+  });
+  const paprika: Ingredient = { id: 'p', name: 'Paprika', amount: 1, unit: 'Stück' };
+
+  it('Julia: 1 Paprika im Rezept, 4 laufen morgen ab → fragen, vorgeschlagen alle 4', () => {
+    const [s] = leftoverSuggestions(soon('Paprika', 4, 'Stück', 1), [paprika], localFoodTable, at);
+    expect(s).toMatchObject({ ingredientId: 'p', need: 1, have: 4, perItem: 1, itemUnit: 'Stück', planned: 1, amount: 4 });
+    expect(s.until!.slice(0, 10)).toBe(day(1).slice(0, 10));
+  });
+
+  it('läuft es erst später ab, gilt wieder die Reste-Regel (höchstens doppelt so viel wie im Rezept)', () => {
+    expect(leftoverSuggestions(soon('Paprika', 4, 'Stück', 5), [paprika], localFoodTable, at)).toEqual([]);
+    expect(leftoverSuggestions(soon('Paprika', 2, 'Stück', 5), [paprika], localFoodTable, at)[0]).toMatchObject({ have: 2, amount: 2 });
+    expect(leftoverSuggestions(soon('Paprika', 2, 'Stück', 5), [paprika], localFoodTable, at)[0].until).toBeUndefined();
+  });
+
+  it('nichts fragen, wenn es gerade reicht oder eingefroren ist', () => {
+    expect(leftoverSuggestions(soon('Paprika', 1, 'Stück', 1), [paprika], localFoodTable, at)).toEqual([]);
+    expect(leftoverSuggestions(soon('Paprika', 4, 'Stück', 1, { frozenAt: NOW }), [paprika], localFoodTable, at)).toEqual([]);
+  });
+
+  it('in Gramm: 300 g Hack im Rezept, 500 g laufen heute ab', () => {
+    const hack: Ingredient = { id: 'h', name: 'Hackfleisch', amount: 300, unit: 'g' };
+    expect(leftoverSuggestions(soon('Hackfleisch', 500, 'g', 0), [hack], localFoodTable, at)[0]).toMatchObject({ need: 300, have: 500, perItem: 1 });
+  });
+
+  it('die gewählte Menge zählt im Plan: 4 Paprika verplant statt 1', () => {
+    const r = recipe('paprika', [paprika]);
+    const p = soon('Paprika', 5, 'Stück', 1);
+    const plan = (amounts?: Record<string, number>): MealPlan => ({ items: [{ recipeId: 'paprika', servings: 2, ...(amounts ? { amounts } : {}) }], checked: [], cooked: [], updatedAt: '' });
+    expect(pantryAfterPlan(p, plan(), [r], localFoodTable).items[0].amount).toBe(4);
+    expect(pantryAfterPlan(p, plan({ p: 4 }), [r], localFoodTable).items[0].amount).toBe(1);
   });
 });

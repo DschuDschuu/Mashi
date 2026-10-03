@@ -7,7 +7,7 @@ import { currentContent } from '../../domain/recipe';
 import { formatAmount, formatQuantity, formatUnitAmount, scaleIngredients } from '../../domain/scaling';
 import { orderByUse } from '../../domain/stepIngredients';
 import type { Ingredient } from '../../domain/types';
-import { markCooked, useFoodTable, usePantry, usePlan, useRecipe, useRecipes } from '../../data/store';
+import { markCooked, setPlanAmounts, useFoodTable, usePantry, usePlan, useRecipe, useRecipes } from '../../data/store';
 import { goBack, navigate } from '../../router';
 import { Icon } from '../components/Icon';
 import { StepIngredients } from '../components/StepIngredients';
@@ -17,6 +17,7 @@ import { useMediaQuery } from '../useMediaQuery';
 import { DishNutrition } from '../components/DishNutrition';
 import { pickFor } from '../../domain/nutrition/variants';
 import { choicesFor } from '../useNutrition';
+import { amountsText, stockText, untilLabel, UseMoreSheet } from '../components/UseMoreSheet';
 import { newId } from '../../domain/recipe';
 import { byUrgency, isDone, isRunning, newlyDone, pauseTimer, remainingOf, removeTimer, resumeTimer, startTimer, type CookTimer } from '../../domain/timers';
 
@@ -36,6 +37,8 @@ export function CookModeScreen({ id, servings, variants }: { id: string; serving
   const [editing, setEditing] = useState<string | null>(null);
   const [noLeftovers, setNoLeftovers] = useState(false);
   const [noPacks, setNoPacks] = useState(false);
+  /** Blatt offen: für noch offene Reste („Menge wählen“) oder für schon gewählte („Anpassen“) */
+  const [pickLeftovers, setPickLeftovers] = useState<'open' | 'chosen' | null>(null);
   const pantry = usePantry();
   const plan = usePlan();
   const recipes = useRecipes();
@@ -53,10 +56,27 @@ export function CookModeScreen({ id, servings, variants }: { id: string; serving
     const others = { ...plan, items: plan.items.filter((i) => i.recipeId !== recipe.id) };
     const rest = pantryAfterPlan(pantry, others, recipes, table);
     // „Ganze Packung?“ – 600 g Hack bei Packungen à 500 g. Die Rest-Frage („alle 3 Tomaten?“) geht vor.
+    // (auch: „4 Paprika laufen morgen ab – wie viele verwendest du?“)
     const leftovers = leftoverSuggestions(rest, base, table);
     const packs = packSuggestions(rest, base, table).filter((p) => !leftovers.some((l) => l.ingredientId === p.ingredientId));
     return { leftovers, packs };
   }, [recipe, base, pantry, plan, recipes, table]);
+
+  // Eingeplant (gleiche Portionen)? Dann gelten die Mengen aus dem Plan auch beim Kochen – und was du hier
+  // änderst, landet wieder im Plan (Julia): Plan, Reservierung und Kochmodus zeigen immer dasselbe
+  const planned = recipe ? plan.items.find((i) => i.recipeId === recipe.id) : undefined;
+  const linked = !!recipe && !!planned && planned.servings === (servings ?? currentContent(recipe).servings);
+  const seeded = useRef(false);
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    if (seeded.current || !recipe) return;
+    seeded.current = true;
+    if (linked && planned?.amounts) setAmounts(planned.amounts);
+    setReady(true);
+  }, [recipe, linked, planned]);
+  useEffect(() => {
+    if (ready && linked && recipe) setPlanAmounts(recipe.id, amounts); // gleich wie im Plan: tut nichts
+  }, [ready, linked, recipe, amounts]);
 
   // Läuft ein Timer, 4× pro Sekunde neu zeichnen
   const anyRunning = timers.some((t) => t.endsAt);
@@ -84,6 +104,8 @@ export function CookModeScreen({ id, servings, variants }: { id: string; serving
   const last = step === c.steps.length - 1;
   const ingredients = base.map((i) => (i.id in amounts ? { ...i, amount: amounts[i.id] } : i));
   const openLeftovers = noLeftovers ? [] : leftovers.filter((l) => !(l.ingredientId in amounts));
+  /** schon mehr gewählt (im Plan oder hier) – „eine Paprika mehr oder weniger“ lässt sich noch anpassen */
+  const chosenLeftovers = leftovers.filter((l) => l.ingredientId in amounts);
   const openPacks = noPacks ? [] : packs.filter((p) => !(p.ingredientId in amounts));
   const setAmount = (ing: Ingredient, amount: number | undefined) => {
     const { [ing.id]: _old, ...rest } = amounts;
@@ -111,7 +133,8 @@ export function CookModeScreen({ id, servings, variants }: { id: string; serving
   // Läuft ein Timer oder sind Mengen geändert, lieber nachfragen – beides wäre sonst weg
   const leave = async () => {
     const running = timers.filter((t) => isRunning(t, Date.now())).length;
-    const changed = Object.keys(amounts).length > 0;
+    // eingeplant: die Mengen stehen im Plan, beim Verlassen geht nichts verloren
+    const changed = !linked && Object.keys(amounts).length > 0;
     const clocks = running === 1 ? 'Ein Timer läuft noch' : `${running} Timer laufen noch`;
     const why = running && changed ? `${clocks} und deine geänderten Mengen gehen verloren.`
       : running ? `${clocks}.` : changed ? 'Deine geänderten Mengen gehen verloren.' : '';
@@ -160,21 +183,40 @@ export function CookModeScreen({ id, servings, variants }: { id: string; serving
         </div>
       )}
 
+      {chosenLeftovers.length > 0 && (
+        <div className="cook__chosen" role="status">
+          <span className="small">Nur dieses Mal: {amountsText(Object.fromEntries(chosenLeftovers.map((l) => [l.ingredientId, amounts[l.ingredientId]])), base)}</span>
+          <button className="chip chip--sm" onClick={() => setPickLeftovers('chosen')}><Icon name="pencil" size={13} /> Anpassen</button>
+        </div>
+      )}
+
       {openLeftovers.length > 0 && (
         <div className="cook__leftovers" role="status">
-          <p><Icon name="sparkles" size={16} /> <strong>Reste mitverbrauchen?</strong> Nur für dieses Mal – das Rezept bleibt.</p>
+          <p><Icon name="sparkles" size={16} /> <strong>{openLeftovers.every((l) => l.until) ? 'Läuft bald ab – mehr verwenden?' : 'Reste mitverbrauchen?'}</strong> Nur für dieses Mal – das Rezept bleibt.</p>
+          <p className="small">
+            {openLeftovers.map((l) => `${l.name}: ${stockText(l.have, l)} da${l.until ? `, ${untilLabel(l.until)}` : ''}`).join(' · ')}
+          </p>
           <div className="cook__leftover-list">
-            {openLeftovers.map((l) => (
-              <button key={l.ingredientId} className="btn btn--soft btn--sm" onClick={() => {
-                setAmounts({ ...amounts, [l.ingredientId]: l.amount });
-                toast(`${formatUnitAmount(l.amount, l.unit)} ${l.name} – nur dieses Mal`);
-              }}>
-                {formatUnitAmount(l.amount, l.unit)} {l.name} statt {formatAmount(l.planned, l.unit)}
-              </button>
-            ))}
+            <button className="btn btn--soft btn--sm" onClick={() => setPickLeftovers('open')}>Menge wählen</button>
           </div>
           <button className="link link--muted" onClick={() => setNoLeftovers(true)}>Nein danke</button>
         </div>
+      )}
+      {pickLeftovers === 'open' && (
+        <UseMoreSheet uses={openLeftovers} onClose={() => setPickLeftovers(null)} onDone={(more) => {
+          setPickLeftovers(null);
+          if (!Object.keys(more).length) return setNoLeftovers(true);
+          setAmounts({ ...amounts, ...more });
+          toast('Nur für dieses Mal geändert');
+        }} />
+      )}
+      {pickLeftovers === 'chosen' && (
+        // mit allen gewählten Mengen – das Blatt behält die übrigen (von Hand geänderten) bei
+        <UseMoreSheet uses={chosenLeftovers} initial={amounts} onClose={() => setPickLeftovers(null)} onDone={(next) => {
+          setPickLeftovers(null);
+          setAmounts(next);
+          toast(linked ? 'Geändert – auch im Wochenplan' : 'Nur für dieses Mal geändert');
+        }} />
       )}
 
       {openPacks.length > 0 && (

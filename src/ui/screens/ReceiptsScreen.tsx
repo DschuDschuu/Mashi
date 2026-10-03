@@ -3,7 +3,7 @@ import { dropPriceDay, forgetReceiptRule, usePantry } from '../../data/store';
 import { formatAmount } from '../../domain/scaling';
 import { TileSummary } from '../components/TileSummary';
 import { navigate } from '../../router';
-import { CartButton } from '../components/CartButton';
+import { FoodsButton } from '../components/FoodsButton';
 import { Empty, Section } from '../components/Controls';
 import { Icon } from '../components/Icon';
 import { PantryTabs, usePantrySwipe } from '../components/PlanTabs';
@@ -22,7 +22,7 @@ export function ReceiptsScreen() {
   const empty = !(pantry.bons ?? []).length && !unsavedDays(pantry).length;
   return (
     <main className="screen screen--tabbed" {...swipe}>
-      <header className="page-head"><h1>Einkäufe</h1><CartButton /></header>
+      <header className="page-head"><h1>Einkäufe</h1><FoodsButton /></header>
       <PantryTabs active="bons" />
       <button type="button" className="btn btn--soft btn--block" onClick={() => navigate('/speisekammer/bon')}>
         <Icon name="camera" size={18} /> Kassenbon importieren

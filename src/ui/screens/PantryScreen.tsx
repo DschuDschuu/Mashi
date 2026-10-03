@@ -4,8 +4,8 @@ import { suggestPantryUnit } from '../../domain/packs';
 import { daysLabel, daysLeft, frozenSince, specialDays, useByOf } from '../../domain/shelfLife';
 import {
   eatPreparedPortions,
-  addPantryItem, answerPantryCheck, assignPantrySorts, currentPantry, currentProducts, freezePantryItem, removePantryItem, setPantryAmount, thawPantryItem, updatePantryItem,
-  saveProducts, useFoodTable, usePantry, usePlan, useProducts, useRecipes,
+  addPantryItem, answerPantryCheck, addProduct, assignPantrySorts, currentPantry, freezePantryItem, removePantryItem, setPantryAmount, thawPantryItem, updatePantryItem,
+  useFoodTable, usePantry, usePlan, useProducts, useRecipes,
 } from '../../data/store';
 import { currentContent } from '../../domain/recipe';
 import { DishNutrition } from '../components/DishNutrition';
@@ -13,7 +13,7 @@ import { navigate, useRoute } from '../../router';
 import { foodTable } from '../../services';
 import { Empty, Section, Stepper, Switch } from '../components/Controls';
 import { Icon } from '../components/Icon';
-import { CartButton } from '../components/CartButton';
+import { FoodsButton } from '../components/FoodsButton';
 import { PantryTabs, usePantrySwipe } from '../components/PlanTabs';
 import { IngredientNames } from '../components/IngredientNames';
 import { groupByCategory } from '../../domain/categories';
@@ -30,7 +30,7 @@ import { NutritionQuickForm } from '../components/NutritionQuickForm';
 import type { FoodEntry } from '../../domain/nutrition/types';
 import { newId } from '../../domain/recipe';
 import { nameOf, sortTags, type MyProduct } from '../../domain/nutrition/myProducts';
-import { FOOD_CHOICES, normalizeName } from '../../domain/nutrition/localFoods';
+import { FOOD_CHOICES, normalizeName, PROVIDER } from '../../domain/nutrition/localFoods';
 
 const UNITS: PantryUnit[] = ['g', 'ml', 'Stück', 'Glas'];
 
@@ -264,7 +264,7 @@ export function PantryScreen() {
 
   return (
     <main className="screen screen--tabbed" {...swipe}>
-      <header className="page-head"><h1>Speisekammer</h1><CartButton /></header>
+      <header className="page-head"><h1>Speisekammer</h1><FoodsButton /></header>
       <PantryTabs active="pantry" />
       <IngredientNames />
 
@@ -400,7 +400,7 @@ function AddForm({ onDone }: { onDone: () => void }) {
   const offerTable = offer ? foodTable.matchName(offer.name)?.food : undefined;
   /** Produkt speichern und dem gerade eingetragenen Vorrat die Sorte geben */
   const adopt = (p: MyProduct) => {
-    saveProducts([...currentProducts(), p]);
+    p = addProduct(p, offer!.name);
     const ids = currentPantry().items.filter((it) => !it.productId && normalizeName(it.name) === normalizeName(offer!.name)).map((it) => it.id);
     assignPantrySorts([{ itemIds: ids, productId: p.id }]);
     toast(`„${offer!.name} · ${offer!.brand}“ steht jetzt unter „Meine Lebensmittel“`);
@@ -648,8 +648,14 @@ function EditRow({ item, estimate, onDone }: { item: PantryItem; estimate?: Date
   );
 }
 
-/** Neues Produkt mit Name + Marke und dem Richtwert der Tabelle – Nährwerte lassen sich später verfeinern */
+/**
+ * Neues Produkt mit Name + Marke, noch ohne eigene Nährwerte – es rechnet mit dem Richtwert der Tabelle
+ * (Eintrag aus der Tabelle: über „ersetzt“; sonst wie früher mit einer Kopie der Werte)
+ */
 function fromTable(offer: { name: string; brand: string }, food: FoodEntry): MyProduct {
-  return { id: newId('p'), name: offer.name, brand: offer.brand, replaces: [], names: [normalizeName(offer.name)], per100g: food.per100g, updatedAt: new Date().toISOString() };
+  const base = { id: newId('p'), name: offer.name, brand: offer.brand, names: [normalizeName(offer.name)], updatedAt: new Date().toISOString() };
+  return food.ref.provider === PROVIDER
+    ? { ...base, replaces: [food.ref.foodId], per100g: { kcal: 0, protein: 0, carbs: 0, fat: 0 }, noValues: true }
+    : { ...base, replaces: [], per100g: food.per100g };
 }
 

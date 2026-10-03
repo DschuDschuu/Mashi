@@ -3,7 +3,7 @@ import PouchDB from 'pouchdb-core';
 import memory from 'pouchdb-adapter-memory';
 import { describe, expect, it } from 'vitest';
 import { PouchRecipeRepository, type RecipeDb } from './pouchRepository';
-import { addExtra, addPantryItem, dropPriceDay, editBon, setCategory, addToPlan, answerLeftover, applyInventory, clearDoneExtras, deleteRecipe, importPantry, importReceipt, importRecipes, regenerateImage, markCooked, uncookRecipe, clearCooked, createRecipe, currentLeftoverAsk, currentPantry, eatPreparedPortions, freezePantryItem, initStore, thawPantryItem, togglePlanCooked, removeFromPlan, removePantryItem, setFoodStage, setPantryAmount, toggleShoppingItem, updatePantryItem } from './store';
+import { setPlanAmounts, addExtra, addPantryItem, dropPriceDay, editBon, setCategory, addToPlan, answerLeftover, applyInventory, clearDoneExtras, deleteRecipe, importPantry, importReceipt, importRecipes, regenerateImage, markCooked, uncookRecipe, clearCooked, createRecipe, currentLeftoverAsk, currentPantry, eatPreparedPortions, freezePantryItem, initStore, thawPantryItem, togglePlanCooked, removeFromPlan, removePantryItem, setFoodStage, setPantryAmount, toggleShoppingItem, updatePantryItem } from './store';
 import { keyOfName } from '../domain/mealplan';
 import { emptyPantry } from '../domain/pantry';
 import { EXTRA_PREFIX, RESTOCK_PREFIX } from '../domain/restock';
@@ -342,3 +342,20 @@ describe('Store: alten Tag aus dem Preisverlauf löschen mit Rückgängig', () =
   });
 });
 
+
+describe('Store: „nur dieses Mal“-Mengen im Wochenplan ändern (Julia)', () => {
+  it('ändern und zurück auf das Rezept', async () => {
+    const repo = await freshStore('mengen');
+    const rid = createRecipe({
+      title: 'Paprika-Pfanne', description: '', servings: 2, prepMinutes: 0, cookMinutes: 0, difficulty: 1,
+      ingredients: [{ id: 'p', name: 'Paprika', amount: 1, unit: 'Stück' }], steps: [], categories: [], tags: [], devices: [],
+    }, { source: 'selbst', status: 'kochbuch' });
+    addToPlan(rid, 2, {}, { p: 3 });
+    setPlanAmounts(rid, { p: 2 });
+    await settle();
+    expect((await repo.loadPlan()).items[0].amounts).toEqual({ p: 2 });
+    setPlanAmounts(rid, {});
+    await settle();
+    expect((await repo.loadPlan()).items[0]).not.toHaveProperty('amounts');
+  });
+});

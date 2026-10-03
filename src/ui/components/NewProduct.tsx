@@ -2,9 +2,9 @@ import { useMemo, useState } from 'react';
 import { basicsOf } from '../../domain/mealplan';
 import { buildFoodList, findFoodRow, type FoodRow } from '../../domain/nutrition/foodList';
 import { normalizeName } from '../../domain/nutrition/localFoods';
-import { sharedOf, withShared, type MyProduct } from '../../domain/nutrition/myProducts';
+import { fillOrAdd, sharedOf, withShared, type MyProduct } from '../../domain/nutrition/myProducts';
 import { zeroOf } from '../../domain/nutrition/noNutrition';
-import { saveProducts, usePantry, useProducts } from '../../data/store';
+import { addProduct, saveProducts, usePantry, useProducts } from '../../data/store';
 import { foodTable } from '../../services';
 import { toast } from '../toast';
 import { ProductForm } from './MyProductsPanel';
@@ -36,10 +36,11 @@ export function NewProduct({ name, bonName, pack = {}, onDone }: {
         <ProductForm shared={shared} initial={pack} onCancel={() => onDone()} onSave={(p) => {
           // wie „Weitere Sorte“ in der Kachel: alle Sorten bekommen dasselbe Gemeinsame
           const group = new Set(sortOf.products.map((x) => x.id));
-          const sort = withShared(p, shared);
-          saveProducts([...products.map((x) => (group.has(x.id) ? withShared(x, shared) : x)), sort]);
-          toast(`Weitere Sorte von „${shared.name}“ angelegt`);
-          onDone(sort);
+          // die einzige Sorte hat noch keine Werte? Dann füllt sich die (siehe fillOrAdd)
+          const { products: next, saved } = fillOrAdd(products.map((x) => (group.has(x.id) ? withShared(x, shared) : x)), withShared(p, shared), sortOf.products);
+          saveProducts(next);
+          toast(saved.id === p.id ? `Weitere Sorte von „${shared.name}“ angelegt` : `„${shared.name}“ ergänzt`);
+          onDone(saved);
         }} />
       </div>
     );
@@ -47,7 +48,7 @@ export function NewProduct({ name, bonName, pack = {}, onDone }: {
   return (
     <ProductForm
       initial={{ name, names: [normalizeName(bonName)], replaces: [], ...pack }}
-      onSave={(p) => { saveProducts([...products, p]); toast(`„${p.name}“ angelegt`); onDone(p); }}
+      onSave={(p) => { const saved = addProduct(p); toast(saved.id === p.id ? `„${p.name}“ angelegt` : `„${saved.name}“ ergänzt`); onDone(saved); }}
       onCancel={() => onDone()}
       afterName={(n) => {
         const hit = existing(n);

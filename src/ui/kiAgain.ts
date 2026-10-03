@@ -15,6 +15,8 @@ export interface KiForm {
   time: string[];
   withPantry: boolean;
   withTastes: boolean;
+  /** Makro-Ziel mitschicken (ältere gemerkte Aufträge: fehlt → an) */
+  withMacros?: boolean;
 }
 
 export interface KiAgain {

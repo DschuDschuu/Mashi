@@ -121,11 +121,21 @@ describe('Gleiche Zeilen zusammenfassen', () => {
       { name: 'Butter', count: 1, price: 1.99 },
       { name: 'Joghurt', count: 1, price: 0.79 },
       { name: 'Joghurt', count: 1, price: 0.99, reduced: true, discounts: [{ kind: 'mhd', amount: 0.2, percent: 20 }] },
-      { name: 'Bananen', count: 1, price: 1.2, weightKg: 0.982 },
-      { name: 'Bananen', count: 1, price: 1.2, weightKg: 0.982 },
+      { name: 'Bananen', count: 1, price: 1.2, weightKg: 0.982, perKg: 1.19 },
+      { name: 'Bananen', count: 1, price: 1.2, weightKg: 0.982, perKg: 1.19 },
     ]);
     // die Eingabe bleibt unverändert
     expect(lines[0]).toEqual({ name: 'Joghurt', count: 1, price: 0.99 });
   });
 });
 
+
+describe('Kilopreis vom Bon (Julia: Banane zweimal 1,99 €/kg, Verlauf zeigte +0,1 %)', () => {
+  it('der Kilopreis der Gewichtszeile wird gemerkt – nicht Preis ÷ Gewicht', () => {
+    const [a] = parseReceipt(['EUR', 'Bananen 2,37 A', '1,190 kg x 1,99 EUR/kg', 'Zu zahlen'].join('\n'));
+    const [b] = parseReceipt(['EUR', 'Bananen 1,79 A', '0,898 kg x 1,99 EUR/kg', 'Zu zahlen'].join('\n'));
+    expect([a.perKg, b.perKg]).toEqual([1.99, 1.99]);
+    // gerechnet wären es 1,9916 bzw. 1,9933 €/kg – also ein „Anstieg“
+    expect(a.price! / a.weightKg!).not.toBeCloseTo(b.price! / b.weightKg!, 4);
+  });
+});

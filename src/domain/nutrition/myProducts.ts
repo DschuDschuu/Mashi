@@ -1,4 +1,4 @@
-import { normalizeName } from './localFoods';
+import { normalizeName, PROVIDER } from './localFoods';
 import { fatGroupOf, fatLevel, sameLevel } from './fatLevels';
 import { averageNutrients } from './variants';
 import type { FoodEntry, FoodTable, Nutrients } from './types';
@@ -24,8 +24,13 @@ export interface MyProduct {
    * gar nicht kennt (z. B. „kimchi“). Normalisiert gespeichert (siehe normalizeName).
    */
   names?: string[];
-  /** Werte vom Etikett, pro 100 g bzw. 100 ml */
+  /** Werte vom Etikett, pro 100 g bzw. 100 ml (bei noValues: Nullen, zählen nicht) */
   per100g: Nutrients;
+  /**
+   * Ohne eigene Nährwerte angelegt (Julia: „Meine Lebensmittel“ als zentrale Stelle – Haltbarkeit, Packung,
+   * Kategorie auch ohne Etikett). Gerechnet wird dann mit der Tabelle; kennt die sie nicht, fehlen die Werte.
+   */
+  noValues?: boolean;
   /** Packungsgröße, z. B. 125 g – füllt beim Kassenbon die Menge je Stück aus */
   packageAmount?: number;
   packageUnit?: 'g' | 'ml' | 'Stück';
@@ -142,8 +147,15 @@ function pieceOf(p: MyProduct, replaced?: FoodEntry): number | undefined {
   return replaced?.portions?.Stück ? undefined : glassOf(p, replaced);
 }
 
+const ZERO: Nutrients = { kcal: 0, protein: 0, carbs: 0, fat: 0 };
+
+/** Womit eine Sorte rechnet: eigene Werte – ohne eigene die der Tabelle (undefined = unbekannt) */
+export const valuesOf = (p: Pick<MyProduct, 'per100g' | 'noValues'>, replaced?: FoodEntry): Nutrients | undefined =>
+  p.noValues ? (replaced && !replaced.noValues ? replaced.per100g : undefined) : p.per100g;
+
 /** Ein Produkt als Tabelleneintrag. Umrechnungen (Dichte, Stückgewicht) erbt es vom ersetzten Eintrag. */
 function asEntry(p: MyProduct, replaced?: FoodEntry): FoodEntry {
+  const values = valuesOf(p, replaced);
   // „1 Glas = Packung“ nur, wo es wirklich ein Glas ist (Pesto, Senf) oder die Tabelle es nicht kennt –
   // sonst hielte offener Joghurt „wie ein Glas“ 14 statt 3 Tage (siehe openedDaysOf)
   const glass = replaced && !replaced.portions?.Glas ? undefined : glassOf(p, replaced);
@@ -151,7 +163,8 @@ function asEntry(p: MyProduct, replaced?: FoodEntry): FoodEntry {
   return {
     ref: { provider: MY_PRODUCTS_PROVIDER, foodId: p.id },
     name: productLabel(p),
-    per100g: p.per100g,
+    per100g: values ?? ZERO,
+    ...(values ? {} : { noValues: true }),
     ...(replaced?.density !== undefined ? { density: replaced.density } : {}),
     ...(replaced?.portions || glass || piece ? { portions: { ...replaced?.portions, ...(glass ? { Glas: glass } : {}), ...(piece ? { Stück: piece } : {}) } } : {}),
     ...(replaced?.kind ? { kind: replaced.kind } : {}),
@@ -170,13 +183,20 @@ function asGroup(ps: MyProduct[], key: string, replaced?: FoodEntry): FoodEntry 
   const days = ps.map((p) => p.shelfDays).filter((d): d is number => d !== undefined);
   // Favorit: dessen Werte statt des Durchschnitts (Schlüssel bleibt – Vorrat und Rezept finden sich weiter)
   const fav = ps.find((p) => p.favorite);
+  // Sorten ohne eigene Werte rechnen mit der Tabelle; kennt die sie nicht, zählen sie beim Durchschnitt nicht mit
+  const known = ps.map((p) => valuesOf(p, replaced)).filter((v): v is Nutrients => !!v);
+  const favValues = fav && valuesOf(fav, replaced);
+  const avg = known.length ? averageNutrients(known) : undefined;
+  const values = favValues ?? avg;
+  const { noValues: _n, ...entry } = asEntry(fav ?? ps[0], replaced);
   return {
-    ...asEntry(fav ?? ps[0], replaced),
+    ...entry,
     ref: { provider: MY_PRODUCTS_PROVIDER, foodId: `sorten:${key}` },
     name: replaced?.name ?? key.charAt(0).toLocaleUpperCase('de-DE') + key.slice(1),
-    per100g: fav ? fav.per100g : averageNutrients(ps.map((p) => p.per100g)),
+    per100g: values ?? ZERO,
+    ...(values ? {} : { noValues: true }),
     ...(days.length === ps.length ? { shelfDays: Math.min(...days) } : { shelfDays: undefined }),
-    variants: ps.map((p) => ({ id: p.id, name: productLabel(p), per100g: p.per100g, ...(p.favorite ? { favorite: true } : {}) })),
+    variants: ps.map((p) => ({ id: p.id, name: productLabel(p), per100g: valuesOf(p, replaced) ?? values ?? ZERO, ...(p.favorite ? { favorite: true } : {}) })),
     ...(fav ? { favoriteId: fav.id } : {}),
   };
 }
@@ -246,7 +266,8 @@ function buildTable(base: FoodTable, products: MyProduct[]): FoodTable {
           return ps && asGroup(ps, key, byReplaced.has(key) ? base.byRef({ provider: ref.provider, foodId: key }) : exact?.quality === 'exact' ? exact.food : undefined);
         }
         const p = products.find((x) => x.id === ref.foodId);
-        return p ? asEntry(p) : undefined;
+        // ohne eigene Werte: die des ersetzten Eintrags
+        return p ? asEntry(p, p.noValues && p.replaces[0] ? base.byRef({ provider: PROVIDER, foodId: p.replaces[0] }) : undefined) : undefined;
       }
       const food = base.byRef(ref);
       return food && swap(food);
@@ -275,14 +296,22 @@ function buildTable(base: FoodTable, products: MyProduct[]): FoodTable {
       // (1 Glas, 1 EL, Dichte) – falls du selbst keine Packungsgröße eingetragen hast
       // „Milch (1,5 %)“ normalisiert zu „milch“ – die Stufe entscheidet, nicht dein Standard-Produkt „Milch“
       const otherLevel = !!m?.specific && m.alias !== n;
-      if (own && !otherLevel) return { food: asGroup(own, n, m?.quality === 'exact' ? m.food : undefined), quality: 'exact' };
+      // Sorten ganz ohne eigene Werte rechnen wie vorher mit dem Tabellentreffer – auch einem ungefähren
+      // („Pesto Rosso“ → Pesto), dann aber auch als ungefähr; sonst gingen beim Übernehmen Werte verloren
+      const loose = (ps: MyProduct[]) => (m && m.quality !== 'exact' && ps.every((p) => p.noValues) ? m : undefined);
+      if (own && !otherLevel) {
+        const approx = loose(own);
+        return { food: asGroup(own, n, m?.quality === 'exact' ? m.food : approx?.food), quality: approx?.quality ?? 'exact' };
+      }
       const selves = otherLevel ? undefined : byOwnName.get(n);
       if (selves?.length) {
         // Umrechnungen (Dichte, Stückgewicht) vom ersetzten Eintrag behalten, wenn der Name dorthin führt
-        const replaced = m && selves.every((x) => x.replaces.includes(m.food.ref.foodId)) ? m.food : undefined;
+        const approx = loose(selves);
+        const replaced = m && selves.every((x) => x.replaces.includes(m.food.ref.foodId)) ? m.food : approx?.food;
+        const quality = approx && replaced === approx.food ? approx.quality : 'exact';
         // mehrere Sorten: als Gruppe (Sortenwahl, Durchschnitt oder Favorit) – Schlüssel wie über die Tabelle
-        if (selves.length > 1) return { food: asGroup(selves, replaced?.ref.foodId ?? n, replaced), quality: 'exact' };
-        return { food: asEntry(selves[0], replaced), quality: 'exact' };
+        if (selves.length > 1) return { food: asGroup(selves, replaced && replaced !== approx?.food ? replaced.ref.foodId : n, replaced), quality };
+        return { food: asEntry(selves[0], replaced), quality };
       }
       return m && { food: swap(m.food, m.alias ?? n, n, name), quality: m.quality, ...(m.alias ? { alias: m.alias } : {}), ...(m.specific ? { specific: true } : {}) };
     },
@@ -309,5 +338,31 @@ export function isValidProduct(v: unknown): v is MyProduct {
     && (p.brand === undefined || typeof p.brand === 'string')
     && (p.detail === undefined || typeof p.detail === 'string')
     && (p.excludes === undefined || (Array.isArray(p.excludes) && p.excludes.every((x) => typeof x === 'string')))
+    && (p.noValues === undefined || typeof p.noValues === 'boolean')
     && !!n && isNum(n.kcal) && isNum(n.protein) && isNum(n.carbs) && isNum(n.fat);
+}
+
+/** Die eigenen Produkte, mit denen eine Zutat rechnet (eine Sorte oder alle Sorten) – leer = Tabelle oder unbekannt */
+export function productsFor(name: string, table: FoodTable, products: readonly MyProduct[]): MyProduct[] {
+  const food = table.matchName(name)?.food;
+  if (food?.ref.provider !== MY_PRODUCTS_PROVIDER) return [];
+  const ids = new Set(food.variants?.map((v) => v.id) ?? [food.ref.foodId]);
+  return products.filter((p) => ids.has(p.id));
+}
+
+/**
+ * Werte für ein Lebensmittel, das bisher nur ohne Werte da ist (z. B. aus Vorrat und Bons übernommen):
+ * dessen Sorte füllt sich – statt dass zwei Sorten entstehen und Mashi beim Planen fragt, welche.
+ * Nur, wenn es genau diese eine Sorte gibt und die Marke nicht widerspricht. Haltbarkeit, Packung,
+ * „gilt für“ und Favorit der alten Sorte bleiben, wo die neue nichts sagt.
+ * @param group die Sorten dieses Lebensmittels (siehe productsFor)
+ */
+export function fillOrAdd(products: readonly MyProduct[], p: MyProduct, group: readonly MyProduct[]): { products: MyProduct[]; saved: MyProduct } {
+  const [only] = group;
+  const fits = group.length === 1 && only.noValues && !p.noValues && (!brandOf(only) || !brandOf(p) || brandOf(only) === brandOf(p));
+  if (!fits) return { products: [...products, p], saved: p };
+  const defined = Object.fromEntries(Object.entries(p).filter(([, v]) => v !== undefined && !(Array.isArray(v) && !v.length)));
+  const { noValues: _n, ...old } = only;
+  const saved: MyProduct = { ...old, ...defined, id: only.id } as MyProduct;
+  return { products: products.map((x) => (x.id === only.id ? saved : x)), saved };
 }

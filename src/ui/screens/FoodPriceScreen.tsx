@@ -67,7 +67,8 @@ export function FoodPriceScreen({ name, title }: { name: string; title: string }
   // günstigster bezahlter Preis (nach Rabatt) – in der Einheit des Verlaufs
   const paidEntry = (p: Purchase) => {
     const row = rowFromLine(p.line);
-    return priceOf({ ...row, line: { ...row.line, price: paidOf(p.line) } }, p.date);
+    // bezahlt (nach Rabatt) – darum ohne den Regal-Kilopreis rechnen
+    return priceOf({ ...row, line: { ...row.line, price: paidOf(p.line), perKg: undefined } }, p.date);
   };
   const cheapest = shownPurchases
     .map(paidEntry)

@@ -16,6 +16,8 @@ export interface BonLine {
   bon: string;
   count: number;
   weightKg?: number;
+  /** Kilopreis vom Bon (oder von dir) – geht vor Preis ÷ Gewicht */
+  perKg?: number;
   /** Preis auf dem Bon – vor Rabatt */
   price?: number;
   /** Rabattzeilen darunter */
@@ -64,6 +66,7 @@ export function lineFromRow(r: ImportRow): BonLine {
   return {
     bon: r.line.name, count: r.line.count,
     ...(r.line.weightKg !== undefined ? { weightKg: r.line.weightKg } : {}),
+    ...(r.line.perKg !== undefined ? { perKg: r.line.perKg } : {}),
     ...(r.line.price !== undefined ? { price: r.line.price } : {}),
     ...(r.line.discounts?.length ? { discounts: r.line.discounts } : {}),
     ...(r.skip ? { skip: true } : {}),
@@ -77,7 +80,7 @@ export function lineFromRow(r: ImportRow): BonLine {
 
 export function rowFromLine(l: BonLine): ImportRow {
   return {
-    line: { name: l.bon, count: l.count, ...(l.weightKg !== undefined ? { weightKg: l.weightKg } : {}), ...(l.price !== undefined ? { price: l.price } : {}), ...(l.discounts ? { discounts: l.discounts } : {}) },
+    line: { name: l.bon, count: l.count, ...(l.weightKg !== undefined ? { weightKg: l.weightKg } : {}), ...(l.perKg !== undefined ? { perKg: l.perKg } : {}), ...(l.price !== undefined ? { price: l.price } : {}), ...(l.discounts ? { discounts: l.discounts } : {}) },
     key: receiptKey(l.bon), known: true, skip: !!l.skip, name: l.name,
     ...(l.amount !== undefined ? { amount: l.amount, unit: l.unit } : {}),
     ...(l.productId ? { productId: l.productId } : {}),
@@ -103,7 +106,7 @@ export function addBon(pantry: Pantry, bon: SavedBon): Pantry {
   return { ...pantry, bons };
 }
 
-export type BonLinePatch = Partial<Pick<BonLine, 'name' | 'amount' | 'unit' | 'productId' | 'price' | 'discounts' | 'count' | 'weightKg'>>;
+export type BonLinePatch = Partial<Pick<BonLine, 'name' | 'amount' | 'unit' | 'productId' | 'price' | 'discounts' | 'count' | 'weightKg' | 'perKg'>>;
 
 /**
  * Eine Zeile eines gespeicherten Bons ändern – und alles, was daraus entstanden ist, mit:

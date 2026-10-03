@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import type { ShoppingItem } from '../../domain/mealplan';
 import { shoppingList } from '../../domain/restock';
-import { addExtra, clearDoneExtras, removeExtra, toggleBuyAnyway, toggleShoppingItem, useFoodTable, usePantry, usePlan, useProducts, useRecipes } from '../../data/store';
+import { addExtra, clearChecked, removeExtra, toggleBuyAnyway, toggleShoppingItem, useFoodTable, usePantry, usePlan, useProducts, useRecipes } from '../../data/store';
 import { IngredientNames } from '../components/IngredientNames';
 import { toast } from '../toast';
 import { navigate } from '../../router';
@@ -31,13 +31,14 @@ export function ShoppingScreen() {
   const isDone = (i: ShoppingItem) => plan.checked.includes(i.key);
   const open = shown.filter((i) => !isDone(i) && !i.covered);
   const categoryOf = useCategoryOf();
-  const done = shown.filter(isDone);
+  // abgehakt und entfernt (Julia: „Abgehaktes entfernen“) – steht nicht mehr unter „Im Wagen“
+  const done = shown.filter((i) => isDone(i) && !(plan.hidden ?? []).includes(i.key));
   const have = shown.filter((i) => i.covered && !isDone(i));
   const count = (v: View) => all.filter((i) => (v === 'basics' ? i.pantry : !i.pantry) && !isDone(i) && !i.covered).length;
 
   return (
     <main className="screen screen--tabbed">
-      <TopBar title="Einkaufsliste" backTo="/speisekammer" />
+      <TopBar title="Einkaufsliste" backTo="/plan" />
       {/* eigene Einträge: „Spülmittel“, „Backpapier“ – auch ohne Plan */}
       <AddExtra />
       {all.length === 0 ? (
@@ -71,13 +72,11 @@ export function ShoppingScreen() {
           {done.length > 0 && (
             <Section title={`Im Wagen (${done.length})`}>
               <ul className="shopping panel">{done.map((i) => <ShoppingRow key={i.key} item={i} checked />)}</ul>
-              {/* eigene Einträge verschwinden mit dem Bon – oder hier von Hand */}
-              {done.some((i) => i.extra) && (
-                <button className="link link--muted" onClick={() => {
-                  const undo = clearDoneExtras();
-                  toast('Erledigte Einträge entfernt', { label: 'Rückgängig', run: undo });
-                }}>Erledigtes entfernen</button>
-              )}
+              {/* alles Abgehakte von der Liste – eigene Einträge und die vom Wochenplan (Julia) */}
+              <button className="link link--muted" onClick={() => {
+                const undo = clearChecked();
+                toast('Abgehaktes entfernt', { label: 'Rückgängig', run: undo });
+              }}>Abgehaktes entfernen</button>
             </Section>
           )}
           {have.length > 0 && (

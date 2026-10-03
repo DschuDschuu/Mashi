@@ -122,7 +122,7 @@ function LineEdit({ line, onDone }: { line: BonLine; onDone: (patch: Partial<Bon
   const [amount, setAmount] = useState(field(shown));
   const [price, setPrice] = useState(field(line.price));
   // Kilopreis wie auf dem Bon („1,99 EUR/kg“) – Julia trägt lieber den ein als das Gewicht; Mashi rechnet das Gewicht aus
-  const [perKg, setPerKg] = useState(line.weightKg && line.price !== undefined ? field(line.price / line.weightKg) : '');
+  const [perKg, setPerKg] = useState(line.perKg !== undefined ? field(line.perKg) : line.weightKg && line.price !== undefined ? field(line.price / line.weightKg) : '');
   // was vom Bon kam (Betrag und „20%“), bleibt erkennbar – geänderter Betrag oder Art: Prozent fällt weg, Mashi rechnet
   const [discounts, setDiscounts] = useState<{ kind: DiscountKind; text: string; from?: LineDiscount }[]>(
     (line.discounts ?? []).map((d) => ({ kind: d.kind, text: field(d.amount), from: d })));
@@ -150,7 +150,7 @@ function LineEdit({ line, onDone }: { line: BonLine; onDone: (patch: Partial<Bon
     if (eurPerKg && pr === undefined) return setError('Für den Kilopreis braucht Mashi den Preis auf dem Bon.');
     // Preis ÷ Kilopreis = Gewicht (6,45 € ÷ 1,99 €/kg = 3,242 kg)
     const kg = eurPerKg && pr !== undefined ? Math.round((pr / eurPerKg) * 1000) / 1000 : undefined;
-    onDone({ name: name.trim(), productId: productId || undefined, count: n, amount: total, unit, price: pr, discounts: ds, weightKg: kg });
+    onDone({ name: name.trim(), productId: productId || undefined, count: n, amount: total, unit, price: pr, discounts: ds, weightKg: kg, perKg: eurPerKg });
   };
 
   return (

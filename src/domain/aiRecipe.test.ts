@@ -9,6 +9,14 @@ const good = {
   steps: [{ text: 'Paprika schneiden.' }, { text: 'Anbraten.', timerMinutes: 8 }],
 };
 
+describe('Makro-Ziel in der KI-Anfrage', () => {
+  it('geht mit, wenn gesetzt – sonst nicht', () => {
+    expect(buildRecipePrompt({ prompt: 'Pasta', kitchen: { macros: { carbs: 40, protein: 30, fat: 30 } } }))
+      .toContain('Makro-Ziel (Anteil an den Kalorien): Kohlenhydrate 40 %, Eiweiß 30 %, Fett 30 %');
+    expect(buildRecipePrompt({ prompt: 'Pasta' })).not.toContain('Makro-Ziel');
+  });
+});
+
 describe('KI-Auftrag', () => {
   it('enthält Wunsch, Rahmen und was bald weg muss – und das Antwortformat', () => {
     const p = buildRecipePrompt({

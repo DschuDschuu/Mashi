@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { currentMode } from '../../data/connection';
-import { createRecipe, deleteRecipe, usePantry, useRecipes } from '../../data/store';
+import { createRecipe, deleteRecipe, useMacroGoal, usePantry, useRecipes } from '../../data/store';
 import { basicsOf } from '../../domain/mealplan';
 import { isPrepared } from '../../domain/pantry';
 import { currentContent } from '../../domain/recipe';
@@ -42,6 +42,9 @@ export function AiCreateScreen({ initialPrompt = '' }: { initialPrompt?: string 
   const real = currentMode() === 'sync';
   const [withPantry, setWithPantry] = useState(start?.withPantry ?? true);
   const [withTastes, setWithTastes] = useState(start?.withTastes ?? true);
+  // Makro-Ziel aus den Einstellungen mitschicken (Julia) – standardmäßig an
+  const [withMacros, setWithMacros] = useState(start?.withMacros ?? true);
+  const goal = useMacroGoal();
   const pantry = usePantry();
   const recipes = useRecipes();
   const { rest } = useUseUp();
@@ -52,7 +55,7 @@ export function AiCreateScreen({ initialPrompt = '' }: { initialPrompt?: string 
   const generate = async () => {
     setBusy(true);
     setError(null);
-    const form: KiForm = { prompt, servings, devices, wishes, time, withPantry, withTastes };
+    const form: KiForm = { prompt, servings, devices, wishes, time, withPantry, withTastes, withMacros };
     // die letzten Ideen (auch die, die gerade ersetzt wird) – damit die KI sich nicht wiederholt
     const recent = recipes
       .filter((r) => r.source === 'ki')
@@ -68,6 +71,7 @@ export function AiCreateScreen({ initialPrompt = '' }: { initialPrompt?: string 
           kitchen: {
             ...(withPantry ? { pantry: rest.items.filter((i) => !isPrepared(i)).map((i) => i.name), basics: [...basicsOf(pantry)] } : {}),
             ...(withTastes && pantry.tastes ? { tastes: pantry.tastes } : {}),
+            ...(withMacros ? { macros: goal } : {}),
           },
         } : {}),
       });
@@ -137,6 +141,10 @@ export function AiCreateScreen({ initialPrompt = '' }: { initialPrompt?: string 
         {real && (
           <Switch checked={withPantry} onChange={setWithPantry} label="Meinen Vorrat einbeziehen"
             hint="Die KI nutzt gern, was du schon hast – dann musst du weniger einkaufen." />
+        )}
+        {real && (
+          <Switch checked={withMacros} onChange={setWithMacros} label="Mein Makro-Ziel einbeziehen"
+            hint={`Kohlenhydrate ${goal.carbs} % · Eiweiß ${goal.protein} % · Fett ${goal.fat} %`} />
         )}
         {real && (pantry.tastes ? (
           <Switch checked={withTastes} onChange={setWithTastes} label="Meine Vorlieben einbeziehen"

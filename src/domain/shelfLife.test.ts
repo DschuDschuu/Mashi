@@ -125,12 +125,13 @@ describe('Reste mitverbrauchen (nur dieses Mal)', () => {
   const ing = (name: string, amount: number, unit: Ingredient['unit']): Ingredient => ({ id: name, name, amount, unit });
 
   it('2 Tomaten im Rezept, 3 da → „alle 3“', () => {
-    const s = leftoverSuggestions(pantry(item('Tomaten', 24, { amount: 3, unit: 'Stück' })), [ing('Tomaten', 2, 'Stück')], localFoodTable);
-    expect(s).toEqual([{ ingredientId: 'Tomaten', name: 'Tomaten', amount: 3, planned: 2, unit: 'Stück' }]);
+    const s = leftoverSuggestions(pantry(item('Tomaten', 24, { amount: 3, unit: 'Stück' })), [ing('Tomaten', 2, 'Stück')], localFoodTable, NOW);
+    expect(s).toHaveLength(1);
+    expect(s[0]).toMatchObject({ ingredientId: 'Tomaten', name: 'Tomaten', amount: 3, planned: 2, unit: 'Stück', need: 2, have: 3 });
   });
 
   it('rechnet in der Einheit des Rezepts: 200 g Spinat geplant, 250 g da → 250 g', () => {
-    const s = leftoverSuggestions(pantry(item('Spinat', 24, { amount: 250, unit: 'g' })), [ing('Spinat', 200, 'g')], localFoodTable);
+    const s = leftoverSuggestions(pantry(item('Spinat', 24, { amount: 250, unit: 'g' })), [ing('Spinat', 200, 'g')], localFoodTable, NOW);
     expect(s[0]).toMatchObject({ amount: 250, planned: 200 });
   });
 
@@ -138,9 +139,14 @@ describe('Reste mitverbrauchen (nur dieses Mal)', () => {
     const p = pantry(
       item('Pasta', 24, { amount: 5000, unit: 'g' }),
       item('Spinat', 24, { amount: 205, unit: 'g' }),
-      item('Hähnchenbrust', 24, { amount: 1000, unit: 'g' }),
+      item('Hähnchenbrust', 24, { amount: 1000, unit: 'g', useBy: iso(30) }),
     );
-    expect(leftoverSuggestions(p, [ing('Pasta', 250, 'g'), ing('Spinat', 200, 'g'), ing('Hähnchenbrust', 300, 'g')], localFoodTable)).toEqual([]);
+    expect(leftoverSuggestions(p, [ing('Pasta', 250, 'g'), ing('Spinat', 200, 'g'), ing('Hähnchenbrust', 300, 'g')], localFoodTable, NOW)).toEqual([]);
+  });
+
+  it('läuft es bald ab, auch mehr als doppelt so viel: 300 g Hähnchen geplant, 1 kg läuft morgen ab', () => {
+    const p = pantry(item('Hähnchenbrust', 24, { amount: 1000, unit: 'g', useBy: iso(26) }));
+    expect(leftoverSuggestions(p, [ing('Hähnchenbrust', 300, 'g')], localFoodTable, NOW)[0]).toMatchObject({ amount: 1000, need: 300, have: 1000 });
   });
 
   it('„Gekocht“ zieht die geänderte Menge ab – das Rezept bleibt, wie es ist', () => {
@@ -229,7 +235,7 @@ Zu zahlen 11,54`;
 
   it('Reste-Vorschlag im Kochmodus lässt Gefrorenes aus', () => {
     const tk = { ...item('Spinat', 20, { amount: 250, unit: 'g' }), frozenAt: iso(20) };
-    expect(leftoverSuggestions(pantry(tk), [{ id: 's', name: 'Spinat', amount: 200, unit: 'g' }], localFoodTable)).toEqual([]);
+    expect(leftoverSuggestions(pantry(tk), [{ id: 's', name: 'Spinat', amount: 200, unit: 'g' }], localFoodTable, NOW)).toEqual([]);
   });
 });
 

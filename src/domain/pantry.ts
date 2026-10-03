@@ -287,6 +287,8 @@ export function priceOf(row: ImportRow, date: string): PriceEntry | undefined {
   const name = row.name.trim();
   const sort = row.productId ? { productId: row.productId } : {};
   // gewogen (Kilopreis auf dem Bon): immer je kg – auch wenn der Vorrat „2 Stück“ Kürbis zählt (Julia)
+  // der Kilopreis vom Bon ist genau – Preis ÷ Gewicht schwankt, weil der Preis auf Cent gerundet ist (Julia: Banane +0,1 %)
+  if (row.line.perKg) return { name, perUnit: row.line.perKg / 1000, unit: 'g', date, ...sort };
   if (row.line.weightKg) return { name, perUnit: paid / (row.line.weightKg * 1000), unit: 'g', date, ...sort };
   const counted = row.unit === 'Stück' || row.unit === 'Glas';
   if (row.amount && !counted) return { name, perUnit: paid / row.amount, unit: 'g', date, ...sort };
@@ -486,7 +488,7 @@ export function pantryAfterPlan(pantry: Pantry, plan: MealPlan, recipes: Recipe[
     if (plan.cooked.includes(item.recipeId)) continue;
     const r = recipes.find((x) => x.id === item.recipeId);
     if (!r) continue;
-    const d = deductRecipe(rest, currentContent(r), item.servings, table, {}, item.variants);
+    const d = deductRecipe(rest, currentContent(r), item.servings, table, item.amounts ?? {}, item.variants);
     d.checkIds.forEach((id) => reserved.add(id));
     rest = d.pantry;
   }
@@ -530,20 +532,35 @@ export function recipesFromPantry(pantry: Pantry, recipes: Recipe[], table: Food
 export interface Leftover {
   ingredientId: string;
   name: string;
-  /** vorgeschlagene Menge in der Einheit der Zutat – so viel, dass nichts übrig bleibt */
+  /** alles verwenden – in der Einheit des Rezepts */
   amount: number;
   /** was das Rezept für diese Portionen vorsieht */
   planned: number;
   unit?: Unit;
+  /** Rezept-Menge je Vorrats-Einheit (1 Stück Paprika = 1 Stück; bei Gramm 1 g = 1 g) */
+  perItem: number;
+  /** in Vorrats-Einheiten: was das Rezept braucht – und was da ist */
+  need: number;
+  have: number;
+  itemUnit: PantryUnit;
+  /** in Packungen gezählt (2 × 400 ml) */
+  pack?: Pack;
+  /** nur wenn es bald abläuft: frühestes „verbrauchen bis“ */
+  until?: string;
 }
 
 /**
- * Das Rezept will 2 Tomaten, da sind 3 → „alle 3 nehmen?“. Nur Verderbliches, und nur wenn der Rest
- * nennenswert ist (ab 10 %) und höchstens so viel wie geplant – 5 kg Nudeln schlägt niemand vor.
+ * Reste mitverbrauchen – nur dieses Mal, das Rezept bleibt. Nur Verderbliches, das schon im Rezept steht.
+ * - Das Rezept will 2 Tomaten, da sind 3 → „alle 3?“ – wenn der Rest nennenswert ist (ab 10 %) und höchstens
+ *   so viel wie geplant; 5 kg Nudeln schlägt niemand vor.
+ * - Läuft es in ≤ `days` Tagen ab, gilt die Obergrenze nicht (Julia: 1 Paprika im Rezept, 4 laufen morgen ab).
  * @param ingredients schon auf die Portionen umgerechnet
  * @param pantry am besten ohne das, was andere geplante Gerichte noch brauchen (pantryAfterPlan)
  */
-export function leftoverSuggestions(pantry: Pantry, ingredients: Ingredient[], table: FoodTable): Leftover[] {
+export function leftoverSuggestions(pantry: Pantry, ingredients: Ingredient[], table: FoodTable, now = new Date(), days = 2): Leftover[] {
+  const end = new Date(now);
+  end.setHours(23, 59, 59, 999);
+  end.setDate(end.getDate() + days);
   const perishable = pantry.items.filter((it) => !isPrepared(it) && (it.amount ?? 0) > 0 && !it.frozenAt && useByOf(it, table, pantry.shelfDays));
   const resolved = ingredients.map((ing) => ({ ing, need: resolveIngredient(ing, 1, table) }));
   const out: Leftover[] = [];
@@ -551,12 +568,23 @@ export function leftoverSuggestions(pantry: Pantry, ingredients: Ingredient[], t
     if (!need || need.pantry || need.food?.negligible || ing.amount === undefined) continue;
     // Kommt dieselbe Zutat zweimal vor (Knoblauch für Soße UND Topping), lieber nichts vorschlagen
     if (resolved.filter((r) => r.need?.key === need.key).length > 1) continue;
-    const item = perishable.find((it) => itemAsIngredient(it, table)?.key === need.key);
-    const inItem = item && needIn(item, need);
-    if (!item || !inItem) continue;
-    const rest = item.amount! - inItem;
-    if (rest < inItem * 0.1 || rest > inItem) continue;
-    out.push({ ingredientId: ing.id, name: ing.name, amount: ing.amount * (item.amount! / inItem), planned: ing.amount, unit: ing.unit });
+    const mine = perishable.filter((it) => itemAsIngredient(it, table)?.key === need.key);
+    const first = mine[0];
+    const inItem = first && needIn(first, need);
+    if (!first || !inItem || inItem <= 0) continue;
+    // nur gleich Gezähltes zusammen (Stück mit Stück, gleiche Packung)
+    const same = mine.filter((it) => it.unit === first.unit && samePack(it.pack, first.pack));
+    const have = Math.round(same.reduce((n, it) => n + it.amount!, 0) * 10) / 10;
+    const rest = have - inItem;
+    if (rest < inItem * 0.1) continue;
+    const soonest = same.map((it) => useByOf(it, table, pantry.shelfDays)!.toISOString()).sort()[0];
+    const expiring = new Date(soonest).getTime() <= end.getTime();
+    if (!expiring && rest > inItem) continue;
+    out.push({
+      ingredientId: ing.id, name: ing.name, amount: ing.amount * (have / inItem), planned: ing.amount, ...(ing.unit ? { unit: ing.unit } : {}),
+      perItem: ing.amount / inItem, need: inItem, have, itemUnit: first.unit ?? 'Stück', ...(first.pack ? { pack: first.pack } : {}),
+      ...(expiring ? { until: soonest } : {}),
+    });
   }
   return out;
 }
@@ -650,7 +678,7 @@ export function plannedByDish(pantry: Pantry, plan: MealPlan, recipes: Recipe[],
     if (plan.cooked.includes(item.recipeId)) continue;
     const r = recipes.find((x) => x.id === item.recipeId);
     if (!r) continue;
-    const d = deductRecipe(rest, currentContent(r), item.servings, table, {}, item.variants);
+    const d = deductRecipe(rest, currentContent(r), item.servings, table, item.amounts ?? {}, item.variants);
     out.push({ recipeId: r.id, taken: takenBetween(rest, d.pantry), stock: d.stock });
     // „Noch da?“-Markierung nur gedacht – fürs nächste Gericht wieder wie vorher
     rest = { ...d.pantry, items: d.pantry.items.map((it) => ({ ...it, check: originalCheck.get(it.id) })) };

@@ -2,7 +2,7 @@ import { navigate } from '../../router';
 import { useShoppingCount } from '../useShoppingCount';
 import { Icon } from './Icon';
 
-/** Wagen oben rechts in der Speisekammer – Einkaufen gehört zum Vorrat. Zahl = noch einzukaufen. */
+/** Wagen oben rechts im Wochenplan – die Einkaufsliste kommt aus dem Plan. Zahl = noch einzukaufen. */
 export function CartButton() {
   const toBuy = useShoppingCount();
   return (

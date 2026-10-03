@@ -415,7 +415,9 @@ p { margin: 0; }
 
 .list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; }
 .list__item { display: flex; align-items: center; gap: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 8px; }
-.list__title { flex: 1; font-weight: 700; font-size: 0.95rem; }
+.list__title { flex: 1; min-width: 0; overflow-wrap: anywhere; font-weight: 700; font-size: 0.95rem; }
+/* Knöpfe behalten ihre Größe – sonst schob ein langer Name „Löschen“ aus der Zeile (Archiv, Julia) */
+.list__item > .btn, .list__item > .iconbtn { flex: none; }
 
 /* ── KI: Illustration & Wartezustand ─────────────────────────── */
 .ai-art { position: relative; display: flex; align-items: flex-end; gap: 4px; margin-top: 4px; }
@@ -762,7 +764,7 @@ p { margin: 0; }
   .plan-list .list__item {
     /* oben: Titel bis ans ✕ (über die Regler-Spalte hinweg), unten: Fehlt/Preis links, Portionen rechts */
     display: grid; grid-template-columns: 36px minmax(0, 1fr) auto auto;
-    grid-template-areas: "check hit hit remove" "check meta servings servings" "check thaw thaw thaw";
+    grid-template-areas: "check hit hit remove" "check meta servings servings" "check thaw thaw thaw" "check amounts amounts amounts";
     column-gap: 10px; row-gap: 2px; align-items: center;
   }
   .plan-list .plan-cooked { grid-area: check; }
@@ -771,6 +773,7 @@ p { margin: 0; }
   .plan-list__servings { grid-area: servings; justify-self: end; }
   .plan-list__meta { grid-area: meta; }
   .plan-list__thaw { grid-area: thaw; padding-top: 4px; }
+  .plan-amounts { grid-area: amounts; padding: 4px 0 0; }
   .plan-list .list__title { overflow-wrap: normal; }
 }
 
@@ -977,17 +980,9 @@ p { margin: 0; }
 .shelf__tile { display: flex; flex-direction: column; justify-content: space-between; gap: 8px; padding: 10px; border-radius: var(--r-sm); background: var(--bg); min-width: 0; }
 .shelf__tile-label { font-size: 0.78rem; font-weight: 600; color: var(--ink-2); line-height: 1.25; }
 .shelf__tile .days-field { align-self: stretch; justify-content: center; padding: 0 8px 0 2px; }
-.shelf__groups { display: flex; flex-direction: column; }
-.shelf__group { border-top: 1px solid var(--line); }
-.shelf__group > summary { display: flex; align-items: center; gap: 10px; padding: 11px 0; cursor: pointer; list-style: none; font-weight: 600; }
-.shelf__group > summary::-webkit-details-marker { display: none; }
-.shelf__group > summary > svg:first-child { color: var(--art); flex: none; }
-.shelf__group-name { flex: 1; min-width: 0; }
-.shelf__group-name small { font-weight: 500; }
-.shelf__pill { flex: none; font-size: 0.78rem; font-weight: 700; color: var(--primary-press); background: var(--primary-soft); padding: 3px 9px; border-radius: 999px; }
-.shelf__chevron { flex: none; color: var(--ink-3); transform: rotate(90deg); transition: transform 0.15s; }
-.shelf__group[open] .shelf__chevron { transform: rotate(-90deg); }
-.shelf__rows { display: grid; gap: 4px; padding: 0 0 12px 28px; }
+.shelf__rows { display: grid; gap: 4px; }
+.shelf__row > span:first-child { display: inline-flex; align-items: center; gap: 8px; }
+.shelf__row > span:first-child > svg { color: var(--art); flex: none; }
 .shelf__row { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 40px; font-size: 0.92rem; }
 /* Zahl + Einheit als ein Feld */
 .days-field { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); padding: 0 10px 0 4px; height: 34px; color: var(--ink-3); font-size: 0.82rem; }
@@ -995,7 +990,7 @@ p { margin: 0; }
 .days-field input { width: 2.6em; border: 0; background: transparent; text-align: right; font-weight: 700; font-size: 0.95rem; padding: 0; color: var(--ink); outline: none; }
 .days-field input::placeholder { color: var(--ink-3); font-weight: 600; }
 .days-field.is-own { border-color: var(--primary); background: var(--primary-soft); }
-@media (prefers-reduced-motion: reduce) { .fold__chevron, .shelf__chevron { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .fold__chevron { transition: none; } }
 .shelf__tile .days-field input { width: 2.1em; }
 
 /* ── Badge „Bald verbrauchen“ auf geplanten Gerichten ─────────── */
@@ -1591,3 +1586,26 @@ details.cost-line[open] > summary::after { transform: rotate(-90deg); }
 .price-sorts-legend li { display: flex; align-items: center; gap: 8px; }
 .price-sorts-legend__name { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: 0.9rem; }
 .last-buy__alone { display: flex; justify-content: flex-end; margin-top: -4px; }
+/* Rezeptkarte: schon im Wochenplan (Julia) – Schild oben links auf dem Bild */
+.card__planned { position: absolute; top: 8px; left: 8px; z-index: 1; display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: 999px; background: var(--primary); color: var(--on-primary); font-size: 0.72rem; font-weight: 700; }
+/* lange drücken: kein Text markieren, kein Kontextmenü des Browsers */
+.card { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+.quick-sheet__actions { display: flex; flex-direction: column; gap: 8px; }
+.price-view { margin-bottom: 4px; }
+
+/* „Reste mitverbrauchen / Läuft bald ab – mehr verwenden?“ */
+.use-more__item { padding: 10px 0; border-top: 1px solid var(--line); }
+.use-more > p + .use-more__item { border-top: 0; }
+.use-more__head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.use-more__until { flex: none; padding: 2px 8px; border-radius: 999px; background: var(--peach); color: #9a5a2f; font-weight: 700; white-space: nowrap; }
+.use-more__pick { display: flex; align-items: center; gap: 10px; margin-top: 6px; }
+
+.adopt-foods { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+
+/* Wochenplan: „Nur dieses Mal: 3 Paprika statt 1 · Ändern“ – eigene Zeile ganz unten in der Karte */
+.plan-list .list__item:has(.plan-amounts) { flex-wrap: wrap; }
+.plan-amounts { order: 10; flex: 1 1 100%; padding-left: 48px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; color: var(--ink-2); }
+.plan-amounts__soon { background: var(--peach); color: #9a5a2f; }
+@container (max-width: 640px) { .plan-amounts { padding-left: 0; } }
+/* Kochmodus: „Nur dieses Mal: 3 Paprika statt 1 · Anpassen“ */
+.cook__chosen { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 6px 2px; color: var(--ink-2); }

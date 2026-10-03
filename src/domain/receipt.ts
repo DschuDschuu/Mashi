@@ -10,6 +10,8 @@ export interface ReceiptLine {
   count: number;
   /** bei loser Ware: „0,982 kg x 1,19 EUR/kg“ */
   weightKg?: number;
+  /** Kilopreis von derselben Zeile („… x 1,99 EUR/kg“) – genauer als Preis ÷ Gewicht (der Preis ist auf Cent gerundet) */
+  perKg?: number;
   price?: number;
   /** darunter stand „RABATT 20%“ – bei Lidl der Aufkleber für Ware kurz vor dem MHD */
   reduced?: boolean;
@@ -78,12 +80,12 @@ export function parseReceipt(text: string): ReceiptLine[] {
    * dann gehört sie wohl zum Artikel darunter (Julia: Kürbis-Gewicht landete bei der Milch darüber).
    * Passt auch der nicht, bleibt es beim Artikel darüber (wie bisher).
    */
-  let pending: { kg: number; total: number; prev?: ReceiptLine } | undefined;
+  let pending: { kg: number; perKg: number; total: number; prev?: ReceiptLine } | undefined;
   const fits = (l: ReceiptLine | undefined, total: number) => !!l && l.weightKg === undefined && l.price !== undefined && Math.abs(l.price - total) <= 0.02;
   const settle = (next?: ReceiptLine) => {
     if (!pending) return;
     const to = fits(next, pending.total) ? next : pending.prev;
-    if (to && to.weightKg === undefined) to.weightKg = pending.kg;
+    if (to && to.weightKg === undefined) { to.weightKg = pending.kg; to.perKg = pending.perKg; }
     pending = undefined;
   };
 
@@ -93,9 +95,10 @@ export function parseReceipt(text: string): ReceiptLine[] {
     if (w) {
       settle();
       const kg = num(w[1]);
-      const total = Math.round(kg * num(w[2]) * 100) / 100;
-      if (fits(last, total)) last!.weightKg = kg;
-      else pending = { kg, total, prev: last };
+      const perKg = num(w[2]);
+      const total = Math.round(kg * perKg * 100) / 100;
+      if (fits(last, total)) { last!.weightKg = kg; last!.perKg = perKg; }
+      else pending = { kg, perKg, total, prev: last };
       continue;
     }
     const d = line.match(DISCOUNT);

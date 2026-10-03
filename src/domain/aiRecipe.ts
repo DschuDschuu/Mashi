@@ -18,6 +18,8 @@ export interface KitchenContext {
   basics?: string[];
   /** Vorlieben aus den Einstellungen („kein Koriander, gern scharf“ – oder aus den Rezepten zusammengefasst) */
   tastes?: string;
+  /** Makro-Ziel – Anteil an den Kalorien in % (Julia: per Schalter mitschicken) */
+  macros?: { carbs: number; protein: number; fat: number };
 }
 
 export interface RecipeAsk {
@@ -70,6 +72,7 @@ export function buildRecipePrompt(ask: RecipeAsk, opts: { maxLength?: number } =
   if (k.useUp?.length) lines.push(`Muss bald aufgebraucht werden – bitte möglichst alles davon verwenden: ${list(k.useUp)}`);
   if (k.pantry?.length) lines.push(`Außerdem im Vorrat (gern nutzen, damit wenig eingekauft werden muss): ${list(k.pantry)}`);
   if (k.basics?.length) lines.push(`Immer im Haus: ${list(k.basics)}`);
+  if (k.macros) lines.push(`Makro-Ziel (Anteil an den Kalorien): Kohlenhydrate ${k.macros.carbs} %, Eiweiß ${k.macros.protein} %, Fett ${k.macros.fat} % – das Rezept soll möglichst nah daran liegen.`);
   const recent = [...new Set((ask.recent ?? []).map((t) => t.trim()).filter(Boolean))].slice(0, 8);
   if (recent.length) lines.push(`Zuletzt vorgeschlagen – bitte etwas deutlich anderes (andere Hauptzutat, andere Sauce, andere Richtung): ${recent.join('; ')}`);
 

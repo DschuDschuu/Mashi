@@ -1,4 +1,5 @@
 import { keyOfName, resolveName } from './mealplan';
+import { PROVIDER } from './nutrition/localFoods';
 import type { FoodEntry, FoodKind, FoodTable } from './nutrition/types';
 import type { Pantry, PantryItem } from './pantry';
 
@@ -79,6 +80,20 @@ export function shelfDaysForFood(id: string | undefined, kind: FoodKind | undefi
   if (id && custom.foods?.[id]) return custom.foods[id];
   if (id && id in DAYS_BY_FOOD) return DAYS_BY_FOOD[id] ?? undefined;
   return kind ? custom.kinds?.[kind] ?? DEFAULT_SHELF_DAYS[kind] : undefined;
+}
+
+/**
+ * Was Mashi für ein Lebensmittel schätzt, wenn du nichts einträgst – Richtwert des Lebensmittels, sonst der Art
+ * (dein Wert für die Art zählt; dein Wert für genau dieses Lebensmittel nicht – der IST ja die Abweichung).
+ * @param table die allgemeine Tabelle (ohne eigene Produkte)
+ * @returns id: Eintrag der Tabelle (dort speichert die Kachel ohne eigenes Produkt); days undefined = hält lange
+ */
+export function estimateDays(name: string, table: FoodTable, custom: ShelfDays = {}): { id?: string; days?: number } {
+  const r = resolveName(name, table);
+  const id = r?.food && r.food.ref.provider === PROVIDER ? r.food.ref.foodId : undefined;
+  const foods = { ...custom.foods };
+  if (id) delete foods[id];
+  return { ...(id ? { id } : {}), days: shelfDaysForFood(id, r?.kind, { ...custom, foods }) };
 }
 
 // ── Übersicht zum Einstellen ───────────────────────────────────────

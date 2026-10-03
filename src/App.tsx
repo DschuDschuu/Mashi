@@ -1,4 +1,4 @@
-import { useEffect, type ReactElement } from 'react';
+import { useEffect, useRef, type ReactElement } from 'react';
 import { Onboarding } from './ui/components/Onboarding';
 import { useSettings } from './ui/settings';
 import type { Mode } from './data/backend';
@@ -58,8 +58,8 @@ function resolve(route: Route): { screen: ReactElement; tab?: string; section?: 
       if (b === 'lebensmittel' && c) return { screen: <FoodPriceScreen key={c} name={c} title={route.query.get('t') || c} />, section: '/speisekammer' };
       return { screen: <PricesScreen />, tab: '/speisekammer' };
     case 'einkaeufe': return { screen: <ReceiptsScreen />, tab: '/speisekammer' };
-    // die Einkaufsliste hängt am Wagen in der Speisekammer
-    case 'einkauf': return { screen: <ShoppingScreen />, tab: '/speisekammer' };
+    // die Einkaufsliste hängt am Wagen im Wochenplan
+    case 'einkauf': return { screen: <ShoppingScreen />, tab: '/plan' };
     case 'speisekammer':
       if (b === 'bon') return { screen: <ReceiptImportScreen shared={route.query.has('geteilt')} />, section: '/speisekammer' };
       if (b === 'inventur') return { screen: <InventoryScreen />, section: '/speisekammer' };
@@ -80,6 +80,10 @@ function resolve(route: Route): { screen: ReactElement; tab?: string; section?: 
   return { screen: <StartScreen />, tab: '/' };
 }
 
+/** Seiten, die beim Zurückkommen ihren Scroll-Stand behalten – und der zuletzt gesehene Stand je Seite */
+const KEEP_SCROLL = new Set(['/kochbuch']);
+const scrollMemory = new Map<string, number>();
+
 /** mode = null: auf diesem Gerät noch nicht verbunden → Verbindungs-Bildschirm. */
 export function App({ mode }: { mode: Mode | null }) {
   const ready = useStoreReady();
@@ -88,11 +92,23 @@ export function App({ mode }: { mode: Mode | null }) {
   const leftoverOpen = !!useLeftoverAsk();
   const confirmOpen = !!useConfirm();
   const settings = useSettings();
+  const pathNow = useRef(route.path);
 
+  // Wo du warst, je Seite mitschreiben – beim Zurück ins Kochbuch dorthin statt nach oben (Julia).
+  // Der Pfad wird schon beim Zeichnen gesetzt: so landen Scroll-Ereignisse des Seitenwechsels bei der neuen Seite.
+  pathNow.current = route.path;
+  useEffect(() => {
+    const onScroll = () => scrollMemory.set(pathNow.current, window.scrollY);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
   // Geschweifte Klammern nötig: neuere Browser geben bei scrollTo ein Promise zurück,
   // das React sonst für eine Aufräumfunktion hält.
   useEffect(() => {
-    window.scrollTo(0, 0);
+    const keep = KEEP_SCROLL.has(route.path) ? scrollMemory.get(route.path) : undefined;
+    window.scrollTo(0, keep ?? 0);
+    // Bilder/Karten können einen Moment später erst die volle Höhe haben – dann noch einmal
+    if (keep) requestAnimationFrame(() => window.scrollTo(0, keep));
   }, [route.path]);
 
   if (mode === null) return <div className="app"><ConnectScreen /></div>;
