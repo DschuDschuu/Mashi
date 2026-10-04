@@ -95,8 +95,8 @@ aus den Zutaten berechnet (gecacht je Version).
  #/speisekammer/inventur  Inventur (wann du willst): Speisekammer & Keller, Tiefkühler, Immer im Haus/Gewürze abhaken
  #/speisekammer           Vorräte, Bald verbrauchen, Verwalten (Haltbarkeit, gelernte Bon-Artikel)
  #/speisekammer/bon       Kassenbon importieren
- #/produkte               Meine Lebensmittel: Tabs „Produkte“ (pflegen: Werte, Sorten + Favorit, Nachkaufen) · „Im Haus“ · „Gewürze“ (= ohne Nährwerte)
- #/preise                 Preise und Ersparnis
+ #/produkte               Meine Lebensmittel: Tabs „Produkte“ (pflegen: Werte, Sorten + Favorit, Nachkaufen) · „Im Haus“ · „Gewürze“ (= ohne Nährwerte, mit Packung/Preis; „Petersilie getrocknet“ getrennt vom Bund)
+ #/preise                 Preise und Ersparnis – Regalpreis/Bezahlt, je Sorte eine Farbe, je Packungsgröße eine Linienart
  #/reste                  Bald verbrauchen
  #/mehr                   Einstellungen (Zahnrad): Über Mashi, Archiv, Makro-Ziel, Sicherung (vollständig, Einspielen führt zusammen), Sync
  #/rezept/:id             Rezeptdetail

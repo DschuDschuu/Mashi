@@ -10,7 +10,7 @@ export function ConfirmSheet() {
 
 function Sheet() {
   const req = useConfirm()!;
-  const no = () => req.resolve(false);
+  const no = () => req.resolve(null);
   const ref = useSheet(no);
   return (
     <div className="sheet-backdrop confirm-backdrop" onClick={no}>
@@ -21,10 +21,20 @@ function Sheet() {
         {req.text && <p className="small muted" id="confirm-text">{req.text}</p>}
         {/* „nein“ steht im Code zuerst: der Fokus landet dort – ein versehentliches Enter löscht nichts.
             Angezeigt wird der Knopf, der es tut, oben (column-reverse). */}
-        <div className="confirm__actions">
-          <button type="button" className="btn btn--ghost" onClick={no}>{req.cancel ?? 'Abbrechen'}</button>
-          <button type="button" className={`btn ${req.danger ? 'btn--danger' : 'btn--primary'}`} onClick={() => req.resolve(true)}>{req.confirm}</button>
-        </div>
+        {req.choices ? (
+          // Auswahl (choose): je Möglichkeit ein Knopf, „Abbrechen“ zuletzt
+          <div className="confirm__choices">
+            {req.choices.map((c) => (
+              <button key={c.value} type="button" className="btn btn--soft btn--block" onClick={() => req.resolve(c.value)}>{c.label}</button>
+            ))}
+            <button type="button" className="btn btn--ghost btn--block" onClick={no}>{req.cancel ?? 'Abbrechen'}</button>
+          </div>
+        ) : (
+          <div className="confirm__actions">
+            <button type="button" className="btn btn--ghost" onClick={no}>{req.cancel ?? 'Abbrechen'}</button>
+            <button type="button" className={`btn ${req.danger ? 'btn--danger' : 'btn--primary'}`} onClick={() => req.resolve('ja')}>{req.confirm}</button>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -45,6 +45,8 @@ export interface FoodEntry {
   favoriteId?: string;
   /** eigenes Lebensmittel ohne Nährwerte, das auch die Tabelle nicht kennt – per100g sind Nullen und zählen nicht */
   noValues?: boolean;
+  /** steht in deinen Gewürzen (siehe noNutrition.ts) – ohne Preis blockiert es den Portionspreis nicht */
+  spice?: boolean;
 }
 
 /** Eine Sorte = ein eigenes Produkt („Pesto verde (K-Classic)“) */
@@ -69,6 +71,15 @@ export interface FoodTable {
    * specific = im Namen steht ausdrücklich eine Fettstufe („Milch 3,5 %“) – dann nicht dein Standard-Produkt.
    */
   matchName(name: string): { food: FoodEntry; quality: 'exact' | 'approx'; alias?: string; specific?: boolean } | undefined;
+  /**
+   * Nur mit Gewürzen (withSpices): die getrocknete Form, wenn es das Lebensmittel auch frisch gibt
+   * („Petersilie“ → „Petersilie getrocknet“) – sonst undefined. Für die Mengen-Regel (matchIngredient).
+   */
+  driedOf?(name: string): FoodEntry | undefined;
+  /** Nur mit Gewürzen: liegt die frische Form im Vorrat? */
+  freshInStock?(name: string): boolean;
+  /** Nur mit Gewürzen: steht der Name in deinen Gewürzen (auch wenn die Tabelle ihn nicht kennt)? */
+  isSpice?(name: string): boolean;
 }
 
 export type NutritionAccuracy = 'berechnet' | 'geschaetzt' | 'nicht_verfuegbar';

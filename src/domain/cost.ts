@@ -63,11 +63,12 @@ export function recipeCost(content: RecipeContent, servings: number, table: Food
   const items: Cost['items'] = [];
   for (const ing of content.ingredients) {
     const need = resolveIngredient(ing, factor, table);
-    if (!need || need.food?.negligible) continue;
+    if (!need) continue;
     const price = (pick[ing.id] && byProduct.get(pick[ing.id])) || byKey.get(need.key);
     const qty = price && quantityIn(price.unit, need);
     if (!price || qty === undefined) {
-      if (!need.pantry) missing.push(need.name);
+      // Grundvorrat (Salz, Öl) und Gewürze ohne Preis fehlen nicht – mit Preis zählen sie anteilig (Julia: „1 TL von 15 g“)
+      if (!need.pantry && !need.spice) missing.push(need.name);
       continue;
     }
     total += qty * price.perUnit;

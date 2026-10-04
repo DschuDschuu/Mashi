@@ -85,6 +85,8 @@ export function guessCategory(name: string, table: FoodTable): FoodCategory {
   const strong = STRONG.find(([, re]) => re.test(raw));
   if (strong) return strong[0];
   const known = !!id && !!table.byRef({ provider: PROVIDER, foodId: id });
+  // getrocknete Kräuter (Petersilie getrocknet) und alles in deinen Gewürzen: zu den Würzen – nicht zu „Sonstiges“
+  if (r?.spice && !known) return 'saucen';
   if (!known) {
     const hit = BY_NAME.find(([, re]) => re.test(n));
     if (hit) return hit[0];

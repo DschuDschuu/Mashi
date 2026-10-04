@@ -15,10 +15,12 @@ import { addPrepared, eatPrepared } from '../domain/prepared';
 import { currentContent, currentVersion, newId, sameContent, withNewVersion } from '../domain/recipe';
 import { recordSavings, type BonSavings } from '../domain/savings';
 import { addBon, bonFromImport, dropDayPrices, editBonLine, includeBonLine, sameBonOf, withdrawBonStock, dropUnsavedDay, type BonLine, type BonLinePatch } from '../domain/bons';
+import type { PriceEntry } from '../domain/cost';
+import { assignPrices, moveSort } from '../domain/sortRefs';
 import { withCategory, type FoodCategory } from '../domain/categories';
 import { relinkOldImport, renameFood, syncProductNames } from '../domain/renameFood';
 import { specialDays, type ShelfDays } from '../domain/shelfLife';
-import { zeroOf } from '../domain/nutrition/noNutrition';
+import { withSpices, zeroOf } from '../domain/nutrition/noNutrition';
 import { DEFAULT_MACRO_GOAL, withFavorite, type MacroGoal } from '../domain/nutrition/variants';
 import { canTransition } from '../domain/status';
 import type { Rating, Recipe, RecipeContent, RecipeImage, RecipeSource, RecipeStatus } from '../domain/types';
@@ -186,16 +188,35 @@ export function useProducts(): MyProduct[] {
 }
 
 /**
- * Die Lebensmitteltabelle mit meinen Produkten – überall dieselbe, damit „Mein Pesto“ auf jedem
- * Bildschirm gleich erkannt wird. withMyProducts merkt sich das Ergebnis: gleiche Produkte → dieselbe Tabelle.
+ * Namen im Vorrat (ohne Aufgebrauchtes) – für „frische Petersilie im Haus?“ bei den Gewürzen. Dieselbe Liste,
+ * solange sich nur Mengen ändern: sonst entstünde bei jedem Abziehen eine neue Tabelle und alles rechnete neu.
  */
+let stockCache: { items: PantryItem[]; names: string[] } | null = null;
+export function currentStock(): string[] {
+  if (stockCache?.items === pantry.items) return stockCache.names;
+  const names = [...new Set(pantry.items.filter((i) => i.amount === undefined || i.amount > 0).map((i) => i.name))].sort();
+  stockCache = { items: pantry.items, names: stockCache && stockCache.names.join('|') === names.join('|') ? stockCache.names : names };
+  return stockCache.names;
+}
+export const useStock = (): string[] => useSyncExternalStore(subscribe, currentStock);
+
+/**
+ * Die Lebensmitteltabelle mit meinen Produkten und Gewürzen – überall dieselbe, damit „Mein Pesto“ auf jedem
+ * Bildschirm gleich erkannt wird und „Petersilie“ (Bund) nie mit „Petersilie getrocknet“ (Gewürz) verwechselt wird.
+ * Gleiche Produkte, Gewürze und Vorrats-Namen → dieselbe Tabelle.
+ */
+let spiced: { base: FoodTable; zero: string[]; stock: string[]; table: FoodTable } | null = null;
 export function currentFoodTable(): FoodTable {
-  return withMyProducts(foodTable, products);
+  const base = withMyProducts(foodTable, products);
+  const zero = zeroOf(pantry);
+  const stock = currentStock();
+  if (spiced?.base !== base || spiced.zero !== zero || spiced.stock !== stock) spiced = { base, zero, stock, table: withSpices(base, zero, { stock }) };
+  return spiced.table;
 }
 
-/** Dasselbe für die Oberfläche – neu, sobald sich meine Produkte ändern */
+/** Dasselbe für die Oberfläche – neu, sobald sich Produkte, Gewürze oder die Namen im Vorrat ändern */
 export function useFoodTable(): FoodTable {
-  return withMyProducts(foodTable, useProducts());
+  return useSyncExternalStore(subscribe, currentFoodTable);
 }
 
 /** Für Berechnungen außerhalb von React (z. B. Nährwerte auf den Rezeptkarten). */
@@ -1002,6 +1023,33 @@ export function assignPantrySorts(assign: readonly { itemIds: string[]; productI
   // mit der Sorte auch ihr Name – „Meine Lebensmittel“ gibt ihn vor
   const nameOfId = (id: string) => { const p = products.find((x) => x.id === id); return p ? nameOf(p) : undefined; };
   commitPantry({ ...pantry, items: pantry.items.map((i) => (to.has(i.id) ? { ...i, productId: to.get(i.id), name: nameOfId(to.get(i.id)!) ?? i.name } : i)) });
+}
+
+/**
+ * Sorte entfernen – ihre Einkäufe, Preise und ihr Vorrat gehen zu Sorte „to“ oder werden „ohne Sorte“ (Julia: beim
+ * Entfernen fragen). Erst umhängen, dann entfernen: saveProducts benennt den Vorrat nach seiner (neuen) Sorte.
+ * „Rückgängig“: erst die Stellen zurück, dann die Sorte – so heißt ihr Vorrat wieder wie sie.
+ */
+export function removeProduct(id: string, to: string | undefined): () => void {
+  const p = products.find((x) => x.id === id);
+  if (!p) return () => {};
+  const at = products.indexOf(p);
+  const { next, undo } = moveSort(pantry, id, to, now());
+  commitPantry(next);
+  saveProducts(products.filter((x) => x.id !== id));
+  return () => {
+    commitPantry(undo(pantry));
+    const list = products.filter((x) => x.id !== id);
+    list.splice(Math.min(at, list.length), 0, p);
+    saveProducts(list);
+  };
+}
+
+/** Ältere Preise ohne Sorte (oder mit einer entfernten) einer Sorte zuordnen – mit „Rückgängig“ */
+export function assignPriceSort(entries: readonly PriceEntry[], productId: string): () => void {
+  const { next, undo } = assignPrices(pantry, entries, productId, now());
+  commitPantry(next);
+  return () => commitPantry(undo(pantry));
 }
 
 /**

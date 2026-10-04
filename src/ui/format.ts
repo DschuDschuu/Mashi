@@ -47,6 +47,15 @@ export function recipeCount(n: number): string {
 /** „1,70 €“ */
 export const euro = (n: number) => n.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
 
+/** Packungsgröße einer Preis-Linie („500 g“, „1000 g“, „?“) lesbar: „500 g“, „1 kg“, „1,5 l“ */
+export function sizeLabel(size: string): string {
+  if (size === '?') return 'Größe unbekannt';
+  const [n, u] = size.split(' ');
+  const v = Number(n);
+  const fmt = (x: number) => x.toLocaleString('de-DE', { maximumFractionDigits: 1 });
+  return v >= 1000 ? `${fmt(v / 1000)} ${u === 'ml' ? 'l' : 'kg'}` : `${fmt(v)} ${u}`;
+}
+
 /** „980 g“, „3 Stück“ – oder „vorhanden“, wenn die Menge unbekannt ist. */
 export const quantityLabel = (item: Pick<PantryItem, 'amount' | 'unit' | 'pack' | 'openedAt' | 'recipeId'>) => amountLabel(item);
 

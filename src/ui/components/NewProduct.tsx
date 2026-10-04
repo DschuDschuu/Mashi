@@ -3,8 +3,8 @@ import { basicsOf } from '../../domain/mealplan';
 import { buildFoodList, findFoodRow, type FoodRow } from '../../domain/nutrition/foodList';
 import { normalizeName } from '../../domain/nutrition/localFoods';
 import { fillOrAdd, sharedOf, withShared, type MyProduct } from '../../domain/nutrition/myProducts';
-import { zeroOf } from '../../domain/nutrition/noNutrition';
-import { addProduct, saveProducts, usePantry, useProducts } from '../../data/store';
+import { spiceName, zeroOf } from '../../domain/nutrition/noNutrition';
+import { addProduct, saveProducts, useFoodTable, usePantry, useProducts } from '../../data/store';
 import { foodTable } from '../../services';
 import type { NutritionResult } from '../../domain/nutrition/types';
 import { toast } from '../toast';
@@ -27,7 +27,8 @@ export function NewProduct({ name, bonName = name, pack = {}, onDone }: {
 }) {
   const products = useProducts();
   const pantry = usePantry();
-  const rows = useMemo(() => buildFoodList(products, basicsOf(pantry), zeroOf(pantry), foodTable), [products, pantry]);
+  const table = useFoodTable();
+  const rows = useMemo(() => buildFoodList(products, basicsOf(pantry), zeroOf(pantry), foodTable, [], [], (z) => spiceName(z, table)), [products, pantry, table]);
   const [sortOf, setSortOf] = useState<FoodRow | null>(null);
   const [notSort, setNotSort] = useState('');
   const existing = (n: string) => findFoodRow(rows, n, foodTable, notSort);

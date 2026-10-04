@@ -1,5 +1,6 @@
 import type { PantryItem } from '../pantry';
 import type { RecipeContent } from '../types';
+import { matchIngredient } from './noNutrition';
 import { OPTIONAL_NUTRIENTS, CORE_NUTRIENTS, type FoodTable, type FoodVariant, type Nutrients, type NutritionResult } from './types';
 
 /**
@@ -82,7 +83,7 @@ export function variantChoices(content: RecipeContent, table: FoodTable, items: 
   const out: VariantChoice[] = [];
   for (const ing of content.ingredients) {
     if (ing.optional) continue;
-    const food = (ing.foodRef ? table.byRef(ing.foodRef) : undefined) ?? table.matchName(ing.name)?.food;
+    const food = (ing.foodRef ? table.byRef(ing.foodRef) : undefined) ?? matchIngredient(table, ing)?.food;
     if (!food?.variants?.length) continue;
     const known = variantsInStock(food.variants, items);
     const ids = new Set(food.variants.map((v) => v.id));

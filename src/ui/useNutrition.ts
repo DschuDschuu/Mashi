@@ -4,7 +4,7 @@ import { withMyProducts, type MyProduct } from '../domain/nutrition/myProducts';
 import type { FoodTable, NutritionResult } from '../domain/nutrition/types';
 import { currentContent } from '../domain/recipe';
 import type { Recipe, RecipeContent } from '../domain/types';
-import { currentMacroGoal, currentNoNutrition, currentPantry, currentProducts, useMacroGoal, useNoNutrition, usePantry, useProducts } from '../data/store';
+import { currentMacroGoal, currentNoNutrition, currentPantry, currentProducts, currentStock, useMacroGoal, useNoNutrition, usePantry, useProducts, useStock } from '../data/store';
 import { pickFor, variantChoices, type VariantChoice } from '../domain/nutrition/variants';
 import { withoutNutrition } from '../domain/nutrition/noNutrition';
 import { foodTable } from '../services';
@@ -16,22 +16,27 @@ import { foodTable } from '../services';
  */
 let cachedFor: MyProduct[] | null = null;
 let cachedZero: string[] | null = null;
+let cachedStock: string[] | null = null;
 let table: FoodTable = foodTable;
 let cache = new WeakMap<RecipeContent, NutritionResult>();
 
-/** „Ohne Nährwerte“ (Gewürze …) kommt obendrauf – ändert sich eins von beiden, frischer Cache. */
-function tableFor(products: MyProduct[], zero: string[]): FoodTable {
-  if (products !== cachedFor || zero !== cachedZero) {
+/**
+ * „Ohne Nährwerte“ (Gewürze …) kommt obendrauf – mit den Namen im Vorrat (frische Petersilie im Haus → die frische).
+ * Ändert sich eins davon, frischer Cache.
+ */
+function tableFor(products: MyProduct[], zero: string[], stock: string[] = currentStock()): FoodTable {
+  if (products !== cachedFor || zero !== cachedZero || stock !== cachedStock) {
     cachedFor = products;
     cachedZero = zero;
-    table = withoutNutrition(withMyProducts(foodTable, products), zero);
+    cachedStock = stock;
+    table = withoutNutrition(withMyProducts(foodTable, products), zero, stock);
     cache = new WeakMap();
   }
   return table;
 }
 
-export function nutritionOf(content: RecipeContent, products: MyProduct[] = currentProducts(), zero: string[] = currentNoNutrition()): NutritionResult {
-  const t = tableFor(products, zero);
+export function nutritionOf(content: RecipeContent, products: MyProduct[] = currentProducts(), zero: string[] = currentNoNutrition(), stock: string[] = currentStock()): NutritionResult {
+  const t = tableFor(products, zero, stock);
   let n = cache.get(content);
   if (!n) {
     n = computeNutrition(content, t);
@@ -55,17 +60,19 @@ export function useVariants(content: RecipeContent, own: Readonly<Record<string,
   const products = useProducts();
   const zero = useNoNutrition();
   const pantry = usePantry();
+  const stock = useStock();
   const goal = useMacroGoal();
   return useMemo(() => {
-    const choices = variantChoices(content, tableFor(products, zero), pantry.items, goal);
+    const choices = variantChoices(content, tableFor(products, zero, stock), pantry.items, goal);
     const pick = pickFor(choices, own);
-    const n = Object.keys(pick).length ? computeNutrition(content, tableFor(products, zero), pick) : nutritionOf(content, products, zero);
+    const n = Object.keys(pick).length ? computeNutrition(content, tableFor(products, zero, stock), pick) : nutritionOf(content, products, zero, stock);
     return { choices, pick, n };
-  }, [content, own, products, zero, pantry, goal]);
+  }, [content, own, products, zero, stock, pantry, goal]);
 }
 
 export function useNutrition(content: RecipeContent): NutritionResult {
   const products = useProducts();
   const zero = useNoNutrition();
-  return useMemo(() => nutritionOf(content, products, zero), [content, products, zero]);
+  const stock = useStock();
+  return useMemo(() => nutritionOf(content, products, zero, stock), [content, products, zero, stock]);
 }

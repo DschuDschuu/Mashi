@@ -13,17 +13,28 @@ export interface ConfirmRequest {
   cancel?: string;
   /** löscht oder verwirft etwas → roter Knopf */
   danger?: boolean;
+  /** statt des einen Knopfs mehrere Möglichkeiten – siehe choose() */
+  choices?: { label: string; value: string }[];
 }
 
-let current: (ConfirmRequest & { resolve: (ok: boolean) => void }) | null = null;
+/** Antwort: der Wert der gewählten Möglichkeit („ja“ bei ask) – null = abgebrochen */
+let current: (ConfirmRequest & { resolve: (answer: string | null) => void }) | null = null;
 const listeners = new Set<() => void>();
 const emit = () => listeners.forEach((l) => l());
 
 /** Fragen und auf die Antwort warten: true = bestätigt. Eine neue Frage beantwortet eine offene mit „nein“. */
 export function ask(req: ConfirmRequest): Promise<boolean> {
+  return choose({ ...req, choices: undefined }).then((answer) => answer !== null);
+}
+
+/**
+ * Auswahl im selben Blatt (Julia: „5 Einkäufe – zu welcher Sorte?“): je Möglichkeit ein Knopf, darunter „Abbrechen“.
+ * Gibt den Wert der gewählten Möglichkeit zurück, null = abgebrochen. Eine neue Frage bricht eine offene ab.
+ */
+export function choose(req: Omit<ConfirmRequest, 'confirm'> & { confirm?: string }): Promise<string | null> {
   return new Promise((resolve) => {
-    current?.resolve(false);
-    current = { ...req, resolve: (ok) => { current = null; emit(); resolve(ok); } };
+    current?.resolve(null);
+    current = { confirm: '', ...req, resolve: (answer) => { current = null; emit(); resolve(answer); } };
     emit();
   });
 }

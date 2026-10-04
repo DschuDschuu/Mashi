@@ -1466,6 +1466,8 @@ p { margin: 0; }
 .confirm-backdrop { z-index: 45; }
 .confirm__actions { display: flex; flex-direction: column-reverse; gap: 8px; margin-top: 6px; }
 .confirm__actions .btn { width: 100%; }
+.confirm__choices { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
+.confirm__choices .btn { white-space: normal; }
 .btn--danger { background: #b4513f; color: #fff; border-color: transparent; }
 .btn--danger:active:not(:disabled) { background: #963f30; }
 
@@ -1557,7 +1559,14 @@ p { margin: 0; }
 .last-buy { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; column-gap: 10px; row-gap: 0; }
 .last-buy__what { min-width: 0; overflow-wrap: anywhere; }
 .last-buy__price { text-align: right; font-variant-numeric: tabular-nums; }
-.last-buy .last-buy__link { justify-self: end; align-self: center; padding: 2px 0; }
+.last-buy .last-buy__link { justify-self: end; align-self: center; padding: 2px 0; grid-column: 1 / -1; }
+/* je Packungsgröße eine Zeile (Julia) – als Spalten: Größe | Datum | Preis | rechts €/kg, alles bündig untereinander */
+.last-buy__title, .last-buy__rows { grid-column: 1 / -1; }
+.last-buy__rows { list-style: none; margin: 2px 0 0; padding: 0; display: grid; grid-template-columns: auto auto auto minmax(0, 1fr);
+  align-items: baseline; column-gap: 10px; row-gap: 2px; font-variant-numeric: tabular-nums; }
+.last-buy__rows li { display: contents; }
+.last-buy__rows li > :nth-child(4) { text-align: right; }
+.last-buy__rows s { color: var(--ink-3); }
 /* Sorten-Karte: Marken-Chip näher an die Überschrift, mehr Luft zu den Kalorien (Julia) */
 .foods__sort .foods__brand { margin: -4px 0 6px; }
 /* Preis-Seite: Sorten als Chips mit Farbpunkt (wie die Linie im Diagramm) */
@@ -1628,6 +1637,15 @@ details.cost-line[open] > summary::after { transform: rotate(-90deg); }
 .price-legend__item { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0; border: 0; background: none; color: var(--ink-2); font: inherit; font-size: 0.85rem; cursor: pointer; }
 .price-legend__item.is-off { color: var(--ink-3); text-decoration: line-through; opacity: 0.6; }
 .price-legend__item.is-off .price-sorts__dot { background: var(--line) !important; }
+/* Packung und Preis eines Gewürzes (Julia) – zwei schmale Felder nebeneinander, auf dem Handy notfalls untereinander */
+.spice-pack.btn { align-self: flex-start; }
+.spice-pack .row-gap > .field { flex: 1 1 7em; min-width: 0; }
+.spice-pack .field input { width: 100%; min-width: 0; }
+/* ältere Preise ohne Sorte zuordnen (Julia): je Preis eine Zeile mit Sorten-Chips, darüber „Alle zu …“ */
+.old-prices__all, .old-prices__sorts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
+.old-prices { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.old-prices li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 10px; padding: 8px 0; border-top: 1px solid var(--line); }
+.old-prices .chip { white-space: normal; max-width: 100%; }
 /* je Sorte: Name, dahinter ihre Packungsgrößen mit Linienart – bricht auf dem Handy als Gruppe um */
 .price-legend__group { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0 10px; min-width: 0; }
 .price-legend__name { color: var(--ink); font-weight: 600; }

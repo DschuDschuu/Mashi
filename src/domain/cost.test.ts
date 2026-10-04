@@ -5,6 +5,7 @@ import { withMyProducts, type MyProduct } from './nutrition/myProducts';
 import { applyImport, emptyPantry, proposeImport } from './pantry';
 import { parseReceipt } from './receipt';
 import { asCooked } from './scaling';
+import { withSpices } from './nutrition/noNutrition';
 import type { Ingredient, RecipeContent } from './types';
 
 const content = (ingredients: Ingredient[], servings = 2): RecipeContent => ({
@@ -146,5 +147,32 @@ describe('Bon-Artikel einem eigenen Produkt zuordnen', () => {
     const lookup = (name: string) => (table.matchName(name)?.food.ref.foodId === 'p-fk' ? { amount: 175, unit: 'g' as const } : undefined);
     const next = proposeImport(parseReceipt('EUR\nFrischkäse Balance 0,79 x 2 1,58 A\nZu zahlen'), pantry.rules, lookup);
     expect(next[0]).toMatchObject({ known: true, productId: 'p-fk', amount: 350, unit: 'g' });
+  });
+});
+
+describe('Gewürze im Preis (Julia: mitrechnen, wenn ein Preis da ist)', () => {
+  const c = content([
+    { id: '1', name: 'Reis', amount: 100, unit: 'g' },
+    { id: '2', name: 'Basilikum', amount: 2, unit: 'TL' },
+    { id: '3', name: 'Sumach', amount: 1, unit: 'TL' },
+  ], 2);
+  // Basilikum kennt die Tabelle frisch – in den Gewürzen ist es die getrocknete
+  const table = withSpices(localFoodTable, ['Sumach', 'Basilikum']);
+
+  it('ohne Preis: Gewürze blockieren den Portionspreis nicht', () => {
+    expect(recipeCost(c, 2, table, [price('Reis', 0.002, 'g')])).toMatchObject({ total: 0.2, missing: [] });
+    // ohne Gewürz-Liste wäre Sumach „Preis unbekannt“
+    expect(recipeCost(c, 2, localFoodTable, [price('Reis', 0.002, 'g')])?.missing).toContain('Sumach');
+  });
+
+  it('mit Preis: anteilig – getrocknete Kräuter mit ca. 1 g je TL', () => {
+    // erfundene Packung: 15 g Basilikum getrocknet für 1,50 € → 2 TL ≈ 2 g = 0,20 €
+    const cost = recipeCost(c, 2, table, [price('Reis', 0.002, 'g'), price('Basilikum getrocknet', 0.1, 'g')]);
+    expect(cost).toMatchObject({ total: 0.4, missing: [] });
+  });
+
+  it('auch Salz & Co. zählen, sobald es einen Preis gibt', () => {
+    const salz = content([{ id: '1', name: 'Salz', amount: 10, unit: 'g' }], 1);
+    expect(recipeCost(salz, 1, localFoodTable, [price('Salz', 0.0005, 'g')])?.total).toBe(0.01);
   });
 });

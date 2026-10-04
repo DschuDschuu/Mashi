@@ -234,7 +234,10 @@ const day = (iso: string) => iso.slice(0, 10);
 function movePrice(pantry: Pantry, before: PriceEntry | undefined, after: PriceEntry | undefined): Pick<Pantry, 'history' | 'prices'> {
   let history = [...(pantry.history ?? pantry.prices ?? [])];
   const at = (p: PriceEntry) => (h: PriceEntry) => receiptKey(h.name) === receiptKey(p.name) && day(h.date) === day(p.date) && h.productId === p.productId;
-  if (before) history = history.filter((h) => !at(before)(h));
+  // der alte Eintrag – auch einer ohne Sorte vom selben Tag (Preise kannten ihre Sorte erst später), sonst bliebe er
+  // als „ohne Sorte“ stehen (Julia: Hackfleisch ohne Sorte, obwohl alles zugeordnet ist)
+  const old = (p: PriceEntry) => (h: PriceEntry) => at(p)(h) || (!h.productId && at({ ...p, productId: undefined })(h));
+  if (before) history = history.filter((h) => !old(before)(h));
   if (after) history = [...history.filter((h) => !at(after)(h)), after];
   const keys = new Set([before, after].filter((p): p is PriceEntry => !!p).map((p) => receiptKey(p.name)));
   const latest = (key: string) => history.filter((h) => receiptKey(h.name) === key).sort((a, b) => a.date.localeCompare(b.date)).pop();

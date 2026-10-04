@@ -9,8 +9,11 @@ import { navigate } from '../../router';
 import { Empty } from '../components/Controls';
 import { Icon } from '../components/Icon';
 import { PantryTabs, usePantrySwipe } from '../components/PlanTabs';
-import { PriceLines, SORT_COLORS } from '../components/PriceLines';
-import { euro } from '../format';
+import { LineSample, PriceLines, SORT_COLORS } from '../components/PriceLines';
+import { euro, sizeLabel } from '../format';
+import { purchasesOf } from '../../domain/bons';
+import { mainSizeOf, overviewEntries, SIZE_DASHES } from '../../domain/foodPrices';
+import { PRICE_MODES, usePriceMode } from '../usePriceMode';
 import { FoodsButton } from '../components/FoodsButton';
 import { groupByCategory } from '../../domain/categories';
 import { useCategoryOf } from '../useCategory';
@@ -39,13 +42,16 @@ export function PricesScreen() {
   const swipe = usePantrySwipe('prices');
   const pantry = usePantry();
   const table = useFoodTable();
-  const trends = useMemo(() => {
-    // ältere Preise ohne Sorte: über den Bon desselben Tages zuordnen (wie auf der Preis-Seite eines Lebensmittels)
-    const lines = (pantry.bons ?? []).flatMap((b) => b.lines.filter((l) => !l.skip).map((l) => ({ day: b.date.slice(0, 10), l })));
-    const sortOf = (h: { name: string; date: string; productId?: string }) => h.productId
-      ?? lines.find((x) => x.day === h.date.slice(0, 10) && receiptKey(x.l.name) === receiptKey(h.name))?.l.productId;
-    return foodTrends(pantry.history ?? pantry.prices ?? [], (n) => keyOfName(n, table) ?? receiptKey(n), sortOf);
-  }, [pantry, table]);
+  const products = useProducts();
+  const [mode, setMode] = usePriceMode();
+  const { trends, ranks, marks } = useMemo(() => {
+    const keyOf = (n: string) => keyOfName(n, table) ?? receiptKey(n);
+    // dieselben Punkte wie auf der Preis-Seite eines Lebensmittels (Julia): Einkäufe vom Bon und ältere Preise,
+    // je Sorte und Packungsgröße eine Linie – eine entfernte Sorte zählt als „ohne Sorte“
+    const o = overviewEntries(pantry.history ?? pantry.prices ?? [], purchasesOf(pantry.bons, () => true), keyOf, mode,
+      new Set(products.map((p) => p.id)), mainSizeOf(products));
+    return { trends: foodTrends(o.entries, keyOf, (e) => e.productId), ranks: o.ranks, marks: o.marks };
+  }, [pantry, table, products, mode]);
   // Umschalter (Julia): nach Preisänderung (teurer/günstiger/gleich) oder nach Kategorie – gemerkt auf diesem Gerät
   const [view, setView] = useState<'aenderung' | 'kategorie'>(() => { try { return localStorage.getItem(VIEW_KEY) === 'kategorie' ? 'kategorie' : 'aenderung'; } catch { return 'aenderung'; } });
   const pickView = (v: 'aenderung' | 'kategorie') => { setView(v); try { localStorage.setItem(VIEW_KEY, v); } catch { /* egal */ } };
@@ -79,6 +85,12 @@ export function PricesScreen() {
             </Empty>
           ) : (
             <>
+              {/* Julia: derselbe Umschalter wie auf der Preis-Seite eines Lebensmittels – gemerkt für beide */}
+              <div className="segments price-view" role="tablist" aria-label="Welcher Preis">
+                {PRICE_MODES.map(([v, label]) => (
+                  <button key={v} role="tab" aria-selected={mode === v} className={`segment${mode === v ? ' is-on' : ''}`} onClick={() => setMode(v)}>{label}</button>
+                ))}
+              </div>
               <div className="segments price-view" role="tablist" aria-label="Preise sortieren">
                 {([['aenderung', 'nach Preisänderung'], ['kategorie', 'nach Kategorie']] as const).map(([v, label]) => (
                   <button key={v} role="tab" aria-selected={view === v} className={`segment${view === v ? ' is-on' : ''}`} onClick={() => pickView(v)}>{label}</button>
@@ -97,13 +109,15 @@ export function PricesScreen() {
                     </button>
                     {open && (
                       <ul className="prices">
-                        {list.map((t) => <FoodCard key={`${t.key}|${t.unit}`} trend={t} />)}
+                        {list.map((t) => <FoodCard key={`${t.key}|${t.unit}`} trend={t} ranks={ranks.get(t.key)} marks={marks} />)}
                       </ul>
                     )}
                   </section>
                 );
               })}
-              <p className="muted small center">Regalpreise vom Kassenbon – Rabatte und Coupons zählen nicht mit, damit du echte Preiserhöhungen siehst.</p>
+              <p className="muted small center">{mode === 'bezahlt'
+                ? 'Bezahlte Preise vom Kassenbon – mit Angeboten, Lidl Plus und MHD-Ware (Ring = Rabatt, Raute = MHD).'
+                : 'Regalpreise vom Kassenbon – Rabatte und Coupons zählen nicht mit, damit du echte Preiserhöhungen siehst.'}</p>
             </>
           )}
         </div>
@@ -112,16 +126,35 @@ export function PricesScreen() {
   );
 }
 
-/** Ein Lebensmittel: je Sorte Farbe, letzter Preis und ▲/▼ – darunter alle Sorten in einem Diagramm */
-function FoodCard({ trend: t }: { trend: FoodTrend }) {
+/**
+ * Ein Lebensmittel: je Sorte eine Farbe, je Packungsgröße eine Linienart (wie auf seiner Preis-Seite) – letzter Preis
+ * und ▲/▼ je Linie, darunter alle Linien in einem Diagramm. Linien-ID = „Sorte|Größe“ (siehe overviewEntries).
+ */
+function FoodCard({ trend: t, ranks, marks }: { trend: FoodTrend; ranks?: Map<string, number>; marks: Map<string, 'rabatt' | 'mhd'> }) {
   const products = useProducts();
+  const parse = (id: string) => { const [sortId, size] = id.split('|'); return { sortId, size: size || undefined }; };
+  const sortIds = [...new Set(t.sorts.map((s) => parse(s.id).sortId))];
   const several = t.sorts.length > 1;
-  const label = (id: string) => {
+  const sortName = (id: string) => {
     const p = id ? products.find((x) => x.id === id) : undefined;
-    if (p) return sortTags(p).join(' · ') || (several ? 'ohne Zusatz' : t.name);
-    return several ? 'ohne Sorte' : t.name;
+    if (p) return sortTags(p).join(' · ') || (sortIds.length > 1 ? 'ohne Zusatz' : t.name);
+    return sortIds.length > 1 ? 'ohne Sorte' : t.name;
   };
-  const series = t.sorts.map((s, n) => ({ id: s.id, label: label(s.id), color: SORT_COLORS[n % SORT_COLORS.length], points: s.points }));
+  const series = t.sorts.map((s) => {
+    const { sortId, size } = parse(s.id);
+    const rank = ranks?.get(s.id) ?? 0;
+    return {
+      id: s.id, sortId, rank,
+      // nur eine Sorte: die Größe allein reicht („400 g“) – sonst „leicht · 400 g“
+      label: size ? (sortIds.length > 1 ? `${sortName(sortId)} · ${sizeLabel(size)}` : sizeLabel(size)) : sortName(sortId),
+      color: SORT_COLORS[sortIds.indexOf(sortId) % SORT_COLORS.length],
+      dash: SIZE_DASHES[rank % SIZE_DASHES.length],
+      points: s.points.map((p) => { const mark = marks.get(`${t.key}|${s.id}|${p.date.slice(0, 10)}`); return mark ? { ...p, mark } : p; }),
+      trend: s,
+    };
+  });
+  // Legende: Sorten zusammen, je Sorte die Hauptgröße zuerst
+  const rows = [...series].sort((a, b) => sortIds.indexOf(a.sortId) - sortIds.indexOf(b.sortId) || a.rank - b.rank);
   const points = t.sorts.reduce((n, s) => n + s.points.length, 0);
   return (
     <li className="price-card">
@@ -135,15 +168,15 @@ function FoodCard({ trend: t }: { trend: FoodTrend }) {
         )}
       </div>
       {several ? (
-        // je Sorte eine Zeile: Farbpunkt, Name, letzter Preis, ▲/▼
+        // je Linie eine Zeile: Linienmuster, Name, letzter Preis, ▲/▼
         <ul className="price-sorts-legend">
-          {t.sorts.map((s, n) => (
+          {rows.map((s) => (
             <li key={s.id}>
-              <span className="price-sorts__dot" style={{ background: series[n].color }} aria-hidden="true" />
-              <span className="price-sorts-legend__name">{series[n].label}</span>
-              <span className="small">{euro(displayPrice(s.latest, t.unit))}/{displayUnit(t.unit)}</span>
-              <span className={`price-card__change is-${s.direction}`}>
-                <span aria-hidden="true">{arrowOf(s.direction)}</span> {percent(s.change)}
+              <LineSample color={s.color} dash={s.dash} />
+              <span className="price-sorts-legend__name">{s.label}</span>
+              <span className="small">{euro(displayPrice(s.trend.latest, t.unit))}/{displayUnit(t.unit)}</span>
+              <span className={`price-card__change is-${s.trend.direction}`}>
+                <span aria-hidden="true">{arrowOf(s.trend.direction)}</span> {percent(s.trend.change)}
               </span>
             </li>
           ))}

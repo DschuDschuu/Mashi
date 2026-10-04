@@ -1,17 +1,26 @@
-import { productLabel } from '../../domain/nutrition/myProducts';
-import { useProducts } from '../../data/store';
+import { useMemo } from 'react';
+import { discountOf, paidOf } from '../../domain/bons';
+import { foodPricePoints, lastBySize } from '../../domain/foodPrices';
 import { navigate } from '../../router';
-import { linePriceParts, lineAmount, perKg, usePurchases } from '../usePurchases';
+import { lineAmount, usePurchases } from '../usePurchases';
 import { Icon } from './Icon';
 import { displayPrice, displayUnit } from '../../domain/priceHistory';
-import { euro } from '../format';
+import { euro, sizeLabel } from '../format';
 
 /** Link zur Preis-Seite eines Lebensmittels */
 export const foodPricePath = (name: string, title = name) => `/preise/lebensmittel/${encodeURIComponent(name)}?t=${encodeURIComponent(title)}`;
 
+/** „15.9.“ – aus einem anderen Jahr „15.9.25“ */
+const shortDate = (iso: string) => {
+  const d = new Date(iso);
+  return d.toLocaleDateString('de-DE', { day: 'numeric', month: 'numeric', ...(d.getFullYear() !== new Date().getFullYear() ? { year: '2-digit' } : {}) });
+};
+
 /**
- * „Zuletzt gekauft“ in der Kachel (Julia: statt des Preisfelds) – Datum, Menge, bezahlt und Normalpreis,
- * darunter der Weg zur Preis-Seite nur für dieses Lebensmittel. Ohne Bon nichts.
+ * „Zuletzt gekauft“ in der Kachel (Julia: statt des Preisfelds) – je Packungsgröße eine Zeile, klein nach groß:
+ * Größe | Datum | bezahlt (bei Rabatt dahinter der alte Preis durchgestrichen) | rechts der Preis je kg zum Vergleichen.
+ * Als Spalten, Datum vor dem Preis – sonst rutscht bei einem Angebotspreis alles dahinter (Julia).
+ * Ohne Sorte darunter der Weg zur Preis-Seite. Ohne Bon nur der letzte gemerkte Preis.
  */
 export function LastPurchase({ name, title, productIds, sort }: {
   name: string; title: string; productIds: readonly string[];
@@ -19,26 +28,29 @@ export function LastPurchase({ name, title, productIds, sort }: {
   sort?: boolean;
 }) {
   const { purchases, history } = usePurchases(name, productIds, { byName: !sort });
-  const products = useProducts();
-  const last = purchases[0];
-  const latest = [...history].sort((a, b) => a.date.localeCompare(b.date)).pop();
-  if (!last && !history.length) return null;
-  const which = !sort && last?.line.productId && productIds.length > 1 ? products.find((p) => p.id === last.line.productId) : undefined;
-  // Zeile 1: was – rechts der Preis; Zeile 2: wann – rechts der Weg zur Preis-Seite (Julia)
-  // rechts nur der Preis („2,49 € statt 3,29 €“) – der Grund (Angebot, MHD) steht unten beim Datum, sonst wird es am Handy eng
-  const { price, why } = last ? linePriceParts(last.line) : { price: `${euro(displayPrice(latest!.perUnit, latest!.unit))}/${displayUnit(latest!.unit)}`, why: undefined };
-  const date = new Date((last ?? latest!).date).toLocaleDateString('de-DE');
+  const rows = useMemo(() => lastBySize(foodPricePoints(history, purchases)), [history, purchases]);
+  if (!rows.length) return null;
   return (
     <div className={sort ? 'last-buy last-buy--sort' : 'last-buy'}>
-      <span className="small last-buy__what">
-        <strong>Zuletzt gekauft</strong>
-        {which && <> · {productLabel(which)}</>}
-        {last && lineAmount(last.line) && <> · {lineAmount(last.line)}</>}
-      </span>
-      <span className="small last-buy__price">{price}</span>
-      {/* gewogene Ware: der Kilopreis gleich mit (Julia: Kürbis) */}
-      <span className="small muted">am {date}{why && <> · {why}</>}{last && perKg(last.line) && <> · {perKg(last.line)}</>}</span>
-      {/* je Sorte kein eigener Knopf – die Preis-Seite zeigt alle Sorten in einem Diagramm (Julia) */}
+      <strong className="small last-buy__title">Zuletzt gekauft</strong>
+      <ul className="last-buy__rows">
+        {rows.map((p) => {
+          const l = p.purchase?.line;
+          const paid = l ? paidOf(l) : undefined;
+          const was = l && l.price !== undefined && discountOf(l) > 0 ? l.price : undefined;
+          // gewogene Ware: die Menge vom Bon („982 g“); sonst die Packungsgröße
+          const amount = p.size !== undefined ? sizeLabel(`${p.size} ${p.sizeUnit}`) : l ? lineAmount(l) : '';
+          return (
+            <li key={`${p.size ?? (l?.weightKg !== undefined ? 'lose' : '')}|${p.date}`}>
+              <span className="small">{amount}</span>
+              <span className="small muted">{shortDate(p.date)}</span>
+              {/* bezahlt vorne, der alte Preis dahinter – so stehen die bezahlten Preise untereinander, ohne Lücke (Julia) */}
+              <span className="small muted">{paid !== undefined && euro(paid)}{was !== undefined && <> <s>{euro(was)}</s></>}</span>
+              <strong className="small last-buy__price">{euro(displayPrice(p.paid, p.unit))}/{displayUnit(p.unit)}</strong>
+            </li>
+          );
+        })}
+      </ul>
       {!sort && <PriceLink name={name} title={title} />}
     </div>
   );

@@ -1,5 +1,6 @@
 import type { RecipeContent } from '../types';
 import { toGrams } from './units';
+import { matchIngredient } from './noNutrition';
 import {
   CORE_NUTRIENTS, OPTIONAL_NUTRIENTS,
   type FoodEntry, type FoodTable, type IngredientNutrition, type NutritionAccuracy, type NutritionResult, type Nutrients,
@@ -19,7 +20,7 @@ export function computeNutrition(content: RecipeContent, table: FoodTable, pick:
   const items: IngredientNutrition[] = content.ingredients.map((ing) => {
     const base = { ingredientId: ing.id, name: ing.name };
     const refFood = ing.foodRef ? table.byRef(ing.foodRef) : undefined;
-    const match = chosen(refFood ? { food: refFood, quality: 'exact' as const } : table.matchName(ing.name), pick[ing.id]);
+    const match = chosen(refFood ? { food: refFood, quality: 'exact' as const } : matchIngredient(table, ing), pick[ing.id]);
 
     if (ing.optional) return { ...base, status: 'ignored', food: match?.food };
     if (!match) return { ...base, status: ing.amount === undefined ? 'no-amount' : 'unmatched', grams: gramsIfObvious(ing.amount, ing.unit) };

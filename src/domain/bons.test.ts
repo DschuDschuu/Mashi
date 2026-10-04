@@ -81,6 +81,14 @@ describe('Gespeicherte Bons', () => {
     expect(hack[0]).toMatchObject({ productId: 'leicht', amount: 1, pack: { amount: 500, unit: 'g' } });
   });
 
+  it('Zuordnung ändern: ein alter Preis ohne Sorte vom selben Tag bleibt nicht als „ohne Sorte“ übrig', () => {
+    // Zeile hatte schon eine Sorte, der Preis im Verlauf aber noch keine (eingelesen, bevor Preise ihre Sorte kannten)
+    const p0 = imported((rows) => { rows[0] = { ...rows[0], name: 'Rinderhack', amount: 500, unit: 'g', productId: 'normal' }; });
+    const old = { ...p0, history: (p0.history ?? []).map(({ productId: _, ...h }) => h) };
+    const p = editBonLine(old, 'b1', 0, { productId: 'leicht' }, NOW, id);
+    expect(historyOf(p, 'Rinderhack').map((h) => h.productId)).toEqual(['leicht']);
+  });
+
   it('Zuordnung ändern, aber schon aufgebraucht: es entsteht nichts Neues', () => {
     const p0 = imported((rows) => { rows[0] = { ...rows[0], name: 'Rinderhack', amount: 500, unit: 'g' }; });
     const eaten = { ...p0, items: p0.items.filter((i) => i.name !== 'Rinderhack') };

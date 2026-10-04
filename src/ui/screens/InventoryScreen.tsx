@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { applyInventory, useFoodTable, usePantry, usePlan } from '../../data/store';
 import { basicsOf } from '../../domain/mealplan';
-import { zeroOf } from '../../domain/nutrition/noNutrition';
+import { spiceName, zeroOf } from '../../domain/nutrition/noNutrition';
 import { normalizeName } from '../../domain/nutrition/localFoods';
 import { type PantryItem, type PantryUnit } from '../../domain/pantry';
 import { suggestPantryUnit } from '../../domain/packs';
@@ -49,7 +49,8 @@ export function InventoryScreen() {
   const onList = new Set((plan.extra ?? []).map((x) => normalizeName(x.name)));
   const lists = [
     { title: 'Immer im Haus', icon: 'home' as const, names: [...basicsOf(pantry)].sort((a, b) => a.localeCompare(b, 'de')) },
-    { title: 'Gewürze', icon: 'leaf' as const, names: [...zeroOf(pantry)].sort((a, b) => a.localeCompare(b, 'de')) },
+    // „Petersilie getrocknet“, wenn es Petersilie auch frisch gibt – „auffüllen“ setzt dann das Gewürz auf die Liste, nicht den Bund
+    { title: 'Gewürze', icon: 'leaf' as const, names: zeroOf(pantry).map((z) => spiceName(z, table)).sort((a, b) => a.localeCompare(b, 'de')) },
   ].filter((l) => l.names.length);
 
   const all = groups.reduce((n, g) => n + g.items.length, 0) + lists.reduce((n, l) => n + l.names.length, 0);

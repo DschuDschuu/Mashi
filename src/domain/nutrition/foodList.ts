@@ -1,5 +1,6 @@
 import { aliasesOf, normalizeName, PROVIDER } from './localFoods';
 import { nameOf, type MyProduct } from './myProducts';
+import { isDried } from './noNutrition';
 import type { FoodEntry, FoodTable } from './types';
 
 /**
@@ -50,9 +51,11 @@ function keyOf(p: MyProduct, table: FoodTable, spelled: ReadonlyMap<string, stri
  * @param known Zutatennamen, wie du sie schreibst (aus Rezepten und Vorrat) – für die Anzeige
  * @param keep Zutaten, die auch ohne jede Festlegung in der Liste bleiben – z. B. gerade eben
  *   „Immer im Haus“ ausgeschaltet: sonst verschwände die Zeile unter dem Finger und ließe sich nicht zurückholen
+ * @param spiceNameOf wie ein Gewürz heißt – gibt es es auch frisch: „Petersilie getrocknet“ (siehe spiceName), eigene Zeile
  */
 export function buildFoodList(
   products: MyProduct[], basics: string[], zero: string[], table: FoodTable, known: readonly string[] = [], keep: readonly string[] = [],
+  spiceNameOf: (name: string) => string = (z) => z,
 ): FoodRow[] {
   const spelled = new Map(known.map((k) => [normalizeName(k), k.trim()] as const));
   type Draft = Omit<FoodRow, 'ingredient'> & { label: string };
@@ -69,14 +72,15 @@ export function buildFoodList(
     const n = normalizeName(name);
     const hit = rows.get(n) ?? [...rows.values()].find((r) => r.products.some((p) =>
       normalizeName(p.name) === n || p.names?.some((x) => normalizeName(x) === n)
-      || p.replaces.includes(table.matchName(name)?.food.ref.foodId ?? '\u0000')));
+      // „Basilikum getrocknet“ ist nicht das frische Basilikum, auch wenn die Tabelle es so zuordnet
+      || (!isDried(name) && p.replaces.includes(table.matchName(name)?.food.ref.foodId ?? '\u0000'))));
     if (hit) return hit;
     const row: Draft = { key: n, name: '', label: name, products: [], table: table.matchName(name)?.food };
     rows.set(n, row);
     return row;
   };
   for (const b of basics) rowFor(b).basic = b;
-  for (const z of zero) rowFor(z).zero = z;
+  for (const z of zero) rowFor(spiceNameOf(z)).zero = z;
   for (const k of keep) rowFor(k);
 
   return [...rows.values()]

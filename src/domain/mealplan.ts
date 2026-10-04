@@ -1,5 +1,5 @@
 import type { FoodEntry, FoodKind, FoodTable } from './nutrition/types';
-import { zeroOf } from './nutrition/noNutrition';
+import { matchIngredient, spiceName, zeroOf } from './nutrition/noNutrition';
 import { toGrams } from './nutrition/units';
 import { normalizeName } from './nutrition/localFoods';
 import { MY_PRODUCTS_PROVIDER } from './nutrition/myProducts';
@@ -78,7 +78,8 @@ export const basicsOf = (pantry: { basics?: string[] } | undefined): string[] =>
  * „Immer im Haus“ – und alles „Ohne Nährwerte“ (Gewürze & Co.), wie Salz und Pfeffer.
  */
 export function basicsKeys(pantry: Pick<Pantry, 'basics' | 'noNutrition'> | undefined, table: FoodTable): Set<string> {
-  const names = [...basicsOf(pantry), ...zeroOf(pantry)];
+  // Gewürze als Gewürz: „Petersilie“ in den Gewürzen ist die getrocknete – der Bund fehlt weiter, wenn er fehlt
+  const names = [...basicsOf(pantry), ...zeroOf(pantry).map((z) => spiceName(z, table))];
   return new Set(names.map((name) => keyOfName(name, table)).filter((k): k is string => !!k));
 }
 
@@ -132,6 +133,8 @@ export interface Resolved {
   grams?: number;
   amount?: number;
   unit?: Unit;
+  /** steht in deinen Gewürzen – ohne Preis blockiert es den Portionspreis nicht (Julia) */
+  spice?: boolean;
 }
 
 /**
@@ -141,7 +144,8 @@ export interface Resolved {
  */
 export function resolveIngredient(ing: Ingredient, factor: number, table: FoodTable): Resolved | null {
   if (ing.optional) return null;
-  const match = ing.foodRef ? { food: table.byRef(ing.foodRef)! } : table.matchName(ing.name);
+  // Gewürz auch frisch zu haben (Petersilie)? Dann entscheidet die Menge – siehe matchIngredient
+  const match = ing.foodRef ? { food: table.byRef(ing.foodRef)! } : matchIngredient(table, ing);
   const food = match?.food;
   const amount = ing.amount !== undefined ? ing.amount * factor : undefined;
   // Gramm und Kilo lassen sich auch ohne bekanntes Lebensmittel zusammenzählen
@@ -159,6 +163,7 @@ export function resolveIngredient(ing: Ingredient, factor: number, table: FoodTa
     grams,
     amount,
     unit: ing.unit,
+    ...(food?.spice || (!food && table.isSpice?.(ing.name)) ? { spice: true } : {}),
   };
 }
 

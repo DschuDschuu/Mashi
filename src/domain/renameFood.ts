@@ -1,5 +1,5 @@
 import { basicsOf } from './mealplan';
-import { zeroOf } from './nutrition/noNutrition';
+import { isFreshHerb, zeroOf } from './nutrition/noNutrition';
 import { nameOf, type MyProduct } from './nutrition/myProducts';
 import { receiptKey, sameName, type ImportRow, type Pantry } from './pantry';
 
@@ -57,7 +57,8 @@ export function renameFood(pantry: Pantry, from: string, to: string, productIds:
     prices: (pantry.prices ?? []).map((h) => mark(`p:${h.date}|${h.productId ?? ''}`, h)),
     ...(pantry.restock ? { restock: pantry.restock.map((r) => mark(`s:${r.below}${r.unit}`, r)) } : {}),
     ...(basicsOf(pantry).some((b) => sameName(b, from)) ? { basics: basicsOf(pantry).map((b, n) => mark(`b:${n}`, { name: b }).name) } : {}),
-    ...(zeroOf(pantry).some((b) => sameName(b, from)) ? { noNutrition: zeroOf(pantry).map((b, n) => mark(`z:${n}`, { name: b }).name) } : {}),
+    // ein frisches Kraut (Petersilie-Bund) umbenennen: das gleichnamige Gewürz ist die getrocknete – die bleibt (Julia)
+    ...(zeroOf(pantry).some((b) => sameName(b, from)) && !(productIds.length && isFreshHerb(from)) ? { noNutrition: zeroOf(pantry).map((b, n) => mark(`z:${n}`, { name: b }).name) } : {}),
   };
 
   const undo = (p: Pantry): Pantry => ({

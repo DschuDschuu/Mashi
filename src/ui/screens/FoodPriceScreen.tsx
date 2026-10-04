@@ -1,31 +1,25 @@
 import { useMemo, useState } from 'react';
 import { discountOf } from '../../domain/bons';
-import { foodPricePoints, seriesKeyOf, SIZE_DASHES, sizeRanks, type FoodPricePoint } from '../../domain/foodPrices';
+import { foodPricePoints, mainSizeOf, seriesKeyOf, SIZE_DASHES, sizeRanks, type FoodPricePoint } from '../../domain/foodPrices';
 import { keyOfName } from '../../domain/mealplan';
-import { sortTags } from '../../domain/nutrition/myProducts';
+import type { PriceEntry } from '../../domain/cost';
+import { productLabel, sortTags, type MyProduct } from '../../domain/nutrition/myProducts';
 import { displayPrice, displayUnit } from '../../domain/priceHistory';
-import { useFoodTable, useProducts } from '../../data/store';
+import { assignPriceSort, useFoodTable, useProducts } from '../../data/store';
+import { toast } from '../toast';
+import { PRICE_MODES, usePriceMode } from '../usePriceMode';
 import { navigate } from '../../router';
 import { Empty, Section } from '../components/Controls';
 import { Icon } from '../components/Icon';
 import { LineSample, PriceLines, SORT_COLORS, type ChartPoint } from '../components/PriceLines';
 import { TopBar } from '../components/TopBar';
-import { euro } from '../format';
+import { euro, sizeLabel } from '../format';
 import { lineAmount, linePrice, linePriceParts, productIdsOfName, usePurchases } from '../usePurchases';
 import { bonTitle } from './BonScreen';
 
-type Mode = 'regal' | 'bezahlt';
-const MODE_KEY = 'mashi-price-mode';
-const readMode = (): Mode => { try { return localStorage.getItem(MODE_KEY) === 'bezahlt' ? 'bezahlt' : 'regal'; } catch { return 'regal'; } };
 
-const fmt = (n: number) => n.toLocaleString('de-DE', { maximumFractionDigits: 1 });
-/** „500 g“, „1 kg“, „1,5 l“ */
-const sizeLabel = (size: string) => {
-  if (size === '?') return 'Größe unbekannt';
-  const [n, u] = size.split(' ');
-  const v = Number(n);
-  return v >= 1000 ? `${fmt(v / 1000)} ${u === 'ml' ? 'l' : 'kg'}` : `${fmt(v)} ${u}`;
-};
+/** Sorte kurz: „Rind“, „Bio · K-Classic“ – ohne Zusatz und Marke der ganze Name */
+const sortLabel = (p: MyProduct) => sortTags(p).join(' · ') || productLabel(p);
 
 /**
  * Preise nur für ein Lebensmittel (Julia, aus der Kachel „Zuletzt gekauft“): wie oft gekauft, was gespart,
@@ -42,13 +36,13 @@ export function FoodPriceScreen({ name, title }: { name: string; title: string }
     return [...new Set([...productIdsOfName(name, table), ...products.filter((p) => key && keyOfName(p.name, table) === key).map((p) => p.id)])];
   }, [name, table, products]);
   const { purchases, history } = usePurchases(name, ids);
-  const [mode, setModeState] = useState<Mode>(readMode);
-  const setMode = (m: Mode) => { setModeState(m); try { localStorage.setItem(MODE_KEY, m); } catch { /* nur Komfort */ } };
+  const [mode, setMode] = usePriceMode();
   // per Legende ausgeblendete Linien – gilt für Kacheln, Verlauf und Einkäufe
   const [hidden, setHidden] = useState<string[]>([]);
 
   const { points, seriesOf, all, sortName, sortSize } = useMemo(() => {
-    const points = foodPricePoints(history, purchases);
+    // eine entfernte Sorte zählt als „ohne Sorte“ (und lässt sich unten neu zuordnen)
+    const points = foodPricePoints(history, purchases, new Set(products.map((p) => p.id)));
     const key = seriesKeyOf(points);
     const sortOrder = [...new Set(points.map((p) => p.sortId))];
     const order = [...new Set(points.map((p) => key(p).id))];
@@ -57,12 +51,7 @@ export function FoodPriceScreen({ name, title }: { name: string; title: string }
       const p = productOf(sortId);
       return p ? (sortTags(p).join(' · ') || (sortOrder.length > 1 ? 'ohne Zusatz' : title)) : sortOrder.length > 1 ? 'ohne Sorte' : title;
     };
-    // Hauptgröße = die bei der Sorte gespeicherte Packungsgröße – ihre Linie ist durchgezogen
-    const mainOf = (sortId: string) => {
-      const p = productOf(sortId);
-      return p?.packageAmount && p.packageUnit !== 'Stück' ? `${p.packageAmount} ${p.packageUnit ?? 'g'}` : undefined;
-    };
-    const ranks = sizeRanks(points, mainOf);
+    const ranks = sizeRanks(points, mainSizeOf(products));
     const all = order.map((id) => {
       const k = key(points.find((p) => key(p).id === id)!);
       const sort = sortName(k.sortId);
@@ -110,6 +99,13 @@ export function FoodPriceScreen({ name, title }: { name: string; title: string }
   const cheapest = shownPurchases.filter((p) => p.unit === unit).sort((a, b) => a.paid - b.paid)[0];
   const sortOf = (id?: string) => (id && ids.length > 1 ? products.find((p) => p.id === id) : undefined);
   const marks = mode === 'bezahlt' && shownPoints.some((p) => p.discount || p.mhd);
+  // ältere Preise ohne Bon und ohne (bekannte) Sorte – hier zuordnen (Julia: Liste, dazu „Alle zu …“)
+  const sorts = ids.map((id) => products.find((p) => p.id === id)).filter((p): p is MyProduct => !!p);
+  const unsorted = points.filter((p) => p.entry && !p.sortId).reverse();
+  const assign = (entries: PriceEntry[], p: MyProduct) => {
+    const undo = assignPriceSort(entries, p.id);
+    toast(`${entries.length === 1 ? '1 Preis' : `${entries.length} Preise`} zu „${sortLabel(p)}“`, { label: 'Rückgängig', run: undo });
+  };
 
   return (
     <main className="screen">
@@ -137,7 +133,7 @@ export function FoodPriceScreen({ name, title }: { name: string; title: string }
           {/* Julia: Rabatte und MHD im Diagramm sehen – „Bezahlt“ zeigt, was es dich wirklich gekostet hat */}
           {purchases.length > 0 && points.length > 1 && (
             <div className="segments price-view" role="tablist" aria-label="Welcher Preis">
-              {([['regal', 'Regalpreis'], ['bezahlt', 'Bezahlt']] as const).map(([v, label]) => (
+              {PRICE_MODES.map(([v, label]) => (
                 <button key={v} role="tab" aria-selected={mode === v} className={`segment${mode === v ? ' is-on' : ''}`} onClick={() => setMode(v)}>{label}</button>
               ))}
             </div>
@@ -191,6 +187,30 @@ export function FoodPriceScreen({ name, title }: { name: string; title: string }
               </Section>
             );
           })}
+
+          {unsorted.length > 0 && sorts.length > 0 && (
+            <Section title="Ältere Preise ohne Sorte">
+              <div className="price-card stack stack--tight">
+                <p className="small muted">Eingelesen, bevor Mashi Bons gespeichert hat. Welche Sorte war das?</p>
+                {unsorted.length > 1 && (
+                  <div className="old-prices__all">
+                    <span className="small">Alle zu</span>
+                    {sorts.map((s) => <button key={s.id} type="button" className="chip chip--sm" onClick={() => assign(unsorted.map((p) => p.entry!), s)}>{sortLabel(s)}</button>)}
+                  </div>
+                )}
+                <ul className="old-prices">
+                  {unsorted.map((p) => (
+                    <li key={`${p.entry!.name}|${p.date}|${p.shelf}`}>
+                      <span className="small">{new Date(p.date).toLocaleDateString('de-DE')} · <strong>{euro(displayPrice(p.shelf, p.unit))}</strong>/{displayUnit(p.unit)}</span>
+                      <span className="old-prices__sorts">
+                        {sorts.map((s) => <button key={s.id} type="button" className="chip chip--sm" onClick={() => assign([p.entry!], s)}>{sortLabel(s)}</button>)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </Section>
+          )}
 
           {shownPurchases.length > 0 && (
             <Section title="Alle Einkäufe">

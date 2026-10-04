@@ -22,7 +22,8 @@ Live: <https://dschudschuu.github.io/Mashi/> · installierbar als App (PWA), fun
   „Bald verbrauchen“, Einfrieren, Reste verwerten
 - **Meine Lebensmittel**: eigene Produkte mit Marke, Nährwerte per Barcode, Open Food Facts
   oder abgetippt (oder leer – dann rechnet Mashi mit der Tabelle); mehrere Sorten einer Zutat mit Favorit ★; je Lebensmittel eine Stufe: normal · Nachkaufen ·
-  Immer im Haus · Gewürze (ohne Nährwerte) – je ein Tab;
+  Immer im Haus · Gewürze (ohne Nährwerte, mit Packung und Preis) – je ein Tab; Kräuter frisch und getrocknet getrennt
+  (TL/Prise im Rezept = getrocknet, sonst frisch – frische im Vorrat geht vor);
   Fettstufen bei Milch, Joghurt, Quark
 - **Nährwerte** rein rechnerisch aus Zutaten × Lebensmitteltabelle (nie von der KI), je Zutat
   aufgeschlüsselt, Makro-Ziel für die Sortenwahl

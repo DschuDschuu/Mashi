@@ -3,6 +3,7 @@ import { setFoodStage, useFoodTable, usePantry } from '../../data/store';
 import type { PantryUnit } from '../../domain/pantry';
 import { ruleKey, type RestockRule, type RestockStatus } from '../../domain/restock';
 import { stageOf, type FoodStage } from '../../domain/stage';
+import { withSpices } from '../../domain/nutrition/noNutrition';
 import { toast } from '../toast';
 import { useRestockStatus } from '../useShoppingCount';
 import { Stepper } from './Controls';
@@ -60,8 +61,12 @@ export function StagePicker({ name, label = name, onTouch }: { name: string; lab
       return;
     }
     setAsking(false);
+    // ein Kraut, das es auch frisch gibt: Gewürz wird die getrocknete – der Bund bleibt, wie er ist (Julia)
+    const dried = s === 'ohne' ? withSpices(table, [name]).driedOf?.(name) : undefined;
     const undo = setFoodStage(name, s);
-    toast(s === 'haus' ? `„${label}“ ist jetzt immer im Haus` : `„${label}“ steht jetzt unter „Gewürze“ – zählt nicht mit`, { label: 'Rückgängig', run: undo });
+    toast(s === 'haus' ? `„${label}“ ist jetzt immer im Haus`
+      : dried ? `„${dried.name}“ steht jetzt unter „Gewürze“ – „${label}“ bleibt, wie es ist`
+        : `„${label}“ steht jetzt unter „Gewürze“ – zählt nicht mit`, { label: 'Rückgängig', run: undo });
   };
   return (
     <div className="stage">

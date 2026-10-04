@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
-import { ask } from '../confirm';
+import { ask, choose } from '../confirm';
 import { basicsOf } from '../../domain/mealplan';
 import { buildFoodList, findFoodRow, matchesFilter, type FoodFilter, type FoodRow } from '../../domain/nutrition/foodList';
-import { normalizeName, PROVIDER } from '../../domain/nutrition/localFoods';
+import { guessMatch, normalizeName, PROVIDER } from '../../domain/nutrition/localFoods';
 import { estimateDays, setShelfDays } from '../../domain/shelfLife';
 import { adoptCandidates } from '../../domain/adoptFoods';
 import { brandOf, fillOrAdd, productLabel, sharedOf, valuesOf, withShared, type MyProduct, type SharedMatch } from '../../domain/nutrition/myProducts';
@@ -11,13 +11,15 @@ import { useCategoryOf } from '../useCategory';
 import { CategoryPicker } from './CategoryPicker';
 import { FoodPriceLink, LastPurchase } from './LastPurchase';
 import { purchasesOf } from '../../domain/bons';
-import { zeroOf } from '../../domain/nutrition/noNutrition';
+import { spiceName, zeroOf } from '../../domain/nutrition/noNutrition';
 import { averageNutrients } from '../../domain/nutrition/variants';
 import type { Nutrients } from '../../domain/nutrition/types';
-import { addProduct, currentPantry, currentProducts, dismissRename, setPantryShelfDays, renameFoodEverywhere, saveProducts, setFavoriteVariant, setFoodStage, useFoodTable, usePantry, useProducts, useRecipes } from '../../data/store';
+import { addProduct, currentPantry, currentProducts, dismissRename, removeProduct, setPantryShelfDays, renameFoodEverywhere, saveProducts, setFavoriteVariant, setFoodStage, useFoodTable, usePantry, useProducts, useRecipes } from '../../data/store';
 import { stageOf } from '../../domain/stage';
+import { sortUses } from '../../domain/sortRefs';
 import { StagePicker } from './StagePicker';
-import { currentContent } from '../../domain/recipe';
+import { currentContent, newId } from '../../domain/recipe';
+import { parseNum, toField } from './productFields';
 import { foodTable } from '../../services';
 import { euro } from '../format';
 import { toast } from '../toast';
@@ -58,7 +60,9 @@ export function FoodList({ adding, onAdding }: {
   // eigene Haltbarkeit fürs Lebensmittel (früher auf der Seite „Haltbarkeit“) – steht jetzt in dessen Kachel, also sichtbar
   const ownShelf = useMemo(() => Object.keys(pantry.shelfDays?.foods ?? {}).map((id) => foodTable.byRef({ provider: PROVIDER, foodId: id })?.name).filter((n): n is string => !!n), [pantry.shelfDays]);
   const keep = useMemo(() => [...touched, ...restock.map((r) => r.name), ...ownShelf], [touched, restock, ownShelf]);
-  const rows = useMemo(() => buildFoodList(products, basics, zero, foodTable, known, keep), [products, basics, zero, known, keep]);
+  const spiceTable = useFoodTable();
+  const rows = useMemo(() => buildFoodList(products, basics, zero, foodTable, known, keep, (z) => spiceName(z, spiceTable)),
+    [products, basics, zero, known, keep, spiceTable]);
   const [filter, setFilter] = useState<FoodFilter>('produkte');
   const [open, setOpen] = useState<string | null>(null);
   /** fertig hinzugefügt – als weitere Sorte gleich die Zeile aufklappen, damit man sie sieht */
@@ -190,9 +194,24 @@ function FoodLine({ row, open, onToggle, products, onTouch }: {
     });
   };
   const remove = async (p: MyProduct) => {
-    if (!(await ask({ title: `„${productLabel(p)}“ entfernen?`, text: 'Die Rezepte rechnen dann wieder mit Richtwerten.', confirm: 'Entfernen', danger: true }))) return;
+    // hängen Einkäufe oder Vorrat an der Sorte und gibt es andere: fragen, wohin damit (Julia) – sonst „ohne Sorte“
+    const uses = sortUses(currentPantry(), p.id);
+    const others = ps.filter((x) => x.id !== p.id);
+    let to: string | undefined;
+    if (uses.purchases + uses.stock > 0 && others.length) {
+      const what = [
+        uses.purchases ? `${uses.purchases} ${uses.purchases === 1 ? 'Einkauf' : 'Einkäufe'}` : '',
+        uses.stock ? `${uses.stock}× im Vorrat` : '',
+      ].filter(Boolean).join(' und ');
+      const answer = await choose({
+        title: `„${productLabel(p)}“ entfernen?`, text: `${what} – zu welcher Sorte?`,
+        choices: [...others.map((o) => ({ label: `Zu „${productLabel(o)}“`, value: o.id })), { label: 'Ohne Sorte behalten', value: '' }],
+      });
+      if (answer === null) return;
+      to = answer || undefined;
+    } else if (!(await ask({ title: `„${productLabel(p)}“ entfernen?`, text: 'Die Rezepte rechnen dann wieder mit Richtwerten.', confirm: 'Entfernen', danger: true }))) return;
     onTouch();
-    saveProducts(products.filter((x) => x.id !== p.id));
+    toast(`„${productLabel(p)}“ entfernt`, { label: 'Rückgängig', run: removeProduct(p.id, to) });
   };
   // Stufe über den Schlüssel: „Passata“ und „Passierte Tomaten“ sind dasselbe
   const pantry = usePantry();
@@ -230,7 +249,8 @@ function FoodLine({ row, open, onToggle, products, onTouch }: {
               <button type="button" className="iconbtn iconbtn--sm" aria-label="Abbrechen" onClick={() => setRenaming(null)}><Icon name="close" size={16} /></button>
             </form>
           ) : title}
-          {open && shared && renaming === null && (
+          {/* Gewürze nicht umbenennen: der Name verbindet sie mit deinen Gewürzen (Packung, Preis) */}
+          {open && shared && renaming === null && !zeroRow && (
             <button type="button" className="foods__pen" onClick={() => setRenaming(shared.name)} aria-label={ps.length > 1 ? 'Namen ändern – für alle Sorten' : 'Namen ändern'}>
               <Icon name="pencil" size={14} />
             </button>
@@ -253,7 +273,10 @@ function FoodLine({ row, open, onToggle, products, onTouch }: {
 
       {open && zeroRow && (
         <div className="foods__body">
-          {ps.length > 0 && <p className="small muted">Deine eigenen Werte bleiben gespeichert und zählen wieder, sobald du eine andere Stufe wählst.</p>}
+          {ps.some((p) => !p.noValues) && <p className="small muted">Deine eigenen Werte bleiben gespeichert und zählen wieder, sobald du eine andere Stufe wählst.</p>}
+          {/* Julia: Gewürze auch mit Preis – zuletzt gekauft (Bon) und die eigene Packung */}
+          <LastPurchase name={row.ingredient} title={title} productIds={ps.map((p) => p.id)} />
+          <SpicePack name={title} product={ps.length === 1 ? ps[0] : undefined} />
           <CategoryPicker name={row.ingredient} label={title} />
           <StagePicker name={row.ingredient} label={title} onTouch={onTouch} />
         </div>
@@ -305,7 +328,10 @@ function FoodLine({ row, open, onToggle, products, onTouch }: {
                 })()
                 : <span className="small foods__values"><strong>{fmt(p.per100g.kcal)} kcal</strong><span>{macros(p.per100g)}</span></span>}
               <LastPurchase sort name={row.ingredient} title={title} productIds={[p.id]} />
-              {p.packageAmount && <span className="small muted">Packung {fmt(p.packageAmount)} {p.packageUnit ?? 'g'}{p.packagePrice !== undefined && <> · {euro(p.packagePrice)}</>}</span>}
+              {/* gekauft: Größe und Preis stehen schon bei „Zuletzt gekauft“ (Julia) – sonst die eingetragene Packung */}
+              {p.packageAmount && !purchasesOf(pantry.bons, (l) => l.productId === p.id).length && (
+                <span className="small muted">Packung {fmt(p.packageAmount)} {p.packageUnit ?? 'g'}{p.packagePrice !== undefined && <> · {euro(p.packagePrice)}</>}</span>
+              )}
             </div>
           ))}
 
@@ -471,13 +497,71 @@ function AddFood({ tab, rows, onDone }: { tab: FoodFilter; rows: FoodRow[]; onDo
 }
 
 /**
+ * Packung und Preis eines Gewürzes (Julia: „Gewürze auch Preis hinzufügbar“). Dafür wird es ein eigenes Lebensmittel
+ * ohne Nährwerte – so zählt der Preis im Rezept anteilig („1 TL von 15 g“); mitgerechnet wird es weiter nicht.
+ */
+function SpicePack({ name, product }: { name: string; product?: MyProduct }) {
+  const [editing, setEditing] = useState(false);
+  const [amount, setAmount] = useState(toField(product?.packageAmount));
+  const [price, setPrice] = useState(toField(product?.packagePrice));
+  const [error, setError] = useState<string | null>(null);
+  if (!editing) {
+    return product?.packageAmount ? (
+      <div className="row-between spice-pack">
+        <span className="small">Packung {fmt(product.packageAmount)} {product.packageUnit ?? 'g'}{product.packagePrice !== undefined ? ` · ${euro(product.packagePrice)}` : ''}</span>
+        <button type="button" className="chip chip--sm" onClick={() => setEditing(true)}><Icon name="pencil" size={13} /> Ändern</button>
+      </div>
+    ) : (
+      <button type="button" className="btn btn--soft btn--sm spice-pack" onClick={() => setEditing(true)}><Icon name="plus" size={16} /> Packung und Preis</button>
+    );
+  }
+  const save = () => {
+    const a = parseNum(amount);
+    const p = parseNum(price);
+    if (!(a && a > 0)) return setError('Packungsgröße bitte als Zahl, z. B. 15.');
+    if (price.trim() && p === undefined) return setError('Preis bitte als Zahl, z. B. 1,49 – oder leer lassen.');
+    const at = new Date().toISOString();
+    const priced = { packageAmount: a, packageUnit: 'g' as const, ...(p !== undefined ? { packagePrice: p } : {}), updatedAt: at };
+    const next: MyProduct = product
+      ? (({ packagePrice: _, ...rest }) => ({ ...rest, ...priced }))(product)
+      // „gilt für“ nur bei genauem Treffer (Paprikapulver) – „Basilikum getrocknet“ darf nie das frische ersetzen
+      : { id: newId('p'), name, replaces: guessMatch(name).replaces, per100g: { kcal: 0, protein: 0, carbs: 0, fat: 0 }, noValues: true, ...priced };
+    const before = currentProducts();
+    saveProducts(product ? before.map((x) => (x.id === product.id ? next : x)) : [...before, next]);
+    setEditing(false);
+    setError(null);
+    toast(`${name}: ${fmt(a)} g${p !== undefined ? ` für ${euro(p)}` : ''}`, {
+      label: 'Rückgängig',
+      run: () => saveProducts(product ? currentProducts().map((x) => (x.id === product.id ? product : x)) : currentProducts().filter((x) => x.id !== next.id)),
+    });
+  };
+  return (
+    <div className="stack stack--tight spice-pack">
+      <div className="row-gap">
+        <label className="field"><span>Packung (g)</span>
+          <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="z. B. 15" autoFocus />
+        </label>
+        <label className="field"><span>Preis (€)</span>
+          <input inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="z. B. 1,49" />
+        </label>
+      </div>
+      {error && <p className="small error" role="alert">{error}</p>}
+      <div className="row-gap">
+        <button type="button" className="btn btn--primary btn--sm" onClick={save}>Speichern</button>
+        <button type="button" className="btn btn--ghost btn--sm" onClick={() => { setEditing(false); setError(null); }}>Abbrechen</button>
+      </div>
+    </div>
+  );
+}
+
+/**
  * „Aus Vorrat & Bons übernehmen“ (Julia): was du hast oder gekauft hast, bekommt eine Kachel – ohne eigene
  * Nährwerte (rechnet weiter mit der Tabelle). Nur sichtbar, solange es etwas zu übernehmen gibt.
  */
 function AdoptFoods() {
   const pantry = usePantry();
   const table = useFoodTable();
-  const candidates = useMemo(() => adoptCandidates(pantry.items, pantry.bons, table, [...basicsOf(pantry), ...zeroOf(pantry)]),
+  const candidates = useMemo(() => adoptCandidates(pantry.items, pantry.bons, table, [...basicsOf(pantry), ...zeroOf(pantry).map((z) => spiceName(z, table))]),
     [pantry, table]);
   if (!candidates.length) return null;
   const names = candidates.map((p) => p.name);
