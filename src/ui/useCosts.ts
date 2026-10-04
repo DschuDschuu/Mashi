@@ -22,7 +22,8 @@ export function usePricing(): { table: FoodTable; prices: PriceEntry[]; packageF
   }, [products, pantry, table]);
 }
 
-export function useRecipeCost(content: RecipeContent, servings: number): Cost | null {
+/** pick: gewählte Sorte je Zutat (wie im Wochenplan) – sonst der neueste Preis je Lebensmittel */
+export function useRecipeCost(content: RecipeContent, servings: number, pick?: Readonly<Record<string, string>>): Cost | null {
   const { table, prices } = usePricing();
-  return useMemo(() => recipeCost(content, servings, table, prices), [content, servings, table, prices]);
+  return useMemo(() => recipeCost(content, servings, table, prices, pick), [content, servings, table, prices, pick]);
 }

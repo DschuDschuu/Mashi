@@ -17,10 +17,20 @@ export interface ChartPoint extends PricePoint {
   why?: string;
 }
 
-export interface PriceSeries { id: string; label: string; color: string; points: ChartPoint[] }
+/** dash: Linienart (SVG-Strichmuster) – je Packungsgröße einer Sorte, siehe SIZE_DASHES; leer = durchgezogen */
+export interface PriceSeries { id: string; label: string; color: string; dash?: string; points: ChartPoint[] }
+
+/** kleines Linienmuster für die Legende – gleiche Farbe und Strichart wie im Diagramm */
+export function LineSample({ color, dash }: { color: string; dash?: string }) {
+  return (
+    <svg className="price-legend__line" width="22" height="8" viewBox="0 0 22 8" aria-hidden="true">
+      <line x1="2" y1="4" x2="20" y2="4" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeDasharray={dash} />
+    </svg>
+  );
+}
 
 /**
- * Preisverlauf mehrerer Linien in EINEM Diagramm (Julia: je Sorte bzw. Packungsgröße eine Farbe, per Legende ein- und
+ * Preisverlauf mehrerer Linien in EINEM Diagramm (Julia: je Sorte eine Farbe, je Packungsgröße eine Linienart, per Legende ein- und
  * ausblendbar – die Legende steht darunter, hier nur die sichtbaren Linien). Tippen rastet am nächsten Einkauf ein;
  * der Tooltip nennt Datum, Preis und – in „Bezahlt“ – die Art des Rabatts.
  */
@@ -78,7 +88,7 @@ export function PriceLines({ series, unit, label }: { series: PriceSeries[]; uni
         <g key={s.id}>
           {s.points.length > 1 && (
             <path d={s.points.map((p, i) => `${i ? 'L' : 'M'}${x(p.date).toFixed(1)},${y(p).toFixed(1)}`).join(' ')}
-              fill="none" stroke={s.color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+              fill="none" stroke={s.color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" strokeDasharray={s.dash} />
           )}
           {s.points.map((p, i) => {
             const r = active?.s === si && active.i === i ? 5 : 4;

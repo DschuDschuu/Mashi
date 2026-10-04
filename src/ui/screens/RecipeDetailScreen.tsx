@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ask } from '../confirm';
 import { useSheet } from '../useSheet';
 import { useRecipeStock } from '../useRecipeStock';
@@ -6,7 +6,7 @@ import { StockLine } from '../components/StockLine';
 import type { Stock } from '../../domain/pantry';
 import { categoryInfo, deviceInfo, DIFFICULTY_LABEL, SOURCE_INFO, STATUS_INFO } from '../../domain/catalog';
 import { currentContent, currentVersion, originalVersion } from '../../domain/recipe';
-import { formatQuantity, scaleIngredients } from '../../domain/scaling';
+import { asCooked, formatQuantity, scaleIngredients } from '../../domain/scaling';
 import { orderByUse } from '../../domain/stepIngredients';
 import type { Recipe, RecipeContent } from '../../domain/types';
 import { describeChange, diffContent } from '../../domain/versions';
@@ -20,7 +20,7 @@ import { Empty, Stars, Stepper } from '../components/Controls';
 import { Icon } from '../components/Icon';
 import { deviceIcon } from '../catalogIcons';
 import { NutritionDetails, NutritionTiles } from '../components/Nutrition';
-import { UnknownIngredients } from '../components/MyProductsPanel';
+import { UnknownIngredients } from '../components/NewProduct';
 import { RecipeImage } from '../components/RecipeImage';
 import { StepIngredients } from '../components/StepIngredients';
 import { StatusBadge } from '../components/StatusBadge';
@@ -30,17 +30,19 @@ import { splitBrand } from '../../domain/nutrition/myProducts';
 import { toast } from '../toast';
 import { formOf, startAgain } from '../kiAgain';
 import { useIsTablet } from '../useMediaQuery';
-import { useNutrition } from '../useNutrition';
+import { useNutrition, useVariants } from '../useNutrition';
 import { useSwipe } from '../useSwipe';
 import { useSlide } from '../useSlide';
 import { RenamePanel } from '../components/RenamePanel';
-import { useMorePrompt } from '../components/UseMoreSheet';
+import { amountsText, useMorePrompt } from '../components/UseMoreSheet';
 import { useVariantPrompt } from '../components/VariantSheet';
 
 // Vier kurze Tabs passen auch aufs schmale Handy (375 px) – die Infos stehen unter „Notizen“
 const TABS = ['Zutaten', 'Schritte', 'Nährwerte', 'Notizen'] as const;
 type Tab = (typeof TABS)[number];
 const TABLET_TABS: readonly Tab[] = ['Nährwerte', 'Notizen'];
+/** gleich bleibendes „keine Plan-Mengen“ – ein neues {} bei jedem Zeichnen würde alles neu rechnen lassen */
+const NO_AMOUNTS: Record<string, number> = {};
 
 export function RecipeDetailScreen({ id }: { id: string }) {
   const recipe = useRecipe(id);
@@ -62,10 +64,20 @@ function Detail({ recipe }: { recipe: Recipe }) {
   // null = nicht angefasst → folgt dem Plan; der kann beim Start erst nach dem ersten Zeichnen ankommen.
   const [own, setServings] = useState<number | null>(null);
   const servings = own ?? planned?.servings ?? c.servings;
+  // Im Plan mit „nur dieses Mal“-Mengen (Julia: 3 statt 1 Paprika) → hier genauso: Zutaten, Nährwerte und Preis, mit Hinweis.
+  // Eigene Portionen gewählt (die Mengen gelten nur für die Plan-Portionen) oder „Rezept zeigen“ → wie geschrieben.
+  const [original, setOriginal] = useState(false);
+  const planAmounts = planned?.amounts ?? NO_AMOUNTS;
+  const hasPlanAmounts = Object.keys(planAmounts).length > 0;
+  const asPlanned = hasPlanAmounts && own === null && !original;
+  const shown = useMemo(() => (asPlanned ? asCooked(c, servings, planAmounts) : c), [asPlanned, c, servings, planAmounts]);
   const [tab, setTab] = useState<Tab>('Zutaten');
   const [menu, setMenu] = useState(false);
   const [imgBusy, setImgBusy] = useState(false);
-  const n = useNutrition(c);
+  const written = useNutrition(c);
+  // wie die Plan-Karte: mit der Sorte, die dort gewählt ist
+  const dish = useVariants(shown, planned?.variants);
+  const n = asPlanned ? dish.n : written;
   const variantPrompt = useVariantPrompt();
   const isTablet = useIsTablet();
   const tabBar = useRef<HTMLDivElement>(null);
@@ -86,7 +98,7 @@ function Detail({ recipe }: { recipe: Recipe }) {
   }, [c.servings]);
 
   // Reihenfolge wie beim Kochen: was im ersten Schritt gebraucht wird, zuerst
-  const ingredients = orderByUse(scaleIngredients(c, servings), c.steps);
+  const ingredients = orderByUse(scaleIngredients(shown, servings), c.steps);
   const { stock, soon } = useRecipeStock(recipe, servings);
   const rating = recipe.feedback.length
     ? { avg: recipe.feedback.reduce((s, f) => s + f.rating, 0) / recipe.feedback.length, count: recipe.feedback.length }
@@ -148,8 +160,22 @@ const header = (
         )}
       </div>
 
+      {asPlanned && (
+        <p className="plan-note" role="note">
+          <Icon name="calendar" size={15} />
+          <span>Wie im Wochenplan – {amountsText(planAmounts, scaleIngredients(c, servings))}</span>
+          <button type="button" className="link" onClick={() => setOriginal(true)}>Rezept zeigen</button>
+        </p>
+      )}
+      {original && hasPlanAmounts && own === null && (
+        <p className="plan-note" role="note">
+          <Icon name="calendar" size={15} />
+          <span>So steht es im Rezept.</span>
+          <button type="button" className="link" onClick={() => setOriginal(false)}>Wie im Wochenplan</button>
+        </p>
+      )}
       <NutritionTiles n={n} />
-      <CostLine content={c} servings={servings} />
+      <CostLine content={shown} servings={servings} pick={asPlanned ? dish.pick : undefined} />
 
       {!recipe.archivedAt && recipe.status !== 'ki_entwurf' && (
         <div className="plan-chips">
@@ -279,8 +305,8 @@ const header = (
 /** Zutat ohne Marke („Pesto (K-Classic)“, „Pesto · K-Classic“ → „Pesto“) – Julia: Marke muss in den Kosten nicht dran */
 const plainName = (n: string) => splitBrand(n.split(' · ')[0]).name;
 
-function CostLine({ content, servings }: { content: RecipeContent; servings: number }) {
-  const cost = useRecipeCost(content, servings);
+function CostLine({ content, servings, pick }: { content: RecipeContent; servings: number; pick?: Record<string, string> }) {
+  const cost = useRecipeCost(content, servings, pick);
   if (!cost) return null;
   // fehlen Preise: „ab …“ und welche fehlen – die bekannten stehen aufgeklappt (Julia; auf der Karte dann gar nichts)
   const partial = cost.missing.length > 0;

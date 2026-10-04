@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { discountOf } from '../../domain/bons';
-import { foodPricePoints, seriesKeyOf, type FoodPricePoint } from '../../domain/foodPrices';
+import { foodPricePoints, seriesKeyOf, SIZE_DASHES, sizeRanks, type FoodPricePoint } from '../../domain/foodPrices';
 import { keyOfName } from '../../domain/mealplan';
 import { sortTags } from '../../domain/nutrition/myProducts';
 import { displayPrice, displayUnit } from '../../domain/priceHistory';
@@ -8,7 +8,7 @@ import { useFoodTable, useProducts } from '../../data/store';
 import { navigate } from '../../router';
 import { Empty, Section } from '../components/Controls';
 import { Icon } from '../components/Icon';
-import { PriceLines, SORT_COLORS, type ChartPoint, type PriceSeries } from '../components/PriceLines';
+import { LineSample, PriceLines, SORT_COLORS, type ChartPoint } from '../components/PriceLines';
 import { TopBar } from '../components/TopBar';
 import { euro } from '../format';
 import { lineAmount, linePrice, linePriceParts, productIdsOfName, usePurchases } from '../usePurchases';
@@ -47,26 +47,47 @@ export function FoodPriceScreen({ name, title }: { name: string; title: string }
   // per Legende ausgeblendete Linien – gilt für Kacheln, Verlauf und Einkäufe
   const [hidden, setHidden] = useState<string[]>([]);
 
-  const { points, seriesOf, all } = useMemo(() => {
+  const { points, seriesOf, all, sortName, sortSize } = useMemo(() => {
     const points = foodPricePoints(history, purchases);
     const key = seriesKeyOf(points);
     const sortOrder = [...new Set(points.map((p) => p.sortId))];
     const order = [...new Set(points.map((p) => key(p).id))];
-    const labelOf = (id: string) => {
-      const p0 = points.find((p) => key(p).id === id)!;
-      const k = key(p0);
-      const p = k.sortId ? products.find((x) => x.id === k.sortId) : undefined;
-      const sort = p ? (sortTags(p).join(' · ') || (sortOrder.length > 1 ? 'ohne Zusatz' : title)) : sortOrder.length > 1 ? 'ohne Sorte' : title;
-      // nur eine Sorte: die Größe allein reicht („400 g“, „1 kg“) – sonst „leicht · 400 g“
-      return k.size ? (sortOrder.length > 1 ? `${sort} · ${sizeLabel(k.size)}` : sizeLabel(k.size)) : sort;
+    const productOf = (sortId: string) => (sortId ? products.find((x) => x.id === sortId) : undefined);
+    const sortName = (sortId: string) => {
+      const p = productOf(sortId);
+      return p ? (sortTags(p).join(' · ') || (sortOrder.length > 1 ? 'ohne Zusatz' : title)) : sortOrder.length > 1 ? 'ohne Sorte' : title;
     };
-    const all = order.map((id, n) => ({ id, label: labelOf(id), color: SORT_COLORS[n % SORT_COLORS.length] }));
-    return { points, seriesOf: (p: FoodPricePoint) => key(p).id, all };
+    // Hauptgröße = die bei der Sorte gespeicherte Packungsgröße – ihre Linie ist durchgezogen
+    const mainOf = (sortId: string) => {
+      const p = productOf(sortId);
+      return p?.packageAmount && p.packageUnit !== 'Stück' ? `${p.packageAmount} ${p.packageUnit ?? 'g'}` : undefined;
+    };
+    const ranks = sizeRanks(points, mainOf);
+    const all = order.map((id) => {
+      const k = key(points.find((p) => key(p).id === id)!);
+      const sort = sortName(k.sortId);
+      const rank = ranks.get(id) ?? 0;
+      return {
+        id, sortId: k.sortId, size: k.size, rank,
+        // nur eine Sorte: die Größe allein reicht („400 g“, „1 kg“) – sonst „leicht · 400 g“
+        label: k.size ? (sortOrder.length > 1 ? `${sort} · ${sizeLabel(k.size)}` : sizeLabel(k.size)) : sort,
+        // Julia: je Sorte eine Farbe, je Packungsgröße eine Linienart (durchgezogen, gestrichelt, gepunktet …)
+        color: SORT_COLORS[sortOrder.indexOf(k.sortId) % SORT_COLORS.length],
+        dash: SIZE_DASHES[rank % SIZE_DASHES.length],
+      };
+    });
+    // immer in derselben Größe gekauft (keine eigenen Linien): die Größe trotzdem hinter dem Namen nennen
+    const sortSize = (sortId: string) => {
+      const sizes = new Set(points.filter((p) => p.sortId === sortId).map((p) => (p.size === undefined ? '?' : `${p.size} ${p.sizeUnit}`)));
+      return sizes.size === 1 && !sizes.has('?') ? sizeLabel([...sizes][0]) : undefined;
+    };
+    return { points, seriesOf: (p: FoodPricePoint) => key(p).id, all, sortName, sortSize };
   }, [history, purchases, products, title]);
 
   const shownPoints = points.filter((p) => !hidden.includes(seriesOf(p)));
+  const toggle = (ids: string[], show: boolean) => setHidden(show ? hidden.filter((h) => !ids.includes(h)) : [...new Set([...hidden, ...ids])]);
   /** je Einheit ein Diagramm (je kg und je Stück lassen sich nicht fair vergleichen); jede Linie behält ihre Farbe */
-  const seriesFor = (u: 'g' | 'Stück', onlyShown: boolean): PriceSeries[] => all
+  const seriesFor = (u: 'g' | 'Stück', onlyShown: boolean) => all
     .filter((s) => !onlyShown || !hidden.includes(s.id))
     .map((s) => {
       // je Tag ein Punkt (der letzte Einkauf des Tages)
@@ -131,13 +152,28 @@ export function FoodPriceScreen({ name, title }: { name: string; title: string }
                   {/* statt der Chips (Julia: nehmen zu viel Platz): schmale Legende, antippen blendet aus */}
                   {lines.length > 1 && (
                     <div className="price-legend" role="group" aria-label="Linien zeigen">
-                      {lines.map((s) => {
-                        const on = !hidden.includes(s.id);
+                      {/* Julia: vorne der Name der Sorte, dahinter ihre Packungsgrößen – Name blendet die ganze Sorte aus, eine Größe nur ihre Linie */}
+                      {[...new Set(lines.map((s) => s.sortId))].map((sortId) => {
+                        const group = lines.filter((s) => s.sortId === sortId).sort((a, b) => a.rank - b.rank);
+                        const ids = all.filter((s) => s.sortId === sortId).map((s) => s.id);
+                        const on = ids.some((id) => !hidden.includes(id));
+                        const only = group.length === 1 ? group[0] : undefined;
+                        const size = only && (only.size ? sizeLabel(only.size) : sortSize(sortId));
                         return (
-                          <button key={s.id} type="button" className={`price-legend__item${on ? '' : ' is-off'}`} aria-pressed={on}
-                            onClick={() => setHidden(on ? [...hidden, s.id] : hidden.filter((h) => h !== s.id))}>
-                            <span className="price-sorts__dot" style={{ background: s.color }} aria-hidden="true" />{s.label}
-                          </button>
+                          <span key={sortId} className="price-legend__group">
+                            <button type="button" className={`price-legend__item price-legend__name${on ? '' : ' is-off'}`} aria-pressed={on} onClick={() => toggle(ids, !on)}>
+                              {only ? <LineSample color={only.color} dash={only.dash} /> : <span className="price-sorts__dot" style={{ background: group[0].color }} aria-hidden="true" />}
+                              {sortName(sortId)}{size ? ` · ${size}` : ''}
+                            </button>
+                            {!only && group.map((s) => {
+                              const sOn = !hidden.includes(s.id);
+                              return (
+                                <button key={s.id} type="button" className={`price-legend__item${sOn ? '' : ' is-off'}`} aria-pressed={sOn} aria-label={s.label} onClick={() => toggle([s.id], !sOn)}>
+                                  <LineSample color={s.color} dash={s.dash} />{sizeLabel(s.size ?? '?')}
+                                </button>
+                              );
+                            })}
+                          </span>
                         );
                       })}
                     </div>

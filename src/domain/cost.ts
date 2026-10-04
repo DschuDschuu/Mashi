@@ -38,15 +38,22 @@ export function productPrices(products: MyProduct[]): PriceEntry[] {
       perUnit: p.packagePrice! / p.packageAmount!,
       unit: p.packageUnit === 'Stück' ? 'Stück' : 'g',
       date: p.updatedAt,
+      productId: p.id,
     }));
 }
 
-export function recipeCost(content: RecipeContent, servings: number, table: FoodTable, prices: PriceEntry[]): Cost | null {
+/**
+ * pick: gewählte Sorte je Zutat-ID (wie bei den Nährwerten) – dann zählt der Preis genau dieser Sorte.
+ * Hat die Sorte noch keinen Preis, nimmt Mashi den neuesten des Lebensmittels (besser „ca.“ als gar nichts).
+ */
+export function recipeCost(content: RecipeContent, servings: number, table: FoodTable, prices: PriceEntry[], pick: Readonly<Record<string, string>> = {}): Cost | null {
   // Gleiche Zutat, mehrere Preise (z. B. zwei Bons) → der neueste zählt
   const byKey = new Map<string, PriceEntry>();
+  const byProduct = new Map<string, PriceEntry>();
   for (const p of [...prices].sort((a, b) => a.date.localeCompare(b.date))) {
     const key = keyOfName(p.name, table);
     if (key) byKey.set(key, p);
+    if (p.productId) byProduct.set(p.productId, p);
   }
 
   const factor = servings / content.servings;
@@ -57,7 +64,7 @@ export function recipeCost(content: RecipeContent, servings: number, table: Food
   for (const ing of content.ingredients) {
     const need = resolveIngredient(ing, factor, table);
     if (!need || need.food?.negligible) continue;
-    const price = byKey.get(need.key);
+    const price = (pick[ing.id] && byProduct.get(pick[ing.id])) || byKey.get(need.key);
     const qty = price && quantityIn(price.unit, need);
     if (!price || qty === undefined) {
       if (!need.pantry) missing.push(need.name);

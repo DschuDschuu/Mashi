@@ -6,19 +6,22 @@ import { fillOrAdd, sharedOf, withShared, type MyProduct } from '../../domain/nu
 import { zeroOf } from '../../domain/nutrition/noNutrition';
 import { addProduct, saveProducts, usePantry, useProducts } from '../../data/store';
 import { foodTable } from '../../services';
+import type { NutritionResult } from '../../domain/nutrition/types';
 import { toast } from '../toast';
+import { Icon } from './Icon';
 import { ProductForm } from './MyProductsPanel';
 
 /**
- * Neues Produkt aus einer Bon-Zeile – in der Bon-Prüfung und am gespeicherten Bon – wie unter „Meine Lebensmittel“ (Julia): gibt es das Lebensmittel schon,
+ * Neues Produkt – aus einer Bon-Zeile (Bon-Prüfung, gespeicherter Bon), einer unbekannten Rezept-Zutat oder dem Vorrat mit Marke –
+ * wie unter „Meine Lebensmittel“ (Julia: überall dasselbe Formular): gibt es das Lebensmittel schon,
  * fragt Mashi gleich unter dem Namen „weitere Sorte?“; dann nur Zusatz, Marke, Werte, Packung.
  */
-export function NewProduct({ name, bonName, pack = {}, onDone }: {
-  /** vorbelegt: der Name in der Speisekammer (sonst der Bon-Name) */
+export function NewProduct({ name, bonName = name, pack = {}, onDone }: {
+  /** vorbelegt: der Name in der Speisekammer (sonst der Bon-Name) bzw. die Zutat im Rezept */
   name: string;
   /** so steht es auf dem Bon – wird als Zutatenname gemerkt */
-  bonName: string;
-  /** Packungsgröße aus der Bon-Zeile */
+  bonName?: string;
+  /** Vorbelegtes: Packungsgröße aus der Bon-Zeile, Marke aus dem Vorrat */
   pack?: Partial<MyProduct>;
   onDone: (p?: MyProduct) => void;
 }) {
@@ -65,3 +68,33 @@ export function NewProduct({ name, bonName, pack = {}, onDone }: {
     />
   );
 }
+
+/**
+ * Zutaten, die Mashi in diesem Rezept nicht kennt – direkt unter „Meine Lebensmittel“ anlegen,
+ * mit demselben Formular wie überall (Julia: nicht mehr das alte mit Etikett-Foto). Danach rechnen alle Rezepte damit.
+ */
+export function UnknownIngredients({ n }: { n: NutritionResult }) {
+  const [open, setOpen] = useState<string | null>(null);
+  const unknown = [...new Set(n.items.filter((i) => i.status === 'unmatched').map((i) => i.name))];
+  if (!unknown.length) return null;
+
+  return (
+    <div className="panel stack unknown-ings">
+      <p className="small">
+        <strong>{unknown.length === 1 ? '1 Zutat kennt' : `${unknown.length} Zutaten kennt`} Mashi noch nicht.</strong>{' '}
+        Leg sie unter „Meine Lebensmittel“ an – dann rechnet jedes Rezept damit.
+      </p>
+      {unknown.map((name) =>
+        open === name ? (
+          <NewProduct key={name} name={name} onDone={() => setOpen(null)} />
+        ) : (
+          <div key={name} className="row-between">
+            <span>{name}</span>
+            <button className="btn btn--soft btn--sm" onClick={() => setOpen(name)}><Icon name="plus" size={16} /> Hinzufügen</button>
+          </div>
+        ),
+      )}
+    </div>
+  );
+}
+

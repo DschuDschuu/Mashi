@@ -68,6 +68,33 @@ export function foodPricePoints(history: readonly PriceEntry[], purchases: reado
  * Linie eines Punkts: je Sorte – und je Größe, wenn diese Sorte in mehreren Größen gekauft wurde (Julia: 400 g und
  * 1 kg Hähnchen nicht vermischen). Punkte ohne Größe in so einer Sorte: eigene Linie „Größe unbekannt“.
  */
+/** Linienart je Packungsgröße einer Sorte (Julia): Hauptgröße durchgezogen, die nächste gestrichelt, dann gepunktet … */
+export const SIZE_DASHES: readonly (string | undefined)[] = [undefined, '6 4', '0.5 4', '8 3 0.5 3', '2 2'];
+
+/**
+ * Rang jeder Linie innerhalb ihrer Sorte (0 = durchgezogen): zuerst die Hauptgröße – die Packungsgröße der Sorte
+ * („500 g“), sonst die meistgekaufte –, dann die übrigen nach Häufigkeit, „Größe unbekannt“ zuletzt.
+ */
+export function sizeRanks(points: readonly FoodPricePoint[], mainOf: (sortId: string) => string | undefined): Map<string, number> {
+  const key = seriesKeyOf(points);
+  const lines = new Map<string, { sortId: string; size?: string; n: number }>();
+  for (const p of points) {
+    const k = key(p);
+    const l = lines.get(k.id) ?? { sortId: k.sortId, size: k.size, n: 0 };
+    l.n++;
+    lines.set(k.id, l);
+  }
+  const ranks = new Map<string, number>();
+  for (const sortId of new Set([...lines.values()].map((l) => l.sortId))) {
+    const main = mainOf(sortId);
+    const score = (l: { size?: string; n: number }) => (l.size === '?' ? -1 : l.size === main ? Infinity : l.n);
+    [...lines.entries()].filter(([, l]) => l.sortId === sortId)
+      .sort(([, a], [, b]) => score(b) - score(a))
+      .forEach(([id], i) => ranks.set(id, i));
+  }
+  return ranks;
+}
+
 export function seriesKeyOf(points: readonly FoodPricePoint[]): (p: FoodPricePoint) => { id: string; sortId: string; size?: string } {
   const sizes = new Map<string, Set<string>>();
   for (const p of points) if (p.size !== undefined) sizes.set(p.sortId, (sizes.get(p.sortId) ?? new Set()).add(`${p.size} ${p.sizeUnit}`));

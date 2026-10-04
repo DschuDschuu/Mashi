@@ -862,6 +862,10 @@ p { margin: 0; }
 .scanner__video { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: var(--r); background: #000; }
 .scanner__manual { display: flex; gap: 8px; }
 .scanner__manual input { flex: 1; min-width: 0; border: 1px solid var(--line); background: var(--surface); border-radius: var(--r-sm); padding: 10px 12px; font-size: 1rem; letter-spacing: 0.04em; }
+/* Rezept aus dem Wochenplan mit „nur dieses Mal“-Mengen (Julia) – darunter rechnet alles damit */
+.plan-note { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 0; padding: 8px 12px; border-radius: var(--r-sm);
+  background: var(--primary-soft); color: var(--primary-press); font-size: 0.85rem; }
+.plan-note > span { flex: 1 1 12em; min-width: 0; overflow-wrap: anywhere; }
 .scan-note { background: var(--sky); border-radius: var(--r-sm); padding: 10px 12px; font-size: 0.85rem; }
 .bonrow__product { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
 .bonrow__product select { border: 1px solid var(--line); background: var(--surface); border-radius: var(--r-sm); padding: 8px 10px; font-size: 0.92rem; max-width: 100%; }
@@ -1068,9 +1072,7 @@ p { margin: 0; }
 /* gesperrt, aber lesbar – z. B. „Lese Foto … 42 %“ */
 .filebtn:disabled { opacity: 0.6; }
 
-/* Nährwerte hinzufügen (schlanker Dialog) */
-.quicknut__ways { display: flex; flex-wrap: wrap; gap: 8px; }
-.quicknut__ways .btn.is-on { background: var(--primary); color: var(--on-primary); }
+/* Suche bei Open Food Facts im Produkt-Formular */
 .quicknut__search { display: flex; gap: 8px; }
 .quicknut__search input { flex: 1; min-width: 0; }
 .quicknut__hits { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; max-height: 280px; overflow-y: auto; }
@@ -1626,6 +1628,11 @@ details.cost-line[open] > summary::after { transform: rotate(-90deg); }
 .price-legend__item { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0; border: 0; background: none; color: var(--ink-2); font: inherit; font-size: 0.85rem; cursor: pointer; }
 .price-legend__item.is-off { color: var(--ink-3); text-decoration: line-through; opacity: 0.6; }
 .price-legend__item.is-off .price-sorts__dot { background: var(--line) !important; }
+/* je Sorte: Name, dahinter ihre Packungsgrößen mit Linienart – bricht auf dem Handy als Gruppe um */
+.price-legend__group { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0 10px; min-width: 0; }
+.price-legend__name { color: var(--ink); font-weight: 600; }
+.price-legend__line { flex: none; }
+.price-legend__item.is-off .price-legend__line line { stroke: var(--line); }
 .price-legend__marks { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 2px; }
 .price-legend__ring { display: inline-block; width: 9px; height: 9px; border-radius: 50%; border: 2px solid var(--ink-3); }
 .price-legend__diamond { display: inline-block; width: 8px; height: 8px; background: var(--ink-3); transform: rotate(45deg); }

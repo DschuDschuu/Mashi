@@ -20,8 +20,8 @@ Live: <https://dschudschuu.github.io/Mashi/> · installierbar als App (PWA), fun
 - **Speisekammer**: Vorrat per Kassenbon oder von Hand (mit Marke/Sorte), Packungen („4 × 500 g“,
   „750 ml offen“ – Angebrochenes hält kürzer), „Ganze Packung verwenden?“ beim Kochen, **Inventur** (Speisekammer, Keller, Tiefkühler, Gewürze), Haltbarkeit,
   „Bald verbrauchen“, Einfrieren, Reste verwerten
-- **Meine Lebensmittel**: eigene Produkte mit Marke, Nährwerte per Etikett-Foto, Open Food Facts
-  oder abgetippt; mehrere Sorten einer Zutat mit Favorit ★; je Lebensmittel eine Stufe: normal · Nachkaufen ·
+- **Meine Lebensmittel**: eigene Produkte mit Marke, Nährwerte per Barcode, Open Food Facts
+  oder abgetippt (oder leer – dann rechnet Mashi mit der Tabelle); mehrere Sorten einer Zutat mit Favorit ★; je Lebensmittel eine Stufe: normal · Nachkaufen ·
   Immer im Haus · Gewürze (ohne Nährwerte) – je ein Tab;
   Fettstufen bei Milch, Joghurt, Quark
 - **Nährwerte** rein rechnerisch aus Zutaten × Lebensmitteltabelle (nie von der KI), je Zutat

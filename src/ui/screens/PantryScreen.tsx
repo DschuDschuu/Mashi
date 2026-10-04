@@ -26,7 +26,7 @@ import { toast } from '../toast';
 import { BarcodeScanner } from '../components/BarcodeScanner';
 import { SortPicker, useSortOptions } from '../components/SortPicker';
 import { BrandNames } from '../components/BrandNames';
-import { NutritionQuickForm } from '../components/NutritionQuickForm';
+import { NewProduct } from '../components/NewProduct';
 import type { FoodEntry } from '../../domain/nutrition/types';
 import { newId } from '../../domain/recipe';
 import { nameOf, sortTags, type MyProduct } from '../../domain/nutrition/myProducts';
@@ -401,13 +401,16 @@ function AddForm({ onDone }: { onDone: () => void }) {
   };
   // Richtwert der Tabelle fürs Angebot – kennt sie die Zutat nicht, geht nur „Mit Nährwerten“
   const offerTable = offer ? foodTable.matchName(offer.name)?.food : undefined;
-  /** Produkt speichern und dem gerade eingetragenen Vorrat die Sorte geben */
-  const adopt = (p: MyProduct) => {
-    p = addProduct(p, offer!.name);
+  /** dem gerade eingetragenen Vorrat die Sorte geben – das Produkt ist schon gespeichert */
+  const assign = (p: MyProduct) => {
     const ids = currentPantry().items.filter((it) => !it.productId && normalizeName(it.name) === normalizeName(offer!.name)).map((it) => it.id);
     assignPantrySorts([{ itemIds: ids, productId: p.id }]);
-    toast(`„${offer!.name} · ${offer!.brand}“ steht jetzt unter „Meine Lebensmittel“`);
     setOffer(null);
+  };
+  /** Produkt (Werte aus der Tabelle) speichern und dem Vorrat die Sorte geben */
+  const adopt = (p: MyProduct) => {
+    assign(addProduct(p, offer!.name));
+    toast(`„${offer!.name} · ${offer!.brand}“ steht jetzt unter „Meine Lebensmittel“`);
   };
   const submit = () => {
     if (!name.trim()) return;
@@ -425,8 +428,8 @@ function AddForm({ onDone }: { onDone: () => void }) {
   };
   if (offer && withValues) {
     return (
-      <NutritionQuickForm ingredient={offer.name} initialBrand={offer.brand} onCancel={() => { setOffer(null); setWithValues(false); }}
-        onSave={(p) => { adopt(p); setWithValues(false); }} />
+      // dasselbe Formular wie unter „Meine Lebensmittel“ (Julia) – speichert selbst, hier nur noch die Sorte am Vorrat
+      <NewProduct name={offer.name} pack={{ brand: offer.brand }} onDone={(p) => { if (p) assign(p); else setOffer(null); setWithValues(false); }} />
     );
   }
   return (

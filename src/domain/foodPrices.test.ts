@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { BonLine, Purchase } from './bons';
 import type { PriceEntry } from './cost';
-import { foodPricePoints, seriesKeyOf } from './foodPrices';
+import { foodPricePoints, seriesKeyOf, sizeRanks } from './foodPrices';
 
 const buy = (date: string, line: Partial<BonLine>): Purchase => ({ bonId: `b-${date}`, index: 0, date, line: { bon: 'Haehnchen', count: 1, name: 'Hähnchen', ...line } });
 
@@ -42,5 +42,23 @@ describe('Preis-Diagramm eines Lebensmittels (Julia)', () => {
     ]);
     const key = seriesKeyOf(pts);
     expect(pts.map((p) => key(p).id)).toEqual(['leicht|400 g', 'leicht|1000 g', 'normal|']);
+  });
+
+  it('Linienart je Größe: Hauptgröße durchgezogen, dann nach Häufigkeit, „Größe unbekannt“ zuletzt', () => {
+    const pts = foodPricePoints([], [
+      buy('2026-09-01T10:00:00Z', { price: 4, amount: 400, unit: 'g', productId: 'leicht' }),
+      buy('2026-09-02T10:00:00Z', { price: 4, amount: 400, unit: 'g', productId: 'leicht' }),
+      buy('2026-09-03T10:00:00Z', { price: 8, amount: 1000, unit: 'g', productId: 'leicht' }),
+      buy('2026-09-04T10:00:00Z', { price: 2, amount: 250, unit: 'g', productId: 'leicht' }),
+      buy('2026-09-05T10:00:00Z', { price: 2, amount: 250, unit: 'g', productId: 'leicht' }),
+      buy('2026-09-06T10:00:00Z', { price: 2, amount: 250, unit: 'g', productId: 'leicht' }),
+      buy('2026-09-07T10:00:00Z', { price: 3, weightKg: 0.5, perKg: 6, productId: 'leicht' }), // lose: ohne Größe
+      buy('2026-09-09T10:00:00Z', { price: 3, amount: 500, unit: 'g', productId: 'normal' }),
+    ]);
+    // gespeicherte Packungsgröße der Sorte „leicht“: 1 kg – auch wenn 250 g öfter gekauft wurde
+    const ranks = sizeRanks(pts, (id) => (id === 'leicht' ? '1000 g' : undefined));
+    expect(Object.fromEntries(ranks)).toEqual({ 'leicht|1000 g': 0, 'leicht|250 g': 1, 'leicht|400 g': 2, 'leicht|?': 3, 'normal|': 0 });
+    // ohne gespeicherte Größe: die meistgekaufte ist die Hauptgröße
+    expect(sizeRanks(pts, () => undefined).get('leicht|250 g')).toBe(0);
   });
 });

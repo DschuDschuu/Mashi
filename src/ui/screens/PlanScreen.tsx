@@ -6,6 +6,7 @@ import { suggestRecipes, type ShoppingItem, type Suggestion } from '../../domain
 import { ingredientCompletions, longNotCooked, searchRecipes } from '../../domain/recipeSearch';
 import { currentContent } from '../../domain/recipe';
 import { asCooked } from '../../domain/scaling';
+import { pickFor } from '../../domain/nutrition/variants';
 import type { Recipe } from '../../domain/types';
 import { preparedOf } from '../../domain/prepared';
 import { thawFit, thawNeeds, type ThawNeed } from '../../domain/pantry';
@@ -27,6 +28,7 @@ import { amountsText, moreLabel, useMorePrompt, usePlannedMore, UseMoreSheet } f
 import { StatusBadge } from '../components/StatusBadge';
 import { euro, portionCount, recipeCount, relativeDay } from '../format';
 import { usePricing } from '../useCosts';
+import { choicesFor } from '../useNutrition';
 import { cookedToast } from '../cookedToast';
 import { useUseUp } from '../useUseUp';
 import { toast } from '../toast';
@@ -56,7 +58,11 @@ export function PlanScreen() {
   const missing = useMissing();
   const portions = items.reduce((s, i) => s + i.servings, 0);
   const { prices } = usePricing();
-  const costs = useMemo(() => new Map(items.map((i) => [i.recipeId, recipeCost(currentContent(i.recipe), i.servings, table, prices)])), [items, table, prices]);
+  // wie gekocht: „nur dieses Mal“-Mengen und dieselbe Sorte wie bei den Nährwerten (Julia: 3 statt 1 Paprika kostet auch mehr)
+  const costs = useMemo(() => new Map(items.map((i) => {
+    const c = asCooked(currentContent(i.recipe), i.servings, i.amounts);
+    return [i.recipeId, recipeCost(c, i.servings, table, prices, pickFor(choicesFor(c), i.variants))];
+  })), [items, table, prices]);
   const week = sumCosts([...costs.values()]);
 
   // was ein Gericht vorher auftauen muss – aus derselben Reservierung wie „Für den Wochenplan“

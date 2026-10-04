@@ -3,16 +3,13 @@ import { FOOD_CHOICES, guessMatch } from '../../domain/nutrition/localFoods';
 import { levelNameFromFat } from '../../domain/nutrition/fatLevels';
 import { brandOf, nameOf, type MyProduct, type SharedMatch } from '../../domain/nutrition/myProducts';
 import { MatchChips, visibleExcludes, type Match } from './MatchChips';
-import type { NutritionResult } from '../../domain/nutrition/types';
 import { newId } from '../../domain/recipe';
 import { shelfDaysForFood } from '../../domain/shelfLife';
-import { addProduct, usePantry, useProducts } from '../../data/store';
+import { usePantry, useProducts } from '../../data/store';
 import type { ScannedProduct } from '../../domain/nutrition/openFoodFacts';
 import { barcodeLookup } from '../../services';
 import { BarcodeScanner } from './BarcodeScanner';
-import { toast } from '../toast';
 import { Icon } from './Icon';
-import { NutritionQuickForm } from './NutritionQuickForm';
 import { BrandNames } from './BrandNames';
 import { parseNum, toField, type Values } from './productFields';
 import { purchasesOf } from '../../domain/bons';
@@ -25,45 +22,6 @@ export function shelfEstimate(replaces: string[], custom: Parameters<typeof shel
   return days ? `leer = geschätzt ${days} Tage` : 'leer = hält lange';
 }
 const fmt = (n: number) => n.toLocaleString('de-DE', { maximumFractionDigits: 1 });
-
-/**
- * „Meine Produkte“: was du immer in einer bestimmten Sorte kaufst. Die Werte vom Etikett
- * ersetzen beim Rechnen die allgemeinen Richtwerte – in allen Rezepten.
- */
-/**
- * Zutaten, die Mashi in diesem Rezept nicht kennt – mit der Möglichkeit, sie direkt
- * als eigenes Produkt anzulegen (Werte vom Etikett). Danach rechnen alle Rezepte damit.
- */
-export function UnknownIngredients({ n }: { n: NutritionResult }) {
-  const [open, setOpen] = useState<string | null>(null);
-  const unknown = [...new Set(n.items.filter((i) => i.status === 'unmatched').map((i) => i.name))];
-  if (!unknown.length) return null;
-
-  const save = (p: MyProduct, ingredient: string) => {
-    const saved = addProduct(p, ingredient);
-    setOpen(null);
-    toast(saved.id === p.id ? `„${p.name}“ angelegt – alle Rezepte rechnen neu` : `Nährwerte für „${saved.name}“ gespeichert – alle Rezepte rechnen neu`);
-  };
-
-  return (
-    <div className="panel stack unknown-ings">
-      <p className="small">
-        <strong>{unknown.length === 1 ? '1 Zutat kennt' : `${unknown.length} Zutaten kennt`} Mashi noch nicht.</strong>{' '}
-        Mit ihren Nährwerten – vom Etikett-Foto, aus Open Food Facts oder abgetippt – wird die Berechnung genauer, in jedem Rezept.
-      </p>
-      {unknown.map((name) =>
-        open === name ? (
-          <NutritionQuickForm key={name} ingredient={name} onSave={(p) => save(p, name)} onCancel={() => setOpen(null)} />
-        ) : (
-          <div key={name} className="row-between">
-            <span>{name}</span>
-            <button className="btn btn--soft btn--sm" onClick={() => setOpen(name)}><Icon name="plus" size={16} /> Nährwerte hinzufügen</button>
-          </div>
-        ),
-      )}
-    </div>
-  );
-}
 
 /**
  * Ein Formular für eigene Produkte – neu, als weitere Sorte, zum Bearbeiten und aus der Bon-Prüfung.

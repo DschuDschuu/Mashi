@@ -4,6 +4,7 @@ import { localFoodTable } from './nutrition/localFoods';
 import { withMyProducts, type MyProduct } from './nutrition/myProducts';
 import { applyImport, emptyPantry, proposeImport } from './pantry';
 import { parseReceipt } from './receipt';
+import { asCooked } from './scaling';
 import type { Ingredient, RecipeContent } from './types';
 
 const content = (ingredients: Ingredient[], servings = 2): RecipeContent => ({
@@ -60,6 +61,27 @@ describe('Was kostet ein Gericht?', () => {
     expect(recipeCost(c, 2, localFoodTable, [price('Paprika', 0.5, 'Stück')])?.total).toBe(1);
   });
 
+  it('Wochenplan „nur dieses Mal“: 3 statt 1 Paprika kostet auch dreimal so viel', () => {
+    const c = content([{ id: '1', name: 'Paprika', amount: 1, unit: 'Stück' }, { id: '2', name: 'Reis', amount: 150, unit: 'g' }], 2);
+    const prices = [price('Paprika', 0.5, 'Stück'), price('Reis', 0.002, 'g')];
+    expect(recipeCost(c, 2, localFoodTable, prices)?.total).toBe(0.8);                        // 0,50 + 0,30
+    expect(recipeCost(asCooked(c, 2, { '1': 3 }), 2, localFoodTable, prices)).toMatchObject({ total: 1.8, perServing: 0.9 }); // 1,50 + 0,30
+    // mehr Portionen + angepasste Menge: die Menge gilt schon für diese Portionen, der Reis wird umgerechnet
+    expect(recipeCost(asCooked(c, 4, { '1': 3 }), 4, localFoodTable, prices)?.total).toBe(2.1); // 1,50 + 0,60
+  });
+
+  it('gewählte Sorte: zählt ihr Preis – ohne eigenen Preis der neueste des Lebensmittels', () => {
+    const c = content([{ id: '1', name: 'Rinderhack', amount: 500, unit: 'g' }]);
+    const prices = [
+      { ...price('Rinderhack', 0.006, 'g', '2026-09-01'), productId: 'p-normal' },
+      { ...price('Rinderhack', 0.012, 'g', '2026-09-10'), productId: 'p-bio' },
+    ];
+    expect(recipeCost(c, 2, localFoodTable, prices, { '1': 'p-normal' })?.total).toBe(3);
+    expect(recipeCost(c, 2, localFoodTable, prices, { '1': 'p-bio' })?.total).toBe(6);
+    expect(recipeCost(c, 2, localFoodTable, prices, { '1': 'p-ohne-preis' })?.total).toBe(6);
+    expect(recipeCost(c, 2, localFoodTable, prices)?.total).toBe(6);
+  });
+
   it('Wochenplan: Summe der bekannten Gerichte, Unbekannte werden gezählt statt verschwiegen', () => {
     expect(sumCosts([{ total: 4.98, perServing: 2.49, missing: ['Paprika'], items: [] }, null, { total: 1.2, perServing: 0.6, missing: ['Paprika'], items: [] }]))
       .toEqual({ total: 6.18, missing: ['Paprika'], unknown: 1 });
@@ -96,7 +118,7 @@ describe('Preise und Packungsgrößen vom Kassenbon und aus „Meine Produkte“
 
   it('Preis von Hand: Preis je Packung ÷ Packungsgröße', () => {
     expect(productPrices([{ ...mozzarella, packagePrice: 0.89 }])).toEqual([
-      { name: 'Mozzarella light', perUnit: 0.89 / 125, unit: 'g', date: mozzarella.updatedAt },
+      { name: 'Mozzarella light', perUnit: 0.89 / 125, unit: 'g', date: mozzarella.updatedAt, productId: 'p-mozz' }, // Preis je Sorte
     ]);
     expect(productPrices([mozzarella])).toEqual([]); // ohne Preis nichts
   });
