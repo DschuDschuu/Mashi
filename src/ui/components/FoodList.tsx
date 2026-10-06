@@ -3,7 +3,7 @@ import { ask, choose } from '../confirm';
 import { basicsOf } from '../../domain/mealplan';
 import { buildFoodList, findFoodRow, matchesFilter, type FoodFilter, type FoodRow } from '../../domain/nutrition/foodList';
 import { guessMatch, normalizeName, PROVIDER } from '../../domain/nutrition/localFoods';
-import { estimateDays, setShelfDays } from '../../domain/shelfLife';
+import { estimateDays, FOREVER, MAX_SHELF_DAYS, setShelfDays } from '../../domain/shelfLife';
 import { adoptCandidates } from '../../domain/adoptFoods';
 import { brandOf, fillOrAdd, productLabel, sharedOf, valuesOf, withShared, type MyProduct, type SharedMatch } from '../../domain/nutrition/myProducts';
 import { groupByCategory } from '../../domain/categories';
@@ -222,10 +222,10 @@ function FoodLine({ row, open, onToggle, products, onTouch }: {
   const saveFoodShelf = (id: string, d: number | undefined) => {
     const old = currentPantry().shelfDays;
     setPantryShelfDays(setShelfDays(old, { food: id }, d));
-    toast(d ? `${title} hält ${d === 1 ? '1 Tag' : `${d} Tage`} ab Kauf` : 'Haltbarkeit schätzt wieder Mashi', { label: 'Rückgängig', run: () => setPantryShelfDays(old ?? {}) });
+    toast(`${title}: ${shelfText(d)}`, { label: 'Rückgängig', run: () => setPantryShelfDays(old ?? {}) });
   };
   // eine eigene Haltbarkeit ist auch etwas Festgelegtes (früher auf der Seite „Haltbarkeit“)
-  const nothing = !ps.length && stage === 'normal' && !row.zero && !(estimate.id && pantry.shelfDays?.foods?.[estimate.id]);
+  const nothing = !ps.length && stage === 'normal' && !row.zero && !(estimate.id && pantry.shelfDays?.foods?.[estimate.id] !== undefined);
   /** mindestens eine Sorte mit Bon-Einkauf – dann steht „Zuletzt gekauft“ je Sorte, sonst einmal oben */
   const sortBought = ps.some((p) => purchasesOf(pantry.bons, (l) => l.productId === p.id).length > 0);
   const zeroRow = !!row.zero;
@@ -364,7 +364,7 @@ function FoodLine({ row, open, onToggle, products, onTouch }: {
           {shared ? (
             // key: nach „Rückgängig“ (oder vom anderen Gerät) zeigt das Feld wieder den gespeicherten Wert
             <ShelfField key={shared.shelfDays ?? 'leer'} value={shared.shelfDays} estimate={estimate.days} onSave={(d) => saveShared({ ...shared, shelfDays: d },
-              d ? `Hält ${d === 1 ? '1 Tag' : `${d} Tage`} ab Kauf${ps.length > 1 ? ` – alle ${ps.length} Sorten` : ''}` : 'Haltbarkeit schätzt wieder Mashi', false)} />
+              `${shelfText(d)}${d !== undefined && ps.length > 1 ? ` – alle ${ps.length} Sorten` : ''}`, false)} />
           ) : estimate.id && (
             <ShelfField key={pantry.shelfDays?.foods?.[estimate.id] ?? 'leer'} value={pantry.shelfDays?.foods?.[estimate.id]} estimate={estimate.days}
               onSave={(d) => saveFoodShelf(estimate.id!, d)} />
@@ -381,32 +381,42 @@ function FoodLine({ row, open, onToggle, products, onTouch }: {
   );
 }
 
+/** Meldung zur Haltbarkeit: „hält 730 Tage ab Kauf“, „hält unbegrenzt“, „schätzt wieder Mashi“ */
+const shelfText = (d: number | undefined) => (d === undefined ? 'Haltbarkeit schätzt wieder Mashi'
+  : d === FOREVER ? 'hält unbegrenzt – keine Erinnerung' : `hält ${d === 1 ? '1 Tag' : `${d} Tage`} ab Kauf`);
+
 /**
  * „Hält ab Kauf“ in der Kachel; leer = Mashis Schätzung (steht grau im Feld und darunter).
- * Gespeichert beim Verlassen des Felds.
+ * Bis 10 Jahre; „Hält unbegrenzt“ schaltet die Schätzung ab (Julia: Salz, Zucker – nie „läuft bald ab“).
+ * Gespeichert beim Verlassen des Felds bzw. beim Haken.
  */
 function ShelfField({ value, estimate, onSave }: { value?: number; estimate?: number; onSave: (days: number | undefined) => void }) {
   const [text, setText] = useState(value ? String(value) : '');
   const [error, setError] = useState(false);
+  const forever = value === FOREVER;
   const commit = () => {
     const t = text.trim();
     const d = t ? Number(t) : undefined;
-    if (d !== undefined && (!Number.isInteger(d) || d < 1 || d > 365)) return setError(true);
+    if (d !== undefined && (!Number.isInteger(d) || d < 1 || d > MAX_SHELF_DAYS)) return setError(true);
     setError(false);
-    if (d !== value) onSave(d);
+    if (d !== value && !(forever && d === undefined)) onSave(d);
   };
-  const guess = estimate === undefined ? 'hält lange (keine Erinnerung)' : estimate === 1 ? '1 Tag' : `${estimate} Tage`;
+  const guess = estimate === undefined ? 'lange (ohne Erinnerung)' : estimate === 1 ? '1 Tag' : `${estimate} Tage`;
   return (
     <div className="stage shelf-shared">
       <label className="shelf-shared__row">
         <span className="small muted">Hält ab Kauf</span>
-        <input inputMode="numeric" value={text} placeholder={estimate === undefined ? '–' : String(estimate)} onChange={(e) => setText(e.target.value)} onBlur={commit}
-          onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+        <input inputMode="numeric" value={text} placeholder={forever ? '∞' : estimate === undefined ? '–' : String(estimate)} onChange={(e) => setText(e.target.value)} onBlur={commit}
+          onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()} disabled={forever}
           aria-label="Hält ab Kauf, Tage" aria-invalid={error} />
         <span className="small muted">Tage</span>
       </label>
-      <p className="small muted">{value ? `Dein Wert – Mashi schätzt ${guess}` : `Leer = Mashis Schätzung: ${guess}`}</p>
-      {error && <p className="small error" role="alert">Bitte ganze Tage von 1 bis 365 – oder leer lassen.</p>}
+      <label className="shelf-forever small">
+        <input type="checkbox" checked={forever} onChange={(e) => { setText(''); setError(false); onSave(e.target.checked ? FOREVER : undefined); }} />
+        Hält unbegrenzt – nicht schätzen
+      </label>
+      <p className="small muted">{forever ? 'Keine Erinnerung – Mashi schätzt nicht' : value ? `Dein Wert – Mashi schätzt ${guess}` : `Leer = Mashis Schätzung: ${guess}`}</p>
+      {error && <p className="small error" role="alert">Bitte ganze Tage von 1 bis {MAX_SHELF_DAYS} (10 Jahre) – oder leer lassen.</p>}
     </div>
   );
 }

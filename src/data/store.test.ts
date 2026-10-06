@@ -3,8 +3,8 @@ import PouchDB from 'pouchdb-core';
 import memory from 'pouchdb-adapter-memory';
 import { describe, expect, it } from 'vitest';
 import { PouchRecipeRepository, type RecipeDb } from './pouchRepository';
-import { setPlanAmounts, addExtra, addPantryItem, dropPriceDay, editBon, setCategory, addToPlan, answerLeftover, applyInventory, clearDoneExtras, deleteRecipe, importPantry, importReceipt, importRecipes, regenerateImage, markCooked, uncookRecipe, clearCooked, createRecipe, currentLeftoverAsk, currentPantry, eatPreparedPortions, freezePantryItem, initStore, thawPantryItem, togglePlanCooked, removeFromPlan, removePantryItem, setFoodStage, setPantryAmount, toggleShoppingItem, updatePantryItem } from './store';
-import { keyOfName } from '../domain/mealplan';
+import { cookParts, setPlanAmounts, addExtra, addPantryItem, dropPriceDay, editBon, setCategory, addToPlan, answerLeftover, applyInventory, clearDoneExtras, deleteRecipe, importPantry, importReceipt, importRecipes, regenerateImage, markCooked, uncookRecipe, clearCooked, createRecipe, currentLeftoverAsk, currentPantry, eatPreparedPortions, freezePantryItem, initStore, thawPantryItem, togglePlanCooked, removeFromPlan, removePantryItem, setFoodStage, setPantryAmount, toggleShoppingItem, updatePantryItem } from './store';
+import { buildShoppingList, keyOfName } from '../domain/mealplan';
 import { emptyPantry } from '../domain/pantry';
 import { EXTRA_PREFIX, RESTOCK_PREFIX } from '../domain/restock';
 import { foodTable } from '../services';
@@ -129,6 +129,48 @@ describe('Store: Vorgekocht', () => {
     const plan = await repo.loadPlan();
     expect(plan.items.map((i) => i.recipeId)).toEqual([curry]);
     expect(prep().map((i) => i.amount)).toEqual([2]);
+  });
+});
+
+describe('Store: Rezept-Teile (Julia: Sauce gestern, Nudeln und Fleisch heute)', () => {
+  it('nur die Sauce kochen → Vorgekocht „Sauce für …“, Einkauf ohne Sauce-Zutaten; der Rest verbraucht sie', async () => {
+    const repo = await freshStore('parts');
+    // erfundenes Rezept
+    const id = createRecipe({
+      title: 'Pasta', description: '', servings: 2, prepMinutes: 0, cookMinutes: 0, difficulty: 1,
+      ingredients: [
+        { id: 'i1', name: 'Passata', amount: 500, unit: 'g', part: 'Sauce' },
+        { id: 'i2', name: 'Spaghetti', amount: 200, unit: 'g' },
+      ],
+      steps: [{ id: 's1', text: 'Passata köcheln.' }, { id: 's2', text: 'Spaghetti kochen.' }],
+      categories: [], tags: [], devices: [],
+    }, { source: 'selbst', status: 'kochbuch' });
+    addToPlan(id, 2);
+    addPantryItem('Passata', 500, 'g');
+    addPantryItem('Spaghetti', 500, 'g');
+    const amount = (name: string) => currentPantry().items.find((i) => i.name === name && !i.recipeId)?.amount;
+    const shopping = async () => buildShoppingList(await repo.loadPlan(), await repo.list(), foodTable, currentPantry()).map((x) => x.name);
+
+    const sauce = cookParts(id, ['Sauce']);
+    expect(sauce.stored).toEqual(['Sauce für Pasta']);
+    expect(amount('Passata')).toBeUndefined(); // ganz verbraucht
+    expect(amount('Spaghetti')).toBe(500);     // noch nicht gekocht
+    expect(currentPantry().items.find((i) => i.part === 'Sauce')).toMatchObject({ name: 'Sauce für Pasta', recipeId: id, amount: 2 });
+    await settle();
+    expect(await shopping()).not.toContain('Passata');
+
+    // am nächsten Tag der Rest: nur Spaghetti weg, die Sauce ist verbraucht, das Gericht gekocht
+    const rest = togglePlanCooked(id);
+    expect(amount('Spaghetti')).toBe(300);
+    expect(currentPantry().items.some((i) => i.part)).toBe(false);
+    // Rückgängig: die Sauce ist wieder da, die Spaghetti auch
+    rest?.undo?.();
+    expect(currentPantry().items.find((i) => i.part === 'Sauce')).toBeTruthy();
+    expect(amount('Spaghetti')).toBe(500);
+    // und die Sauce selbst zurücknehmen
+    sauce.undo?.();
+    expect(amount('Passata')).toBe(500);
+    expect(currentPantry().items.some((i) => i.part)).toBe(false);
   });
 });
 

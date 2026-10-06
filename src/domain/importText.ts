@@ -129,6 +129,18 @@ function timerFrom(text: string): number | undefined {
 
 const looksLikeIngredient = (line: string) => AMOUNT_FIRST.test(line) && /^\S/.test(line) && !/[.!]$/.test(line) && line.length < 90;
 
+/**
+ * Zwischenüberschrift für einen Rezept-Teil (Julia: „Sauce“, „Salat“ getrennt kochen): „Für die Sauce:“, „Dressing:“,
+ * „Für den Teig“ → „Sauce“, „Dressing“, „Teig“. null = Überschrift ohne eigenen Teil („Außerdem:“), undefined = keine.
+ */
+function partHeading(line: string): string | null | undefined {
+  const m = line.match(/^(?:für\s+(?:die|den|das)\s+)?(\p{L}[\p{L} -]{1,28}?)\s*:$/iu) ?? line.match(/^für\s+(?:die|den|das)\s+(\p{L}[\p{L} -]{1,28})$/iu);
+  if (!m) return undefined;
+  const name = m[1].trim();
+  if (/^(außerdem|sonstiges|zusätzlich|weiterhin|dazu)$/i.test(name)) return null;
+  return name.charAt(0).toLocaleUpperCase('de-DE') + name.slice(1);
+}
+
 export function parseRecipeText(text: string): TextImport {
   const warnings: string[] = [];
   const noteLines: string[] = [];
@@ -138,8 +150,13 @@ export function parseRecipeText(text: string): TextImport {
   let servings: number | undefined;
   let totalMinutes: number | undefined;
   let difficulty: Difficulty = 1;
-  const ingredientLines: string[] = [];
-  const steps: string[] = [];
+  /** je Zeile auch der Teil der Überschrift darüber („Für die Sauce:“) */
+  const ingredientLines: { line: string; part?: string }[] = [];
+  const steps: { text: string; part?: string }[] = [];
+  let ingPart: string | undefined;
+  let stepPart: string | undefined;
+  const addIng = (line: string) => ingredientLines.push({ line, ...(ingPart ? { part: ingPart } : {}) });
+  const addStep = (text: string) => steps.push({ text, ...(stepPart ? { part: stepPart } : {}) });
   let section: 'unknown' | 'ingredients' | 'steps' = 'unknown';
   let expectMinutes = false;
   let expectDifficulty = false;
@@ -179,38 +196,43 @@ export function parseRecipeText(text: string): TextImport {
     }
 
     // Schrittnummer allein in der Zeile (zaubermix): nächster Schritt beginnt
-    if (STEP_NUMBER_ONLY.test(line)) { section = 'steps'; steps.push(''); continue; }
+    if (STEP_NUMBER_ONLY.test(line)) { section = 'steps'; addStep(''); continue; }
     const numbered = line.match(STEP_NUMBERED);
-    if (numbered && !looksLikeIngredient(line)) { section = 'steps'; steps.push(numbered[2]); continue; }
+    if (numbered && !looksLikeIngredient(line)) { section = 'steps'; addStep(numbered[2]); continue; }
+
+    // Zwischenüberschrift „Für die Sauce:“ → die folgenden Zutaten bzw. Schritte gehören zum Teil „Sauce“ (Julia)
+    const heading = partHeading(line);
 
     if (section === 'steps') {
-      // Zwischenüberschriften in der Zubereitung („Für die Soße“, „Zutaten:“) als eigener Absatz
-      if (steps.length && steps[steps.length - 1] === '') steps[steps.length - 1] = line;
-      else if (looksLikeIngredient(line) && steps.length === 0) ingredientLines.push(line);
-      else steps.push(line);
+      if (heading !== undefined) { stepPart = heading ?? undefined; continue; }
+      if (steps.length && steps[steps.length - 1].text === '') steps[steps.length - 1].text = line;
+      else if (looksLikeIngredient(line) && steps.length === 0) addIng(line);
+      else addStep(line);
       continue;
     }
 
-    // Überschriften mit Doppelpunkt („Gemüse:“) überspringen
+    if (heading !== undefined) { ingPart = heading ?? undefined; continue; }
+    // andere Überschriften mit Doppelpunkt überspringen
     if (/:$/.test(line) && line.length < 40) continue;
 
     // Ein ganzer Satz ohne Mengenangabe ist nie eine Zutat – auch nicht ohne Überschrift davor
-    if (!AMOUNT_FIRST.test(line) && (line.length > 60 || /[.!]$/.test(line))) { steps.push(line); section = 'steps'; continue; }
+    if (!AMOUNT_FIRST.test(line) && (line.length > 60 || /[.!]$/.test(line))) { addStep(line); section = 'steps'; continue; }
 
     if (section === 'ingredients' || looksLikeIngredient(line)) {
       section = section === 'unknown' ? 'ingredients' : section;
-      ingredientLines.push(line);
+      addIng(line);
       continue;
     }
     // Noch vor allem anderen: kurze Zeile ohne Menge = Titel
     if (!title && ingredientLines.length === 0 && line.length < 80) { title = line.replace(/^\d+\s*[.)]?\s*/, ''); continue; }
     // Lange Sätze ohne Abschnitt → Zubereitung
-    if (line.length > 60 || /[.!]$/.test(line)) { steps.push(line); section = 'steps'; continue; }
-    ingredientLines.push(line);
+    if (line.length > 60 || /[.!]$/.test(line)) { addStep(line); section = 'steps'; continue; }
+    addIng(line);
   }
 
-  const ingredients = ingredientLines.map(parseIngredientLine);
-  const stepList: Step[] = steps.map((t) => t.trim()).filter(Boolean).map((t) => ({ id: newId('s'), text: t, ...(timerFrom(t) ? { timerMinutes: timerFrom(t) } : {}) }));
+  const ingredients = ingredientLines.map(({ line, part }) => ({ ...parseIngredientLine(line), ...(part ? { part } : {}) }));
+  const stepList: Step[] = steps.map((s) => ({ ...s, text: s.text.trim() })).filter((s) => s.text)
+    .map(({ text: t, part }) => ({ id: newId('s'), text: t, ...(timerFrom(t) ? { timerMinutes: timerFrom(t) } : {}), ...(part ? { part } : {}) }));
 
   if (!title) warnings.push('Kein Titel erkannt – bitte eintragen.');
   if (!servings) warnings.push('Keine Portionen gefunden – 2 angenommen, bitte prüfen.');

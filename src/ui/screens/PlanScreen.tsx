@@ -6,6 +6,7 @@ import { suggestRecipes, type ShoppingItem, type Suggestion } from '../../domain
 import { ingredientCompletions, longNotCooked, searchRecipes } from '../../domain/recipeSearch';
 import { currentContent } from '../../domain/recipe';
 import { asCooked } from '../../domain/scaling';
+import { doneParts, partLabel } from '../../domain/parts';
 import { pickFor } from '../../domain/nutrition/variants';
 import type { Recipe } from '../../domain/types';
 import { preparedOf } from '../../domain/prepared';
@@ -103,6 +104,7 @@ export function PlanScreen() {
                 {/* eigene Zeile unter Bild und Titel – sonst bleibt neben dem Portionen-Regler nur ein schmaler Streifen */}
                 <div className="plan-list__meta">
                   {cooked && <PreparedLine recipeId={recipe.id} />}
+                  {!cooked && <DonePartsLine recipeId={recipe.id} />}
                   {/* mit den „nur dieses Mal“-Mengen (Julia: überall dieselbe Zahl) */}
                   <DishNutrition content={asCooked(currentContent(recipe), servings, amounts)} own={variants} recipeId={cooked ? undefined : recipe.id} />
                   {/* pro Portion, nur wenn alle Preise bekannt sind – sonst nichts (Julia, wie auf der Rezeptkarte) */}
@@ -446,6 +448,13 @@ function ThawPill({ needs, recipeId, title, servings }: { needs: ThawNeed[]; rec
       )}
     </div>
   );
+}
+
+/** Teile, die schon fertig in der Speisekammer stehen (Julia: „Sauce gestern gekocht“) – „Sauce fertig“ */
+function DonePartsLine({ recipeId }: { recipeId: string }) {
+  const done = doneParts(usePantry().items, recipeId);
+  if (!done.length) return null;
+  return <span className="small plan-done-parts"><Icon name="check" size={13} /> {done.map(partLabel).join(', ')} fertig</span>;
 }
 
 /** Gekocht – und wenn etwas übrig ist: „Vorgekocht · noch 3 Portionen“ mit „1 essen“ (Aktiv wie in der Speisekammer) */

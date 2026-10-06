@@ -117,3 +117,37 @@ describe('Einheit Glas', () => {
     expect(brief('2 Gläser Kichererbsen')).toBe('2 | Glas | Kichererbsen');
   });
 });
+
+describe('Rezept-Teile aus Zwischenüberschriften (Julia: Sauce getrennt kochen)', () => {
+  // erfundener Rezepttext
+  const text = `Pasta mit Tomatensauce
+2 Portionen
+Zutaten:
+Für die Sauce:
+500 g Passata
+1 Zwiebel, gewürfelt
+Für die Nudeln:
+200 g Spaghetti
+Außerdem:
+Salz
+Zubereitung:
+Für die Sauce:
+Zwiebel anschwitzen und mit Passata 20 Minuten köcheln.
+Für die Nudeln:
+Spaghetti in Salzwasser kochen.`;
+
+  it('Zutaten bekommen den Teil der Überschrift – „Außerdem“ ist keiner', () => {
+    const { content } = parseRecipeText(text);
+    expect(content.ingredients.map((i) => [i.name, i.part ?? '', i.note ?? ''])).toEqual([
+      ['Passata', 'Sauce', ''], ['Zwiebel', 'Sauce', 'gewürfelt'], ['Spaghetti', 'Nudeln', ''], ['Salz', '', ''],
+    ]);
+  });
+
+  it('Schritte ebenso – die Überschrift selbst ist kein Schritt', () => {
+    const { content } = parseRecipeText(text);
+    expect(content.steps.map((s) => [s.text, s.part ?? ''])).toEqual([
+      ['Zwiebel anschwitzen und mit Passata 20 Minuten köcheln.', 'Sauce'],
+      ['Spaghetti in Salzwasser kochen.', 'Nudeln'],
+    ]);
+  });
+});

@@ -1,5 +1,6 @@
 import type { FoodEntry, FoodKind, FoodTable } from './nutrition/types';
 import { matchIngredient, spiceName, zeroOf } from './nutrition/noNutrition';
+import { doneParts, remainingContent } from './parts';
 import { toGrams } from './nutrition/units';
 import { normalizeName } from './nutrition/localFoods';
 import { MY_PRODUCTS_PROVIDER } from './nutrition/myProducts';
@@ -175,8 +176,9 @@ export const resolveName = (name: string, table: FoodTable) => resolveIngredient
 /** Schlüssel eines Namens (siehe Resolved.key) – zum Vergleichen: gleiches Lebensmittel? */
 export const keyOfName = (name: string, table: FoodTable) => resolveName(name, table)?.key;
 
-function resolveRecipe(r: Recipe, servings: number, table: FoodTable): Resolved[] {
-  const c = currentContent(r);
+/** done: schon fertige Teile (Sauce von gestern) – deren Zutaten braucht es nicht mehr (siehe parts.ts) */
+function resolveRecipe(r: Recipe, servings: number, table: FoodTable, done: readonly string[] = []): Resolved[] {
+  const c = remainingContent(currentContent(r), done);
   const factor = servings / c.servings;
   return c.ingredients.map((i) => resolveIngredient(i, factor, table)).filter((x): x is Resolved => x !== null);
 }
@@ -314,7 +316,8 @@ export function buildShoppingList(plan: MealPlan, all: Recipe[], table: FoodTabl
     const r = all.find((x) => x.id === item.recipeId);
     if (!r) continue;
     const title = currentContent(r).title;
-    for (const x of resolveRecipe(r, item.servings, table)) {
+    // Julia: ist die Sauce schon fertig (Vorgekocht), stehen ihre Zutaten nicht mehr auf der Liste
+    for (const x of resolveRecipe(r, item.servings, table, doneParts(pantry?.items ?? [], r.id))) {
       const g = groups.get(x.key) ?? { name: x.name, pantry: x.pantry, kind: x.kind, parts: [], from: new Set<string>() };
       g.parts.push(x);
       g.from.add(title);

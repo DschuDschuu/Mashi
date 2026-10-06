@@ -7,7 +7,7 @@ import { addItem, applyImport, deductRecipe, emptyPantry, freezeItem, leftoverSu
 import { parseReceipt } from './receipt';
 import { parseSavings } from './savings';
 import { recipeOfTheDay } from './recipeOfTheDay';
-import { daysLabel, daysLeft, expiringSoon, expiryLabel, setShelfDays, shelfOverview, useByOf, useUpKeys } from './shelfLife';
+import { daysLabel, daysLeft, expiringSoon, expiryLabel, FOREVER, setShelfDays, shelfOverview, useByOf, useUpKeys } from './shelfLife';
 import type { Ingredient, Recipe } from './types';
 
 const NOW = new Date(2026, 8, 25, 10); // 25.09.2026, Ortszeit
@@ -103,6 +103,22 @@ describe('Haltbarkeit selbst einstellen', () => {
     const p = pantry(item('Mozzarella', 25));
     expect(left(p, 'Mozzarella', withMyProducts(localFoodTable, [mozzarella]))).toBe(7);
     expect(left(p, 'Mozzarella', withMyProducts(localFoodTable, [{ ...mozzarella, shelfDays: 12 }]))).toBe(12);
+  });
+
+  it('„hält unbegrenzt“ (Julia: Schätzung abschalten): keine Erinnerung – beim Lebensmittel und beim eigenen Produkt', () => {
+    const p = { ...pantry(item('Spinat', 25), item('Mozzarella', 25)), shelfDays: setShelfDays({}, { food: 'spinat' }, FOREVER) };
+    expect(p.shelfDays).toEqual({ foods: { spinat: 0 } }); // gespeichert, nicht weggeworfen
+    expect(useByOf(p.items[0], localFoodTable, p.shelfDays)).toBeUndefined();
+    expect(useByOf(p.items[1], withMyProducts(localFoodTable, [{ ...mozzarella, shelfDays: FOREVER }]), p.shelfDays)).toBeUndefined();
+    // zwei Sorten: unbegrenzt nur, wenn beide es sind – sonst die kürzere
+    const sorte = (id: string, shelfDays: number) => ({ ...mozzarella, id, name: 'Mozzarella', shelfDays });
+    expect(left(p, 'Mozzarella', withMyProducts(localFoodTable, [sorte('a', FOREVER), sorte('b', 9)]))).toBe(9);
+    expect(useByOf(p.items[1], withMyProducts(localFoodTable, [sorte('a', FOREVER), sorte('b', FOREVER)]), p.shelfDays)).toBeUndefined();
+  });
+
+  it('länger als ein Jahr (Julia: z. B. 730 Tage)', () => {
+    const p = pantry(item('Mozzarella', 25));
+    expect(left(p, 'Mozzarella', withMyProducts(localFoodTable, [{ ...mozzarella, shelfDays: 730 }]))).toBe(730);
   });
 
   it('leer = zurück auf Standard, leere Listen fallen weg', () => {

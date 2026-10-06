@@ -17,6 +17,7 @@ import { recordSavings, type BonSavings } from '../domain/savings';
 import { addBon, bonFromImport, dropDayPrices, editBonLine, includeBonLine, sameBonOf, withdrawBonStock, dropUnsavedDay, type BonLine, type BonLinePatch } from '../domain/bons';
 import type { PriceEntry } from '../domain/cost';
 import { assignPrices, moveSort } from '../domain/sortRefs';
+import { doneParts, forParts, partLabel, partsOf, remainingContent } from '../domain/parts';
 import { withCategory, type FoodCategory } from '../domain/categories';
 import { relinkOldImport, renameFood, syncProductNames } from '../domain/renameFood';
 import { specialDays, type ShelfDays } from '../domain/shelfLife';
@@ -409,11 +410,48 @@ export function uncookRecipe(id: string): CookedResult | null {
 function consume(r: Recipe, servings: number, amounts: Record<string, number> = {}, log = false, variants: Record<string, string> = {}): CookedResult {
   if (!pantry.items.length) return { used: [], toCheck: [] };
   const before = pantry;
-  const d = deductRecipe(pantry, currentContent(r), servings, currentFoodTable(), amounts, variants);
-  if (!d.used.length && !d.toCheck.length) return { used: [], toCheck: [] };
-  const taken = takenBetween(before, d.pantry);
-  commitPantry(log ? { ...d.pantry, cookLog: { ...pruneCookLog(d.pantry.cookLog), [r.id]: taken } } : d.pantry);
+  // schon fertige Teile (die Sauce von gestern): nur noch der Rest – und die gelagerte Sauce ist jetzt verbraucht
+  const done = doneParts(pantry.items, r.id);
+  const d = deductRecipe(pantry, remainingContent(currentContent(r), done), servings, currentFoodTable(), amounts, variants);
+  const after = done.length ? { ...d.pantry, items: d.pantry.items.filter((it) => !(it.recipeId === r.id && it.part)) } : d.pantry;
+  if (!d.used.length && !d.toCheck.length && !done.length) return { used: [], toCheck: [] };
+  const taken = takenBetween(before, after);
+  commitPantry(log ? { ...after, cookLog: { ...pruneCookLog(after.cookLog), [r.id]: taken } } : after);
   return { used: d.used, toCheck: d.toCheck, undo: () => putBack(r.id, taken) };
+}
+
+/**
+ * Nur Teile kochen (Julia: „Sauce gestern, Nudeln und Fleisch heute frisch“): ihre Zutaten gehen aus dem Vorrat, jeder
+ * Teil steht als Vorgekocht in der Speisekammer („Sauce für Lasagne“), bis der Rest gekocht ist. Wird das Gericht damit
+ * fertig (alle übrigen Teile schon da), ist es ein ganz normales „Gekocht“ (markCooked).
+ */
+export function cookParts(id: string, parts: readonly string[], servings?: number, amounts: Record<string, number> = {}, variants?: Record<string, string>): CookedResult & { stored: string[] } {
+  const r = get(id);
+  const c = currentContent(r);
+  const all = partsOf(c);
+  const done = doneParts(pantry.items, id);
+  if (!all.length || all.every((p) => parts.includes(p) || done.includes(p))) return { ...markCooked(id, servings, amounts, variants), stored: [] };
+  const planned = plan.items.find((i) => i.recipeId === id);
+  const cookedServings = servings ?? planned?.servings ?? c.servings;
+  const pick = variants ?? planned?.variants ?? {};
+  const before = pantry;
+  const d = pantry.items.length ? deductRecipe(pantry, forParts(c, parts), cookedServings, currentFoodTable(), amounts, pick) : { pantry, used: [], toCheck: [] };
+  const taken = takenBetween(before, d.pantry);
+  let items = d.pantry.items;
+  const created: string[] = [];
+  const stored: string[] = [];
+  for (const p of parts.filter((x) => !done.includes(x))) {
+    const title = `${partLabel(p)} für ${c.title}`;
+    const add = addPrepared(items, { id, title }, cookedServings, now(), () => newId('v'), { servings: cookedServings, amounts, variants: pick }, p);
+    items = add.items;
+    if (add.item) { created.push(add.item.id); stored.push(title); }
+  }
+  commitPantry({ ...d.pantry, items });
+  return {
+    used: d.used, toCheck: d.toCheck, stored,
+    // genau das Genommene zurück, die gelagerten Teile wieder weg – sonst bleibt, was sich inzwischen geändert hat
+    undo: () => { const back = returnTaken(pantry, taken); commitPantry({ ...back, items: back.items.filter((it) => !created.includes(it.id)) }); },
+  };
 }
 
 /** Genommenes zurücklegen und den Merkzettel dafür löschen. */

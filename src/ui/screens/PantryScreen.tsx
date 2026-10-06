@@ -29,6 +29,7 @@ import { BrandNames } from '../components/BrandNames';
 import { NewProduct } from '../components/NewProduct';
 import type { FoodEntry } from '../../domain/nutrition/types';
 import { newId } from '../../domain/recipe';
+import { forParts } from '../../domain/parts';
 import { nameOf, sortTags, type MyProduct } from '../../domain/nutrition/myProducts';
 import { FOOD_CHOICES, normalizeName, PROVIDER } from '../../domain/nutrition/localFoods';
 
@@ -143,8 +144,10 @@ export function PantryScreen() {
    * die ganze Breite. Ein Knopf darf keinen Knopf enthalten – darum liegt der Zeilen-Knopf unsichtbar
    * über der ganzen Zeile (.pantry__cover) und Pille und ✕ liegen obendrauf.
    */
-  const dishRow = ({ key, recipeId, cooked, name, alarm, qty, open, onToggle, label, pill, end, date }: {
+  const dishRow = ({ key, recipeId, part, cooked, name, alarm, qty, open, onToggle, label, pill, end, date }: {
     key: string; recipeId?: string;
+    /** nur ein Teil des Rezepts („Sauce für …“) – dann die Nährwerte nur dieses Teils */
+    part?: string;
     /** so gekocht (Mengen, Sorten) – die Nährwerte pro Portion rechnen damit */
     cooked?: PantryItem['cooked'];
     name: string; alarm: boolean; qty: ReactNode;
@@ -153,6 +156,7 @@ export function PantryScreen() {
     date?: ReactNode;
   }) => {
     const recipe = recipeId ? recipes.find((r) => r.id === recipeId) : undefined;
+    const content = recipe && (part ? forParts(currentContent(recipe), [part]) : currentContent(recipe));
     return (
       <li key={key} className={`pantry__item pantry__item--dish${open ? ' is-editing' : ''}`}>
         <button type="button" className="pantry__cover" onClick={onToggle} aria-expanded={open} aria-label={label} />
@@ -164,7 +168,7 @@ export function PantryScreen() {
         {/* rechts oben die Portionen, das Datum darunter (Julia: spart eine Zeile links) */}
         <span className="pantry__dishright">{qty}{date}</span>
         {end}
-        {recipe && <DishNutrition content={cooked ? asCooked(currentContent(recipe), cooked.servings, cooked.amounts) : currentContent(recipe)} own={cooked?.variants} sorts={false} full className="pantry__dishnut" />}
+        {content && <DishNutrition content={cooked ? asCooked(content, cooked.servings, cooked.amounts) : content} own={cooked?.variants} sorts={false} full className="pantry__dishnut" />}
       </li>
     );
   };
@@ -176,7 +180,7 @@ export function PantryScreen() {
       const shelf = shelfLabel(i);
       return [
         dishRow({
-          key: i.id, recipeId: i.recipeId, cooked: i.cooked, name: i.name, alarm: !!shelf?.alarm,
+          key: i.id, recipeId: i.recipeId, part: i.part, cooked: i.cooked, name: i.name, alarm: !!shelf?.alarm,
           pill: i.frozenAt ? <ThawPill item={i} /> : <EatPill item={i} />,
           open: isEditing, onToggle: () => setEditing(isEditing ? null : i.id), label: `${i.name} bearbeiten`,
           qty: (
@@ -242,7 +246,7 @@ export function PantryScreen() {
       return [
         dishRow({
           // Nährwerte des Teils, das als Nächstes gegessen wird
-          key: k, recipeId: parts[0].recipeId, cooked: first.cooked, name: parts[0].name, alarm: parts.some((p) => shelfLabel(p)?.alarm),
+          key: k, recipeId: parts[0].recipeId, part: parts[0].part, cooked: first.cooked, name: parts[0].name, alarm: parts.some((p) => shelfLabel(p)?.alarm),
           pill: open ? undefined : <EatPill item={first} />, open, onToggle: () => setExpanded(open ? null : k), label: `${parts[0].name}: ${parts.length} Teile`, qty, date: shelfLeft,
           end: <span className={`pantry__chev${open ? ' is-open' : ''}`} aria-hidden="true"><Icon name="chevron" size={16} /></span>,
         }),
@@ -360,8 +364,13 @@ function AddForm({ onDone }: { onDone: () => void }) {
   /** Einheit selbst gewählt? Dann springt sie nicht mehr automatisch um */
   const [unitTouched, setUnitTouched] = useState(false);
   const products = useProducts();
-  /** per Barcode erkannte oder angetippte Sorte („Mein Produkt“) – undefined = Vorschlag (bei nur einem: dieses) */
-  const [product, setProduct] = useState<MyProduct | null | undefined>(undefined);
+  /**
+   * per Barcode erkannte oder angetippte Sorte („Mein Produkt“) – undefined = Vorschlag (bei nur einem: dieses).
+   * Gilt nur für den Namen, für den sie gewählt wurde – sonst bliebe nach dem Umtippen die alte Sorte hängen.
+   */
+  const [pick, setPick] = useState<{ name: string; product: MyProduct | null } | undefined>(undefined);
+  const product = pick && normalizeName(pick.name) === normalizeName(name) ? pick.product : undefined;
+  const setProduct = (p: MyProduct | null | undefined, forName = name) => setPick(p === undefined ? undefined : { name: forName, product: p });
   const options = useSortOptions(name);
   const chosen = product === undefined ? (options.length === 1 ? products.find((p) => p.id === options[0].id) ?? null : null) : product;
   /** Marke für etwas, das noch nicht unter „Meine Lebensmittel“ steht */
@@ -386,12 +395,13 @@ function AddForm({ onDone }: { onDone: () => void }) {
       toast('Diesen Barcode kennt Mashi noch nicht – leg das Produkt unter „Meine Lebensmittel“ an, dann klappt es beim nächsten Mal.');
       return;
     }
-    setProduct(p);
     // Name wie in Rezepten („grünes pesto“), nicht wie auf der Packung – so findet das Rezept den Vorrat
     const n = p.names?.[0] ?? (p.replaces[0] ? FOOD_CHOICES.find((f) => f.id === p.replaces[0])?.name : undefined) ?? p.name;
     // Schreibweise wie beim vorhandenen Vorrat, sonst mit großem Anfangsbuchstaben
     const known = currentPantry().items.find((it) => normalizeName(it.name) === normalizeName(n))?.name;
-    if (!name.trim()) setName(known ?? n.charAt(0).toLocaleUpperCase('de-DE') + n.slice(1));
+    const finalName = name.trim() ? name : known ?? n.charAt(0).toLocaleUpperCase('de-DE') + n.slice(1);
+    if (!name.trim()) setName(finalName);
+    setProduct(p, finalName);
     // Barcode: eine Packung – „1 Stück“ (die Größe hängt Mashi an); bei „10er“-Packungen die Stückzahl
     if (!amount && p.packageAmount && p.packageUnit) {
       setAmount(p.packageUnit === 'Stück' ? String(p.packageAmount) : '1');
@@ -450,7 +460,8 @@ function AddForm({ onDone }: { onDone: () => void }) {
       </label>
       <AmountFields amount={amount} unit={unit} onAmount={setAmount} onUnit={(u) => { setUnit(u); setUnitTouched(true); }} />
       {packHint && <p className="small muted">Packung à {packHint} – aus „Meine Lebensmittel“</p>}
-      <SortPicker options={options} value={chosen?.id} onChange={(id) => setProduct(products.find((p) => p.id === id) ?? null)}
+      {/* vorgeschlagene Sorte (nur eine da) antippen = bestätigen, nicht abwählen (Julia: „Chip wird deaktiviert“) */}
+      <SortPicker options={options} value={chosen?.id} onChange={(id) => setProduct(id ? products.find((p) => p.id === id) ?? null : product === undefined ? chosen : null)}
         onOther={() => { setProduct(null); setOtherBrand(true); }} />
       {askBrand && name.trim() && (
         <label className="field"><span>Marke (optional)</span>

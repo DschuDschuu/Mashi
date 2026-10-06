@@ -47,6 +47,16 @@ describe('KI-Antwort prüfen', () => {
     expect(new Set([...r.ingredients, ...r.steps].map((x) => x.id)).size).toBe(5);
   });
 
+  it('Teile (Julia: Sauce getrennt kochen): an Zutaten und Schritten, „Zum Schluss“ bringt sie zusammen', () => {
+    const r = parseRecipeReply(JSON.stringify({
+      ...good,
+      ingredients: [{ name: 'Passata', amount: 500, unit: 'g', part: 'Sauce' }, { name: 'Spaghetti', amount: 200, unit: 'g' }],
+      steps: [{ text: 'Passata köcheln.', part: 'Sauce' }, { text: 'Spaghetti kochen.' }, { text: 'Alles mischen.', part: 'zum Schluss' }],
+    }));
+    expect(r.ingredients.map((i) => i.part)).toEqual(['Sauce', undefined]);
+    expect(r.steps.map((s) => s.part)).toEqual(['Sauce', undefined, '*']);
+  });
+
   it('JSON in ```json … ``` oder mit Sätzen drumherum', () => {
     expect(parseRecipeReply('Gern! Hier ist dein Rezept:\n```json\n' + JSON.stringify(good) + '\n```\nGuten Appetit!').title).toBe('Paprika-Feta-Pfanne');
     expect(parseRecipeReply('Klar: ' + JSON.stringify(good) + ' – viel Spaß').title).toBe('Paprika-Feta-Pfanne');

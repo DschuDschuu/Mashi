@@ -18,7 +18,7 @@ Live: <https://dschudschuu.github.io/Mashi/> · installierbar als App (PWA), fun
 - **Einkaufsliste** aus dem Plan, zieht den Vorrat ab, Basics, „Doch kaufen“, eigene Einträge, Kassenbon hakt ab,
   „Nachkaufen“ bei Vorratsware unter dem Mindestbestand (z. B. passierte Tomaten unter 4 Dosen)
 - **Speisekammer**: Vorrat per Kassenbon oder von Hand (mit Marke/Sorte), Packungen („4 × 500 g“,
-  „750 ml offen“ – Angebrochenes hält kürzer), „Ganze Packung verwenden?“ beim Kochen, **Inventur** (Speisekammer, Keller, Tiefkühler, Gewürze), Haltbarkeit,
+  „750 ml offen“ – Angebrochenes hält kürzer), „Ganze Packung verwenden?“ beim Kochen, **Inventur** (Speisekammer, Keller, Tiefkühler, Gewürze), Haltbarkeit (bis 10 Jahre oder „hält unbegrenzt“),
   „Bald verbrauchen“, Einfrieren, Reste verwerten
 - **Meine Lebensmittel**: eigene Produkte mit Marke, Nährwerte per Barcode, Open Food Facts
   oder abgetippt (oder leer – dann rechnet Mashi mit der Tabelle); mehrere Sorten einer Zutat mit Favorit ★; je Lebensmittel eine Stufe: normal · Nachkaufen ·
@@ -27,7 +27,9 @@ Live: <https://dschudschuu.github.io/Mashi/> · installierbar als App (PWA), fun
   Fettstufen bei Milch, Joghurt, Quark
 - **Nährwerte** rein rechnerisch aus Zutaten × Lebensmitteltabelle (nie von der KI), je Zutat
   aufgeschlüsselt, Makro-Ziel für die Sortenwahl
-- **Kochmodus** Schritt für Schritt mit Timer, Mengen nur für dieses Mal
+- **Kochmodus** Schritt für Schritt mit Timer, Mengen nur für dieses Mal, Hinweise an den Zutaten („gewürfelt“);
+  **Rezept-Teile** (Sauce, Salat …): nur einen Teil kochen – er steht als Vorgekocht in der Speisekammer, Einkaufsliste
+  und Rest richten sich danach (Teile auch aus „Für die Sauce:“ beim Import und von der KI)
 - **Abgleich** zwischen Geräten über eine eigene CouchDB (siehe `server/couchdb/ANLEITUNG.md`),
   Sicherung als Datei (alles: Rezepte, Lebensmittel, Speisekammer, Plan), Einführung beim ersten Start, vier Farbthemen
 

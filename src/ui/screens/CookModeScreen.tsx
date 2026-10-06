@@ -7,7 +7,8 @@ import { currentContent } from '../../domain/recipe';
 import { asCooked, formatAmount, formatQuantity, formatUnitAmount, scaleIngredients } from '../../domain/scaling';
 import { orderByUse } from '../../domain/stepIngredients';
 import type { Ingredient } from '../../domain/types';
-import { markCooked, setPlanAmounts, useFoodTable, usePantry, usePlan, useRecipe, useRecipes } from '../../data/store';
+import { cookParts, markCooked, setPlanAmounts, useFoodTable, usePantry, usePlan, useRecipe, useRecipes } from '../../data/store';
+import { doneParts, forParts, partLabel, partsOf } from '../../domain/parts';
 import { goBack, navigate } from '../../router';
 import { Icon } from '../components/Icon';
 import { StepIngredients } from '../components/StepIngredients';
@@ -42,13 +43,21 @@ export function CookModeScreen({ id, servings, variants }: { id: string; serving
   const pantry = usePantry();
   const plan = usePlan();
   const recipes = useRecipes();
+  /** Rezept-Teile, die du heute kochst (Julia: „Sauce gestern, Nudeln und Fleisch heute“) – null = alle noch nicht fertigen */
+  const [chosen, setChosen] = useState<string[] | null>(null);
+  const done = useMemo(() => (recipe ? doneParts(pantry.items, recipe.id) : []), [recipe, pantry.items]);
+  const today = useMemo(() => {
+    if (!recipe) return [];
+    return chosen ?? partsOf(currentContent(recipe)).filter((p) => !done.includes(p));
+  }, [recipe, chosen, done]);
 
   const base = useMemo(() => {
     if (!recipe) return [];
-    const c = currentContent(recipe);
+    // nur die Teile von heute – mit „zum Schluss“, wenn das Gericht damit fertig wird
+    const c = forParts(currentContent(recipe), today, done);
     // Reihenfolge wie beim Kochen: was im ersten Schritt gebraucht wird, zuerst
     return orderByUse(scaleIngredients(c, servings ?? c.servings), c.steps);
-  }, [recipe, servings]);
+  }, [recipe, servings, today, done]);
   // Reste mitverbrauchen – aber nicht, was andere geplante Gerichte noch brauchen
   const table = useFoodTable();
   const { leftovers, packs } = useMemo(() => {
@@ -98,10 +107,22 @@ export function CookModeScreen({ id, servings, variants }: { id: string; serving
 
   if (!recipe) return null;
   const c = currentContent(recipe);
+  const parts = partsOf(c);
+  const cook = forParts(c, today, done);
+  // nur „zusammenstellen“ ohne eigene Schritte: ein Schritt, damit „Fertig“ erreichbar bleibt
+  const steps = cook.steps.length ? cook.steps : [{ id: 'nur-fertig', text: 'Für diese Auswahl gibt es keine eigenen Schritte – tippe auf „Fertig“.' }];
+  const open = parts.filter((p) => !done.includes(p));
+  const togglePart = (p: string) => {
+    const on = today.includes(p);
+    // nichts mehr gewählt geht nur, wenn ohnehin alles fertig ist
+    if (on && today.length === 1 && open.length) return;
+    setChosen(on ? today.filter((x) => x !== p) : parts.filter((x) => x === p || today.includes(x)));
+    setStep(0);
+  };
   // Sorte: im Rezept gewählt – sonst die vom Plan – sonst Vorschlag (eine im Vorrat = diese)
   const own = variants ?? plan.items.find((i) => i.recipeId === recipe.id)?.variants;
-  const s = c.steps[step];
-  const last = step === c.steps.length - 1;
+  const s = steps[Math.min(step, steps.length - 1)];
+  const last = step >= steps.length - 1;
   const ingredients = base.map((i) => (i.id in amounts ? { ...i, amount: amounts[i.id] } : i));
   const openLeftovers = noLeftovers ? [] : leftovers.filter((l) => !(l.ingredientId in amounts));
   /** schon mehr gewählt (im Plan oder hier) – „eine Paprika mehr oder weniger“ lässt sich noch anpassen */
@@ -122,7 +143,17 @@ export function CookModeScreen({ id, servings, variants }: { id: string; serving
   const drop = (tid: string) => setTimers((l) => removeTimer(l, tid));
 
   const finish = () => {
-    cookedToast(markCooked(recipe.id, servings ?? c.servings, amounts, pickFor(choicesFor(c), own)));
+    const pick = pickFor(choicesFor(c), own);
+    if (parts.length) {
+      // nur Teile: die stehen jetzt als Vorgekocht in der Speisekammer – das Gericht ist noch nicht gekocht
+      const result = cookParts(recipe.id, today, servings ?? c.servings, amounts, pick);
+      if (result.stored.length) {
+        toast(`${result.stored.join(', ')} steht in der Speisekammer – den Rest kochst du später`, result.undo ? { label: 'Rückgängig', run: result.undo } : undefined);
+        goBack(`/rezept/${recipe.id}`);
+        return;
+      }
+      cookedToast(result);
+    } else cookedToast(markCooked(recipe.id, servings ?? c.servings, amounts, pick));
     if (recipe.status === 'zum_testen' || recipe.status === 'bewaehrt') navigate(`/rezept/${recipe.id}/test`, { replace: true });
     else goBack(`/rezept/${recipe.id}`);
   };
@@ -147,8 +178,8 @@ export function CookModeScreen({ id, servings, variants }: { id: string; serving
       <header className="cook__head">
         <button className="iconbtn" onClick={leave} aria-label="Kochmodus beenden"><Icon name="close" /></button>
         <div className="cook__progress">
-          <span>Schritt {step + 1} von {c.steps.length}</span>
-          <div className="bar"><div style={{ width: `${((step + 1) / c.steps.length) * 100}%` }} /></div>
+          <span>Schritt {step + 1} von {steps.length}</span>
+          <div className="bar"><div style={{ width: `${((step + 1) / steps.length) * 100}%` }} /></div>
         </div>
         {wide ? <span className="iconbtn-spacer" /> : (
           <button className={`iconbtn${showIngredients ? ' is-on' : ''}`} onClick={() => setShowIngredients(!showIngredients)} aria-label="Zutaten anzeigen" aria-expanded={showIngredients}>
@@ -156,6 +187,21 @@ export function CookModeScreen({ id, servings, variants }: { id: string; serving
           </button>
         )}
       </header>
+      {/* Julia: welche Teile heute – fertige (Vorgekocht) stehen mit Haken da */}
+      {parts.length > 0 && (
+        <div className="cook__parts" role="group" aria-label="Was kochst du heute?">
+          <span className="small muted">Heute:</span>
+          {parts.map((p) => {
+            const isDone = done.includes(p);
+            const on = today.includes(p);
+            return (
+              <button key={p} type="button" className={`chip chip--sm${on ? ' is-on' : ''}`} aria-pressed={on} disabled={isDone} onClick={() => togglePart(p)}>
+                {isDone ? <><Icon name="check" size={13} /> {partLabel(p)} fertig</> : partLabel(p)}
+              </button>
+            );
+          })}
+        </div>
+      )}
       {/* mit den Mengen von gerade (3 statt 1 Paprika) – wie Plan-Karte und Reste */}
       <DishNutrition content={asCooked(c, servings ?? c.servings, amounts)} own={own} className="cook__nutri" />
 
@@ -172,7 +218,7 @@ export function CookModeScreen({ id, servings, variants }: { id: string; serving
                   ) : (
                     <button type="button" className="cook__ing" onClick={() => setEditing(i.id)} disabled={i.amount === undefined}
                       aria-label={`${formatQuantity(i)} ${i.name} – Menge nur für dieses Mal ändern`}>
-                      <strong>{formatQuantity(i)}</strong> {i.name}
+                      <strong>{formatQuantity(i)}</strong> {i.name}{i.note && <span className="muted">, {i.note}</span>}
                       {changed && <span className="small muted"> · im Rezept {formatQuantity(original)}</span>}
                     </button>
                   )}

@@ -7,7 +7,7 @@ import type { FoodKind, FoodTable } from './nutrition/types';
  * Mashi ordnet selbst zu (Tabelle, sonst am Namen); je Lebensmittel lässt sich das ändern (Pantry.categories).
  */
 export type FoodCategory =
-  | 'obst-gemuese' | 'fleisch-fisch' | 'milch-eier' | 'nudeln-reis-brot' | 'konserven'
+  | 'obst-gemuese' | 'fleisch-fisch' | 'milch-eier' | 'nudeln-reis-brot' | 'muesli-nuesse' | 'konserven'
   | 'saucen' | 'backen' | 'tiefkuehl' | 'getraenke' | 'sonstiges';
 
 /** Reihenfolge = Reihenfolge der Gruppen */
@@ -16,6 +16,8 @@ export const CATEGORIES: readonly { id: FoodCategory; title: string }[] = [
   { id: 'fleisch-fisch', title: 'Fleisch & Fisch' },
   { id: 'milch-eier', title: 'Milchprodukte & Eier' },
   { id: 'nudeln-reis-brot', title: 'Nudeln, Reis & Brot' },
+  // Julia: eigene Abteilung wie im Laden – Haferflocken, Müsli, Nüsse, Saaten
+  { id: 'muesli-nuesse', title: 'Müsli, Nüsse & Kerne' },
   { id: 'konserven', title: 'Konserven & Gläser' },
   { id: 'saucen', title: 'Saucen & Würzen' },
   { id: 'backen', title: 'Backen & Süßes' },
@@ -39,7 +41,9 @@ const BY_FOOD: Record<string, FoodCategory> = {
   tahini: 'saucen', senf: 'saucen', miso: 'saucen', 'gemuese-gewuerzpaste': 'saucen', buldak: 'saucen', kreuzkuemmel: 'saucen',
   'ital-kraeuter': 'saucen', thymian: 'saucen', salz: 'saucen', pfeffer: 'saucen', muskat: 'saucen', chiliflocken: 'saucen',
   // Backregal und Süßes
-  mehl: 'backen', panko: 'backen', speisestaerke: 'backen', ahornsirup: 'backen', honig: 'backen', chiasamen: 'backen', sesam: 'backen',
+  mehl: 'backen', panko: 'backen', speisestaerke: 'backen', ahornsirup: 'backen', honig: 'backen',
+  // Müsli, Nüsse & Kerne
+  haferflocken: 'muesli-nuesse', chiasamen: 'muesli-nuesse', sesam: 'muesli-nuesse',
   'rote-linsen': 'nudeln-reis-brot',
   erbsen: 'tiefkuehl',
   wasser: 'getraenke',
@@ -69,7 +73,9 @@ const BY_NAME: [FoodCategory, RegExp][] = [
   ['konserven', /dose|konserve|passiert|eingelegt|gewürzgurke|essiggurke|cornichon|oliven|kimchi|kichererbse|kidney|bohnen|thunfisch|tomatenmark|kokosmilch|mais($|\s)/],
   ['saucen', /sauce|soße|dressing|senf|ketchup|mayo|essig|öl($|\s)|brühe|fond|paste|gewürz|pfeffer|(^|\s)salz|curry|chili|sambal|sriracha|marinade|würze/],
   // Nüsse nur als Nüsse – nicht „Butternuss-Kürbis“ (Julia: landete unter Backen)
-  ['backen', /mehl|zucker|backpulver|hefe|vanille|schoko|kakao|kuvertüre|honig|sirup|marmelade|konfitüre|nutella|(^|[\s-])n(uss|üsse)($|[\s-])|(hasel|wal|erd|para|pekan|cashew)n(uss|üsse)|nussmus|nusscreme|mandel|rosinen|müsli|keks|chips|riegel|gummibär|bonbon/],
+  // Julia: Müsli, Nüsse & Kerne als eigene Abteilung – Aufstriche (Nussmus, Erdnussbutter, Nougatcreme) bleiben beim Süßen
+  ['muesli-nuesse', /^(?!.*(creme|butter|mus$|nougat|nutella|milch|drink))(?=.*(müsli|granola|crunchy|cornflakes|flocken|(^|[\s-])n(uss|üsse)($|[\s-])|(hasel|wal|erd|para|pekan|cashew|macadamia)n(uss|üsse)|mandel|pistazie|kerne|saaten|leinsamen|chia|studentenfutter|trockenobst|rosinen))/],
+  ['backen', /mehl|zucker|backpulver|hefe|vanille|schoko|kakao|kuvertüre|honig|sirup|marmelade|konfitüre|nutella|(^|[\s-])n(uss|üsse)($|[\s-])|(hasel|wal|erd|para|pekan|cashew)n(uss|üsse)|nussmus|nusscreme|mandel|keks|chips|riegel|gummibär|bonbon/],
 ];
 
 /** Mashis Vorschlag – ohne deine Änderung */

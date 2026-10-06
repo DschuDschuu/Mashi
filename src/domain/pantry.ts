@@ -1,4 +1,5 @@
 import type { PriceEntry } from './cost';
+import { doneParts, remainingContent } from './parts';
 import type { MacroGoal } from './nutrition/variants';
 import { basicsKeys, needIn, resolveIngredient, resolveName, type Resolved } from './mealplan';
 import type { FoodTable } from './nutrition/types';
@@ -54,6 +55,8 @@ export interface PantryItem {
    * pro Portion rechnen damit (Julia: mit 3 statt 1 Paprika gekocht, auch die Reste so).
    */
   cooked?: { servings: number; amounts?: Record<string, number>; variants?: Record<string, string> };
+  /** Vorgekocht nur ein Teil des Rezepts („Sauce für Lasagne“, siehe parts.ts) – bis der Rest gekocht ist */
+  part?: string;
 }
 
 /** Vorgekochtes (Portionen eines Rezepts) – kein Zutatenvorrat */
@@ -493,7 +496,8 @@ export function pantryAfterPlan(pantry: Pantry, plan: MealPlan, recipes: Recipe[
     if (plan.cooked.includes(item.recipeId)) continue;
     const r = recipes.find((x) => x.id === item.recipeId);
     if (!r) continue;
-    const d = deductRecipe(rest, currentContent(r), item.servings, table, item.amounts ?? {}, item.variants);
+    // schon fertige Teile (die Sauce von gestern) brauchen nichts mehr
+    const d = deductRecipe(rest, remainingContent(currentContent(r), doneParts(pantry.items, r.id)), item.servings, table, item.amounts ?? {}, item.variants);
     d.checkIds.forEach((id) => reserved.add(id));
     rest = d.pantry;
   }
@@ -683,7 +687,7 @@ export function plannedByDish(pantry: Pantry, plan: MealPlan, recipes: Recipe[],
     if (plan.cooked.includes(item.recipeId)) continue;
     const r = recipes.find((x) => x.id === item.recipeId);
     if (!r) continue;
-    const d = deductRecipe(rest, currentContent(r), item.servings, table, item.amounts ?? {}, item.variants);
+    const d = deductRecipe(rest, remainingContent(currentContent(r), doneParts(pantry.items, r.id)), item.servings, table, item.amounts ?? {}, item.variants);
     out.push({ recipeId: r.id, taken: takenBetween(rest, d.pantry), stock: d.stock });
     // „Noch da?“-Markierung nur gedacht – fürs nächste Gericht wieder wie vorher
     rest = { ...d.pantry, items: d.pantry.items.map((it) => ({ ...it, check: originalCheck.get(it.id) })) };

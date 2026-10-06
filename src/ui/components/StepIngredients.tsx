@@ -17,6 +17,8 @@ export function StepIngredients({ step, ingredients, large = false }: { step: St
       {list.map((i) => (
         <li key={i.id}>
           {formatQuantity(i) && <strong>{formatQuantity(i)}</strong>} {i.name.replace(/\s*\(.*?\)\s*/g, ' ').trim()}
+          {/* beim Schnippeln wichtig (Julia): „gewürfelt“, „fein gehackt“ */}
+          {i.note && <span className="step-ings__note">, {i.note}</span>}
         </li>
       ))}
     </ul>

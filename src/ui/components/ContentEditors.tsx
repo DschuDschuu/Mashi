@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { newId } from '../../domain/recipe';
+import { FINISH, partLabel, partsOf, REST, suggestedPart } from '../../domain/parts';
 import { stepIngredients } from '../../domain/stepIngredients';
 import type { Ingredient, Step, Unit } from '../../domain/types';
 import { Icon } from './Icon';
@@ -9,12 +10,18 @@ import { renameKey, renameSuggestion, type RenameOptions } from '../../domain/re
 import { dismissRename } from '../../data/store';
 import { useRenameOptions } from '../useRenames';
 
+/** Auswahl „＋ Neuer Teil …“ – kein echter Teil, öffnet das Eingabefeld */
+const NEW_PART = '\u0000neu';
+
 const UNITS: Unit[] = ['g', 'kg', 'ml', 'l', 'EL', 'TL', 'Prise', 'Stück', 'Zehe', 'Dose', 'Glas', 'Bund', 'Handvoll', 'cm', 'Messlöffel'];
 
 /** Zutatenliste bearbeiten – geteilt von Testfeedback und Rezeptformular. */
 export function IngredientEditor({ items, onChange, newItem }: { items: Ingredient[]; onChange: (i: Ingredient[]) => void; newItem: () => Ingredient }) {
   const update = (idx: number, patch: Partial<Ingredient>) => onChange(items.map((it, i) => (i === idx ? { ...it, ...patch } : it)));
   const renameOpts = useRenameOptions();
+  /** Teile des Rezepts (Julia: „Sauce“, „Salat“ – getrennt kochbar) und für welche Zutat gerade ein neuer getippt wird */
+  const parts = partsOf({ ingredients: items }).filter((p) => p !== REST);
+  const [newPartFor, setNewPartFor] = useState<string | null>(null);
   return (
     <div className="editor">
       <h3 className="small muted">Zutaten</h3>
@@ -31,6 +38,21 @@ export function IngredientEditor({ items, onChange, newItem }: { items: Ingredie
           <button type="button" className="iconbtn iconbtn--sm" aria-label={`${it.name || 'Zutat'} entfernen`} onClick={() => onChange(items.filter((_, i) => i !== idx))}>
             <Icon name="close" size={16} />
           </button>
+          {newPartFor === it.id ? (
+            <input className="editor__part" autoFocus placeholder="Teil, z. B. Sauce" aria-label={`Neuer Teil für ${it.name || 'Zutat'}`}
+              onBlur={(e) => { update(idx, { part: e.target.value.trim() || undefined }); setNewPartFor(null); }}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); } }} />
+          ) : (
+            <select className="editor__part" aria-label={`Teil von ${it.name || 'Zutat'}`} value={it.part ?? ''}
+              onChange={(e) => (e.target.value === NEW_PART ? setNewPartFor(it.id) : update(idx, { part: e.target.value || undefined }))}>
+              <option value="">Ohne Teil</option>
+              {parts.map((p) => <option key={p} value={p}>{p}</option>)}
+              <option value={NEW_PART}>＋ Neuer Teil …</option>
+            </select>
+          )}
+          {/* Hinweis zur Zutat (Julia: „gewürfelt“, „fein gehackt“) – steht im Rezept, bei den Schritten und im Kochmodus */}
+          <input className="editor__note" aria-label={`Hinweis zu ${it.name || 'Zutat'}`} placeholder="Hinweis, z. B. gewürfelt" value={it.note ?? ''}
+            onChange={(e) => update(idx, { note: e.target.value || undefined })} onBlur={(e) => update(idx, { note: e.target.value.trim() || undefined })} />
           <RenameHint name={it.name} options={renameOpts} onApply={(to) => update(idx, { name: to })} />
         </div>
       ))}
@@ -63,6 +85,16 @@ export function StepEditor({ steps, ingredients, onChange }: { steps: Step[]; in
               <span>Min. Timer</span>
             </label>
             <StepIngredientPicker step={s} ingredients={ingredients} onChange={(ingredientIds) => update(idx, { ingredientIds })} />
+            {/* Teil des Schritts – Mashi schlägt ihn aus den Zutaten vor, „Zum Schluss“ bringt Teile zusammen (Julia) */}
+            {partsOf({ ingredients }).length > 0 && (
+              <label className="editor__steppart small">
+                <span className="muted">Teil</span>
+                <select value={s.part ?? ''} aria-label={`Teil von Schritt ${idx + 1}`} onChange={(e) => update(idx, { part: e.target.value || undefined })}>
+                  <option value="">Automatisch ({partLabel(suggestedPart(s, { ingredients }))})</option>
+                  {[...partsOf({ ingredients }), FINISH].map((p) => <option key={p} value={p}>{partLabel(p)}</option>)}
+                </select>
+              </label>
+            )}
           </div>
           <div className="editor__stepactions">
             <button type="button" className="iconbtn iconbtn--sm" aria-label={`Schritt ${idx + 1} nach oben`} disabled={idx === 0} onClick={() => move(idx, -1)}>

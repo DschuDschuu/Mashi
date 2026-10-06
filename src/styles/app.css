@@ -336,6 +336,10 @@ p { margin: 0; }
 
 /* Zutaten wie im Bild: Menge links, Name daneben, ohne Trennlinien */
 .ingredients { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+/* Rezept-Teile (Julia): Überschrift je Teil über seinen Zutaten, Etikett am Schritt */
+.ingredients__part + .ingredients__part { margin-top: 10px; }
+.ingredients__parthead { margin: 4px 0 2px; font-size: 0.85rem; font-weight: 700; color: var(--primary-text); text-transform: none; }
+.steps__part { display: inline-block; margin-bottom: 2px; font-weight: 600; }
 .ingredients li { display: grid; grid-template-columns: 76px 1fr; gap: 12px; padding: 5px 0; font-size: 0.95rem; }
 .ingredients__qty { font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .ingredients__name { color: var(--ink-2); }
@@ -391,6 +395,12 @@ p { margin: 0; }
 .editor { display: flex; flex-direction: column; gap: 8px; }
 .editor__row { display: grid; grid-template-columns: 64px 84px 1fr 36px; gap: 6px; align-items: center; }
 .editor__row input, .editor__row select { padding: 10px 8px; font-size: 0.95rem; }
+/* zweite Zeile: links der Teil (unter Menge und Einheit), daneben der Hinweis – klein, damit die Liste kurz bleibt */
+.editor__row .editor__part { grid-column: 1 / 3; padding: 6px 8px; font-size: 0.85rem; margin-top: -2px; min-width: 0; }
+.editor__row .editor__note { grid-column: 3 / 4; padding: 6px 8px; font-size: 0.85rem; margin-top: -2px; }
+.editor__steppart { display: flex; align-items: center; gap: 8px; }
+.editor__steppart select { padding: 6px 8px; font-size: 0.85rem; min-width: 0; max-width: 100%; }
+.step-ings__note { color: var(--ink-3); font-weight: 400; }
 .editor__step { display: grid; grid-template-columns: 30px 1fr 36px; gap: 8px; align-items: start; }
 .editor__stepbody { display: flex; flex-direction: column; gap: 6px; }
 .editor__timer { display: flex; align-items: center; gap: 6px; font-size: 0.8rem; color: var(--ink-3); }
@@ -1162,6 +1172,10 @@ p { margin: 0; }
 .shelf-shared__row { display: flex; align-items: center; gap: 8px; }
 .shelf-shared__row input { width: 5.5em; min-height: 40px; padding: 0 10px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface); font: inherit; }
 .shelf-shared__row input[aria-invalid="true"] { border-color: #b4513f; }
+.shelf-shared__row input:disabled { color: var(--ink-3); background: var(--bg); }
+/* „Hält unbegrenzt – nicht schätzen“ (Julia: Salz, Zucker, Gewürze ohne Erinnerung) */
+.shelf-forever { display: flex; align-items: center; gap: 8px; min-height: 36px; color: var(--ink-2); cursor: pointer; }
+.shelf-forever input { width: 18px; height: 18px; margin: 0; accent-color: var(--primary); flex: none; }
 /* gleich unter den Tabs: das Formular zum Hinzufügen – ohne zweiten grauen Kasten im Kasten */
 .add-food { border-color: var(--primary-soft); }
 .add-food > .product-form { background: none; padding: 0; }
@@ -1446,6 +1460,9 @@ p { margin: 0; }
   .editor__unit { grid-area: unit; }
   .editor__row > .iconbtn { grid-area: del; }
   .editor__row > .rename-hint { grid-column: 1 / -1; }
+  /* Teil neben Menge und Einheit, der Hinweis darunter über die ganze Breite (sonst nur „Hinweis,“ sichtbar) */
+  .editor__row .editor__part { grid-column: 3 / 5; grid-row: 2; margin-top: 0; }
+  .editor__row .editor__note { grid-column: 1 / 4; grid-row: 3; margin-top: 0; }
 }
 /* Eingabefelder überall gleich: Rahmen, Radius, Fokus (vorher teils nackt) */
 .quicknut__search input, .pantry-freeze input, .cook__edit input {
@@ -1618,10 +1635,15 @@ details.cost-line[open] > summary::after { transform: rotate(-90deg); }
 .plan-list .list__item:has(.plan-amounts) { flex-wrap: wrap; }
 .plan-amounts { order: 10; flex: 1 1 100%; padding-left: 48px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; color: var(--ink-2); }
 .plan-amounts__soon { background: var(--peach); color: #9a5a2f; }
+/* Wochenplan: schon fertige Rezept-Teile (Julia) */
+.plan-done-parts { display: inline-flex; align-items: center; gap: 4px; color: var(--primary-text); }
 /* Chips sind sonst einzeilig – hier lieber umbrechen als aus der Karte ragen (machte die Seite breiter als das Handy) */
 .plan-amounts .chip { white-space: normal; max-width: 100%; text-align: left; }
 @container (max-width: 640px) { .plan-amounts { padding-left: 0; } }
 /* Kochmodus: „Nur dieses Mal: 3 Paprika statt 1 · Anpassen“ */
+/* Rezept-Teile im Kochmodus (Julia): „Heute: Sauce · Alles andere“ – fertige mit Haken, nicht wählbar */
+.cook__parts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 2px; }
+.cook__parts .chip:disabled { opacity: 0.7; }
 .cook__chosen { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 6px 2px; color: var(--ink-2); }
 
 /* Produktformular: weitere Packungsgrößen je Zeile – Feld + Einheit, Papierkorb rechts */

@@ -1,17 +1,21 @@
 import { formatQuantity } from './scaling';
 import type { Ingredient, RecipeContent } from './types';
+import { partLabel } from './parts';
 
 export type ContentChange =
   | { kind: 'ingredient-changed'; name: string; before: string; after: string }
   | { kind: 'ingredient-added'; name: string; after: string }
   | { kind: 'ingredient-removed'; name: string; before: string }
+  /** anderer Rezept-Teil („Sauce“) – undefined = ohne Teil */
+  | { kind: 'ingredient-part'; name: string; part?: string }
   | { kind: 'step-changed'; index: number }
   | { kind: 'step-added'; index: number }
   | { kind: 'step-removed'; index: number }
   | { kind: 'steps-reordered' }
   | { kind: 'field-changed'; field: 'Titel' | 'Portionen' | 'Zubereitungszeit' | 'Kochzeit'; before: string; after: string };
 
-const label = (i: Ingredient) => [formatQuantity(i), i.name].filter(Boolean).join(' ');
+/** „1 Stück Zwiebel, gewürfelt“ – der Hinweis gehört dazu, sonst wäre „gewürfelt → fein gehackt“ keine Änderung */
+const label = (i: Ingredient) => [formatQuantity(i), i.name].filter(Boolean).join(' ') + (i.note?.trim() ? `, ${i.note.trim()}` : '');
 
 /**
  * Vergleicht zwei Rezeptinhalte und listet die Unterschiede in Alltagssprache.
@@ -44,6 +48,7 @@ export function diffContent(before: RecipeContent, after: RecipeContent): Conten
     const a = label(oldScaled);
     const b = label(ing);
     if (a !== b) changes.push({ kind: 'ingredient-changed', name: ing.name, before: a, after: b });
+    if ((old.part?.trim() || undefined) !== (ing.part?.trim() || undefined)) changes.push({ kind: 'ingredient-part', name: ing.name, part: ing.part?.trim() || undefined });
   }
   for (const ing of before.ingredients) {
     if (!afterIds.has(ing.id)) changes.push({ kind: 'ingredient-removed', name: ing.name, before: label(ing) });
@@ -56,7 +61,7 @@ export function diffContent(before: RecipeContent, after: RecipeContent): Conten
   after.steps.forEach((b, i) => {
     const old = stepsBefore.get(b.id);
     if (!old) changes.push({ kind: 'step-added', index: i });
-    else if (old.st.text.trim() !== b.text.trim() || old.st.timerMinutes !== b.timerMinutes || !sameIds(old.st.ingredientIds, b.ingredientIds)) {
+    else if (old.st.text.trim() !== b.text.trim() || old.st.timerMinutes !== b.timerMinutes || !sameIds(old.st.ingredientIds, b.ingredientIds) || old.st.part !== b.part) {
       changes.push({ kind: 'step-changed', index: i });
     }
   });
@@ -76,6 +81,7 @@ export function describeChange(c: ContentChange): string {
     case 'ingredient-changed': return `${c.before} → ${c.after}`;
     case 'ingredient-added': return `Neu: ${c.after}`;
     case 'ingredient-removed': return `Entfernt: ${c.before}`;
+    case 'ingredient-part': return c.part ? `${c.name}: Teil ${partLabel(c.part)}` : `${c.name}: ohne Teil`;
     case 'step-changed': return `Schritt ${c.index + 1} angepasst`;
     case 'step-added': return `Schritt ${c.index + 1} hinzugefügt`;
     case 'step-removed': return `Schritt ${c.index + 1} entfernt`;

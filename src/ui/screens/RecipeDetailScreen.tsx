@@ -8,10 +8,11 @@ import { categoryInfo, deviceInfo, DIFFICULTY_LABEL, SOURCE_INFO, STATUS_INFO } 
 import { currentContent, currentVersion, originalVersion } from '../../domain/recipe';
 import { asCooked, formatQuantity, scaleIngredients } from '../../domain/scaling';
 import { orderByUse } from '../../domain/stepIngredients';
+import { doneParts, partLabel, partOf, partsOf, stepPart } from '../../domain/parts';
 import type { Recipe, RecipeContent } from '../../domain/types';
 import { describeChange, diffContent } from '../../domain/versions';
 import {
-  addToPlan, adoptToCookbook, archiveRecipe, deleteRecipe, restoreRecipe, markCooked, regenerateImage, setPlanVariants, setStatus, toggleFavorite, togglePlanCooked, uncookRecipe, updateNotes, usePlan, useRecipe,
+  addToPlan, adoptToCookbook, archiveRecipe, deleteRecipe, restoreRecipe, markCooked, regenerateImage, setPlanVariants, setStatus, toggleFavorite, togglePlanCooked, uncookRecipe, updateNotes, usePantry, usePlan, useRecipe,
 } from '../../data/store';
 import { cookedToast } from '../cookedToast';
 import { shareMessage, shareRecipes } from '../shareRecipes';
@@ -99,6 +100,9 @@ function Detail({ recipe }: { recipe: Recipe }) {
 
   // Reihenfolge wie beim Kochen: was im ersten Schritt gebraucht wird, zuerst
   const ingredients = orderByUse(scaleIngredients(shown, servings), c.steps);
+  /** Rezept-Teile (Julia) und welche davon schon als Vorgekocht in der Speisekammer stehen */
+  const parts = partsOf(c);
+  const doneNow = doneParts(usePantry().items, recipe.id);
   const { stock, soon } = useRecipeStock(recipe, servings);
   const rating = recipe.feedback.length
     ? { avg: recipe.feedback.reduce((s, f) => s + f.rating, 0) / recipe.feedback.length, count: recipe.feedback.length }
@@ -195,15 +199,25 @@ const header = (
       </div>
       {stock && <p className="ingredients__stock"><StockLine content={c} stock={stock} max={Infinity} /* in der Rezeptansicht alle aufzählen */ /></p>}
       <RenamePanel recipe={recipe} />
-      <ul className={`ingredients${stock ? ' has-stock' : ''}`}>
-        {ingredients.map((i) => (
-          <li key={i.id} className={i.optional ? 'is-optional' : ''}>
-            <span className="ingredients__qty">{formatQuantity(i)}</span>
-            <span className="ingredients__name">{i.name}{i.optional && <em> (optional)</em>}{i.note && <span className="muted">, {i.note}</span>}</span>
-            {stock && <IngredientStock status={stock.get(i.id)} soon={soon.has(i.id)} />}
-          </li>
-        ))}
-      </ul>
+      {/* mit Teilen (Julia: „Sauce“, „Salat“): je Teil eine Überschrift – „Alles andere“ zuletzt */}
+      {(parts.length ? parts : ['']).map((p) => {
+        const list = parts.length ? ingredients.filter((i) => partOf(i) === p) : ingredients;
+        if (!list.length) return null;
+        return (
+          <div key={p || 'alle'} className="ingredients__part">
+            {parts.length > 0 && <h3 className="ingredients__parthead">{partLabel(p)}{doneNow.includes(p) && <span className="small muted"> · fertig in der Speisekammer</span>}</h3>}
+            <ul className={`ingredients${stock ? ' has-stock' : ''}`}>
+              {list.map((i) => (
+                <li key={i.id} className={i.optional ? 'is-optional' : ''}>
+                  <span className="ingredients__qty">{formatQuantity(i)}</span>
+                  <span className="ingredients__name">{i.name}{i.optional && <em> (optional)</em>}{i.note && <span className="muted">, {i.note}</span>}</span>
+                  {stock && <IngredientStock status={stock.get(i.id)} soon={soon.has(i.id)} />}
+                </li>
+              ))}
+            </ul>
+          </div>
+        );
+      })}
     </>
   );
 
@@ -213,6 +227,7 @@ const header = (
         <li key={s.id}>
           <span className="steps__num">{i + 1}</span>
           <div>
+            {parts.length > 0 && <span className="steps__part small muted">{partLabel(stepPart(s, c))}</span>}
             <StepIngredients step={s} ingredients={ingredients} />
             <p>{s.text}</p>
             {s.timerMinutes && <span className="chip chip--xs"><Icon name="timer" size={13} /> {s.timerMinutes} Min.</span>}

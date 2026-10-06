@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { FOOD_CHOICES } from '../../domain/nutrition/localFoods';
 import { navigate } from '../../router';
 import type { FoodKind } from '../../domain/nutrition/types';
-import { setShelfDays, shelfOverview, SPECIAL_DAYS, type Special } from '../../domain/shelfLife';
+import { MAX_SHELF_DAYS, setShelfDays, shelfOverview, SPECIAL_DAYS, type Special } from '../../domain/shelfLife';
 import { setPantryShelfDays, usePantry } from '../../data/store';
 import { Icon, type IconName } from './Icon';
 import { TileSummary } from './TileSummary';
@@ -87,7 +87,7 @@ function DaysField({ own, standard, unit, label, onSave }: { own?: number; stand
 
   const commit = () => {
     const n = Math.round(Number(text.replace(',', '.').trim()));
-    const value = text.trim() && n >= 1 && n <= 365 ? n : undefined;
+    const value = text.trim() && n >= 1 && n <= MAX_SHELF_DAYS ? n : undefined;
     if (value !== own) onSave(value);
     setText(value ? String(value) : '');
   };

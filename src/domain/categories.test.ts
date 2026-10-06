@@ -30,8 +30,15 @@ describe('Kategorien wie im Laden', () => {
     expect(guessCategory('Kidneybohnen', T)).toBe('konserven');
     expect(guessCategory('Rinderbrühe', T)).toBe('saucen');
     expect(guessCategory('Erdnussbutter', T)).toBe('backen');
-    expect(guessCategory('Haselnüsse', T)).toBe('backen');
-    expect(guessCategory('Nüsse', T)).toBe('backen');
+    // Julia: eigene Abteilung „Müsli, Nüsse & Kerne“ – Aufstriche (Erdnussbutter oben) bleiben beim Süßen
+    expect(guessCategory('Haselnüsse', T)).toBe('muesli-nuesse');
+    expect(guessCategory('Nüsse', T)).toBe('muesli-nuesse');
+    for (const n of ['Haferflocken', 'Knuspermüsli', 'Granola', 'Kürbiskerne', 'Leinsamen', 'Chiasamen', 'Mandeln', 'Studentenfutter']) {
+      expect([n, guessCategory(n, T)]).toEqual([n, 'muesli-nuesse']);
+    }
+    expect(guessCategory('Nussmus', T)).toBe('backen');
+    expect(guessCategory('Haselnusscreme', T)).toBe('backen');
+    expect(guessCategory('Chiliflocken', T)).toBe('saucen');
     // „nuss“ im Namen ist noch keine Nuss (Julia)
     expect(guessCategory('Butternuss-Kürbis', T)).toBe('obst-gemuese');
     expect(guessCategory('Butternusskürbis', T)).toBe('obst-gemuese');

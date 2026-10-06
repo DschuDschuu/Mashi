@@ -5,6 +5,7 @@
  * Nährwerte kommen NIE von der KI (RecipeContent hat kein Feld dafür) – die rechnet Mashi selbst.
  */
 import { CATEGORIES, DEVICES } from './catalog';
+import { FINISH } from './parts';
 import { newId } from './recipe';
 import type { Difficulty, Ingredient, RecipeContent, Step, Unit } from './types';
 
@@ -83,8 +84,11 @@ export function buildRecipePrompt(ask: RecipeAsk, opts: { maxLength?: number } =
     '{"title": "…", "description": "ein bis zwei Sätze", "servings": 2, "prepMinutes": 10, "cookMinutes": 20, "difficulty": 1,',
     ' "categories": ["hauptgericht"], "tags": ["Schnell"], "devices": ["herd"],',
     ' "imagePrompt": "kurze Beschreibung des fertigen Gerichts auf Englisch",',
-    ' "ingredients": [{"name": "Paprika", "amount": 1, "unit": "Stück", "note": "gewürfelt"}],',
-    ' "steps": [{"text": "…", "timerMinutes": 5}]}',
+    ' "ingredients": [{"name": "Paprika", "amount": 1, "unit": "Stück", "note": "gewürfelt", "part": "Sauce"}],',
+    ' "steps": [{"text": "…", "timerMinutes": 5, "part": "Sauce"}]}',
+    // Julia: Teile lassen sich getrennt kochen (Sauce gestern, Nudeln heute) – nur wo es echte Teile gibt
+    'part nur, wenn das Gericht klar getrennte Teile hat (z. B. Sauce, Dressing, Salat, Topping, Teig) – sonst weglassen.',
+    'Bei Schritten: der Teil des Schritts, oder "Zum Schluss", wenn er Teile zusammenbringt.',
     `Erlaubte Einheiten: ${UNITS.join(', ')} (oder ohne Einheit, z. B. „Salz“).`,
     `difficulty: 1 = einfach, 2 = mittel, 3 = aufwendig. categories aus: ${CATEGORIES.map((c) => c.id).join(', ')}.`,
     `devices aus: ${DEVICES.map((d) => d.id).join(', ')}. timerMinutes nur bei Schritten mit Wartezeit.`,
@@ -163,11 +167,13 @@ export function parseRecipeReply(text: string, ask: Pick<RecipeAsk, 'servings'> 
       const amount = num(x.amount);
       const unit = unitOf(x.unit);
       const note = str(x.note);
+      const part = str(x.part).slice(0, 30);
       return {
         id: newId('i'), name: str(x.name).slice(0, 80),
         ...(amount !== undefined ? { amount: Math.round(amount * 100) / 100 } : {}),
         ...(unit ? { unit } : {}),
         ...(note ? { note: note.slice(0, 80) } : {}),
+        ...(part ? { part } : {}),
         ...(x.optional === true ? { optional: true } : {}),
       };
     });
@@ -177,7 +183,9 @@ export function parseRecipeReply(text: string, ask: Pick<RecipeAsk, 'servings'> 
     .slice(0, 30)
     .map((x) => {
       const t = num(x.timerMinutes);
-      return { id: newId('s'), text: str(x.text).slice(0, 600), ...(t ? { timerMinutes: Math.min(600, Math.round(t)) } : {}) };
+      // „Zum Schluss“ = bringt Teile zusammen; ein Teil, den keine Zutat hat, ergänzt Mashi aus den Zutaten (stepPart)
+      const part = /^zum schluss$/i.test(str(x.part)) ? FINISH : str(x.part).slice(0, 30);
+      return { id: newId('s'), text: str(x.text).slice(0, 600), ...(t ? { timerMinutes: Math.min(600, Math.round(t)) } : {}), ...(part ? { part } : {}) };
     });
   if (!title || !ingredients.length || !steps.length) throw new RecipeReplyError('Die KI hat kein vollständiges Rezept geschickt.');
   const d = Math.round(num(raw.difficulty) ?? 1);

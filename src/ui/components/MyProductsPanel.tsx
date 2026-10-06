@@ -4,7 +4,7 @@ import { levelNameFromFat } from '../../domain/nutrition/fatLevels';
 import { brandOf, nameOf, type MyProduct, type SharedMatch } from '../../domain/nutrition/myProducts';
 import { MatchChips, visibleExcludes, type Match } from './MatchChips';
 import { newId } from '../../domain/recipe';
-import { shelfDaysForFood } from '../../domain/shelfLife';
+import { FOREVER, MAX_SHELF_DAYS, shelfDaysForFood } from '../../domain/shelfLife';
 import { usePantry, useProducts } from '../../data/store';
 import type { ScannedProduct } from '../../domain/nutrition/openFoodFacts';
 import { barcodeLookup } from '../../services';
@@ -73,7 +73,9 @@ export function ProductForm({ initial, onSave, onCancel, shared, afterName, name
   /** weitere Größen als Liste („1000, 1400“) */
   /** weitere Größen derselben Sorte – je eine Zeile (Julia: statt „1000; 1400“ in einem Feld) */
   const [moreSizes, setMoreSizes] = useState<string[]>((initial?.packageSizes ?? []).map((n) => toField(n)));
-  const [shelf, setShelf] = useState(toField(initial?.shelfDays));
+  const [shelf, setShelf] = useState(initial?.shelfDays ? toField(initial.shelfDays) : '');
+  /** „Hält unbegrenzt – nicht schätzen“ (Julia) – gespeichert als FOREVER (0) */
+  const [forever, setForever] = useState(initial?.shelfDays === FOREVER);
   const pantry = usePantry();
   const shelfCustom = pantry.shelfDays;
   /** diese Sorte gibt es schon vom Kassenbon – dann gilt dessen Preis */
@@ -105,7 +107,7 @@ export function ProductForm({ initial, onSave, onCancel, shared, afterName, name
     const sizes = typed.map((x) => parseNum(x)!).filter((n) => n !== amount);
     if (sizes.length && !amount) return setError('Für weitere Größen braucht Mashi zuerst die übliche Packungsgröße.');
     const shelfDays = parseNum(shelf);
-    if (!sortOnly && shelf.trim() && (!shelfDays || shelfDays > 365 || !Number.isInteger(shelfDays))) return setError('Haltbarkeit bitte in ganzen Tagen (1 bis 365).');
+    if (!sortOnly && !forever && shelf.trim() && (!shelfDays || shelfDays > MAX_SHELF_DAYS || !Number.isInteger(shelfDays))) return setError(`Haltbarkeit bitte in ganzen Tagen (1 bis ${MAX_SHELF_DAYS}, also bis 10 Jahre).`);
     const ex = visibleExcludes(name, match);
     onSave({
       id: initial?.id ?? newId('p'),
@@ -124,7 +126,9 @@ export function ProductForm({ initial, onSave, onCancel, shared, afterName, name
       ...(amount && sizes.length ? { packageSizes: [...new Set(sizes)] } : {}),
       ...(amount && price !== undefined ? { packagePrice: price } : {}),
       // Sorte: die Haltbarkeit kommt aus der Kachel (gemeinsam), siehe withShared
-      ...(sortOnly ? (shared?.shelfDays ? { shelfDays: shared.shelfDays } : {}) : shelfDays ? { shelfDays } : {}),
+      ...(sortOnly
+        ? (shared?.shelfDays !== undefined ? { shelfDays: shared.shelfDays } : {})
+        : forever ? { shelfDays: FOREVER } : shelfDays ? { shelfDays } : {}),
       updatedAt: new Date().toISOString(),
     });
   };
@@ -327,9 +331,15 @@ export function ProductForm({ initial, onSave, onCancel, shared, afterName, name
           ) : null}
           {/* Sorte: Haltbarkeit gilt für alle Sorten – steht in der Kachel */}
           {!sortOnly && (
-            <label className="field"><span>Hält ab Kauf (Tage, optional)</span>
-              <input inputMode="numeric" value={shelf} onChange={(e) => setShelf(e.target.value)} placeholder={shelfEstimate(match.replaces, shelfCustom)} />
-            </label>
+            <>
+              <label className="field"><span>Hält ab Kauf (Tage, optional)</span>
+                <input inputMode="numeric" value={forever ? '' : shelf} onChange={(e) => setShelf(e.target.value)} disabled={forever}
+                  placeholder={forever ? 'hält unbegrenzt' : shelfEstimate(match.replaces, shelfCustom)} />
+              </label>
+              <label className="shelf-forever small">
+                <input type="checkbox" checked={forever} onChange={(e) => setForever(e.target.checked)} /> Hält unbegrenzt – nicht schätzen
+              </label>
+            </>
           )}
 
           {sortOnly

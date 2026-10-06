@@ -35,6 +35,11 @@ export interface ShelfDays {
 
 export const specialDays = (s: Special, custom: ShelfDays = {}): number => custom[s] ?? SPECIAL_DAYS[s];
 
+/** „Hält unbegrenzt“ (Julia: Salz, Zucker, Konserven) – gespeichert als 0: Mashi schätzt nicht, keine Erinnerung */
+export const FOREVER = 0;
+/** Längste eintragbare Haltbarkeit (Julia: „länger als 365, z. B. 730“) – 10 Jahre */
+export const MAX_SHELF_DAYS = 3650;
+
 /** Mashis Standard je Art – in der Speisekammer änderbar (Pantry.shelfDays). Nicht aufgeführt = lange haltbar. */
 export const DEFAULT_SHELF_DAYS: Readonly<Partial<Record<FoodKind, number>>> = {
   protein: 2, // frisches Fleisch und Fisch
@@ -71,13 +76,14 @@ const DAY = 24 * 60 * 60 * 1000;
  * → Art (dein Wert, sonst Standard). undefined = lange haltbar / unbekannt.
  */
 export function shelfDaysOf(food: FoodEntry | undefined, kind: FoodKind | undefined, custom: ShelfDays = {}): number | undefined {
-  if (food?.shelfDays) return food.shelfDays;
+  // FOREVER (0) heißt „hält unbegrenzt“ – nicht „nichts eingetragen“, sonst schätzte Mashi doch wieder
+  if (food?.shelfDays !== undefined) return food.shelfDays || undefined;
   return shelfDaysForFood(food?.baseId ?? food?.ref.foodId, kind, custom);
 }
 
 /** Wie shelfDaysOf, aber ohne eigenes Produkt – z. B. als Schätzung im Produktformular. */
 export function shelfDaysForFood(id: string | undefined, kind: FoodKind | undefined, custom: ShelfDays = {}): number | undefined {
-  if (id && custom.foods?.[id]) return custom.foods[id];
+  if (id && custom.foods?.[id] !== undefined) return custom.foods[id] || undefined;
   if (id && id in DAYS_BY_FOOD) return DAYS_BY_FOOD[id] ?? undefined;
   return kind ? custom.kinds?.[kind] ?? DEFAULT_SHELF_DAYS[kind] : undefined;
 }
@@ -147,7 +153,8 @@ export function setShelfDays(custom: ShelfDays = {}, target: { kind: FoodKind } 
   }
   const patch = <K extends string>(map: Partial<Record<K, number>> | undefined, key: K) => {
     const next: Partial<Record<K, number>> = { ...map };
-    if (days) next[key] = days;
+    // FOREVER (0) ist ein Wert („hält unbegrenzt“), undefined heißt „wieder Mashis Schätzung“
+    if (days !== undefined) next[key] = days;
     else delete next[key];
     return Object.keys(next).length ? next : undefined;
   };

@@ -97,13 +97,13 @@ export function sharedOf(ps: readonly MyProduct[]): SharedMatch {
   const first = ps.find((p) => p.favorite) ?? ps[0];
   const uniq = (xs: string[]) => [...new Set(xs)];
   // vom Favoriten, sonst von der ersten Sorte, die eine hat – nichts Eingetragenes geht verloren
-  const shelfDays = first?.shelfDays ?? ps.find((p) => p.shelfDays)?.shelfDays;
+  const shelfDays = first?.shelfDays ?? ps.find((p) => p.shelfDays !== undefined)?.shelfDays;
   return {
     name: first ? nameOf(first) : '',
     replaces: uniq(ps.flatMap((p) => p.replaces)),
     names: uniq(ps.flatMap((p) => p.names ?? [])),
     excludes: (first?.excludes ?? []).filter((x) => ps.every((p) => p.excludes?.includes(x))),
-    ...(shelfDays ? { shelfDays } : {}),
+    ...(shelfDays !== undefined ? { shelfDays } : {}),
   };
 }
 
@@ -114,7 +114,7 @@ export function withShared(p: MyProduct, s: SharedMatch, now = new Date().toISOS
   return {
     ...rest, name: s.name, ...(brand ? { brand } : {}), replaces: s.replaces,
     ...(s.names.length ? { names: s.names } : {}), ...(s.excludes.length ? { excludes: s.excludes } : {}),
-    ...(s.shelfDays ? { shelfDays: s.shelfDays } : {}),
+    ...(s.shelfDays !== undefined ? { shelfDays: s.shelfDays } : {}),
     updatedAt: now,
   };
 }
@@ -169,7 +169,8 @@ function asEntry(p: MyProduct, replaced?: FoodEntry): FoodEntry {
     ...(replaced?.portions || glass || piece ? { portions: { ...replaced?.portions, ...(glass ? { Glas: glass } : {}), ...(piece ? { Stück: piece } : {}) } } : {}),
     ...(replaced?.kind ? { kind: replaced.kind } : {}),
     ...(replaced ? { baseId: replaced.ref.foodId } : {}),
-    ...(p.shelfDays ? { shelfDays: p.shelfDays } : {}),
+    // 0 = hält unbegrenzt (siehe shelfLife FOREVER)
+    ...(p.shelfDays !== undefined ? { shelfDays: p.shelfDays } : {}),
   };
 }
 
@@ -181,6 +182,8 @@ function asEntry(p: MyProduct, replaced?: FoodEntry): FoodEntry {
 function asGroup(ps: MyProduct[], key: string, replaced?: FoodEntry): FoodEntry {
   if (ps.length === 1) return asEntry(ps[0], replaced);
   const days = ps.map((p) => p.shelfDays).filter((d): d is number => d !== undefined);
+  // die kürzeste Sorte zählt – „hält unbegrenzt“ (0) nur, wenn alle Sorten es tun
+  const shortest = Math.min(...days.map((d) => d || Infinity));
   // Favorit: dessen Werte statt des Durchschnitts (Schlüssel bleibt – Vorrat und Rezept finden sich weiter)
   const fav = ps.find((p) => p.favorite);
   // Sorten ohne eigene Werte rechnen mit der Tabelle; kennt die sie nicht, zählen sie beim Durchschnitt nicht mit
@@ -195,7 +198,7 @@ function asGroup(ps: MyProduct[], key: string, replaced?: FoodEntry): FoodEntry 
     name: replaced?.name ?? key.charAt(0).toLocaleUpperCase('de-DE') + key.slice(1),
     per100g: values ?? ZERO,
     ...(values ? {} : { noValues: true }),
-    ...(days.length === ps.length ? { shelfDays: Math.min(...days) } : { shelfDays: undefined }),
+    ...(days.length === ps.length ? { shelfDays: shortest === Infinity ? 0 : shortest } : { shelfDays: undefined }),
     variants: ps.map((p) => ({ id: p.id, name: productLabel(p), per100g: valuesOf(p, replaced) ?? values ?? ZERO, ...(p.favorite ? { favorite: true } : {}) })),
     ...(fav ? { favoriteId: fav.id } : {}),
   };

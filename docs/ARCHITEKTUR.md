@@ -18,7 +18,8 @@ mashi/
 │  │  ├─ mealplan.ts          Wochenplan, Einkaufsliste; Zutaten/Namen einordnen (resolveIngredient, keyOfName)
 │  │  ├─ pantry.ts            Speisekammer: Vorrat, Bon-Import, beim Kochen abziehen, Verplantes
 │  │  ├─ packs.ts             Packungen: anbrechen, „ganze Packung?“, Größe nachtragen, zusammenlegen
-│  │  ├─ prepared.ts          Vorgekochte Portionen
+│  │  ├─ prepared.ts          Vorgekochte Portionen (auch einzelne Teile: „Sauce für …“, PantryItem.part)
+│  │  ├─ parts.ts             Rezept-Teile: Sauce/Salat getrennt kochen, Schritte filtern, was noch fehlt
 │  │  ├─ shelfLife.ts         Haltbarkeit, Bald verbrauchen
 │  │  ├─ stage.ts             Stufen: Nachkaufen · Im Haus · Gewürze (eine je Lebensmittel)
 │  │  ├─ restock.ts           Nachkaufen + eigene Einträge → Einkaufsliste (shoppingList)
