@@ -66,3 +66,14 @@ Push auf `main` → GitHub Action (Tests + Build) → GitHub Pages: https://dsch
 - Texte in der App kurz und freundlich, Linien-Icons statt Emojis; nichts darf auf 375 px aus der Karte ragen.
 - Für Regex und Sonderzeichen das Edit-Werkzeug nehmen – Skripte (Python, sed) machen aus `\b`, `\n`, ` `
   gern echte Zeichen.
+
+## Effizientes Arbeiten
+
+- Lies zuerst CLAUDE.md und nur die für die Aufgabe relevanten Dateien.
+- Untersuche nicht ohne Grund das gesamte Repository.
+- Ändere nur Dateien, die für die Aufgabe notwendig sind.
+- Bestehende Komponenten, Funktionen und Styles wiederverwenden, bevor neue erstellt werden.
+- Keine ungefragten Refactorings oder Architekturänderungen.
+- Keine neuen Dependencies ohne Rückfrage.
+- Bei kleinen Änderungen keine vollständige Codeausgabe; kurz zusammenfassen, was geändert wurde.
+- Tests nur für die betroffene Funktionalität ausführen, sofern kein vollständiger Testlauf sinnvoll oder ausdrücklich gewünscht ist.
