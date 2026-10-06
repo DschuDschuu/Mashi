@@ -17,7 +17,7 @@ Recipe  (Hülle – ändert sich selten)
 │         └─ RecipeContent  ← ALLES Inhaltliche, unveränderlich je Version
 │              title, description, servings, prepMinutes, cookMinutes, difficulty,
 │              ingredients[] { id, name, amount?, unit?, note? (Hinweis „gewürfelt“), part? (Teil „Sauce“), optional?, foodRef? },
-│              steps[] { id, text, timerMinutes?, ingredientIds?, part? (Teil – fehlt: aus den Zutaten; „-“ Alles andere, „*“ Zum Schluss) },
+│              steps[] { id, text, timerMinutes?, ingredientIds?, part? (Teil – fehlt: aus den Zutaten; „-“ Frisch, „*“ Zum Schluss) },
 │              categories[], tags[], devices[], imagePrompt?
 └─ feedback[]  TestFeedback { versionId, rating 1–5, note }  ← hängt an der GEKOCHTEN Version
 ```

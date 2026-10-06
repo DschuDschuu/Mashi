@@ -24,8 +24,8 @@ const c: RecipeContent = {
 const ids = (x: { id: string }[]) => x.map((i) => i.id);
 
 describe('Rezept-Teile (Julia: Sauce gestern, Nudeln und Fleisch heute)', () => {
-  it('Teile in der Reihenfolge der Zutaten, „Alles andere“ zuletzt – ohne eigene Teile keine', () => {
-    expect(partsOf(c)).toEqual(['Sauce', REST]);
+  it('Frisch zuerst, dann die Teile in der Reihenfolge der Zutaten – ohne eigene Teile keine', () => {
+    expect(partsOf(c)).toEqual([REST, 'Sauce']);
     expect(partsOf({ ingredients: c.ingredients.map(({ part: _, ...i }) => i) })).toEqual([]);
   });
 

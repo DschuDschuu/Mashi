@@ -8,7 +8,7 @@ import { categoryInfo, deviceInfo, DIFFICULTY_LABEL, SOURCE_INFO, STATUS_INFO } 
 import { currentContent, currentVersion, originalVersion } from '../../domain/recipe';
 import { asCooked, formatQuantity, scaleIngredients } from '../../domain/scaling';
 import { orderByUse } from '../../domain/stepIngredients';
-import { doneParts, partLabel, partOf, partsOf, stepPart } from '../../domain/parts';
+import { doneParts, partLabel, partOf, partsOf, REST, stepPart } from '../../domain/parts';
 import type { Recipe, RecipeContent } from '../../domain/types';
 import { describeChange, diffContent } from '../../domain/versions';
 import {
@@ -199,13 +199,13 @@ const header = (
       </div>
       {stock && <p className="ingredients__stock"><StockLine content={c} stock={stock} max={Infinity} /* in der Rezeptansicht alle aufzählen */ /></p>}
       <RenamePanel recipe={recipe} />
-      {/* mit Teilen (Julia: „Sauce“, „Salat“): je Teil eine Überschrift – „Alles andere“ zuletzt */}
+      {/* mit Teilen (Julia: „Sauce“, „Salat“): je Teil eine Überschrift; „Frisch“ (ohne Teil) steht zuerst, ohne Überschrift */}
       {(parts.length ? parts : ['']).map((p) => {
         const list = parts.length ? ingredients.filter((i) => partOf(i) === p) : ingredients;
         if (!list.length) return null;
         return (
           <div key={p || 'alle'} className="ingredients__part">
-            {parts.length > 0 && <h3 className="ingredients__parthead">{partLabel(p)}{doneNow.includes(p) && <span className="small muted"> · fertig in der Speisekammer</span>}</h3>}
+            {p !== REST && parts.length > 0 && <h3 className="ingredients__parthead">{partLabel(p)}{doneNow.includes(p) && <span className="small muted"> · fertig in der Speisekammer</span>}</h3>}
             <ul className={`ingredients${stock ? ' has-stock' : ''}`}>
               {list.map((i) => (
                 <li key={i.id} className={i.optional ? 'is-optional' : ''}>
@@ -227,7 +227,7 @@ const header = (
         <li key={s.id}>
           <span className="steps__num">{i + 1}</span>
           <div>
-            {parts.length > 0 && <span className="steps__part small muted">{partLabel(stepPart(s, c))}</span>}
+            {parts.length > 0 && stepPart(s, c) !== REST && <span className="steps__part small muted">{partLabel(stepPart(s, c))}</span>}
             <StepIngredients step={s} ingredients={ingredients} />
             <p>{s.text}</p>
             {s.timerMinutes && <span className="chip chip--xs"><Icon name="timer" size={13} /> {s.timerMinutes} Min.</span>}

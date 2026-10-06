@@ -45,7 +45,7 @@ export interface Ingredient {
   unit?: Unit;
   /** z. B. „fein gehackt“ */
   note?: string;
-  /** Teil des Rezepts („Sauce“, „Salat“) – lässt sich getrennt kochen (siehe parts.ts); fehlt = „Alles andere“ */
+  /** Teil des Rezepts („Sauce“, „Salat“) – lässt sich getrennt kochen (siehe parts.ts); fehlt = „Frisch“ */
   part?: string;
   optional?: boolean;
   /** Vom Nutzer oder Provider bestätigte Zuordnung. Fehlt sie, wird über den Namen gesucht. */
@@ -66,7 +66,7 @@ export interface Step {
   ingredientIds?: string[];
   /**
    * Zu welchem Teil der Schritt gehört (siehe parts.ts) – fehlt: aus seinen Zutaten (Mashis Vorschlag);
-   * REST = „Alles andere“, FINISH = „Zum Schluss“ (bringt Teile zusammen)
+   * REST = „Frisch“, FINISH = „Zum Schluss“ (bringt Teile zusammen)
    */
   part?: string;
 }

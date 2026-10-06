@@ -1356,6 +1356,9 @@ p { margin: 0; }
 .pantry__item--dish .pantry__eat, .pantry__item--dish > .iconbtn { position: relative; z-index: 2; }
 .pantry__item--dish > .pantry__chev { flex: none; margin-left: -4px; }
 /* rechts bündig mit Menge und Datum: 38 px = Pfeil (36 − 4) + Abstand 6 */
+.pantry__partchip { display: inline-block; margin-left: 8px; padding: 1px 9px; border-radius: 999px; background: var(--peach); color: var(--ink-2); font-size: 0.72rem; font-weight: 700; vertical-align: 1px; white-space: nowrap; }
+/* bei einem langen Rezeptnamen (2 Zeilen): unter dem Datum rechts statt in der 3. Zeile links */
+.pantry__partchip--below { align-self: flex-end; margin: 4px 0 0; }
 .pantry__dishnut { flex: 1 1 100%; padding: 0 38px 8px 0; margin-top: -2px; font-size: 0.8rem; }
 /* „1 gegessen“ neben der Menge – eigener Knopf, nicht im Zeilen-Knopf (Knöpfe lassen sich nicht schachteln) */
 .pantry__eat { flex: none; min-height: 30px; }
@@ -1641,7 +1644,7 @@ details.cost-line[open] > summary::after { transform: rotate(-90deg); }
 .plan-amounts .chip { white-space: normal; max-width: 100%; text-align: left; }
 @container (max-width: 640px) { .plan-amounts { padding-left: 0; } }
 /* Kochmodus: „Nur dieses Mal: 3 Paprika statt 1 · Anpassen“ */
-/* Rezept-Teile im Kochmodus (Julia): „Heute: Sauce · Alles andere“ – fertige mit Haken, nicht wählbar */
+/* Rezept-Teile im Kochmodus (Julia): „Heute: Frisch · Sauce“ – fertige mit Haken, nicht wählbar */
 .cook__parts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 2px; }
 .cook__parts .chip:disabled { opacity: 0.7; }
 .cook__chosen { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 6px 2px; color: var(--ink-2); }

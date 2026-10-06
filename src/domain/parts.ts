@@ -8,24 +8,24 @@ import type { Ingredient, RecipeContent, Step } from './types';
  * Speisekammer („Sauce für Lasagne“), bis der Rest gekocht ist.
  */
 
-/** „Alles andere“: Zutaten ohne eigenen Teil (Nudeln, Fleisch …) */
+/** „Frisch“: Zutaten ohne eigenen Teil (Nudeln, Fleisch …) – das, was frisch gekocht wird, während die Sauce schon in der Speisekammer steht (Julia). Auf der Rezeptseite ohne Überschrift ganz oben */
 export const REST = '-';
 /** Schritt, der Teile zusammenbringt („Sauce über die Nudeln“) – kommt dran, wenn das Gericht damit fertig wird */
 export const FINISH = '*';
 
 export const partOf = (i: Pick<Ingredient, 'part'>): string => i.part?.trim() || REST;
-export const partLabel = (p: string): string => (p === REST ? 'Alles andere' : p === FINISH ? 'Zum Schluss' : p);
+export const partLabel = (p: string): string => (p === REST ? 'Frisch' : p === FINISH ? 'Zum Schluss' : p);
 
-/** Die Teile eines Rezepts in der Reihenfolge der Zutatenliste, „Alles andere“ zuletzt – ohne eigene Teile: [] */
+/** Die Teile eines Rezepts: „Frisch“ zuerst (Julia: „Alles andere“ klang abwertend), dann die Teile in der Reihenfolge der Zutatenliste – ohne eigene Teile: [] */
 export function partsOf(c: Pick<RecipeContent, 'ingredients'>): string[] {
   const parts = [...new Set(c.ingredients.map(partOf))];
   if (!parts.some((p) => p !== REST)) return [];
-  return [...parts.filter((p) => p !== REST), ...(parts.includes(REST) ? [REST] : [])];
+  return [...(parts.includes(REST) ? [REST] : []), ...parts.filter((p) => p !== REST)];
 }
 
 /**
  * Zu welchem Teil ein Schritt gehört: selbst gewählt – sonst Mashis Vorschlag aus seinen Zutaten (nur Sauce-Zutaten →
- * Sauce). Mischt er Teile, oder hat er keine Zutaten und es gibt kein „Alles andere“: „Zum Schluss“.
+ * Sauce). Mischt er Teile, oder hat er keine Zutaten und es gibt keine frischen Zutaten: „Zum Schluss“.
  */
 export function stepPart(step: Step, c: Pick<RecipeContent, 'ingredients'>): string {
   const parts = partsOf(c);

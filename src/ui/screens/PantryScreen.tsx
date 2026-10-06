@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { isCount, plannedOf, recipesFromPantry, type PantryItem, type PantryUnit } from '../../domain/pantry';
 import { suggestPantryUnit } from '../../domain/packs';
 import { daysLabel, daysLeft, frozenSince, specialDays, useByOf } from '../../domain/shelfLife';
@@ -29,7 +29,7 @@ import { BrandNames } from '../components/BrandNames';
 import { NewProduct } from '../components/NewProduct';
 import type { FoodEntry } from '../../domain/nutrition/types';
 import { newId } from '../../domain/recipe';
-import { forParts } from '../../domain/parts';
+import { forParts, partLabel as partName } from '../../domain/parts';
 import { nameOf, sortTags, type MyProduct } from '../../domain/nutrition/myProducts';
 import { FOOD_CHOICES, normalizeName, PROVIDER } from '../../domain/nutrition/localFoods';
 
@@ -160,13 +160,8 @@ export function PantryScreen() {
     return (
       <li key={key} className={`pantry__item pantry__item--dish${open ? ' is-editing' : ''}`}>
         <button type="button" className="pantry__cover" onClick={onToggle} aria-expanded={open} aria-label={label} />
-        <span className="pantry__name">
-          {name}
-          {alarm && <span className="pantry__alarm" role="img" aria-label="läuft heute oder morgen ab"><Icon name="clock" size={12} /></span>}
-          {pill}
-        </span>
-        {/* rechts oben die Portionen, das Datum darunter (Julia: spart eine Zeile links) */}
-        <span className="pantry__dishright">{qty}{date}</span>
+        <DishTop title={part ? (recipe ? currentContent(recipe).title : name) : name} part={part && partName(part)}
+          alarm={alarm} pill={pill} qty={qty} date={date} />
         {end}
         {content && <DishNutrition content={cooked ? asCooked(content, cooked.servings, cooked.amounts) : content} own={cooked?.variants} sorts={false} full className="pantry__dishnut" />}
       </li>
@@ -511,6 +506,43 @@ function thawOne(item: PantryItem) {
 }
 
 // Pillen im Aktiv (Julia): was du jetzt tust – „1 essen“, „1 auftauen“
+/**
+ * Kopf einer Vorgekocht-Zeile: links der Name, rechts oben die Portionen mit dem Datum darunter (Julia: spart eine Zeile).
+ * Ein Teil („Sauce“) steht als Chip hinter dem Namen. Braucht der Name zwei Zeilen, bräche der Chip in die 3. Zeile um –
+ * dann steht er rechts unter dem Datum (Julia), damit er nicht neben „1 essen“ klebt. Das lässt sich nur messen (Höhe des
+ * Namens), nicht per CSS lösen; der Chip selbst wird nicht gemessen, darum schaukelt sich nichts auf.
+ */
+function DishTop({ title, part, alarm, pill, qty, date }: { title: string; part?: string; alarm: boolean; pill?: ReactNode; qty: ReactNode; date?: ReactNode }) {
+  const text = useRef<HTMLSpanElement>(null);
+  const [below, setBelow] = useState(false);
+  useLayoutEffect(() => {
+    const t = text.current;
+    if (!t) return;
+    const measure = () => {
+      const lh = parseFloat(getComputedStyle(t).lineHeight) || parseFloat(getComputedStyle(t).fontSize) * 1.3;
+      setBelow(t.getBoundingClientRect().height > lh * 1.5);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(t);
+    return () => ro.disconnect();
+  }, [title]);
+  return (
+    <>
+      <span className="pantry__name">
+        <span ref={text}>{title}</span>
+        {part && !below && <span className="pantry__partchip">{part}</span>}
+        {alarm && <span className="pantry__alarm" role="img" aria-label="läuft heute oder morgen ab"><Icon name="clock" size={12} /></span>}
+        {pill}
+      </span>
+      <span className="pantry__dishright">
+        {qty}{date}
+        {part && below && <span className="pantry__partchip pantry__partchip--below">{part}</span>}
+      </span>
+    </>
+  );
+}
+
 function EatPill({ item }: { item: PantryItem }) {
   return (
     <button type="button" className="eat-pill pantry__eat" onClick={() => eatOne(item)} aria-label={`${item.name}: 1 Portion essen`}>
