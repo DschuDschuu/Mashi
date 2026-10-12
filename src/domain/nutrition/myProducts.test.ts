@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { RecipeContent } from '../types';
 import { computeNutrition } from './engine';
 import { localFoodTable } from './localFoods';
-import { brandOf, nameOf, packSizesOf, productLabel, sharedOf, sortTags, splitBrand, withMyProducts, withShared, type MyProduct } from './myProducts';
+import { boughtAmountOf, brandOf, isValidProduct, nameOf, packSizesOf, packText, productLabel, sharedOf, sortTags, splitBrand, withMyProducts, withShared, type MyProduct } from './myProducts';
 
 const milk: MyProduct = {
   id: 'p-milch', name: 'Milch 0,1 % (Test)', replaces: ['milch', 'milch-fettarm', 'magermilch'],
@@ -174,5 +174,25 @@ describe('Sorten mit gleichem Namen (Julia: Sortenwahl fehlte)', () => {
   it('eine Sorte: wie bisher das Produkt selbst', () => {
     const table = withMyProducts(localFoodTable, [sort('normal', 20)]);
     expect(table.matchName('Rinderhack')!.food.ref.foodId).toBe('normal');
+  });
+});
+
+describe('Mehrfachpack „2 × 90 g“ (Julia: gibt es nur so, jede 90 g bleibt einzeln zu)', () => {
+  const mozz: MyProduct = { id: 'p1', name: 'Mozzarella Mini', replaces: [], per100g: { kcal: 240, protein: 18, carbs: 1, fat: 18 }, packageAmount: 90, packageUnit: 'g', updatedAt: '2026-10-01T00:00:00Z' };
+
+  it('ein Kauf bringt Stück × Größe; ohne „Stück im Pack“ nur die Packung selbst', () => {
+    expect(boughtAmountOf({ ...mozz, packageCount: 2 })).toBe(180);
+    expect(boughtAmountOf(mozz)).toBe(90);
+    expect(boughtAmountOf({})).toBeUndefined();
+  });
+
+  it('zeigt die Packung, wie man sie kauft', () => {
+    expect(packText({ ...mozz, packageCount: 2 }, '90')).toBe('2 × 90 g');
+    expect(packText(mozz, '90')).toBe('90 g');
+  });
+
+  it('nur ganze Zahlen ab 2 sind gültig – kaputte Werte aus der Datenbank werden abgelehnt', () => {
+    expect(isValidProduct({ ...mozz, packageCount: 2 })).toBe(true);
+    for (const bad of [1, 0, 2.5, -3, '2', NaN]) expect(isValidProduct({ ...mozz, packageCount: bad })).toBe(false);
   });
 });

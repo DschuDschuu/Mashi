@@ -5,7 +5,7 @@ import { mergeSameLines, parseReceipt, parseReceiptDate, type ReceiptLine } from
 import { parseSavings } from '../../domain/savings';
 import { DISCOUNT_LABEL, discountOf, importedOnDay } from '../../domain/bons';
 import { formatAmount } from '../../domain/scaling';
-import { packSizesOf, productLabel, type MyProduct } from '../../domain/nutrition/myProducts';
+import { boughtAmountOf, packSizesOf, productLabel, type MyProduct } from '../../domain/nutrition/myProducts';
 import { importReceipt, usePantry, useProducts } from '../../data/store';
 import { NewProduct } from '../components/NewProduct';
 import { takeSharedReceipt } from '../../pwa';
@@ -132,8 +132,9 @@ export function ReceiptImportScreen({ shared }: { shared: boolean }) {
   /** Zeile einem eigenen Produkt zuordnen: Name und Packungsgröße kommen dann vom Produkt */
   const assign = (i: number, p?: MyProduct) => {
     if (!p) return update(i, { productId: undefined });
+    // „2 × 90 g“: der Bon zählt das Pack (180 g) – die Speisekammer macht daraus 2 geschlossene 90 g
     const pack = p.packageAmount && rows[i].line.weightKg === undefined
-      ? { amountText: String(p.packageAmount).replace('.', ','), unit: p.packageUnit ?? 'g' }
+      ? { amountText: String(boughtAmountOf(p)).replace('.', ','), unit: p.packageUnit ?? 'g' }
       : {};
     update(i, { productId: p.id, name: p.name, ...pack });
   };
@@ -279,14 +280,16 @@ export function ReceiptImportScreen({ shared }: { shared: boolean }) {
                   const sizes = p ? packSizesOf(p) : [];
                   if (sizes.length < 2) return null;
                   const unit = p!.packageUnit ?? 'g';
+                  const mult = p!.packageCount ?? 1;
                   return (
                     <div className="chips bonrow__sizes" role="group" aria-label="Packungsgröße">
-                      {sizes.map((n) => {
+                      {sizes.map((single) => {
+                        const n = single * mult;
                         const on = parseAmount(r.amountText) === n && (r.unit ?? 'g') === unit;
                         return (
                           <button key={n} type="button" className={`chip chip--sm${on ? ' is-on' : ''}`} aria-pressed={on}
                             onClick={() => update(i, { amountText: String(n).replace('.', ','), unit })}>
-                            {formatAmount(n, unit)} {unit}
+                            {mult > 1 ? `${mult} × ${formatAmount(single, unit)}` : formatAmount(n, unit)} {unit}
                           </button>
                         );
                       })}

@@ -123,6 +123,11 @@ describe('Preise und Packungsgrößen vom Kassenbon und aus „Meine Produkte“
     ]);
     expect(productPrices([mozzarella])).toEqual([]); // ohne Preis nichts
   });
+
+  it('Mehrfachpack „2 × 90 g“: der Preis gilt fürs ganze Pack, gerechnet wird mit 180 g (Julia)', () => {
+    const [entry] = productPrices([{ ...mozzarella, packageAmount: 90, packageCount: 2, packagePrice: 3.6 }]);
+    expect(entry.perUnit).toBeCloseTo(0.02, 10); // 3,60 € / 180 g – ohne „Stück im Pack“ wären es 0,04 €/g
+  });
 });
 
 describe('Bon-Artikel einem eigenen Produkt zuordnen', () => {

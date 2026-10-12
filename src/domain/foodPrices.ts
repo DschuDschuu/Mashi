@@ -76,9 +76,10 @@ export function foodPricePoints(history: readonly PriceEntry[], purchases: reado
 export const SIZE_DASHES: readonly (string | undefined)[] = [undefined, '6 4', '0.5 4', '8 3 0.5 3', '2 2'];
 
 /** Hauptgröße einer Sorte = ihre gespeicherte Packungsgröße („500 g“) – ihre Linie ist durchgezogen */
-export const mainSizeOf = (products: readonly { id: string; packageAmount?: number; packageUnit?: string }[]) => (sortId: string): string | undefined => {
+export const mainSizeOf = (products: readonly { id: string; packageAmount?: number; packageCount?: number; packageUnit?: string }[]) => (sortId: string): string | undefined => {
   const p = products.find((x) => x.id === sortId);
-  return p?.packageAmount && p.packageUnit !== 'Stück' ? `${p.packageAmount} ${p.packageUnit ?? 'g'}` : undefined;
+  // beim Bon zählt, was ein Kauf bringt: „2 × 90 g“ steht dort als 180 g
+  return p?.packageAmount && p.packageUnit !== 'Stück' ? `${p.packageAmount * (p.packageCount ?? 1)} ${p.packageUnit ?? 'g'}` : undefined;
 };
 
 /**

@@ -454,7 +454,7 @@ function AddForm({ onDone }: { onDone: () => void }) {
           onKeyDown={(e) => e.key === 'Enter' && submit()} />
       </label>
       <AmountFields amount={amount} unit={unit} onAmount={setAmount} onUnit={(u) => { setUnit(u); setUnitTouched(true); }} />
-      {packHint && <p className="small muted">Packung à {packHint} – aus „Meine Lebensmittel“</p>}
+      {packHint && <p className="small muted">Packung à {packHint}{chosen?.packageCount ? ` (${chosen.packageCount} Stück im Pack)` : ''} – aus „Meine Lebensmittel“</p>}
       {/* vorgeschlagene Sorte (nur eine da) antippen = bestätigen, nicht abwählen (Julia: „Chip wird deaktiviert“) */}
       <SortPicker options={options} value={chosen?.id} onChange={(id) => setProduct(id ? products.find((p) => p.id === id) ?? null : product === undefined ? chosen : null)}
         onOther={() => { setProduct(null); setOtherBrand(true); }} />

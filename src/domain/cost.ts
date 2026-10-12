@@ -1,5 +1,5 @@
 import { keyOfName, resolveIngredient } from './mealplan';
-import type { MyProduct } from './nutrition/myProducts';
+import { boughtAmountOf, type MyProduct } from './nutrition/myProducts';
 import type { FoodTable } from './nutrition/types';
 import type { RecipeContent } from './types';
 
@@ -29,13 +29,13 @@ export interface Cost {
   items: { ingredientId: string; name: string; cost: number }[];
 }
 
-/** Preise aus „Meine Produkte“: Preis je Packung ÷ Packungsgröße. */
+/** Preise aus „Meine Produkte“: Preis je Packung ÷ Packungsgröße (bei „2 × 90 g“: der Preis fürs Pack ÷ 180 g). */
 export function productPrices(products: MyProduct[]): PriceEntry[] {
   return products
     .filter((p) => p.packagePrice !== undefined && p.packageAmount)
     .map((p) => ({
       name: p.name,
-      perUnit: p.packagePrice! / p.packageAmount!,
+      perUnit: p.packagePrice! / boughtAmountOf(p)!,
       unit: p.packageUnit === 'Stück' ? 'Stück' : 'g',
       date: p.updatedAt,
       productId: p.id,

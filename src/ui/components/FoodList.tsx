@@ -5,7 +5,7 @@ import { buildFoodList, findFoodRow, matchesFilter, type FoodFilter, type FoodRo
 import { guessMatch, normalizeName, PROVIDER } from '../../domain/nutrition/localFoods';
 import { estimateDays, FOREVER, MAX_SHELF_DAYS, setShelfDays } from '../../domain/shelfLife';
 import { adoptCandidates } from '../../domain/adoptFoods';
-import { brandOf, fillOrAdd, productLabel, sharedOf, valuesOf, withShared, type MyProduct, type SharedMatch } from '../../domain/nutrition/myProducts';
+import { brandOf, fillOrAdd, packText, productLabel, sharedOf, valuesOf, withShared, type MyProduct, type SharedMatch } from '../../domain/nutrition/myProducts';
 import { groupByCategory } from '../../domain/categories';
 import { useCategoryOf } from '../useCategory';
 import { CategoryPicker } from './CategoryPicker';
@@ -330,7 +330,7 @@ function FoodLine({ row, open, onToggle, products, onTouch }: {
               <LastPurchase sort name={row.ingredient} title={title} productIds={[p.id]} />
               {/* gekauft: Größe und Preis stehen schon bei „Zuletzt gekauft“ (Julia) – sonst die eingetragene Packung */}
               {p.packageAmount && !purchasesOf(pantry.bons, (l) => l.productId === p.id).length && (
-                <span className="small muted">Packung {fmt(p.packageAmount)} {p.packageUnit ?? 'g'}{p.packagePrice !== undefined && <> · {euro(p.packagePrice)}</>}</span>
+                <span className="small muted">Packung {packText(p, fmt(p.packageAmount))}{p.packagePrice !== undefined && <> · {euro(p.packagePrice)}</>}</span>
               )}
             </div>
           ))}

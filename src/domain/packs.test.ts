@@ -355,3 +355,15 @@ describe('Menge von Hand ändern: weniger = angebrochen, außer ganze Packungen 
     expect(changeAmount([base({ amount: 800, unit: 'g', frozenAt: NOW })], 'a', 400, NOW)[0].openedAt).toBeUndefined();
   });
 });
+
+describe('Mehrfachpack „2 × 90 g“ in der Speisekammer (Julia: jede 90 g bleibt einzeln zu)', () => {
+  const mozz = { id: 'pz', packageAmount: 90, packageCount: 2, packageUnit: 'g' as const };
+  const table = { ...T, matchName: (n: string) => (n === 'Mozzarella Mini' ? { food: { ref: { provider: 'mine', foodId: 'pz' }, name: 'Mozzarella Mini', per100g: { kcal: 240, protein: 18, carbs: 1, fat: 18 } }, quality: 'exact' as const } : T.matchName(n)) };
+
+  it('ein Kauf = 180 g auf dem Bon → 2 geschlossene Packungen à 90 g, jede einzeln anbrechbar', () => {
+    const items = attachPacks([{ id: 'm', name: 'Mozzarella Mini', amount: 180, unit: 'g', addedAt: NOW }], table, [mozz], NOW)!;
+    expect(items.map(amountLabel)).toEqual(['2 × 90 g']);
+    // eine anbrechen: eine bleibt zu, eine ist offen
+    expect(openItem(items, 'm', NOW, id).map(amountLabel)).toEqual(['1 × 90 g', '90 g offen']);
+  });
+});

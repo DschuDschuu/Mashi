@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { BonLine, Purchase } from './bons';
 import type { PriceEntry } from './cost';
-import { foodPricePoints, lastBySize, overviewEntries, seriesKeyOf, sizeRanks } from './foodPrices';
+import { foodPricePoints, lastBySize, mainSizeOf, overviewEntries, seriesKeyOf, sizeRanks } from './foodPrices';
 import { foodTrends } from './priceHistory';
 
 const buy = (date: string, line: Partial<BonLine>): Purchase => ({ bonId: `b-${date}`, index: 0, date, line: { bon: 'Haehnchen', count: 1, name: 'Hähnchen', ...line } });
@@ -67,6 +67,12 @@ describe('Preis-Diagramm eines Lebensmittels (Julia)', () => {
     expect(Object.fromEntries(ranks)).toEqual({ 'leicht|1000 g': 0, 'leicht|250 g': 1, 'leicht|400 g': 2, 'leicht|?': 3, 'normal|': 0 });
     // ohne gespeicherte Größe: die meistgekaufte ist die Hauptgröße
     expect(sizeRanks(pts, () => undefined).get('leicht|250 g')).toBe(0);
+  });
+
+  it('Mehrfachpack: Hauptgröße ist das, was ein Kauf bringt – „2 × 90 g“ steht auf dem Bon als 180 g (Julia)', () => {
+    const products = [{ id: 'mozz', packageAmount: 90, packageCount: 2, packageUnit: 'g' }, { id: 'einzeln', packageAmount: 90, packageUnit: 'g' }];
+    expect(mainSizeOf(products)('mozz')).toBe('180 g');
+    expect(mainSizeOf(products)('einzeln')).toBe('90 g');
   });
 });
 

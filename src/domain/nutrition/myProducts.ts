@@ -36,6 +36,11 @@ export interface MyProduct {
   packageUnit?: 'g' | 'ml' | 'Stück';
   /** weitere Packungsgrößen derselben Sorte (Julia: Hähnchen gibt es in mehreren Größen) – gleiche Einheit */
   packageSizes?: number[];
+  /**
+   * Stück im Pack (Julia: „2 × 90 g“ gibt es nur so zu kaufen, jede 90 g bleibt einzeln zu): ganze Zahl ab 2. Die Packungsgröße
+   * ist dann die EINZELpackung; gekauft wird `packageCount` davon – der Preis gilt fürs ganze Pack, der Bon bringt 2 × 90 g in die Speisekammer.
+   */
+  packageCount?: number;
   /** Preis je Packung in Euro (von Hand; Preise vom Kassenbon kommen automatisch) */
   packagePrice?: number;
   /** Barcode (EAN), falls per Scan angelegt – erkennt das Produkt beim nächsten Scan wieder */
@@ -122,6 +127,14 @@ export function withShared(p: MyProduct, s: SharedMatch, now = new Date().toISOS
 /** Alle Packungsgrößen einer Sorte – die erste ist die übliche (packageAmount) */
 export const packSizesOf = (p: Pick<MyProduct, 'packageAmount' | 'packageSizes'>): number[] =>
   [...new Set([p.packageAmount, ...(p.packageSizes ?? [])].filter((n): n is number => !!n && n > 0))];
+
+/** Was ein Kauf auf einmal bringt: „2 × 90 g“ → 180 (ohne Pack = die Packungsgröße selbst) */
+export const boughtAmountOf = (p: Pick<MyProduct, 'packageAmount' | 'packageCount'>): number | undefined =>
+  p.packageAmount ? p.packageAmount * (p.packageCount ?? 1) : undefined;
+
+/** „2 × 90 g“ bzw. „90 g“ – die Packung so, wie man sie kauft (Zahl schon formatiert übergeben) */
+export const packText = (p: Pick<MyProduct, 'packageCount' | 'packageUnit'>, amountText: string): string =>
+  `${p.packageCount ? `${p.packageCount} × ` : ''}${amountText} ${p.packageUnit ?? 'g'}`;
 
 /** Für Listen und Auswahl: „Pesto verde · K-Classic“, „Rinderhack · leicht · K-Classic“ */
 export const productLabel = (p: Pick<MyProduct, 'name' | 'brand' | 'detail'>): string =>
@@ -336,6 +349,7 @@ export function isValidProduct(v: unknown): v is MyProduct {
     && (p.packagePrice === undefined || isNum(p.packagePrice))
     && (p.packageUnit === undefined || ['g', 'ml', 'Stück'].includes(p.packageUnit as string))
     && (p.packageSizes === undefined || (Array.isArray(p.packageSizes) && p.packageSizes.every(isNum)))
+    && (p.packageCount === undefined || (isNum(p.packageCount) && Number.isInteger(p.packageCount) && p.packageCount >= 2))
     && (p.ean === undefined || typeof p.ean === 'string')
     && (p.shelfDays === undefined || isNum(p.shelfDays))
     && (p.brand === undefined || typeof p.brand === 'string')

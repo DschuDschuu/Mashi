@@ -70,6 +70,8 @@ export function ProductForm({ initial, onSave, onCancel, shared, afterName, name
   const [packAmount, setPackAmount] = useState(toField(initial?.packageAmount));
   const [packUnit, setPackUnit] = useState<'g' | 'ml' | 'Stück'>(initial?.packageUnit ?? 'g');
   const [packPrice, setPackPrice] = useState(toField(initial?.packagePrice));
+  /** Stück im Pack („2 × 90 g“, nur so zu kaufen) – leer = einzelne Packung */
+  const [packCount, setPackCount] = useState(toField(initial?.packageCount));
   /** weitere Größen als Liste („1000, 1400“) */
   /** weitere Größen derselben Sorte – je eine Zeile (Julia: statt „1000; 1400“ in einem Feld) */
   const [moreSizes, setMoreSizes] = useState<string[]>((initial?.packageSizes ?? []).map((n) => toField(n)));
@@ -101,6 +103,10 @@ export function ProductForm({ initial, onSave, onCancel, shared, afterName, name
     const amount = parseNum(packAmount);
     const price = parseNum(packPrice);
     if (price !== undefined && !amount) return setError('Für den Preis braucht Mashi die Packungsgröße.');
+    // „Stück im Pack“ nur bei g/ml – bei „Stück“ ist die Packung selbst schon die Zählung
+    const count = packUnit === 'Stück' ? undefined : parseNum(packCount);
+    if (packUnit !== 'Stück' && packCount.trim() && (!count || !Number.isInteger(count) || count < 2)) return setError('„Stück im Pack“ bitte als ganze Zahl ab 2, z. B. 2 – oder leer lassen.');
+    if (count && !amount) return setError('Für „Stück im Pack“ braucht Mashi zuerst die Packungsgröße (eines Stücks).');
     // getrennt mit „;“, Leerzeichen oder „, “ – ein Komma ohne Leerzeichen ist das Dezimalkomma (1,5)
     const typed = moreSizes.filter((x) => x.trim());
     if (typed.some((x) => !(parseNum(x)! > 0))) return setError('Weitere Größe bitte als Zahl, z. B. 1000 – oder die Zeile entfernen.');
@@ -124,6 +130,7 @@ export function ProductForm({ initial, onSave, onCancel, shared, afterName, name
       ...(ean ? { ean } : {}),
       ...(amount ? { packageAmount: amount, packageUnit: packUnit } : {}),
       ...(amount && sizes.length ? { packageSizes: [...new Set(sizes)] } : {}),
+      ...(amount && count ? { packageCount: count } : {}),
       ...(amount && price !== undefined ? { packagePrice: price } : {}),
       // Sorte: die Haltbarkeit kommt aus der Kachel (gemeinsam), siehe withShared
       ...(sortOnly
@@ -309,6 +316,13 @@ export function ProductForm({ initial, onSave, onCancel, shared, afterName, name
               </label>
             )}
           </div>
+          {/* nur als Mehrfachpack zu kaufen (Julia: 2 × 90 g – jede 90 g bleibt einzeln zu) */}
+          {parseNum(packAmount) && packUnit !== 'Stück' ? (
+            <label className="field"><span>Stück im Pack (optional)</span>
+              <input inputMode="numeric" value={packCount} onChange={(e) => setPackCount(e.target.value)} placeholder="z. B. 2" />
+              <small className="muted">Nur wenn es das nur im Mehrfachpack gibt: die Größe oben ist EIN Stück, der Preis gilt fürs ganze Pack.</small>
+            </label>
+          ) : null}
           {/* je weitere Größe eine Zeile (Julia: Hähnchen gibt es in 400 g und 1 kg) – gleiche Einheit wie oben */}
           {moreSizes.map((x, i) => (
             <div key={i} className="product-form__size">
