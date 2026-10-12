@@ -8,7 +8,7 @@ import { asCooked, formatAmount, formatQuantity, formatUnitAmount, scaleIngredie
 import { orderByUse } from '../../domain/stepIngredients';
 import type { Ingredient } from '../../domain/types';
 import { cookParts, markCooked, setPlanAmounts, useFoodTable, usePantry, usePlan, useRecipe, useRecipes } from '../../data/store';
-import { doneParts, forParts, partLabel, partsOf } from '../../domain/parts';
+import { doneParts, forParts, partLabel, partsOf, REST } from '../../domain/parts';
 import { goBack, navigate } from '../../router';
 import { Icon } from '../components/Icon';
 import { StepIngredients } from '../components/StepIngredients';
@@ -18,6 +18,7 @@ import { useMediaQuery } from '../useMediaQuery';
 import { DishNutrition } from '../components/DishNutrition';
 import { pickFor } from '../../domain/nutrition/variants';
 import { choicesFor } from '../useNutrition';
+import { useSheet } from '../useSheet';
 import { amountsText, stockText, untilLabel, UseMoreSheet } from '../components/UseMoreSheet';
 import { newId } from '../../domain/recipe';
 import { byUrgency, isDone, isRunning, newlyDone, pauseTimer, remainingOf, removeTimer, resumeTimer, startTimer, type CookTimer } from '../../domain/timers';
@@ -47,6 +48,8 @@ export function CookModeScreen({ id, servings, variants }: { id: string; serving
   const recipes = useRecipes();
   /** Rezept-Teile, die du heute kochst (Julia: „Sauce gestern, Nudeln und Fleisch heute“) – null = alle noch nicht fertigen */
   const [chosen, setChosen] = useState<string[] | null>(null);
+  /** Dialog „Was kochst du heute?“ beim Start – einmal je Besuch, solange noch mindestens zwei Teile offen sind (Julia: Mashi erkennt Vorgekochtes selbst) */
+  const [askParts, setAskParts] = useState(true);
   const done = useMemo(() => (recipe ? doneParts(pantry.items, recipe.id) : []), [recipe, pantry.items]);
   const today = useMemo(() => {
     if (!recipe) return [];
@@ -123,6 +126,15 @@ export function CookModeScreen({ id, servings, variants }: { id: string; serving
   };
   // Sorte: im Rezept gewählt – sonst die vom Plan – sonst Vorschlag (eine im Vorrat = diese)
   const own = variants ?? plan.items.find((i) => i.recipeId === recipe.id)?.variants;
+  /**
+   * „Was kochst du heute?“ (Julia): Was schon gekocht ist, erkennt Mashi an der Speisekammer – gewählt wird nur unter den
+   * offenen Teilen. Alles Offene heute = wie ohne Auswahl (null), sonst genau die gewählten Teile.
+   */
+  const startParts = (heute: string[]) => {
+    setAskParts(false);
+    setChosen(heute.length && heute.length < open.length ? heute : null);
+    setStep(0);
+  };
   const s = steps[Math.min(step, steps.length - 1)];
   const last = step >= steps.length - 1;
   const ingredients = base.map((i) => (i.id in amounts ? { ...i, amount: amounts[i.id] } : i));
@@ -195,6 +207,8 @@ export function CookModeScreen({ id, servings, variants }: { id: string; serving
           </button>
         )}
       </header>
+      {/* Julia: was schon in der Speisekammer steht, erkennt Mashi selbst – gefragt wird nur nach den offenen Teilen; bleibt eins übrig, wird das gekocht */}
+      {askParts && open.length > 1 && <PartsAskSheet parts={open} done={done} onDone={startParts} />}
       {/* Julia: welche Teile heute – fertige (Vorgekocht) stehen mit Haken da */}
       {parts.length > 0 && (
         <div className="cook__parts" role="group" aria-label="Was kochst du heute?">
@@ -420,6 +434,43 @@ function useWakeLock() {
       void lock?.release();
     };
   }, []);
+}
+
+/**
+ * „Was kochst du heute?“ (Julia): die Situationen als große Knöpfe – „Alles kochen“ und je Teil „Nur Sauce kochen“
+ * (das Übrige kommt später). Gefragt wird nur nach den offenen Teilen: Vorgekochtes erkennt Mashi in der Speisekammer
+ * (kein „schon gekocht“-Knopf); bleibt nur eins offen, startet der Kochmodus gleich dafür. Schließen ohne Wahl = alles kochen.
+ */
+function PartsAskSheet({ parts, done, onDone }: { parts: string[]; done: string[]; onDone: (heute: string[]) => void }) {
+  const ref = useSheet(() => onDone(parts));
+  const names = (list: string[]) => list.map(partLabel).join(' · ');
+  // Ist noch nichts gekocht, gibt es „Nur X kochen“ für jedes Teil außer „Frisch“ – das Frische ist das, was übrig bleibt.
+  // Ist schon etwas fertig, stehen die übrigen Teile alle einzeln zur Wahl, auch „Frisch“.
+  const single = done.length ? parts : parts.filter((p) => p !== REST);
+  const choices: { key: string; title: string; text: string; heute: string[]; primary?: boolean }[] = [
+    { key: 'alles', title: 'Alles kochen', text: names(parts), heute: parts, primary: true },
+    ...single.map((p) => ({
+      key: `nur-${p}`, title: `Nur ${partLabel(p)} kochen`,
+      text: `${names(parts.filter((x) => x !== p))} kochst du später`, heute: [p],
+    })),
+  ];
+  return (
+    <div className="sheet-backdrop" onClick={() => onDone(parts)}>
+      <div className="sheet parts-ask" role="dialog" aria-modal="true" aria-label="Was kochst du heute?" onClick={(e) => e.stopPropagation()} ref={ref}>
+        <div className="sheet__grip" />
+        <h2 className="sheet__title">Was kochst du heute?</h2>
+        {done.length > 0 && <p className="small muted">Schon gekocht und in der Speisekammer: {names(done)}</p>}
+        <div className="parts-ask__list">
+          {choices.map((o) => (
+            <button key={o.key} type="button" className={`parts-ask__choice${o.primary ? ' is-primary' : ''}`} onClick={() => onDone(o.heute)}>
+              <strong>{o.title}</strong>
+              <small>{o.text}</small>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 /**

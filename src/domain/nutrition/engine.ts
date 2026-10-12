@@ -39,14 +39,20 @@ export function computeNutrition(content: RecipeContent, table: FoodTable, pick:
 
   const counted = items.filter((i) => i.status !== 'ignored');
   const accuracy = rateAccuracy(counted);
-  if (accuracy === 'nicht_verfuegbar') return { accuracy, total: null, perServing: null, items };
 
   const contributing = counted.filter((i) => i.food && i.grams !== undefined && (i.status === 'exact' || i.status === 'approx'));
   const total = sumNutrients(contributing.map((i) => ({ per100g: i.food!.per100g, grams: i.grams! })));
-  // Anteil je Zutat pro Portion – zeigt, welche Zutat am meisten ausmacht
+  // Anteil je Zutat pro Portion – zeigt, welche Zutat am meisten ausmacht (auch wenn das Ganze „nicht verfügbar“ ist)
   for (const i of contributing) {
     i.perServing = divide(sumNutrients([{ per100g: i.food!.per100g, grams: i.grams! }]), content.servings);
     i.gramsPerServing = i.grams! / content.servings;
+  }
+  if (accuracy === 'nicht_verfuegbar') {
+    // kein Gesamtwert – aber was bekannt ist, wird als Mindestwert gezeigt statt gar nichts
+    return {
+      accuracy, total: null, perServing: null, items,
+      ...(contributing.length ? { partial: { perServing: divide(total, content.servings), known: contributing.length, of: counted.length } } : {}),
+    };
   }
   const range = rangeOf(total, contributing);
   return { accuracy, total, perServing: divide(total, content.servings), items, ...(range ? { range } : {}) };

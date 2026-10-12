@@ -22,3 +22,28 @@ describe('Anteil je Zutat', () => {
     expect(n.items[2].perServing).toBeUndefined(); // Salz zählt nicht
   });
 });
+
+describe('Zu viele unbekannte Zutaten: das Bekannte trotzdem zeigen (Julia)', () => {
+  const unknown = (id: string) => ({ id, name: `Zzqx-Testzutat ${id}`, amount: 100, unit: 'g' as const });
+  const n = computeNutrition(content([
+    { id: 'a', name: 'Spaghetti', amount: 200, unit: 'g' },
+    unknown('1'), unknown('2'), unknown('3'),
+  ]), localFoodTable);
+
+  it('kein Gesamtwert (wie bisher), aber ein Mindestwert aus den bekannten Zutaten', () => {
+    expect(n.accuracy).toBe('nicht_verfuegbar');
+    expect(n.perServing).toBeNull();
+    expect(n.partial).toMatchObject({ known: 1, of: 4 });
+    // 200 g Spaghetti auf 2 Portionen = 100 g je Portion
+    expect(n.partial!.perServing.kcal).toBeCloseTo(localFoodTable.matchName('Spaghetti')!.food.per100g.kcal);
+  });
+
+  it('die bekannte Zutat hat ihren Anteil je Portion, die unbekannten keinen', () => {
+    expect(n.items[0].perServing!.kcal).toBeCloseTo(n.partial!.perServing.kcal);
+    expect(n.items.slice(1).every((i) => i.perServing === undefined)).toBe(true);
+  });
+
+  it('ist gar nichts bekannt: kein Mindestwert', () => {
+    expect(computeNutrition(content([unknown('1'), unknown('2')]), localFoodTable).partial).toBeUndefined();
+  });
+});

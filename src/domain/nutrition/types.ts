@@ -110,6 +110,11 @@ export interface NutritionResult {
   total: Nutrients | null;
   perServing: Nutrients | null;
   items: IngredientNutrition[];
+  /**
+   * Zu viele Zutaten unbekannt (accuracy = 'nicht_verfuegbar'), aber einige bekannt (Julia: „die Sachen, wo bekannt,
+   * trotzdem anzeigen“): ihre Summe pro Portion – ein Mindestwert, kein Gesamtwert. Dann ist perServing weiter null.
+   */
+  partial?: { perServing: Nutrients; known: number; of: number };
   /** gesamt: kleinster und größter Wert je nach Sorte – nur wenn Zutaten mehrere Sorten haben */
   range?: { kcal: [number, number]; protein: [number, number] };
 }

@@ -66,6 +66,7 @@ function NavIcon({ name }: { name: IconName }) {
   );
 }
 
+/** text = nur der Tooltip – die Zeilen sind flach (Julia: brauchten zu viel Platz), der Titel sagt es schon */
 type Option = { path: string; icon: IconName; title: string; text: string; tint: string };
 const OPTIONS: Option[] = [
   { path: '/neu/ki', icon: 'sparkles', title: 'Mit KI erstellen', text: 'Aus deinen Zutaten und Wünschen wird eine Idee zum Ausprobieren.', tint: 'mint' },
@@ -76,18 +77,17 @@ const OPTIONS: Option[] = [
 const PANTRY_OPTIONS: Option[] = [
   { path: '/speisekammer/bon', icon: 'clipboard', title: 'Kassenbon importieren', text: 'Screenshot aus Lidl Plus – Mashi trägt alles ein.', tint: 'butter' },
   { path: '/speisekammer?neu=1', icon: 'archive', title: 'Vorrat eintragen', text: 'Etwas von Hand in die Speisekammer legen.', tint: 'sage' },
+  // das Feld oben auf der Liste ist gleich bereit (siehe ShoppingScreen)
+  { path: '/einkauf?neu=1', icon: 'cart', title: 'Zur Einkaufsliste hinzufügen', text: 'Etwas aufschreiben, das du besorgen willst.', tint: 'peach' },
 ];
 
 export function CreateSheet({ onClose }: { onClose: () => void }) {
   const ref = useSheet(onClose);
   const option = (o: Option) => (
-    <button key={o.path} className={`option tint-${o.tint}`} onClick={() => { onClose(); navigate(o.path); }}>
-      <span className="option__icon"><Icon name={o.icon} size={24} /></span>
-      <span className="option__text">
-        <strong>{o.title}</strong>
-        <small>{o.text}</small>
-      </span>
-      <Icon name="chevron" size={18} />
+    <button key={o.path} className={`option tint-${o.tint}`} title={o.text} onClick={() => { onClose(); navigate(o.path); }}>
+      <span className="option__icon"><Icon name={o.icon} size={20} /></span>
+      <span className="option__text"><strong>{o.title}</strong></span>
+      <Icon name="chevron" size={16} />
     </button>
   );
   return (
@@ -96,7 +96,7 @@ export function CreateSheet({ onClose }: { onClose: () => void }) {
         <div className="sheet__grip" />
         <h2 className="sheet__title">Neues Rezept</h2>
         <div className="sheet__options">{OPTIONS.map(option)}</div>
-        <h2 className="sheet__title sheet__title--sub">Speisekammer</h2>
+        <h2 className="sheet__title sheet__title--sub">Speisekammer & Einkauf</h2>
         <div className="sheet__options">{PANTRY_OPTIONS.map(option)}</div>
       </div>
     </div>

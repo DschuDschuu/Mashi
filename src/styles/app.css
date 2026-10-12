@@ -269,11 +269,11 @@ p { margin: 0; }
 .sheet { max-height: 90dvh; overflow-y: auto; overscroll-behavior: contain; width: 100%; max-width: 560px; background: var(--bg); border-radius: 28px 28px 0 0; padding: 10px var(--gutter) calc(24px + var(--safe-b)); animation: rise 0.22s ease-out; }
 .sheet__grip { width: 40px; height: 5px; border-radius: 3px; background: var(--line); margin: 0 auto 14px; }
 .sheet__title { font-size: 1.15rem; margin-bottom: 14px; }
-.sheet__options { display: flex; flex-direction: column; gap: 10px; }
-.option { display: flex; align-items: center; gap: 14px; padding: 16px; border-radius: var(--r); text-align: left; color: var(--ink-2); }
-.option__icon { width: 46px; height: 46px; border-radius: 14px; background: rgb(255 255 255 / 0.75); display: grid; place-items: center; color: var(--art); flex: none; }
+.sheet__options { display: flex; flex-direction: column; gap: 6px; }
+/* flach (Julia): eine Zeile je Punkt – Symbol, Titel, Pfeil */
+.option { display: flex; align-items: center; gap: 12px; padding: 7px 14px 7px 8px; min-height: 48px; border-radius: var(--r); text-align: left; color: var(--ink-2); }
+.option__icon { width: 34px; height: 34px; border-radius: 11px; background: rgb(255 255 255 / 0.75); display: grid; place-items: center; color: var(--art); flex: none; }
 .option__text { flex: 1; display: flex; flex-direction: column; color: var(--ink); }
-.option__text small { color: var(--ink-2); font-size: 0.82rem; line-height: 1.35; }
 @keyframes fade { from { opacity: 0; } }
 @keyframes rise { from { transform: translateY(40px); opacity: 0.4; } }
 @media (prefers-reduced-motion: reduce) { .sheet, .sheet-backdrop { animation: none; } }
@@ -1283,18 +1283,24 @@ p { margin: 0; }
 /* Nährwerte je Zutat – immer offen, mit Anteil-Balken */
 .perz { display: flex; flex-direction: column; gap: 10px; margin-top: 6px; }
 .perz__title { font-size: 1rem; margin: 0; }
-.perz ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
-.perz__item { display: flex; flex-direction: column; gap: 3px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+.perz ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.perz__item { display: flex; flex-direction: column; gap: 2px; padding-bottom: 7px; border-bottom: 1px solid var(--line); }
 .perz__item:last-child { border-bottom: 0; }
 .perz__head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
 .perz__name { font-weight: 600; min-width: 0; }
 .perz__kcal { flex: none; font-weight: 700; font-variant-numeric: tabular-nums; }
-.perz__barrow { display: flex; align-items: center; gap: 8px; }
-.perz__bar { flex: 1; height: 6px; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
-.perz__bar > span { display: block; height: 100%; border-radius: 3px; background: var(--primary); }
-.perz__share { flex: none; width: 3.2em; text-align: right; font-size: 0.75rem; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+/* flach (Julia): Zeile 1 Name · Anteil · kcal, dünner Balken, Zeile 2 Makros links und „nicht mitzählen“ rechts */
+.perz__nums { flex: none; display: flex; align-items: baseline; gap: 8px; }
+.perz__bar { display: block; height: 3px; border-radius: 2px; background: var(--surface-2); overflow: hidden; }
+.perz__bar > span { display: block; height: 100%; border-radius: 2px; background: var(--primary); }
+.perz__share { font-size: 0.75rem; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.perz__foot { display: flex; justify-content: space-between; align-items: baseline; gap: 4px 10px; flex-wrap: wrap; }
+.perz__foot .matchlist__toggle { margin-left: auto; min-height: 0; padding: 0; line-height: 1.3; }
+.perz__sorts { align-self: flex-start; display: inline-flex; align-items: center; gap: 4px; padding: 0; border: 0; background: none; font: inherit; font-size: 0.78rem; color: var(--ink-2); }
+.perz__sorts svg { transform: rotate(90deg); transition: transform 0.15s; }
+.perz__sorts[aria-expanded="true"] svg { transform: rotate(-90deg); }
 .perz__item.is-rest .perz__name { font-weight: 500; color: var(--ink-2); }
-.perz .matchlist__toggle, .perz .matchlist__favs { align-self: flex-start; }
+.perz .matchlist__favs { align-self: flex-start; }
 /* Meldung mit „Rückgängig“: breit, Text oben, Knopf darunter – sonst wirkt beides gequetscht */
 .toast--action { flex-direction: column; align-items: stretch; gap: 0; width: 90%; max-width: 420px; border-radius: 999px; padding: 10px 24px 6px; }
 /* „Rückgängig“ in eigener Zeile, einfach als unterstrichener Link in der Schriftfarbe */
@@ -1686,3 +1692,11 @@ details.cost-line[open] > summary::after { transform: rotate(-90deg); }
 .pantry__dishright > .pantry__qty { max-width: none; padding: 0; }
 .pantry__dishright > .pantry__shelf { text-align: right; flex-basis: auto; }
 .pantry__item--dish > .pantry__chev { padding-top: 12px; }
+
+/* Dialog „Was kochst du heute?“: eine große Zeile je Situation, mit Luft (Julia) */
+.parts-ask__list { display: flex; flex-direction: column; gap: 12px; margin-top: 16px; }
+.parts-ask__choice { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; min-height: 62px; padding: 12px 18px; border-radius: var(--r); background: var(--surface); border: 1.5px solid var(--line); color: var(--ink); text-align: left; }
+.parts-ask__choice strong { font-size: 1.02rem; }
+.parts-ask__choice small { color: var(--ink-2); font-size: 0.82rem; line-height: 1.35; }
+.parts-ask__choice.is-primary { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
+.parts-ask__choice.is-primary small { color: var(--on-primary); opacity: 0.85; }

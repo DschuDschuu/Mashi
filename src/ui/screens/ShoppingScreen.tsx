@@ -4,7 +4,7 @@ import { shoppingList } from '../../domain/restock';
 import { addExtra, clearChecked, removeExtra, toggleBuyAnyway, toggleShoppingItem, useFoodTable, usePantry, usePlan, useProducts, useRecipes } from '../../data/store';
 import { IngredientNames } from '../components/IngredientNames';
 import { toast } from '../toast';
-import { navigate } from '../../router';
+import { navigate, useRoute } from '../../router';
 import { Empty, Section } from '../components/Controls';
 import { Icon } from '../components/Icon';
 import { TopBar } from '../components/TopBar';
@@ -24,6 +24,8 @@ export function ShoppingScreen() {
   const plan = usePlan();
   const pantry = usePantry();
   const [view, setView] = useState<View>('liste');
+  // vom Plus-Menü („Zur Einkaufsliste hinzufügen“): das Feld ist gleich bereit
+  const typeNow = useRoute().query.get('neu') === '1';
   const table = useFoodTable();
   const all = useMemo(() => shoppingList(plan, recipes, table, pantry, products), [plan, recipes, table, pantry, products]);
 
@@ -40,7 +42,7 @@ export function ShoppingScreen() {
     <main className="screen screen--tabbed">
       <TopBar title="Einkaufsliste" backTo="/plan" />
       {/* eigene Einträge: „Spülmittel“, „Backpapier“ – auch ohne Plan */}
-      <AddExtra />
+      <AddExtra autoFocus={typeNow} />
       {all.length === 0 ? (
         <Empty icon="cart">
           <span>
@@ -139,7 +141,7 @@ function ShoppingRow({ item, checked }: { item: ShoppingItem; checked: boolean }
 }
 
 /** „Etwas aufschreiben“ – ein Feld, Vorschläge aus deinen Zutaten, Enter oder ＋ */
-function AddExtra() {
+function AddExtra({ autoFocus = false }: { autoFocus?: boolean }) {
   const [name, setName] = useState('');
   const add = () => {
     const n = name.trim();
@@ -150,7 +152,7 @@ function AddExtra() {
   return (
     <form className="shopping__add" onSubmit={(e) => { e.preventDefault(); add(); }}>
       <IngredientNames />
-      <input value={name} onChange={(e) => setName(e.target.value)} list="ingredient-names" placeholder="Etwas aufschreiben …" aria-label="Eigener Eintrag" />
+      <input value={name} onChange={(e) => setName(e.target.value)} list="ingredient-names" placeholder="Etwas aufschreiben …" aria-label="Eigener Eintrag" autoFocus={autoFocus} />
       <button type="submit" className="iconbtn iconbtn--box" disabled={!name.trim()} aria-label="Auf die Liste"><Icon name="plus" size={20} /></button>
     </form>
   );
