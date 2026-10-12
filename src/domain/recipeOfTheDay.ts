@@ -1,8 +1,5 @@
+import { localDay as dayKey } from './dates';
 import type { Recipe } from './types';
-
-/** „2026-09-24“ in Ortszeit – der Tag wechselt um Mitternacht bei dir, nicht in London. */
-const dayKey = (d: Date) =>
-  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
 /** Einfacher, stabiler Zahlen-Fingerabdruck eines Textes (FNV-1a). */
 function hash(text: string): number {

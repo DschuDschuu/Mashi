@@ -1,7 +1,7 @@
 /// <reference types="pouchdb-core" />
 import PouchDB from 'pouchdb-core';
 import memory from 'pouchdb-adapter-memory';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { PouchRecipeRepository, type RecipeDb } from './pouchRepository';
 import { importProducts, saveProducts, currentProducts, clearChecked, cookParts, setPlanAmounts, addExtra, addPantryItem, dropPriceDay, editBon, setCategory, addToPlan, answerLeftover, applyInventory, clearDoneExtras, deleteRecipe, importPantry, importReceipt, importRecipes, regenerateImage, markCooked, uncookRecipe, clearCooked, createRecipe, currentLeftoverAsk, currentPantry, eatPreparedPortions, freezePantryItem, initStore, thawPantryItem, togglePlanCooked, removeFromPlan, removePantryItem, setFoodStage, setPantryAmount, toggleShoppingItem, updatePantryItem } from './store';
 import { buildShoppingList, keyOfName } from '../domain/mealplan';
@@ -481,5 +481,21 @@ describe('Store: Neuladen im Hintergrund überschreibt keinen frischen Tipp (Cod
     release(); // jetzt kommt der alte Stand an
     await settle();
     expect(currentPantry().items.map((i) => i.name)).toContain('Testmilch');
+  });
+});
+
+describe('Store: Bon ohne Datum um Mitternacht (Code-Review #24)', () => {
+  it('kommt auf den heutigen Kalendertag, nicht auf gestern', async () => {
+    vi.stubEnv('TZ', 'Europe/Berlin');
+    await freshStore('bon-mitternacht');
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-11T22:30:00.000Z')); // 12.10., 0:30 Uhr in Berlin
+    try {
+      importReceipt([{ line: { name: 'Testmilch', count: 1, price: 1.09 }, key: 'testmilch', known: false, skip: false, name: 'Testmilch' }]);
+      expect(currentPantry().bons!.at(-1)!.date.slice(0, 10)).toBe('2026-10-12');
+    } finally {
+      vi.useRealTimers();
+      vi.unstubAllEnvs();
+    }
   });
 });

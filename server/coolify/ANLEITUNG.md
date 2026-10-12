@@ -31,6 +31,23 @@ Domains und Daten bleiben dabei erhalten.
 - **2026-10-02:** Aufträge dürfen jetzt bis 16 000 Zeichen lang sein (vorher 8000), damit lange
   Vorlieben ganz bei der KI ankommen. Bis zum Update kürzt die App die Vorlieben selbst, wenn der
   Server ablehnt – es funktioniert also auch vorher, nur mit gekürzten Vorlieben.
+- **2026-10-12 (Sicherheits-Update, bitte einspielen):** Der KI-Dienst
+  - liest Umlaute, die über zwei Netzwerk-Pakete verteilt ankommen, wieder richtig (vorher „K��se“),
+  - bremst Passwort-Raten: nach 10 falschen Anmeldungen von derselben Adresse 15 Minuten Pause, ohne
+    die Datenbank zu fragen (die Adresse kommt von Traefik über `X-Forwarded-For`),
+  - meldet „Server kurz nicht erreichbar“ (503) statt „falsche Anmeldung“, wenn die CouchDB hängt,
+  - zählt Fehlschläge der KI nicht mehr gegen das Tageslimit und merkt sich Anmeldungen nur noch 1 Minute,
+  - schickt auch bei „zu groß“ und Serverfehlern die CORS-Köpfe (sonst meldete die App nur „offline?“).
+
+  Die CouchDB-Einstellungen in der Compose-Datei kommen jetzt direkt aus `server/couchdb/mashi.ini`
+  (inhaltlich unverändert, nur mit Erklär-Kommentaren). Also wie immer: **Edit Compose File → Inhalt
+  ersetzen → Save → Redeploy.**
+
+  **Optional – Bremse auch am Proxy:** Coolify setzt die Traefik-Labels selbst, darum stehen sie nicht in
+  der Compose-Datei. Wer zusätzlich eine Begrenzung je Absender-Adresse möchte (wie in der manuellen
+  Variante: im Schnitt 50 Anfragen/s, kurzzeitig 200), trägt sie bei beiden Diensten unter
+  **Custom Labels** als Traefik-Middleware ein und hängt sie an deren HTTPS-Router. Nicht zu knapp
+  wählen: der Abgleich schickt kurzzeitig viele Anfragen.
 
 ## Dateien
 

@@ -1,6 +1,7 @@
 // Tests für den KI-Vermittler – ohne Netz: CouchDB und OpenRouter werden nachgestellt.
 import { describe, expect, it } from 'vitest';
-import { corsHeaders, makeHandler, MAX_PROMPT, RateLimiter, SYSTEM_PROMPT } from './ki.mjs';
+import { Readable } from 'node:stream';
+import { clientIp, corsHeaders, FailLimiter, makeHandler, MAX_PROMPT, RateLimiter, readBody, SYSTEM_PROMPT } from './ki.mjs';
 
 const APP = 'https://dschudschuu.github.io';
 const GOOD_AUTH = 'Basic ' + Buffer.from('julia-test:geheim-test').toString('base64');
@@ -125,5 +126,69 @@ describe('Coolify: Wege und Einstellungen', () => {
     expect(calls[0].url).toBe('http://couchdb:5984/_session');
     const old = makeHandler({ fetch, env: { ...env, MASHI_APP_ORIGINS: 'https://alt.example.test' } });
     expect((await ask(old, { origin: 'https://alt.example.test' })).headers['Access-Control-Allow-Origin']).toBe('https://alt.example.test');
+  });
+});
+
+describe('Code-Review #7: Umlaute über Stückgrenzen', () => {
+  it('„Käse“ in zwei Stücken, geteilt mitten im ä → kommt heil an', async () => {
+    const bytes = Buffer.from('{"prompt":"Käse"}', 'utf8');
+    const cut = bytes.indexOf(0xc3) + 1; // zwischen den beiden Bytes von „ä“
+    const read = await readBody(Readable.from([bytes.subarray(0, cut), bytes.subarray(cut)]));
+    expect(JSON.parse(read.body).prompt).toBe('Käse');
+  });
+
+  it('zu groß → tooBig, ohne den Rest zu sammeln', async () => {
+    expect(await readBody(Readable.from([Buffer.alloc(10), Buffer.alloc(10)]), 15)).toEqual({ tooBig: true });
+  });
+});
+
+describe('Code-Review #13: Fehler verständlich, kein Kontingent für Fehlschläge', () => {
+  it('Datenbank nicht erreichbar → 503 statt „falsche Anmeldung“', async () => {
+    const down = async () => { throw new Error('ECONNREFUSED'); };
+    expect((await ask(makeHandler({ fetch: down, env }))).status).toBe(503);
+    const broken = async () => ({ ok: false, status: 500, json: async () => ({}) });
+    expect((await ask(makeHandler({ fetch: broken, env }))).status).toBe(503);
+  });
+
+  it('KI antwortet nicht → kostet kein Kontingent', async () => {
+    let fail = true;
+    const { fetch } = fakeFetch();
+    const flaky = async (url, opts) => (url.endsWith('/chat/completions') && fail ? { ok: false, status: 502, json: async () => ({}) } : fetch(url, opts));
+    const handle = makeHandler({ fetch: flaky, env, limiter: new RateLimiter(1, 1) });
+    expect((await ask(handle)).status).toBe(502);
+    fail = false;
+    expect((await ask(handle)).status).toBe(200); // vorher: 429, weil der Fehlschlag mitgezählt hatte
+  });
+
+  it('CORS-Köpfe gibt es auch für Antworten außerhalb des Ablaufs (413, 500)', () => {
+    const { fetch } = fakeFetch();
+    expect(makeHandler({ fetch, env }).cors(APP)['Access-Control-Allow-Origin']).toBe(APP);
+  });
+});
+
+describe('Code-Review #8: Passwort-Raten wird gebremst', () => {
+  it('nach 10 falschen Anmeldungen von derselben Adresse: Pause, ohne die Datenbank zu fragen', async () => {
+    const { fetch, calls } = fakeFetch();
+    const handle = makeHandler({ fetch, env });
+    const wrong = 'Basic ' + Buffer.from('julia-test:falsch').toString('base64');
+    for (let i = 0; i < 10; i++) expect((await handle({ method: 'POST', path: '/rezept', headers: { authorization: wrong + i, origin: APP }, body: '{}', ip: '203.0.113.7' })).status).toBe(401);
+    const asked = calls.length;
+    const out = await handle({ method: 'POST', path: '/rezept', headers: { authorization: GOOD_AUTH, origin: APP }, body: JSON.stringify({ prompt: 'x' }), ip: '203.0.113.7' });
+    expect(out.status).toBe(429);
+    expect(calls.length).toBe(asked); // CouchDB nicht mehr gefragt
+    // andere Adresse: nicht betroffen
+    expect((await handle({ method: 'POST', path: '/rezept', headers: { authorization: GOOD_AUTH, origin: APP }, body: JSON.stringify({ prompt: 'x' }), ip: '198.51.100.2' })).status).toBe(200);
+  });
+
+  it('ohne Anmeldung („noch nicht verbunden“) zählt nicht als Fehlversuch; nach 15 Minuten wieder frei', () => {
+    const f = new FailLimiter(2, 15 * 60 * 1000);
+    f.fail('a', 0); f.fail('a', 1);
+    expect(f.blocked('a', 2)).toBe(true);
+    expect(f.blocked('a', 15 * 60 * 1000 + 2)).toBe(false);
+  });
+
+  it('echte Adresse aus X-Forwarded-For (Traefik), sonst der direkte Absender', () => {
+    expect(clientIp({ 'x-forwarded-for': '203.0.113.7, 10.0.0.2' }, '10.0.0.2')).toBe('203.0.113.7');
+    expect(clientIp({}, '10.0.0.5')).toBe('10.0.0.5');
   });
 });

@@ -11,27 +11,12 @@ const code = readFileSync(join(here, '..', 'ki', 'ki.mjs'), 'utf8').replace(/\r\
 // Compose/Coolify ersetzen $-Platzhalter überall – auch im eingefügten Code. Dort darf keiner stehen.
 if (/\$[{A-Za-z_]/.test(code)) throw new Error('ki.mjs enthält ein $ vor { oder Buchstabe – Compose würde es ersetzen');
 
-/** Mashi-Einstellungen der CouchDB (wie bisher in Coolify, Herkunft der App eingetragen) */
-const MASHI_INI = `[couchdb]
-single_node = true
-max_document_size = 8000000
-[cluster]
-n = 1
-[chttpd]
-require_valid_user = true
-require_valid_user_except_for_up = true
-enable_cors = true
-[chttpd_auth]
-require_valid_user = true
-[httpd]
-WWW-Authenticate = Basic realm="couchdb"
-[cors]
-origins = https://dschudschuu.github.io, http://localhost:5173
-credentials = true
-methods = GET, PUT, POST, HEAD, DELETE
-headers = accept, authorization, content-type, origin, referer
-max_age = 3600
-`;
+/**
+ * Mashi-Einstellungen der CouchDB – direkt aus server/couchdb/mashi.ini (Code-Review #26). Vorher stand hier eine
+ * Abschrift: wer CORS oder max_document_size in mashi.ini änderte, ließ Coolify still auf dem alten Stand.
+ */
+const MASHI_INI = readFileSync(join(here, '..', 'couchdb', 'mashi.ini'), 'utf8').replace(/\r\n/g, '\n');
+if (/\$[{A-Za-z_]/.test(MASHI_INI)) throw new Error('mashi.ini enthält ein $ vor { oder Buchstabe – Compose würde es ersetzen');
 
 const indent = (text, n) => text.replace(/\n$/, '').split('\n').map((l) => (l ? ' '.repeat(n) + l : '')).join('\n');
 

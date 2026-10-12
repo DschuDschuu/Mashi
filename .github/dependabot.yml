@@ -1,0 +1,8 @@
+# Dependabot schlägt Updates der GitHub Actions vor (feste Kennungen in workflows/deploy.yml) – als Pull Request,
+# einmal im Monat. Gemergt wird nur nach Prüfung (Team-Regel: Quiz vor dem Push). Code-Review #25.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly

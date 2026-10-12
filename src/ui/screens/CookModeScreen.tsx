@@ -31,6 +31,8 @@ export function CookModeScreen({ id, servings, variants }: { id: string; serving
   const [addingTimer, setAddingTimer] = useState(false);
   const [, tick] = useState(0);
   useWakeLock();
+  // den Ton-Kontext beim Verlassen schließen – sonst bleibt je Besuch einer offen (Code-Review #23)
+  useEffect(() => closeAudio, []);
   // Tablet quer: Zutaten dauerhaft als Spalte neben dem Schritt
   const wide = useMediaQuery('(min-width: 900px)');
   /** Mengen „nur dieses Mal“ je Zutat-ID – das Rezept bleibt, wie es ist */
@@ -136,10 +138,16 @@ export function CookModeScreen({ id, servings, variants }: { id: string; serving
     setEditing(null);
   };
 
-  const start = (minutes: number, label: string, forStep?: number) =>
+  // beim Tipp den Ton freischalten – später klingelt der Timer ohne Tipp, das erlaubt iOS nur so (Code-Review #23)
+  const start = (minutes: number, label: string, forStep?: number) => {
+    unlockAudio();
     setTimers((l) => startTimer(l, { id: newId('t'), label, minutes, step: forStep }, Date.now()));
+  };
   const pause = (tid: string) => setTimers((l) => pauseTimer(l, tid, Date.now()));
-  const resume = (tid: string) => setTimers((l) => resumeTimer(l, tid, Date.now()));
+  const resume = (tid: string) => {
+    unlockAudio();
+    setTimers((l) => resumeTimer(l, tid, Date.now()));
+  };
   const drop = (tid: string) => setTimers((l) => removeTimer(l, tid));
 
   const finish = () => {
@@ -414,11 +422,32 @@ function useWakeLock() {
   }, []);
 }
 
+/**
+ * EIN Ton-Kontext für den Kochmodus (Code-Review #23): iOS/Safari spielt nur Ton aus einem Kontext, der bei einem
+ * Tipp angelegt bzw. fortgesetzt wurde – ein neuer Kontext je Alarm (aus dem Timer heraus) blieb dort stumm, und
+ * jeder blieb offen. Vibration gibt es auf dem iPhone nicht; bei Stummschalter ist auch der Ton aus.
+ */
+let audio: AudioContext | null = null;
+function unlockAudio() {
+  try {
+    audio ??= new AudioContext();
+    if (audio.state === 'suspended') void audio.resume();
+  } catch {
+    /* kein Audio verfügbar */
+  }
+}
+function closeAudio() {
+  void audio?.close().catch(() => undefined);
+  audio = null;
+}
+
 /** Kurzer Ton + Vibration, ohne Audiodatei. */
 function ring() {
   navigator.vibrate?.([300, 150, 300, 150, 300]);
   try {
-    const ctx = new AudioContext();
+    unlockAudio(); // ohne vorherigen Tipp (z. B. Desktop) trotzdem versuchen
+    const ctx = audio;
+    if (!ctx) return;
     [0, 0.35, 0.7].forEach((t) => {
       const o = ctx.createOscillator();
       const g = ctx.createGain();

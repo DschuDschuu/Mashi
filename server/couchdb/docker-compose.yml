@@ -44,20 +44,19 @@ services:
       - traefik.http.routers.mashi-db.tls.certresolver=letsencrypt                  # ← Resolver
       - traefik.http.routers.mashi-db.service=mashi-db
       - traefik.http.services.mashi-db.loadbalancer.server.port=5984
-      # Rate-Limit (optional, siehe unten): diese Zeile beim HTTPS-Router einkommentieren
-      # - traefik.http.routers.mashi-db.middlewares=mashi-db-ratelimit
+      # Rate-Limit gegen Passwort-Raten (Code-Review #8) – nur beim HTTPS-Router, siehe unten
+      - traefik.http.routers.mashi-db.middlewares=mashi-db-ratelimit
       # HTTP → HTTPS umleiten
       - traefik.http.routers.mashi-db-http.rule=Host(`${MASHI_DB_HOST}`)
       - traefik.http.routers.mashi-db-http.entrypoints=http                         # ← Entrypoint
       - traefik.http.routers.mashi-db-http.middlewares=mashi-db-to-https
       - traefik.http.middlewares.mashi-db-to-https.redirectscheme.scheme=https
       - traefik.http.middlewares.mashi-db-to-https.redirectscheme.permanent=true
-      # Optional: Schutz gegen Passwort-Raten. Großzügig gewählt, weil der Abgleich
-      # kurzzeitig viele Anfragen schickt. Zum Aktivieren die zwei Zeilen hier UND die
-      # Middleware-Zeile beim HTTPS-Router (mashi-db, oben) einkommentieren – nicht beim
-      # HTTP-Router mashi-db-http, der leitet nur auf HTTPS um.
-      # - traefik.http.middlewares.mashi-db-ratelimit.ratelimit.average=50
-      # - traefik.http.middlewares.mashi-db-ratelimit.ratelimit.burst=200
+      # Schutz gegen Passwort-Raten (je Absender-Adresse). Großzügig gewählt, weil der Abgleich
+      # kurzzeitig viele Anfragen schickt. Gilt für den HTTPS-Router mashi-db (oben) und die KI
+      # (mashi-ki) – nicht für mashi-db-http, der leitet nur auf HTTPS um.
+      - traefik.http.middlewares.mashi-db-ratelimit.ratelimit.average=50
+      - traefik.http.middlewares.mashi-db-ratelimit.ratelimit.burst=200
     # Kein Healthcheck in der manuellen Variante. Möglich wäre er seit mashi.ini
     # require_valid_user_except_for_up (/_up ohne Anmeldung) – siehe ../coolify/docker-compose.yml.
     # Achtung: Traefik nimmt "unhealthy" markierte Container aus dem Routing.
@@ -89,6 +88,7 @@ services:
       - traefik.http.routers.mashi-ki.tls=true
       - traefik.http.routers.mashi-ki.tls.certresolver=letsencrypt                  # ← Resolver
       - traefik.http.routers.mashi-ki.service=mashi-ki
+      - traefik.http.routers.mashi-ki.middlewares=mashi-db-ratelimit
       - traefik.http.services.mashi-ki.loadbalancer.server.port=8080
 
 volumes:

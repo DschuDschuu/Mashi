@@ -58,5 +58,5 @@ Beispieldaten zurücksetzen“ stellt sie wieder her. Lokal testen mit echten Da
 React 19 + TypeScript + Vite, eigenes CSS mit Design-Tokens (keine UI-Bibliothek), Hash-Routing
 (GitHub Pages ohne Umleitungen). Daten lokal in PouchDB (IndexedDB), Abgleich mit CouchDB,
 Konflikte werden feldweise zusammengeführt. Texterkennung mit tesseract.js (lädt beim ersten
-Mal das deutsche Sprachmodell). Die Rechenlogik liegt getrennt in `src/domain/` und ist mit
+Mal das deutsche Sprachmodell – von der eigenen Seite, danach auch offline). Die Rechenlogik liegt getrennt in `src/domain/` und ist mit
 Tests abgesichert.

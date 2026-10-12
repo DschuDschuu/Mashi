@@ -19,20 +19,40 @@ services:
         source: ./mashi.ini
         target: /opt/couchdb/etc/local.d/mashi.ini
         content: |
+          ; Mashi – CouchDB-Einstellungen
+          ; Wird nach /opt/couchdb/etc/local.d/ eingebunden und beim Start gelesen.
+          ; Nach Änderungen: docker compose restart couchdb
+
           [couchdb]
+          ; Ein einzelner Server, kein Cluster. Legt die Systemdatenbanken (_users, _replicator)
+          ; beim ersten Start automatisch an.
           single_node = true
+          ; Rezepte enthalten Fotos als eingebettete Daten (verkleinert, meist < 200 KB).
+          ; 8 MB je Dokument lassen reichlich Luft.
           max_document_size = 8000000
+
           [cluster]
+          ; Einzelserver: jede Datenbank einmal speichern statt der Cluster-Vorgabe von 3 Kopien.
           n = 1
+
           [chttpd]
+          ; Ohne Anmeldung kommt niemand an irgendetwas heran – auch nicht an die Server-Infos.
           require_valid_user = true
+          ; Ausnahme nur /_up (Lebenszeichen, verrät nichts) – für Healthchecks
           require_valid_user_except_for_up = true
           enable_cors = true
+
           [chttpd_auth]
           require_valid_user = true
+
           [httpd]
+          ; Ohne diesen Kopf fragt der Browser bei Fauxton (/_utils) nicht nach Benutzer und Passwort
           WWW-Authenticate = Basic realm="couchdb"
+
           [cors]
+          ; Von welchen Web-Adressen aus die Mashi-App die Datenbank ansprechen darf.
+          ; Nur der Ursprung (ohne Pfad!), also NICHT https://dschudschuu.github.io/mashi
+          ; http://localhost:5173 ist der Entwicklungsserver auf Julias Rechner – kann später raus.
           origins = https://dschudschuu.github.io, http://localhost:5173
           credentials = true
           methods = GET, PUT, POST, HEAD, DELETE
@@ -123,6 +143,61 @@ services:
               this.hits.set(user, list);
               return true;
             }
+            /** die zuletzt gezählte Anfrage zurückgeben – die KI hat nicht geantwortet, das soll kein Kontingent kosten */
+            giveBack(user) {
+              const list = this.hits.get(user);
+              if (list?.length) list.pop();
+            }
+          }
+
+          /**
+           * Falsche Anmeldungen je Herkunft (IP) begrenzen (Code-Review #8): nach zu vielen in kurzer Zeit eine Pause, ohne
+           * die Datenbank überhaupt zu fragen – sonst ließen sich über diesen Dienst Passwörter beliebig oft durchprobieren.
+           */
+          export class FailLimiter {
+            constructor(max = 10, windowMs = 15 * 60 * 1000) {
+              this.max = max;
+              this.windowMs = windowMs;
+              /** @type {Map<string, number[]>} */
+              this.fails = new Map();
+            }
+            recent(ip, now) {
+              return (this.fails.get(ip) ?? []).filter((t) => now - t < this.windowMs);
+            }
+            /** true = Pause (zu viele Fehlversuche) */
+            blocked(ip, now = Date.now()) {
+              return this.recent(ip, now).length >= this.max;
+            }
+            fail(ip, now = Date.now()) {
+              this.fails.set(ip, [...this.recent(ip, now), now]);
+              // nicht unbegrenzt wachsen: abgelaufene Adressen gelegentlich wegräumen
+              if (this.fails.size > 5000) for (const [k] of this.fails) if (!this.recent(k, now).length) this.fails.delete(k);
+            }
+          }
+
+          /** Herkunft der Anfrage: Traefik trägt die echte Adresse in X-Forwarded-For ein (erste Angabe), sonst der direkte Absender */
+          export const clientIp = (headers, remote) => String(headers['x-forwarded-for'] ?? '').split(',')[0].trim() || remote || '?';
+
+          /**
+           * Den ganzen Inhalt einer Anfrage lesen – als Bytes sammeln und erst am Ende als UTF-8 lesen (Code-Review #7):
+           * Stückweise gelesen wurde ein Umlaut, dessen Bytes auf zwei Stücke fielen, zu zwei Ersatzzeichen („K??se“).
+           * Zu groß: der Rest wird nur noch verworfen, damit die Antwort (413 mit CORS) noch ankommt.
+           */
+          export function readBody(req, max = MAX_BODY) {
+            return new Promise((resolve, reject) => {
+              const chunks = [];
+              let size = 0;
+              let tooBig = false;
+              req.on('data', (chunk) => {
+                if (tooBig) return;
+                const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+                size += buf.length;
+                if (size > max) { tooBig = true; chunks.length = 0; return; }
+                chunks.push(buf);
+              });
+              req.on('end', () => resolve(tooBig ? { tooBig: true } : { tooBig: false, body: Buffer.concat(chunks).toString('utf8') }));
+              req.on('error', reject);
+            });
           }
 
           /** Herkunft erlaubt? Dann genau diese zurückschreiben (nie „*“, weil mit Anmeldung) */
@@ -139,9 +214,11 @@ services:
 
           /**
            * Wer fragt? Die Anmeldung (Basic) geht unverändert an CouchDB /_session – nur wer dort gilt, darf.
-           * Ergebnis 5 Minuten merken (als Hash, nie das Passwort selbst), damit nicht jede Anfrage die DB fragt.
+           * Ergebnis 1 Minute merken (als Hash, nie das Passwort selbst), damit nicht jede Anfrage die DB fragt – kurz, damit
+           * ein geändertes Passwort oder ein gelöschter Zugang bald nicht mehr gilt (Code-Review #13).
+           * null = Anmeldung falsch; wirft, wenn die Datenbank nicht antwortet (dann 503 statt „falsche Anmeldung“).
            */
-          export function makeAuth({ fetch, couchUrl, ttl = 5 * 60 * 1000 }) {
+          export function makeAuth({ fetch, couchUrl, ttl = 60 * 1000 }) {
             /** @type {Map<string, {name: string, until: number}>} */
             const cache = new Map();
             return async function userOf(authorization, now = Date.now()) {
@@ -150,6 +227,7 @@ services:
               const hit = cache.get(key);
               if (hit && hit.until > now) return hit.name;
               const res = await fetch(couchUrl + '/_session', { headers: { authorization, accept: 'application/json' } });
+              if (res.status >= 500) throw new Error('CouchDB antwortet nicht (' + res.status + ')');
               if (!res.ok) return null;
               const body = await res.json().catch(() => null);
               const name = body?.userCtx?.name;
@@ -191,13 +269,13 @@ services:
           /** „/ki/rezept“ und „/rezept“ sind derselbe Weg (Coolify schneidet /ki meist ab) */
           export const routeOf = (path) => path.replace(/^\/ki(?=\/|$)/, '').replace(/\/+$/, '') || '/';
 
-          export function makeHandler({ fetch, env, limiter = new RateLimiter(Number(env.KI_PER_HOUR) || 20, Number(env.KI_PER_DAY) || 60) }) {
+          export function makeHandler({ fetch, env, limiter = new RateLimiter(Number(env.KI_PER_HOUR) || 20, Number(env.KI_PER_DAY) || 60), fails = new FailLimiter() }) {
             const allowed = (env.KI_ALLOWED_ORIGINS || env.MASHI_APP_ORIGINS || 'https://dschudschuu.github.io,http://localhost:5173').split(',').map((s) => s.trim()).filter(Boolean);
             const userOf = makeAuth({ fetch, couchUrl: (env.COUCHDB_URL || 'http://couchdb:5984').replace(/\/+$/, '') });
             const configured = !!(env.OPENROUTER_API_KEY && env.OPENROUTER_MODEL);
 
             /** @returns {Promise<{status: number, headers: Record<string,string>, body?: unknown}>} */
-            return async function handle({ method, path, headers, body }) {
+            async function handle({ method, path, headers, body, ip = '?' }) {
               const cors = corsHeaders(headers.origin, allowed);
               const reply = (status, payload) => ({ status, headers: { ...cors, 'content-type': 'application/json; charset=utf-8' }, body: payload });
               const route = routeOf(path);
@@ -206,8 +284,17 @@ services:
               if (method !== 'POST' || route !== '/rezept') return reply(404, { error: 'unbekannt' });
               if (!configured) return reply(503, { error: 'nicht eingerichtet', message: 'Auf dem Server fehlt noch der KI-Schlüssel.' });
 
-              const user = await userOf(headers.authorization).catch(() => null);
-              if (!user) return reply(401, { error: 'anmeldung', message: 'Bitte in Mashi mit dem Server verbinden.' });
+              if (fails.blocked(ip)) return reply(429, { error: 'zu viele', message: 'Zu viele falsche Anmeldungen – bitte in einer Viertelstunde noch mal.' });
+              let user;
+              try {
+                user = await userOf(headers.authorization);
+              } catch {
+                return reply(503, { error: 'server', message: 'Die Anmeldung lässt sich gerade nicht prüfen – der Server ist kurz nicht erreichbar.' });
+              }
+              if (!user) {
+                if (headers.authorization) fails.fail(ip); // nur echte Versuche zählen, nicht „noch nicht verbunden“
+                return reply(401, { error: 'anmeldung', message: 'Bitte in Mashi mit dem Server verbinden.' });
+              }
               if (typeof body !== 'string' || body.length > MAX_BODY) return reply(413, { error: 'zu groß' });
               let prompt;
               try { prompt = JSON.parse(body).prompt; } catch { return reply(400, { error: 'kein JSON' }); }
@@ -216,32 +303,32 @@ services:
 
               const out = await askModel({ fetch, apiKey: env.OPENROUTER_API_KEY, model: env.OPENROUTER_MODEL, baseUrl: env.OPENROUTER_BASE_URL, prompt });
               if (out.status === 200) return reply(200, { text: out.text, model: out.model });
+              limiter.giveBack(user); // keine Antwort – kostet kein Kontingent (Code-Review #13)
               if (out.status === 429) return reply(429, { error: 'ausgelastet', message: 'Die kostenlose KI ist gerade ausgelastet – in ein paar Minuten noch mal.' });
               if (out.status === 504) return reply(504, { error: 'zeit', message: 'Die KI hat zu lange gebraucht.' });
               return reply(502, { error: 'ki', message: 'Die KI hat gerade nicht geantwortet.' });
-            };
+            }
+            /** CORS-Köpfe für Antworten außerhalb von handle (413, 500) – sonst meldet der Browser nur „offline?“ */
+            handle.cors = (origin) => corsHeaders(origin, allowed);
+            return handle;
           }
 
           /** Start als echter Server (nur, wenn die Datei direkt läuft – nicht in den Tests) */
           function start() {
             const handle = makeHandler({ fetch: globalThis.fetch, env: process.env });
-            const server = createServer((req, res) => {
-              let body = '';
-              let size = 0;
-              let tooBig = false;
-              req.on('data', (chunk) => {
-                if (tooBig) return;
-                size += chunk.length;
-                if (size > MAX_BODY) { tooBig = true; res.writeHead(413).end(); req.destroy(); return; }
-                body += chunk;
-              });
-              req.on('end', async () => {
-                if (tooBig) return;
-                const path = new URL(req.url ?? '/', 'http://x').pathname;
-                const out = await handle({ method: req.method ?? 'GET', path, headers: req.headers, body }).catch(() => ({ status: 500, headers: {}, body: { error: 'server' } }));
+            const server = createServer(async (req, res) => {
+              const json = { ...handle.cors(req.headers.origin), 'content-type': 'application/json; charset=utf-8' };
+              const send = (out) => {
                 res.writeHead(out.status, out.headers);
                 res.end(out.body === undefined ? undefined : JSON.stringify(out.body));
-              });
+              };
+              const read = await readBody(req).catch(() => ({ tooBig: false, body: '' }));
+              // auch hier mit CORS – sonst greift der „kürzer noch mal“-Versuch der App nie (Code-Review #13)
+              if (read.tooBig) return send({ status: 413, headers: json, body: { error: 'zu groß' } });
+              const path = new URL(req.url ?? '/', 'http://x').pathname;
+              const ip = clientIp(req.headers, req.socket.remoteAddress);
+              send(await handle({ method: req.method ?? 'GET', path, headers: req.headers, body: read.body, ip })
+                .catch(() => ({ status: 500, headers: json, body: { error: 'server' } })));
             });
             const port = Number(process.env.PORT) || 8080;
             // 0.0.0.0: sonst erreicht der Proxy den Container nicht (Coolify: „No Available Server“)

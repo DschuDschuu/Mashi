@@ -68,7 +68,10 @@ ein Passwort neu zu setzen).
   eigenen Datenbank (`mashi` bzw. `mashi-tom`) – er kann keine anderen Datenbanken sehen, anlegen oder Rechte ändern.
 - Ein fremder angemeldeter Benutzer bekommt auf `mashi` ein `403` – das gilt genauso zwischen
   `mashi` und `mashi-tom`.
-- Optional: Rate-Limit-Middleware in `docker-compose.yml` einkommentieren (Passwort-Raten).
+- Rate-Limit gegen Passwort-Raten ist in `docker-compose.yml` eingeschaltet (Datenbank und KI). Der
+  KI-Dienst bremst zusätzlich selbst: nach 10 falschen Anmeldungen von derselben Adresse 15 Minuten Pause.
+- `setup.sh` liest die `.env` nur (führt sie nicht aus), zeigt keine Passwörter in der Prozessliste und
+  nimmt einen Benutzer zu bestehenden Mitgliedern dazu, statt sie zu ersetzen.
 
 ## Lokal getestet (2026-09-23, couchdb:3.5 = 3.5.2)
 

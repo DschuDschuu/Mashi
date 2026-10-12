@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react';
+import { localNoon } from '../domain/dates';
 import { normalizeName } from '../domain/nutrition/localFoods';
 import { reverseKeyed, reverseList, reverseRecord } from '../domain/undo';
 import { EXTRA_PREFIX, RESTOCK_PREFIX, shoppingList, type RestockRule } from '../domain/restock';
@@ -958,19 +959,22 @@ function commitPantry(next: Omit<Pantry, 'updatedAt'>) {
  */
 export function importReceipt(rows: ImportRow[], paidAt?: string, savings?: BonSavings, opts: { replace?: boolean; historyOnly?: boolean } = {}): { count: number; onList: number } {
   const t = now();
+  // ohne erkanntes Datum: heute als Kalendertag (12 Uhr) – nicht „jetzt“ in UTC, das war nachts noch der Vortag
+  // (Code-Review #24). Der Doppelt-Schlüssel braucht weiter ein echtes Datum vom Bon.
+  const day = paidAt ?? localNoon();
   const key = bonKey(paidAt, savings?.total);
   // alten Import ersetzen: Preise dieses Tages neu, der Vorrat ist schon da (kommt nicht doppelt)
   // … und die Vorräte vom ersten Einlesen bekommen die neue Zuordnung (Name, Sorte)
   // derselbe Einkauf schon als Bon gespeichert (Endbetrag anders gelesen)? Der fällt weg – der neue ersetzt ihn
-  const old = opts.replace ? sameBonOf(pantry, paidAt ?? t, rows) : undefined;
+  const old = opts.replace ? sameBonOf(pantry, day, rows) : undefined;
   const base = old ? { ...pantry, bons: (pantry.bons ?? []).filter((b) => b.id !== old.id) } : pantry;
-  const start = opts.replace ? relinkOldImport(dropDayPrices(base, paidAt ?? t, key), rows) : pantry;
-  const next = rememberReceipt(applyImport(start, rows, t, () => newId('v'), paidAt ?? t, { stock: !opts.replace && !opts.historyOnly }), key);
+  const start = opts.replace ? relinkOldImport(dropDayPrices(base, day, key), rows) : pantry;
+  const next = rememberReceipt(applyImport(start, rows, t, () => newId('v'), day, { stock: !opts.replace && !opts.historyOnly }), key);
   // den Bon selbst aufheben (nur die Zeilen) – zum Nachsehen und Korrigieren unter „Preise“;
   // nur für den Verlauf (alter Bon, Julia): ohne Vorrat – Korrekturen ändern dann nur Preise
-  const bon = bonFromImport(rows, paidAt ?? t, t, newId('b'), key, savings);
+  const bon = bonFromImport(rows, day, t, newId('b'), key, savings);
   const kept = addBon(next, opts.historyOnly ? { ...bon, noStock: true } : bon);
-  commitPantry(savings ? recordSavings(kept, savings, paidAt ?? t) : kept);
+  commitPantry(savings ? recordSavings(kept, savings, day) : kept);
   normalizeNames();
   // ersetzt (die Einkaufsliste hat der erste Import schon abgehakt) oder nur für den Verlauf: Liste bleibt
   if (opts.replace || opts.historyOnly) return { count: rows.filter((r) => !r.skip).length, onList: 0 };

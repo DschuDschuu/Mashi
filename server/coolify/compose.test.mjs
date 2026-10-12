@@ -9,6 +9,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const text = readFileSync(join(here, 'docker-compose.yml'), 'utf8');
 const compose = parse(text);
 const ki = readFileSync(join(here, '..', 'ki', 'ki.mjs'), 'utf8').replace(/\r\n/g, '\n');
+const ini = readFileSync(join(here, '..', 'couchdb', 'mashi.ini'), 'utf8').replace(/\r\n/g, '\n');
 const bind = (service, target) => compose.services[service].volumes.find((v) => typeof v === 'object' && v.target === target);
 
 describe('Coolify-Compose', () => {
@@ -36,6 +37,10 @@ describe('Coolify-Compose', () => {
     expect(ini).toContain('WWW-Authenticate = Basic realm="couchdb"');
     expect(ini).toContain('require_valid_user_except_for_up = true');
     expect(ini).toContain('origins = https://dschudschuu.github.io');
+  });
+
+  it('die CouchDB-Einstellungen sind wörtlich server/couchdb/mashi.ini (Code-Review #26)', () => {
+    expect(bind('couchdb', '/opt/couchdb/etc/local.d/mashi.ini').content).toBe(ini.endsWith('\n') ? ini : ini + '\n');
   });
 
   it('der KI-Code ist wörtlich ki.mjs (sonst: node server/coolify/build-compose.mjs)', () => {

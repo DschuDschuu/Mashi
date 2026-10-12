@@ -1,3 +1,4 @@
+import { localDay } from '../../domain/dates';
 import { useEffect, useRef, useState } from 'react';
 import { alreadyImported, bonKey, proposeImport, type ImportRow, type PantryUnit } from '../../domain/pantry';
 import { mergeSameLines, parseReceipt, parseReceiptDate, type ReceiptLine } from '../../domain/receipt';
@@ -218,7 +219,7 @@ export function ReceiptImportScreen({ shared }: { shared: boolean }) {
           {/* Datum immer änderbar – für alte Bons und wenn die Texterkennung keins (oder ein falsches) gefunden hat */}
           <label className="field">
             <span>Einkaufsdatum{!paidAt ? ' (auf dem Bon nicht erkannt)' : ''}</span>
-            <input type="date" value={paidAt?.slice(0, 10) ?? ''} max={new Date().toISOString().slice(0, 10)}
+            <input type="date" value={paidAt?.slice(0, 10) ?? ''} max={localDay()}
               onChange={(e) => setPaidAt(e.target.value ? `${e.target.value}T12:00:00.000Z` : undefined)} />
           </label>
           {!replacing && (
