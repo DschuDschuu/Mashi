@@ -5,10 +5,11 @@ import replication from 'pouchdb-replication';
 import { describe, expect, it } from 'vitest';
 import { createMockRecipes } from './mockRecipes';
 import { PouchRecipeRepository, type RecipeDb } from './pouchRepository';
-import { normalizeDbUrl } from './sync';
+import { normalizeDbUrl, pushAll } from './sync';
 import { mergeRecipes } from '../domain/merge';
 import { withNewVersion, currentContent } from '../domain/recipe';
 import type { Recipe } from '../domain/types';
+import { emptyPantry } from '../domain/pantry';
 
 PouchDB.plugin(memory).plugin(replication);
 
@@ -269,5 +270,55 @@ describe('Kein stilles Überschreiben mehr (Speichern mit dem vorherigen Stand)'
     await pc.savePantry(pantry([item('q', 'Quark', 500), item('m', 'Milch', 1000)], later(T0, 120)));
     await syncOnce(phoneDb, pcDb);
     expect((await phone.loadPantry()).items.map((i) => i.name).sort()).toEqual(['Eier', 'Milch', 'Quark']);
+  });
+});
+
+describe('Vor dem Abmelden hochladen (Code-Review #18)', () => {
+  it('alles angenommen → true', async () => {
+    const local = newDb();
+    await (local as unknown as PouchDB.Database).put({ _id: 'r1', titel: 'Testsuppe' });
+    expect(await pushAll(local, newDb(), 5000)).toBe(true);
+  });
+
+  it('Server lehnt ein Dokument ab (forbidden) → false, obwohl die Replikation „fertig“ meldet', async () => {
+    const local = newDb();
+    await (local as unknown as PouchDB.Database).put({ _id: 'r1', titel: 'Testsuppe' });
+    const remote = newDb();
+    // wie CouchDB mit validate_doc_update: jedes Dokument wird abgelehnt
+    (remote as unknown as { bulkDocs: unknown }).bulkDocs = async (req: { docs: { _id: string }[] }) =>
+      req.docs.map((d) => ({ id: d._id, error: 'forbidden', name: 'forbidden', reason: 'nicht erlaubt', status: 403 }));
+    expect(await pushAll(local, remote, 5000)).toBe(false);
+  });
+});
+
+describe('Konflikt beim Laden auflösen, während der Abgleich schreibt (Code-Review #19)', () => {
+  it('Laden der Speisekammer klappt trotzdem – beide Fassungen bleiben', async () => {
+    const phoneDb = newDb();
+    const pcDb = newDb();
+    const phone = new PouchRecipeRepository(phoneDb);
+    const pc = new PouchRecipeRepository(pcDb);
+    const T = '2026-10-01T10:00:00.000Z';
+    const pantryWith = (name: string, at: string) => ({ ...emptyPantry(), updatedAt: at, items: [{ id: name, name, amount: 1, unit: 'Stück' as const, addedAt: at }] });
+    await phone.savePantry(pantryWith('Testapfel', T));
+    await syncOnce(phoneDb, pcDb);
+    // offline auf beiden geändert → Konflikt
+    await phone.savePantry({ ...pantryWith('Testapfel', T), items: [...pantryWith('Testapfel', T).items, ...pantryWith('Testbirne', later(T, 10)).items], updatedAt: later(T, 10) });
+    await pc.savePantry({ ...pantryWith('Testapfel', T), items: [...pantryWith('Testapfel', T).items, ...pantryWith('Testkiwi', later(T, 20)).items], updatedAt: later(T, 20) });
+    await syncOnce(phoneDb, pcDb);
+    const raw = phoneDb as unknown as PouchDB.Database;
+    expect((await raw.get('speisekammer', { conflicts: true }))._conflicts?.length).toBe(1);
+    // der „Abgleich“ schreibt genau zwischen dem ersten Lesen und der Auflösung eine neue Revision
+    const get = raw.get.bind(raw);
+    let once = true;
+    (raw as unknown as { get: unknown }).get = async (id: string, opts?: object) => {
+      const doc = await get(id, opts as PouchDB.Core.GetOptions);
+      if (once && id === 'speisekammer') {
+        once = false;
+        await raw.put({ ...doc, updatedAt: later(T, 30) });
+      }
+      return doc;
+    };
+    const loaded = await phone.loadPantry();
+    expect(loaded.items.map((i) => i.name).sort()).toEqual(['Testapfel', 'Testbirne', 'Testkiwi']);
   });
 });

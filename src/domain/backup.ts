@@ -60,10 +60,31 @@ function isValidRecipe(v: unknown): v is Recipe {
   });
 }
 
+/** größtes Foto aus einer Datei (als data-URL, ~3 MB) – der Zuschnitt erzeugt deutlich kleinere */
+const MAX_IMAGE = 4_000_000;
+const isDataImage = (v: unknown) => typeof v === 'string' && v.length <= MAX_IMAGE && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(v);
+
+/**
+ * Bild aus einer fremden Datei (geteiltes Rezept, WhatsApp): nur eingebettete Fotos oder der Platzhalter.
+ * Eine Web-Adresse würde bei jedem Anzeigen geladen – der Absender sähe deine IP und wann du Mashi nutzt
+ * (Code-Review #22). Mashi selbst erzeugt nie Web-Adressen, nur eingebettete Fotos.
+ */
+export function isSafeImage(v: unknown): boolean {
+  if (v === undefined) return true;
+  if (!isObj(v)) return false;
+  if (v.kind === 'placeholder') return typeof v.hue === 'number' && typeof v.motif === 'string';
+  if (v.kind !== 'url' || !isDataImage(v.url)) return false;
+  if (v.original !== undefined && !isDataImage(v.original)) return false;
+  return v.crop === undefined || (isObj(v.crop) && ['x', 'y', 'zoom'].every((k) => typeof (v.crop as Record<string, unknown>)[k] === 'number'));
+}
+
 /** Fehlende Listen (Tags, Kategorien, Geräte) als leer ergänzen – sonst stürzt z. B. „Bearbeiten“ ab */
 function withLists(r: Recipe): Recipe {
+  // unsicheres Bild: das Rezept bleibt, nur das Bild fällt weg (Platzhalter)
+  const { image, ...rest } = r;
   return {
-    ...r,
+    ...rest,
+    ...(isSafeImage(image) && image ? { image } : {}),
     versions: r.versions.map((v) => ({
       ...v,
       content: { ...v.content, tags: v.content.tags ?? [], categories: v.content.categories ?? [], devices: v.content.devices ?? [] },
@@ -89,13 +110,33 @@ export function parseBackup(input: unknown): ParsedBackup {
   return { recipes: unique, rejected: list.length - unique.length + rawProducts.length - products.length, products, ...(pantry ? { pantry } : {}), ...(plan ? { plan } : {}) };
 }
 
-/** Grob, aber so, dass die App damit nicht abstürzt: Listen da, Vorräte mit ID und Namen */
+/** fehlt – oder eine Liste, deren Einträge alle passen */
+const listOf = (v: unknown, ok: (x: unknown) => boolean) => v === undefined || (Array.isArray(v) && v.every(ok));
+const strings = (v: unknown) => listOf(v, (x) => typeof x === 'string');
+const isPrice = (x: unknown) => isObj(x) && typeof x.name === 'string' && typeof x.perUnit === 'number' && isStr(x.date) && (x.unit === 'g' || x.unit === 'Stück');
+const isRecord = (v: unknown, ok: (x: unknown) => boolean) => v === undefined || (isObj(v) && Object.values(v).every(ok));
+
+/**
+ * So, dass die App damit nicht abstürzt (Code-Review #22): JEDE Liste, die das Zusammenführen und die Ansichten
+ * durchgehen, muss eine Liste mit passenden Einträgen sein – sonst stürzt es später auf jedem Gerät ab.
+ */
 function isValidPantry(v: unknown): v is Pantry {
   if (!isObj(v) || !Array.isArray(v.items) || !Array.isArray(v.rules) || !isStr(v.updatedAt)) return false;
-  return v.items.every((i) => isObj(i) && isStr(i.id) && isStr(i.name) && isStr(i.addedAt));
+  return v.items.every((i) => isObj(i) && isStr(i.id) && isStr(i.name) && isStr(i.addedAt))
+    && v.rules.every((r) => isObj(r) && isStr(r.key))
+    && listOf(v.prices, isPrice) && listOf(v.history, isPrice)
+    && listOf(v.savings, (s) => isObj(s) && isStr(s.key))
+    && listOf(v.restock, (r) => isObj(r) && isStr(r.name) && typeof r.below === 'number')
+    && listOf(v.bons, (b) => isObj(b) && isStr(b.id) && isStr(b.date) && Array.isArray(b.lines)
+      && b.lines.every((l) => isObj(l) && typeof l.bon === 'string' && typeof l.name === 'string' && typeof l.count === 'number'))
+    && strings(v.receipts) && strings(v.basics) && strings(v.noNutrition) && strings(v.renameDismissed)
+    && isRecord(v.categories, (c) => typeof c === 'string')
+    && isRecord(v.cookLog, (c) => Array.isArray(c));
 }
 
 function isValidPlan(v: unknown): v is MealPlan {
   if (!isObj(v) || !Array.isArray(v.items) || !Array.isArray(v.checked) || !isStr(v.updatedAt)) return false;
-  return v.items.every((i) => isObj(i) && isStr(i.recipeId) && typeof i.servings === 'number');
+  return v.items.every((i) => isObj(i) && isStr(i.recipeId) && typeof i.servings === 'number')
+    && strings(v.checked) && strings(v.cooked) && strings(v.buy) && strings(v.hidden)
+    && listOf(v.extra, (x) => isObj(x) && isStr(x.name));
 }

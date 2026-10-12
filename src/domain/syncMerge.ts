@@ -24,14 +24,19 @@ const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
  * Liste mit Schlüssel dreiseitig zusammenführen.
  * Nur wir geändert → unseres. Nur die anderen → deren. Beide → combine (Standard: unseres).
  * Einer hat gelöscht, der andere geändert → behalten (combine entscheidet, z. B. Mengen verrechnen).
+ * Mehrere Einträge mit demselben Schlüssel bleiben als Gruppe zusammen – früher behielt die Map still nur den
+ * letzten (Code-Review #1: nach dem Umbenennen zwei „Magerquark“-Preise → der neuere ging bei jedem Speichern verloren).
  */
 function merge3Keyed<T>(
   base: T[], ours: T[], theirs: T[], key: (t: T) => string,
   combine: (b: T | undefined, o: T | undefined, t: T | undefined) => T | undefined = (_b, o, t) => o ?? t,
 ): T[] {
-  const b = new Map(base.map((x) => [key(x), x]));
-  const o = new Map(ours.map((x) => [key(x), x]));
-  const t = new Map(theirs.map((x) => [key(x), x]));
+  const group = (xs: T[]) => {
+    const m = new Map<string, T[]>();
+    for (const x of xs) m.set(key(x), [...(m.get(key(x)) ?? []), x]);
+    return m;
+  };
+  const b = group(base), o = group(ours), t = group(theirs);
   // Reihenfolge: wie beim neueren Stand, eigene neue Einträge hinten dran
   const keys = [...new Set([...t.keys(), ...o.keys()])];
   const out: T[] = [];
@@ -39,8 +44,12 @@ function merge3Keyed<T>(
     const bv = b.get(k), ov = o.get(k), tv = t.get(k);
     const oursChanged = !same(bv, ov);
     const theirsChanged = !same(bv, tv);
-    const v = !oursChanged ? tv : !theirsChanged ? ov : combine(bv, ov, tv);
-    if (v !== undefined) out.push(v);
+    if (!oursChanged) out.push(...(tv ?? []));
+    else if (!theirsChanged) out.push(...(ov ?? []));
+    else if ((bv?.length ?? 0) <= 1 && (ov?.length ?? 0) <= 1 && (tv?.length ?? 0) <= 1) {
+      const v = combine(bv?.[0], ov?.[0], tv?.[0]);
+      if (v !== undefined) out.push(v);
+    } else out.push(...(ov ?? tv ?? [])); // doppelte Schlüssel und beide geändert: unsere Gruppe ganz
   }
   return out;
 }
@@ -178,6 +187,17 @@ export function unionPlan(a: MealPlan, b: MealPlan): MealPlan {
     ...(newer.hidden || older.hidden ? { hidden: unionSet(newer.hidden, older.hidden) } : {}),
     ...(newer.extra || older.extra ? { extra: unionKeyed(newer.extra ?? [], older.extra ?? [], (x) => normalizeName(x.name)) } : {}),
   };
+}
+
+/**
+ * Speisekammer aus einer Sicherung (Code-Review #5, Julias Wahl): Preise, Bons, Gelerntes und Einstellungen werden
+ * ergänzt (unionPantry) – die Vorräte nur, wenn ausdrücklich „ersetzen“ gewählt ist. Vereint kämen sonst alles
+ * Gegessene und Entfernte seit der Sicherung als Geister-Vorrat zurück.
+ */
+export function pantryFromBackup(current: Pantry, incoming: Pantry, replaceStock: boolean): Pantry {
+  const { items: _i, cookLog: _c, ...rest } = unionPantry(current, incoming);
+  const stock = replaceStock ? incoming : current;
+  return { ...rest, items: stock.items, ...(stock.cookLog ? { cookLog: stock.cookLog } : {}) };
 }
 
 export function unionProducts(a: MyProduct[], b: MyProduct[]): MyProduct[] {

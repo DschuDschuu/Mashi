@@ -219,6 +219,8 @@ function BackupPanel({ recipes }: { recipes: Recipe[] }) {
   const [preview, setPreview] = useState<(ParsedBackup & { fileName: string }) | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sharing, setSharing] = useState(false);
+  /** Vorräte & Wochenplan aus der Sicherung: weglassen oder ersetzen (Julia) – Standard: weglassen, wenn schon welche da sind */
+  const [replaceStock, setReplaceStock] = useState(false);
 
   const onFile = async (file: File | undefined) => {
     if (input.current) input.current.value = ''; // dieselbe Datei später erneut wählbar
@@ -226,6 +228,8 @@ function BackupPanel({ recipes }: { recipes: Recipe[] }) {
     setError(null);
     try {
       setPreview({ ...parseBackup(JSON.parse(await file.text())), fileName: file.name });
+      // noch nichts da (neues Gerät, nach Datenverlust): gleich übernehmen
+      setReplaceStock(!pantry.items.length && !plan.items.length);
     } catch (e) {
       setPreview(null);
       setError(e instanceof SyntaxError ? 'Das ist keine Mashi-Datei (weder Sicherung noch geteilte Rezepte).' : (e as Error).message);
@@ -239,15 +243,16 @@ function BackupPanel({ recipes }: { recipes: Recipe[] }) {
     if (!preview) return;
     const { added, merged } = importRecipes(preview.recipes);
     const prods = importProducts(preview.products);
-    if (preview.pantry) importPantry(preview.pantry);
-    if (preview.plan) importPlan(preview.plan);
-    toast(`${recipeCount(added)} neu${merged ? `, ${merged} zusammengeführt` : ''}${prods ? ` · ${prods} Produkt${prods === 1 ? '' : 'e'}` : ''}${preview.pantry ? ' · Speisekammer' : ''}${preview.plan ? ' · Plan' : ''}`);
+    if (preview.pantry) importPantry(preview.pantry, replaceStock);
+    if (preview.plan && replaceStock) importPlan(preview.plan);
+    const stock = (preview.pantry || preview.plan) ? (replaceStock ? ' · Vorräte & Plan ersetzt' : ' · Preise & Bons ergänzt') : '';
+    toast(`${recipeCount(added)} neu${merged ? `, ${merged} zusammengeführt` : ''}${prods ? ` · ${prods} Produkt${prods === 1 ? '' : 'e'}` : ''}${stock}`);
     setPreview(null);
   };
 
   return (
     <div className="panel stack">
-      <p className="muted small">Alles als Datei auf diesem Gerät speichern – Rezepte, Meine Lebensmittel, Speisekammer (mit Preisen und gelernten Bon-Artikeln) und Plan. Beim Einspielen wird zusammengeführt, nichts geht verloren.</p>
+      <p className="muted small">Alles als Datei auf diesem Gerät speichern – Rezepte, Meine Lebensmittel, Speisekammer (mit Preisen und gelernten Bon-Artikeln) und Plan. Beim Einspielen gewinnt je Rezept und Lebensmittel das Neuere; Preise und Bons werden ergänzt.</p>
       <div className="row-2">
         <button className="btn btn--ghost" onClick={() => downloadBackup(recipes, products, pantry, plan)}>Herunterladen</button>
         <button className="btn btn--ghost" onClick={() => input.current?.click()}>Einspielen …</button>
@@ -271,6 +276,18 @@ function BackupPanel({ recipes }: { recipes: Recipe[] }) {
             {preview.plan && <> · Plan mit {preview.plan.items.length} Gerichten</>}
             {preview.rejected > 0 && <> · {preview.rejected} unvollständig, werden übersprungen</>}
           </p>
+          {/* Vereinen brächte Gegessenes als Geister-Vorrat zurück (Code-Review #5) – darum eine klare Wahl */}
+          {(preview.pantry || preview.plan) && (
+            <div className="segments" role="radiogroup" aria-label="Vorräte und Wochenplan">
+              <button type="button" role="radio" aria-checked={!replaceStock} className={`segment${!replaceStock ? ' is-on' : ''}`} onClick={() => setReplaceStock(false)}>Vorräte & Plan behalten</button>
+              <button type="button" role="radio" aria-checked={replaceStock} className={`segment${replaceStock ? ' is-on' : ''}`} onClick={() => setReplaceStock(true)}>Aus der Sicherung</button>
+            </div>
+          )}
+          {(preview.pantry || preview.plan) && (
+            <p className="small muted">{replaceStock
+              ? 'Vorräte und Wochenplan werden genau wie in der Sicherung – was seitdem dazukam oder gegessen wurde, gilt nicht mehr.'
+              : 'Deine jetzigen Vorräte und dein Wochenplan bleiben. Aus der Sicherung kommen nur Preise, Bons und Gelerntes dazu.'}</p>
+          )}
           <ul className="backup-preview__list">
             {preview.recipes.slice(0, 8).map((r) => <li key={r.id}>{currentContent(r).title}</li>)}
             {preview.recipes.length > 8 && <li className="muted">… und {preview.recipes.length - 8} weitere</li>}

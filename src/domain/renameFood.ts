@@ -1,7 +1,7 @@
 import { basicsOf } from './mealplan';
 import { isFreshHerb, zeroOf } from './nutrition/noNutrition';
 import { nameOf, type MyProduct } from './nutrition/myProducts';
-import { receiptKey, sameName, type ImportRow, type Pantry } from './pantry';
+import { newestPricePerName, receiptKey, sameName, type ImportRow, type Pantry } from './pantry';
 
 /**
  * Ein Lebensmittel umbenennen (Julia: in „Meine Lebensmittel“ umbenannt, in der Speisekammer stand noch der alte Name).
@@ -61,6 +61,10 @@ export function renameFood(pantry: Pantry, from: string, to: string, productIds:
     ...(zeroOf(pantry).some((b) => sameName(b, from)) && !(productIds.length && isFreshHerb(from)) ? { noNutrition: zeroOf(pantry).map((b, n) => mark(`z:${n}`, { name: b }).name) } : {}),
   };
 
+  // heißt es jetzt wie ein anderes Lebensmittel, stehen zwei „zuletzt bezahlt“ unter einem Namen: der neueste zählt
+  const { prices: newest, dropped } = newestPricePerName(next.prices ?? []);
+  next.prices = newest;
+
   const undo = (p: Pantry): Pantry => ({
     ...p,
     items: p.items.map((i) => (items.has(i.id) && i.name === to ? { ...i, name: was.get(`i:${i.id}`)! } : i)),
@@ -69,7 +73,8 @@ export function renameFood(pantry: Pantry, from: string, to: string, productIds:
       bons: p.bons.map((b) => ({ ...b, lines: b.lines.map((l, n) => (lines.has(`${b.id}|${n}`) && l.name === to ? { ...l, name: was.get(`l:${b.id}|${n}`)! } : l)) })),
     } : {}),
     ...(p.history ? { history: p.history.map((h) => back(`h:${h.date}|${h.productId ?? ''}`, h)) } : {}),
-    prices: (p.prices ?? []).map((h) => back(`p:${h.date}|${h.productId ?? ''}`, h)),
+    // der beim Zusammenlegen entfernte Preis kommt zurück
+    prices: [...(p.prices ?? []).map((h) => back(`p:${h.date}|${h.productId ?? ''}`, h)), ...dropped.filter((d) => !(p.prices ?? []).includes(d))],
     ...(p.restock ? { restock: p.restock.map((r) => back(`s:${r.below}${r.unit}`, r)) } : {}),
     ...(p.basics && next.basics !== pantry.basics ? { basics: p.basics.map((b, n) => back(`b:${n}`, { name: b }).name) } : {}),
     ...(p.noNutrition && next.noNutrition !== pantry.noNutrition ? { noNutrition: p.noNutrition.map((b, n) => back(`z:${n}`, { name: b }).name) } : {}),
@@ -102,7 +107,7 @@ export function syncProductNames(pantry: Pantry, products: readonly MyProduct[])
   return {
     ...pantry, items, rules, ...(bons ? { bons } : {}),
     ...(pantry.history ? { history: pantry.history.map(price) } : {}),
-    prices: (pantry.prices ?? []).map(price),
+    prices: newestPricePerName((pantry.prices ?? []).map(price)).prices,
   };
 }
 

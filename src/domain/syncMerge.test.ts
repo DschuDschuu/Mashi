@@ -3,7 +3,7 @@ import { DEFAULT_NO_NUTRITION } from './nutrition/noNutrition';
 import type { MealPlan } from './mealplan';
 import type { MyProduct } from './nutrition/myProducts';
 import { emptyPantry, type Pantry, type PantryItem } from './pantry';
-import { merge3Pantry, merge3Plan, merge3Products, merge3Recipe, unionPantry, unionPlan, unionProducts } from './syncMerge';
+import { merge3Pantry, merge3Plan, merge3Products, merge3Recipe, pantryFromBackup, unionPantry, unionPlan, unionProducts } from './syncMerge';
 import { createMockRecipes } from '../data/mockRecipes';
 
 // Erfundene Daten – zwei Geräte, „Handy“ (ours) und „Tablet“ (theirs)
@@ -191,5 +191,45 @@ describe('Bons und Kategorien abgleichen', () => {
     const out = unionPantry(a, b);
     expect(out.bons!.map((x) => x.id).sort()).toEqual(['b1', 'b2']);
     expect(out.categories).toEqual({ 'name:tofu': 'fleisch-fisch', 'name:kimchi': 'konserven' });
+  });
+});
+
+describe('Code-Review #1: gleiche Schlüssel gehen beim Zusammenführen nicht verloren', () => {
+  const quark = { name: 'Magerquark', perUnit: 0.002, unit: 'g' as const, date: '2026-03-01' };
+  const alt = { name: 'Magerquark', perUnit: 0.003, unit: 'g' as const, date: '2026-01-01' };
+
+  it('nur wir geändert → genau unser Stand, auch mit doppeltem Namen (Speisekammer, Plan, Produkte)', () => {
+    const base = pantry([item('a', 'Quark', 250)]);
+    const ours = pantry([item('a', 'Quark', 250), item('b', 'Quark', 100)], { prices: [quark, alt] });
+    // (ergänzt nur leere Standardfelder – Listen müssen Eintrag für Eintrag gleich sein)
+    expect(merge3Pantry(base, ours, base)).toMatchObject(ours);
+    const planBase: MealPlan = { items: [], checked: [], cooked: [], updatedAt: T };
+    const planOurs: MealPlan = { ...planBase, items: [{ recipeId: 'r', servings: 2 }, { recipeId: 'r', servings: 4 }], extra: [{ name: 'Milch', addedAt: T }, { name: 'milch', addedAt: T }] };
+    expect(merge3Plan(planBase, planOurs, planBase)).toMatchObject(planOurs);
+    const prod = (id: string): MyProduct => ({ id, name: 'Quark', replaces: [], per100g: { kcal: 1, protein: 1, carbs: 1, fat: 1 }, updatedAt: T });
+    expect(merge3Products([], [prod('x'), prod('x')], [])).toEqual([prod('x'), prod('x')]);
+  });
+
+  it('nur die anderen geändert → deren Stand vollständig', () => {
+    const base = pantry([]);
+    const theirs = pantry([], { prices: [quark, alt] });
+    expect(merge3Pantry(base, base, theirs).prices).toEqual([quark, alt]);
+  });
+});
+
+describe('Code-Review #5: Sicherung einspielen – Vorräte nur auf Wunsch', () => {
+  const heute = pantry([item('h', 'Hähnchenbrust', 200)], { prices: [{ name: 'Quark', perUnit: 0.002, unit: 'g', date: '2026-10-01' }] });
+  const sicherung = pantry([item('h', 'Hähnchenbrust', 900), item('alt', 'Spinat', 300)], { prices: [{ name: 'Milch', perUnit: 0.001, unit: 'g', date: '2026-09-01' }] });
+
+  it('behalten: die heutigen Vorräte bleiben, Preise kommen dazu – kein Geister-Vorrat', () => {
+    const p = pantryFromBackup(heute, sicherung, false);
+    expect(amounts(p)).toEqual({ 'Hähnchenbrust': 200 });
+    expect(p.prices.map((x) => x.name).sort()).toEqual(['Milch', 'Quark']);
+  });
+
+  it('ersetzen: Vorräte genau wie in der Sicherung, Preise trotzdem ergänzt', () => {
+    const p = pantryFromBackup(heute, sicherung, true);
+    expect(amounts(p)).toEqual({ 'Hähnchenbrust': 900, Spinat: 300 });
+    expect(p.prices.map((x) => x.name).sort()).toEqual(['Milch', 'Quark']);
   });
 });

@@ -62,3 +62,16 @@ export function startSync(local: RecipeDb, remote: RecipeDb, onState: (s: SyncSt
     });
   return () => sync.cancel();
 }
+
+/**
+ * Alles hochladen, was hier noch nicht auf dem Server ist – true nur, wenn wirklich JEDES Dokument angekommen ist
+ * (Code-Review #18): PouchDB meldet eine Replikation auch dann als fertig, wenn der Server einzelne Dokumente
+ * abgelehnt hat (forbidden/unauthorized) – die stehen nur in doc_write_failures. Bei Zeitüberschreitung wird
+ * abgebrochen, bevor jemand die lokale Kopie löscht.
+ */
+export function pushAll(local: RecipeDb, remote: RecipeDb, timeoutMs: number): Promise<boolean> {
+  const rep = local.replicate.to(remote);
+  const done = rep.then((r) => r.doc_write_failures === 0 && !(r.errors?.length), () => false);
+  const timeout = new Promise<boolean>((resolve) => setTimeout(() => { rep.cancel(); resolve(false); }, timeoutMs));
+  return Promise.race([done, timeout]);
+}

@@ -129,13 +129,32 @@ export class PouchRecipeRepository implements RecipeRepository {
       throw e;
     }
     if (!doc._conflicts?.length) return pick(doc);
+    // in der Warteschlange neu lesen und bei 409 wiederholen (Code-Review #19) – vorher wurde mit der Revision von
+    // VOR der Warteschlange geschrieben: schrieb der Abgleich dazwischen, schlug das Laden fehl (Startfehler)
     return this.enqueue(async () => {
-      const others = await Promise.all(doc._conflicts!.map((rev) => db.get(kind.id, { rev })));
-      const data = others.reduce((acc, o) => kind.union(acc, pick(o)), pick(doc));
-      const res = await db.put({ _id: kind.id, _rev: doc._rev, type: kind.type, [kind.field]: data, updatedAt: kind.stamp(data) });
-      this.ownRevs.add(res.rev);
-      for (const rev of doc._conflicts!) this.ownRevs.add((await db.remove(kind.id, rev)).rev);
-      return data;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const cur = await db.get(kind.id, { conflicts: true }) as PouchDB.Core.ExistingDocument<SingleDoc> & { _conflicts?: string[] };
+        if (!cur._conflicts?.length) return pick(cur); // inzwischen gelöst (anderes Gerät)
+        const others = await Promise.all(cur._conflicts.map((rev) => db.get(kind.id, { rev })));
+        const data = others.reduce((acc, o) => kind.union(acc, pick(o)), pick(cur));
+        try {
+          const res = await db.put({ _id: kind.id, _rev: cur._rev, type: kind.type, [kind.field]: data, updatedAt: kind.stamp(data) });
+          this.ownRevs.add(res.rev);
+        } catch (e) {
+          if ((e as { status?: number }).status === 409) continue; // Abgleich hat gerade geschrieben → mit neuem Stand
+          throw e;
+        }
+        for (const rev of cur._conflicts) {
+          try {
+            this.ownRevs.add((await db.remove(kind.id, rev)).rev);
+          } catch (e) {
+            // schon von einem anderen Gerät entfernt – kein Fehler
+            if (![404, 409].includes((e as { status?: number }).status ?? 0)) throw e;
+          }
+        }
+        return data;
+      }
+      throw new Error(`${kind.id} konnte nicht geladen werden`);
     });
   }
 

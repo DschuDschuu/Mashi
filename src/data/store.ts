@@ -1,10 +1,11 @@
 import { useSyncExternalStore } from 'react';
 import { normalizeName } from '../domain/nutrition/localFoods';
+import { reverseKeyed, reverseList, reverseRecord } from '../domain/undo';
 import { EXTRA_PREFIX, RESTOCK_PREFIX, shoppingList, type RestockRule } from '../domain/restock';
 import { exclusiveStages, stageOf, withStage, type FoodStage } from '../domain/stage';
 import { emptyPlan, keyOfName, normalizePlan, toggleCooked, type MealPlan } from '../domain/mealplan';
 import { mergeRecipes } from '../domain/merge';
-import { unionPantry, unionPlan } from '../domain/syncMerge';
+import { pantryFromBackup, unionProducts } from '../domain/syncMerge';
 import { fillOrAdd, nameOf, productsFor, withMyProducts, type MyProduct } from '../domain/nutrition/myProducts';
 import type { FoodTable } from '../domain/nutrition/types';
 import {
@@ -44,6 +45,17 @@ let recipes: Recipe[] = [];
 let products: MyProduct[] = [];
 let plan: MealPlan = emptyPlan();
 /** Speichern des Plans läuft noch – beim Neuladen gewinnt dann der Stand im Speicher. */
+/**
+ * Änderungsnummern je Dokument (Code-Review #10): jede eigene Änderung zählt hoch. Das Neuladen merkt sich die Nummern
+ * VOR dem Lesen und übernimmt danach nur, was sich inzwischen nicht geändert hat – sonst überschrieb ein langsames
+ * Lesen (alle Fotos!) einen gerade gespeicherten Tipp, und weil das eigene Speichern kein Neuladen auslöst, blieb es so.
+ */
+let planGen = 0;
+let pantryGen = 0;
+let productsGen = 0;
+const recipeGen = new Map<string, number>();
+const bumpRecipe = (id: string) => recipeGen.set(id, (recipeGen.get(id) ?? 0) + 1);
+
 let planPending = 0;
 let pantry: Pantry = emptyPantry();
 let pantryPending = 0;
@@ -87,10 +99,15 @@ function tracked<T>(p: Promise<T>): Promise<T | void> {
   );
 }
 
-function commit(changed: Recipe) {
+/**
+ * @param keepStamp Sicherung einspielen: den Zeitstempel aus der Datei behalten – sonst gewänne ein altes Rezept
+ *   später jeden Konflikt gegen echte, neuere Änderungen (Code-Review #5)
+ */
+function commit(changed: Recipe, keepStamp = false) {
   // JEDE Änderung bekommt einen Zeitstempel. Der Abgleich zwischen Geräten entscheidet
   // darüber, welche Fassung neuer ist (mergeRecipes) – vergessene Stempel = verlorene Änderungen.
-  const next = { ...changed, updatedAt: now() };
+  const next = keepStamp ? changed : { ...changed, updatedAt: now() };
+  bumpRecipe(next.id);
   const base = recipes.find((r) => r.id === next.id);
   recipes = base ? recipes.map((r) => (r.id === next.id ? next : r)) : [next, ...recipes];
   emit();
@@ -142,6 +159,7 @@ function scheduleReload() {
   reloadTimer = setTimeout(async () => {
     let loaded;
     if (planPending || pantryPending || productsPending || pending.size) reloadMissed = true;
+    const gen = { plan: planGen, pantry: pantryGen, products: productsGen, recipes: new Map(recipeGen) };
     try {
       loaded = await Promise.all([repo.list(), repo.loadProducts(), repo.loadPlan(), repo.loadPantry()]);
     } catch (e) {
@@ -151,14 +169,24 @@ function scheduleReload() {
       return;
     }
     const [fresh, freshProducts, freshPlan, freshPantry] = loaded;
-    if (!productsPending) products = freshProducts;
-    if (!planPending) plan = normalizePlan(freshPlan);
-    if (!pantryPending) pantry = freshPantry;
+    // nur übernehmen, was sich während des Lesens hier nicht geändert hat – sonst später nachholen
+    const keepProducts = productsPending > 0 || productsGen !== gen.products;
+    const keepPlan = planPending > 0 || planGen !== gen.plan;
+    const keepPantry = pantryPending > 0 || pantryGen !== gen.pantry;
+    if (!keepProducts) products = freshProducts;
+    if (!keepPlan) plan = normalizePlan(freshPlan);
+    if (!keepPantry) pantry = freshPantry;
     const inMemory = new Map(recipes.map((r) => [r.id, r]));
-    recipes = fresh.map((r) => (pending.has(r.id) ? inMemory.get(r.id) ?? r : r));
-    for (const id of pending.keys()) if (!fresh.some((r) => r.id === id) && inMemory.has(id)) recipes.unshift(inMemory.get(id)!);
+    const keepRecipe = (id: string) => pending.has(id) || recipeGen.get(id) !== gen.recipes.get(id);
+    // hier geändert: unsere Fassung – hier gelöscht: bleibt weg
+    recipes = fresh.flatMap((r) => (!keepRecipe(r.id) ? [r] : inMemory.has(r.id) ? [inMemory.get(r.id)!] : []));
+    for (const [id, r] of inMemory) if (keepRecipe(id) && !fresh.some((x) => x.id === id)) recipes.unshift(r);
     emit();
-    if (!planPending) tidyRestockChecks();
+    if (!keepPlan) tidyRestockChecks();
+    if (keepProducts || keepPlan || keepPantry || [...inMemory.keys()].some(keepRecipe)) {
+      reloadMissed = true;
+      catchUpReload(); // war das Speichern schon fertig, holt das gleich nach (sonst nach dem Speichern)
+    }
   }, 300);
 }
 
@@ -572,6 +600,7 @@ export function deleteRecipe(id: string): () => void {
   const removed = recipes.find((r) => r.id === id);
   const planned = plan.items.find((i) => i.recipeId === id);
   recipes = recipes.filter((r) => r.id !== id);
+  bumpRecipe(id); // ein laufendes Neuladen holt es sonst zurück
   if (planned) removeFromPlan(id);
   emit();
   void tracked(repo.remove(id));
@@ -592,11 +621,13 @@ export function importRecipes(list: Recipe[]): { added: number; merged: number }
   let merged = 0;
   for (const r of list) {
     const existing = recipes.find((x) => x.id === r.id);
+    // Zeitstempel bleiben, wie sie sind: der neuere gewinnt (mergeRecipes), ein altes Rezept wird nicht „jetzt“
     if (existing) {
-      commit(mergeRecipes(existing, r));
+      const m = mergeRecipes(existing, r);
+      if (JSON.stringify(m) !== JSON.stringify(existing)) commit(m, true);
       merged++;
     } else {
-      commit(r);
+      commit(r, true);
       added++;
     }
   }
@@ -604,22 +635,32 @@ export function importRecipes(list: Recipe[]): { added: number; merged: number }
 }
 
 /** Produkte aus einer Sicherung übernehmen: gleiche ID = ersetzen, neue = anhängen. */
-/** Speisekammer aus einer Sicherung: mit dem heutigen Stand vereinen, nichts wird gelöscht */
-export function importPantry(incoming: Pantry) {
-  commitPantry(unionPantry(pantry, incoming));
+/**
+ * Speisekammer aus einer Sicherung: Preise, Bons, Gelerntes, Einstellungen ergänzen; die Vorräte nur bei „ersetzen“
+ * (siehe pantryFromBackup) – sonst bleiben die heutigen.
+ */
+export function importPantry(incoming: Pantry, replaceStock = false) {
+  commitPantry(pantryFromBackup(pantry, incoming, replaceStock));
 }
 
-/** Wochenplan aus einer Sicherung: vereinen (Gerichte, Haken, eigene Einträge) */
+/**
+ * Wochenplan aus einer Sicherung – nur bei „ersetzen“ aufrufen: dann genau wie in der Datei. Vereinen brachte
+ * längst Gekochtes und Entferntes zurück (Code-Review #5).
+ */
 export function importPlan(incoming: MealPlan) {
-  commitPlan(unionPlan(plan, normalizePlan(incoming)));
+  commitPlan(normalizePlan(incoming));
 }
 
+/**
+ * Produkte aus einer Sicherung: je Produkt gewinnt das neuere (updatedAt) – eine alte Sicherung macht keine
+ * Änderungen von seitdem rückgängig (Code-Review #5). Gibt zurück, wie viele neu oder neuer waren.
+ */
 export function importProducts(incoming: MyProduct[]): number {
   if (!incoming.length) return 0;
-  const byId = new Map(products.map((p) => [p.id, p]));
-  for (const p of incoming) byId.set(p.id, p);
-  saveProducts([...byId.values()]);
-  return incoming.length;
+  const next = unionProducts(products, incoming);
+  const changed = next.filter((p) => !products.includes(p)).length;
+  if (changed) saveProducts(next);
+  return changed;
 }
 
 /**
@@ -639,6 +680,7 @@ export function addProduct(p: MyProduct, forName = p.name): MyProduct {
  */
 export function saveProducts(next: MyProduct[]) {
   const base = products;
+  productsGen++;
   products = next;
   recipes = [...recipes];
   emit();
@@ -662,6 +704,7 @@ export function saveProducts(next: MyProduct[]) {
 
 function commitPlan(next: Omit<MealPlan, 'updatedAt'>) {
   const base = plan;
+  planGen++;
   const saved = { ...next, updatedAt: now() };
   plan = saved;
   emit();
@@ -739,13 +782,17 @@ export function removeExtra(name: string) {
  * verschwinden von der Liste (bleiben abgehakt). „Rückgängig“ holt alles zurück.
  */
 export function clearChecked(): () => void {
-  const before = { extra: plan.extra, checked: plan.checked, hidden: plan.hidden };
-  clearDoneExtras();
+  const beforeHidden = plan.hidden;
+  const undoExtras = clearDoneExtras();
   const fromPlan = plan.checked.filter((k) => !k.startsWith(EXTRA_PREFIX));
   if (fromPlan.length) commitPlan({ ...plan, hidden: [...new Set([...(plan.hidden ?? []), ...fromPlan])] });
+  const afterHidden = plan.hidden;
+  // als Umkehrung (Code-Review #4) – was zwischendurch dazukam, bleibt
   return () => {
+    undoExtras();
+    const hidden = reverseList(plan.hidden, beforeHidden, afterHidden);
     const { hidden: _h, ...rest } = plan;
-    commitPlan({ ...rest, extra: before.extra, checked: before.checked, ...(before.hidden ? { hidden: before.hidden } : {}) });
+    commitPlan(hidden.length ? { ...rest, hidden } : rest);
   };
 }
 
@@ -757,7 +804,13 @@ export function clearDoneExtras(): () => void {
   const keyOf = (n: string) => keyOfName(n, table);
   const extra = (plan.extra ?? []).filter((x) => !doneKeys.has(EXTRA_PREFIX + normalizeName(x.name)) && !doneKeys.has(keyOf(x.name) ?? ''));
   commitPlan({ ...plan, extra, checked: plan.checked.filter((k) => !(k.startsWith(EXTRA_PREFIX) && doneKeys.has(k))) });
-  return () => commitPlan({ ...plan, extra: before.extra, checked: before.checked });
+  const after = { extra: plan.extra, checked: plan.checked };
+  // als Umkehrung (Code-Review #4): genau die entfernten Einträge zurück – „Backpapier“ vom anderen Gerät bleibt
+  return () => commitPlan({
+    ...plan,
+    extra: reverseList(plan.extra, before.extra, after.extra),
+    checked: reverseList(plan.checked, before.checked, after.checked),
+  });
 }
 
 // ── Inventur ───────────────────────────────────────────────────────
@@ -881,6 +934,7 @@ export async function resetDemoData() {
 
 function commitPantry(next: Omit<Pantry, 'updatedAt'>) {
   const base = pantry;
+  pantryGen++;
   const saved = { ...next, updatedAt: now() };
   pantry = saved;
   emit();
@@ -956,7 +1010,16 @@ export function includeBon(bonId: string, index: number, patch: BonLinePatch, to
   const next = includeBonLine(pantry, bonId, index, patch, toStock, now(), () => newId('v'));
   if (next === pantry) return () => {};
   commitPantry(next);
-  return () => commitPantry({ ...pantry, bons: before.bons, rules: before.rules, history: before.history, prices: before.prices, ...(toStock ? { items: before.items } : {}) });
+  const after = pantry;
+  // als Umkehrung (Code-Review #4): nur, was das Aufnehmen geändert hat – und nur, was seitdem unverändert ist
+  return () => commitPantry({
+    ...pantry,
+    bons: reverseKeyed(pantry.bons, before.bons, after.bons, (b) => b.id),
+    rules: reverseKeyed(pantry.rules, before.rules, after.rules, (r) => r.key),
+    history: reverseList(pantry.history, before.history, after.history),
+    prices: reverseList(pantry.prices, before.prices, after.prices),
+    ...(toStock ? { items: reverseKeyed(pantry.items, before.items, after.items, (i) => i.id) } : {}),
+  });
 }
 
 /**
@@ -1016,9 +1079,12 @@ export function setCategory(name: string, c: FoodCategory): () => void {
   const { categories: _old, ...rest } = pantry;
   const next = withCategory(before, name, c, table);
   commitPantry(next ? { ...rest, categories: next } : rest);
+  const after = pantry.categories;
+  // nur die eine geänderte Kategorie zurück (Code-Review #4)
   return () => {
+    const categories = reverseRecord(pantry.categories, before, after);
     const { categories: _now, ...r } = pantry;
-    commitPantry(before ? { ...r, categories: before } : r);
+    commitPantry(categories ? { ...r, categories } : r);
   };
 }
 

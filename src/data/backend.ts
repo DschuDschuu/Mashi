@@ -3,7 +3,7 @@ import { useSyncExternalStore } from 'react';
 import { LocalRecipeRepository } from './localRepository';
 import { PouchRecipeRepository, type RecipeDb } from './pouchRepository';
 import { initStore } from './store';
-import { remoteDb, startSync, testConnection, type SyncConfig, type SyncState } from './sync';
+import { pushAll, remoteDb, startSync, testConnection, type SyncConfig, type SyncState } from './sync';
 import { currentMode, MODE_KEY, savedSyncConfig, SYNC_KEY, type Mode } from './connection';
 
 /**
@@ -86,10 +86,8 @@ export function startDemo() {
 export async function uploadPending(timeoutMs = 15_000): Promise<boolean> {
   const cfg = savedSyncConfig();
   if (!cfg) return true;
-  const local = new PouchDB(LOCAL_DB) as RecipeDb;
-  const push = local.replicate.to(remoteDb(remoteFactory, cfg)).then(() => true, () => false);
-  const timeout = new Promise<boolean>((r) => setTimeout(() => r(false), timeoutMs));
-  return Promise.race([push, timeout]);
+  // nur „true“, wenn der Server jedes Dokument angenommen hat – sonst löscht das Abmelden Ungespeichertes
+  return pushAll(new PouchDB(LOCAL_DB) as RecipeDb, remoteDb(remoteFactory, cfg), timeoutMs);
 }
 
 /**

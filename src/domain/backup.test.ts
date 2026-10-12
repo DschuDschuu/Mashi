@@ -114,3 +114,38 @@ describe('Rezepte teilen (Datei für ein anderes Mashi)', () => {
     expect(parsed.products).toEqual([]);
   });
 });
+
+describe('Import prüft gründlich (Code-Review #22)', () => {
+  const r = createMockRecipes()[0];
+  const T = '2026-10-01T10:00:00.000Z';
+
+  it('Bild als Web-Adresse (Tracker) fällt weg – das Rezept bleibt; eingebettetes Foto bleibt', () => {
+    const tracker = { ...r, image: { kind: 'url' as const, url: 'https://tracker.example/x.gif' } };
+    const parsed = parseBackup(JSON.parse(JSON.stringify(createBackup([tracker]))));
+    expect(parsed.recipes).toHaveLength(1);
+    expect(parsed.recipes[0].image).toBeUndefined();
+    const photo = { ...r, image: { kind: 'url' as const, url: 'data:image/png;base64,iVBORw0KGgo=', original: 'javascript:alert(1)' } };
+    expect(parseBackup([photo]).recipes[0].image).toBeUndefined(); // auch das Original muss eingebettet sein
+  });
+
+  it('kaputte Listen in Speisekammer oder Plan → werden nicht übernommen (statt später überall abzustürzen)', () => {
+    const pantry = { ...emptyPantry(), updatedAt: T };
+    expect(parseBackup({ recipes: [], pantry: { ...pantry, prices: 'kaputt' } }).pantry).toBeUndefined();
+    expect(parseBackup({ recipes: [], pantry: { ...pantry, bons: [{ id: 'b', date: T, lines: null }] } }).pantry).toBeUndefined();
+    expect(parseBackup({ recipes: [], plan: { items: [], checked: [], updatedAt: T, extra: [{ nichts: 1 }] } }).plan).toBeUndefined();
+  });
+
+  it('eine vollständige, echte Speisekammer kommt weiter durch', () => {
+    const pantry = {
+      ...emptyPantry(), updatedAt: T,
+      items: [{ id: 'i', name: 'Testquark', amount: 1, unit: 'Stück' as const, addedAt: T }],
+      rules: [{ key: 'testquark', name: 'Testquark' }],
+      prices: [{ name: 'Testquark', perUnit: 0.79, unit: 'Stück' as const, date: T, productId: 'p' }],
+      history: [{ name: 'Testquark', perUnit: 0.79, unit: 'Stück' as const, date: T }],
+      savings: [{ key: '2026-10-01|5', date: T, offers: 0.2, lidlPlus: 0 }], receipts: ['2026-10-01|5'],
+      bons: [{ id: 'b', date: T, lines: [{ bon: 'Quark', count: 1, name: 'Testquark', price: 0.79 }], updatedAt: T }],
+      restock: [{ name: 'Testquark', below: 1, unit: 'Stück' as const }], categories: { 'food:quark': 'kuehl' as never },
+    };
+    expect(parseBackup({ recipes: [], pantry }).pantry).toEqual(pantry);
+  });
+});

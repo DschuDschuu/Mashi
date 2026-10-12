@@ -304,6 +304,21 @@ export function priceOf(row: ImportRow, date: string): PriceEntry | undefined {
   return { name, perUnit: paid / pieces, unit: 'Stück', date, ...sort };
 }
 
+/**
+ * „Zuletzt bezahlt“ (Pantry.prices) hat je Name einen Eintrag. Nach dem Umbenennen („Quark“ → „Magerquark“) kann
+ * es zwei geben – dann zählt der neueste (Code-Review #1). dropped = die entfernten (für „Rückgängig“).
+ */
+export function newestPricePerName<T extends { name: string; date: string }>(prices: readonly T[]): { prices: T[]; dropped: T[] } {
+  const newest = new Map<string, T>();
+  for (const p of prices) {
+    const k = receiptKey(p.name);
+    const cur = newest.get(k);
+    if (!cur || p.date > cur.date) newest.set(k, p);
+  }
+  const keep = new Set(newest.values());
+  return { prices: prices.filter((p) => keep.has(p)), dropped: prices.filter((p) => !keep.has(p)) };
+}
+
 export const samePack = (a?: Pack, b?: Pack) => a?.amount === b?.amount && a?.unit === b?.unit;
 export const isCount = (u?: PantryUnit) => u === 'Stück' || u === 'Glas';
 

@@ -78,3 +78,29 @@ describe('Meine Lebensmittel gibt den Namen vor', () => {
   });
 });
 
+
+describe('Code-Review #1: Umbenennen auf einen vorhandenen Namen', () => {
+  const p0: Pantry = { ...emptyPantry(), prices: [
+    { name: 'Quark', perUnit: 0.002, unit: 'g', date: '2026-03-01' },
+    { name: 'Magerquark', perUnit: 0.003, unit: 'g', date: '2026-01-01' },
+  ] };
+
+  it('es bleibt ein „zuletzt bezahlt“ – der neueste (März), auch nach dem Abgleich', async () => {
+    const { merge3Pantry } = await import('./syncMerge');
+    const { pantry: p1 } = renameFood(p0, 'Quark', 'Magerquark', []);
+    expect(p1.prices).toEqual([{ name: 'Magerquark', perUnit: 0.002, unit: 'g', date: '2026-03-01' }]);
+    expect(merge3Pantry(p0, p1, p0).prices).toEqual(p1.prices);
+  });
+
+  it('Rückgängig bringt beide Preise zurück', () => {
+    const { pantry: p1, undo } = renameFood(p0, 'Quark', 'Magerquark', []);
+    expect(undo(p1).prices).toEqual(expect.arrayContaining(p0.prices));
+    expect(undo(p1).prices).toHaveLength(2);
+  });
+
+  it('auch „Meine Lebensmittel gibt den Namen vor“ legt doppelte Preise zusammen', () => {
+    const p: Pantry = { ...p0, items: [{ id: 'q', name: 'Quark', amount: 1, unit: 'Stück', addedAt: T, productId: 'pq' }] };
+    const prod: MyProduct = { id: 'pq', name: 'Magerquark', replaces: [], per100g: { kcal: 1, protein: 1, carbs: 1, fat: 1 }, updatedAt: T };
+    expect(syncProductNames(p, [prod])!.prices).toEqual([{ name: 'Magerquark', perUnit: 0.002, unit: 'g', date: '2026-03-01' }]);
+  });
+});

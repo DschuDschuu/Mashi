@@ -3,7 +3,7 @@ import PouchDB from 'pouchdb-core';
 import memory from 'pouchdb-adapter-memory';
 import { describe, expect, it } from 'vitest';
 import { PouchRecipeRepository, type RecipeDb } from './pouchRepository';
-import { cookParts, setPlanAmounts, addExtra, addPantryItem, dropPriceDay, editBon, setCategory, addToPlan, answerLeftover, applyInventory, clearDoneExtras, deleteRecipe, importPantry, importReceipt, importRecipes, regenerateImage, markCooked, uncookRecipe, clearCooked, createRecipe, currentLeftoverAsk, currentPantry, eatPreparedPortions, freezePantryItem, initStore, thawPantryItem, togglePlanCooked, removeFromPlan, removePantryItem, setFoodStage, setPantryAmount, toggleShoppingItem, updatePantryItem } from './store';
+import { importProducts, saveProducts, currentProducts, clearChecked, cookParts, setPlanAmounts, addExtra, addPantryItem, dropPriceDay, editBon, setCategory, addToPlan, answerLeftover, applyInventory, clearDoneExtras, deleteRecipe, importPantry, importReceipt, importRecipes, regenerateImage, markCooked, uncookRecipe, clearCooked, createRecipe, currentLeftoverAsk, currentPantry, eatPreparedPortions, freezePantryItem, initStore, thawPantryItem, togglePlanCooked, removeFromPlan, removePantryItem, setFoodStage, setPantryAmount, toggleShoppingItem, updatePantryItem } from './store';
 import { buildShoppingList, keyOfName } from '../domain/mealplan';
 import { emptyPantry } from '../domain/pantry';
 import { EXTRA_PREFIX, RESTOCK_PREFIX } from '../domain/restock';
@@ -288,7 +288,7 @@ describe('Store: Menge von Hand – die richtige Meldung', () => {
   it('letzte Packung angebrochen ist nicht „alle“ (Julias Joghurt), 0 schon; Rückgängig bringt die Packung zurück', async () => {
     await freshStore('menge');
     const p = currentPantry();
-    importPantry({ ...p, items: [...p.items, { id: 'j', name: 'Testjoghurt', amount: 1, unit: 'Stück', pack: { amount: 500, unit: 'g' }, addedAt: '2026-09-28T10:00:00.000Z' }] });
+    importPantry({ ...p, items: [...p.items, { id: 'j', name: 'Testjoghurt', amount: 1, unit: 'Stück', pack: { amount: 500, unit: 'g' }, addedAt: '2026-09-28T10:00:00.000Z' }] }, true);
     await settle();
     // 500 g → 300 g: aus der einen Packung wird ein offener Rest mit neuer ID
     const { undo, result } = setPantryAmount('j', 300 / 500);
@@ -413,5 +413,73 @@ describe('Store: Reste rechnen mit den Mengen von beim Kochen (Julia)', () => {
     togglePlanCooked(rid);
     answerLeftover(1);
     expect(currentPantry().items.find((i) => i.recipeId === rid)?.cooked).toEqual({ servings: 2, amounts: { p: 3 } });
+  });
+});
+
+describe('Store: Rückgängig als Umkehrung (Code-Review #4)', () => {
+  it('„Abgehaktes entfernen“, dazwischen kommt „Backpapier“ dazu, dann Rückgängig → Backpapier bleibt', async () => {
+    const repo = await freshStore('undo-umkehr');
+    addExtra('Milch');
+    toggleShoppingItem(`${EXTRA_PREFIX}milch`);
+    const undo = clearChecked();
+    addExtra('Backpapier'); // z. B. vom anderen Gerät per Abgleich
+    undo();
+    await settle();
+    const plan = await repo.loadPlan();
+    expect((plan.extra ?? []).map((x) => x.name).sort()).toEqual(['Backpapier', 'Milch']);
+    expect(plan.checked).toContain(`${EXTRA_PREFIX}milch`);
+  });
+});
+
+describe('Store: Sicherung einspielen überschreibt nichts Neueres (Code-Review #5)', () => {
+  const prod = (updatedAt: string, kcal: number) => ({ id: 'p-quark', name: 'Quark', replaces: [], per100g: { kcal, protein: 1, carbs: 1, fat: 1 }, updatedAt });
+
+  it('Produkte: das neuere gewinnt – eine alte Sicherung macht nichts rückgängig', async () => {
+    await freshStore('import-produkte');
+    saveProducts([prod('2026-10-05T10:00:00.000Z', 70)]);
+    expect(importProducts([prod('2026-09-01T10:00:00.000Z', 99)])).toBe(0);
+    expect(currentProducts()[0].per100g.kcal).toBe(70);
+    expect(importProducts([prod('2026-10-09T10:00:00.000Z', 80)])).toBe(1);
+    expect(currentProducts()[0].per100g.kcal).toBe(80);
+  });
+
+  it('Rezepte: der Zeitstempel aus der Datei bleibt (nicht „jetzt“)', async () => {
+    const repo = await freshStore('import-rezepte');
+    const r = { ...createMockRecipes()[0], id: 'import-test', updatedAt: '2026-01-01T10:00:00.000Z' };
+    importRecipes([r]);
+    await settle();
+    expect((await repo.list()).find((x) => x.id === 'import-test')?.updatedAt).toBe('2026-01-01T10:00:00.000Z');
+  });
+});
+
+describe('Store: Neuladen im Hintergrund überschreibt keinen frischen Tipp (Code-Review #10)', () => {
+  it('Lesen hängt, dazwischen wird ein Vorrat eingetragen und gespeichert → bleibt nach dem Neuladen', async () => {
+    const inner = new PouchRecipeRepository(new PouchDB(`reload-${Date.now()}`, { adapter: 'memory' }) as unknown as RecipeDb);
+    let fire = () => {};
+    let release = () => {};
+    let slow = false;
+    // wie das echte Repository – nur: Änderungen vom „anderen Gerät“ per Hand auslösen, und das Lesen kann hängen
+    const repo = new Proxy(inner, {
+      get(t, k) {
+        if (k === 'onExternalChange') return (cb: () => void) => { fire = cb; return () => {}; };
+        if (k === 'loadPantry') return async () => {
+          const stale = await t.loadPantry();
+          if (slow) await new Promise<void>((r) => { release = r; });
+          return stale;
+        };
+        const v = Reflect.get(t, k);
+        return typeof v === 'function' ? v.bind(t) : v;
+      },
+    });
+    await initStore(repo);
+    slow = true;
+    fire(); // Abgleich meldet eine Änderung
+    await new Promise((r) => setTimeout(r, 400)); // Neuladen liest – und hängt
+    addPantryItem('Testmilch', 1, 'Stück'); // Tipp währenddessen
+    await settle(); // Speichern ist fertig
+    slow = false;
+    release(); // jetzt kommt der alte Stand an
+    await settle();
+    expect(currentPantry().items.map((i) => i.name)).toContain('Testmilch');
   });
 });
