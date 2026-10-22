@@ -35,6 +35,8 @@ const PATHS = {
   info: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z M12 11v5 M12 8h.01',
   bookmark: 'M6 3h12v18l-6-4-6 4z',
   grid: 'M4 4h6v6H4z M14 4h6v6h-6z M4 14h6v6H4z M14 14h6v6h-6z',
+  // Mix & Match – Soßen und Beilagen kreuz und quer kombinieren
+  shuffle: 'M16 3h5v5 M4 20 21 3 M21 16v5h-5 M15 15l6 6 M4 4l5 5',
   image: 'M5 4h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z M4 16l5-5 4 4 3-3 4 4 M15.5 8.5h.01',
   file: 'M6 3h8l4 4v14H6z M14 3v4h4 M9 13h6 M9 17h6',
   clipboard: 'M9 3.5h6v3H9z M9 5H6v16h12V5h-3 M9 12h6 M9 16h4',
@@ -64,6 +66,16 @@ const PATHS = {
   glass: 'M6 3h12l-1.6 16.2a2 2 0 0 1-2 1.8H9.6a2 2 0 0 1-2-1.8z M6.5 8h11',
   snow: 'M12 3v18 M4.2 7.5l15.6 9 M4.2 16.5l15.6-9 M9.8 4.6 12 6l2.2-1.4 M9.8 19.4 12 18l2.2 1.4',
   drumstick: 'M15.4 3a5.6 5.6 0 0 1 5.6 5.6c0 3.4-3.4 6.4-6.8 6.4l-3.1 3.1a2 2 0 1 1-2.9 2.2 2 2 0 1 1-2.2-2.9L9.1 14.3C8.8 10.5 11.8 3 15.4 3z',
+
+  // Mix & Match – Bausteine (siehe mixIcon in catalogIcons.ts)
+  // Schüssel mit Nudeln obendrauf
+  pasta: 'M3 13h18a9 9 0 0 1-18 0z M5 13c1.2-2.4 3.3-2.4 4.5 0 1.2-2.4 3.3-2.4 4.5 0 1.2-2.4 3.3-2.4 4.5 0 M7 9.5c1.2-2.4 3.3-2.4 4.5 0 1.2-2.4 3.3-2.4 4.5 0 M10 20.5h4',
+  // drei geriffelte Gnocchi
+  gnocchi: 'M3 15.5a3.5 2.5 0 1 0 7 0 3.5 2.5 0 1 0-7 0z M14 15.5a3.5 2.5 0 1 0 7 0 3.5 2.5 0 1 0-7 0z M8.5 8.5a3.5 2.5 0 1 0 7 0 3.5 2.5 0 1 0-7 0z M5.5 14.3v2.4 M7.5 14.3v2.4 M16.5 14.3v2.4 M18.5 14.3v2.4 M11 7.3v2.4 M13 7.3v2.4',
+  potato: 'M5.5 9.5C7 5 14 3.5 17.5 6.5c3.5 3 2.5 9.5-2 12-4.5 2.5-11 1-11.5-3.5-.3-2 .5-3.5 1.5-5.5z M10 10h.01 M14.5 12.5h.01 M10.5 15h.01',
+  tomato: 'M5 13.5a7 7 0 1 0 14 0 7 7 0 1 0-14 0z M12 6.5V3.5 M12 6.5c-1.2-1.6-2.7-2.1-4-1.6 M12 6.5c1.2-1.6 2.7-2.1 4-1.6',
+  // Kelle – Soße allgemein
+  ladle: 'M3 12h12a6 6 0 0 1-12 0z M15 12V5.5a2.5 2.5 0 0 1 5 0V7',
 } as const;
 
 export type IconName = keyof typeof PATHS;

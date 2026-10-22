@@ -8,7 +8,7 @@ import type { ReceiptSavings } from './savings';
 import type { SavedBon } from './bons';
 import type { FoodCategory } from './categories';
 import { specialDays, useByOf, type ShelfDays } from './shelfLife';
-import { currentContent } from './recipe';
+import { cookingContent } from './homemade';
 import type { MealPlan } from './mealplan';
 import type { RestockRule } from './restock';
 import type { Pack } from './pantryLabel';
@@ -512,7 +512,7 @@ export function pantryAfterPlan(pantry: Pantry, plan: MealPlan, recipes: Recipe[
     const r = recipes.find((x) => x.id === item.recipeId);
     if (!r) continue;
     // schon fertige Teile (die Sauce von gestern) brauchen nichts mehr
-    const d = deductRecipe(rest, remainingContent(currentContent(r), doneParts(pantry.items, r.id)), item.servings, table, item.amounts ?? {}, item.variants);
+    const d = deductRecipe(rest, remainingContent(cookingContent(r, recipes), doneParts(pantry.items, r.id)), item.servings, table, item.amounts ?? {}, item.variants);
     d.checkIds.forEach((id) => reserved.add(id));
     rest = d.pantry;
   }
@@ -533,7 +533,7 @@ export function recipesFromPantry(pantry: Pantry, recipes: Recipe[], table: Food
   return recipes
     .filter((r) => !r.archivedAt && r.status !== 'ki_entwurf')
     .map((recipe) => {
-      const c = currentContent(recipe);
+      const c = cookingContent(recipe, recipes);
       const parts = c.ingredients.map((i) => resolveIngredient(i, 1, table)).filter((x): x is Resolved => !!x && !x.pantry);
       // Knoblauch für Soße UND Béchamel ist eine Zutat, nicht zwei
       const unique = [...new Map(parts.map((p) => [p.key, p])).values()];
@@ -702,7 +702,7 @@ export function plannedByDish(pantry: Pantry, plan: MealPlan, recipes: Recipe[],
     if (plan.cooked.includes(item.recipeId)) continue;
     const r = recipes.find((x) => x.id === item.recipeId);
     if (!r) continue;
-    const d = deductRecipe(rest, remainingContent(currentContent(r), doneParts(pantry.items, r.id)), item.servings, table, item.amounts ?? {}, item.variants);
+    const d = deductRecipe(rest, remainingContent(cookingContent(r, recipes), doneParts(pantry.items, r.id)), item.servings, table, item.amounts ?? {}, item.variants);
     out.push({ recipeId: r.id, taken: takenBetween(rest, d.pantry), stock: d.stock });
     // „Noch da?“-Markierung nur gedacht – fürs nächste Gericht wieder wie vorher
     rest = { ...d.pantry, items: d.pantry.items.map((it) => ({ ...it, check: originalCheck.get(it.id) })) };

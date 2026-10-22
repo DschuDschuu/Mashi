@@ -1,13 +1,16 @@
 import { useEffect, useState } from 'react';
-import { newId } from '../../domain/recipe';
+import { currentContent, newId } from '../../domain/recipe';
+import { homemadeCandidates } from '../../domain/homemade';
+import { choicesOf, ownOf, removeChoice, renameChoice } from '../../domain/choices';
+import { ask } from '../confirm';
 import { FINISH, partLabel, partsOf, REST, suggestedPart } from '../../domain/parts';
 import { stepIngredients } from '../../domain/stepIngredients';
-import type { Ingredient, Step, Unit } from '../../domain/types';
+import type { Ingredient, Recipe, RecipeContent, Step, Unit } from '../../domain/types';
 import { Icon } from './Icon';
 import { AutoTextarea } from './AutoTextarea';
 import { IngredientNames } from './IngredientNames';
 import { renameKey, renameSuggestion, type RenameOptions } from '../../domain/renames';
-import { dismissRename } from '../../data/store';
+import { dismissRename, useRecipes } from '../../data/store';
 import { useRenameOptions } from '../useRenames';
 
 /** Auswahl „＋ Neuer Teil …“ – kein echter Teil, öffnet das Eingabefeld */
@@ -15,10 +18,18 @@ const NEW_PART = '\u0000neu';
 
 const UNITS: Unit[] = ['g', 'kg', 'ml', 'l', 'EL', 'TL', 'Prise', 'Stück', 'Zehe', 'Dose', 'Glas', 'Bund', 'Handvoll', 'cm', 'Messlöffel'];
 
-/** Zutatenliste bearbeiten – geteilt von Testfeedback und Rezeptformular. */
-export function IngredientEditor({ items, onChange, newItem }: { items: Ingredient[]; onChange: (i: Ingredient[]) => void; newItem: () => Ingredient }) {
+/**
+ * Zutatenliste bearbeiten – geteilt von Testfeedback und Rezeptformular.
+ * @param self ID des Rezepts – zeigt nie auf sich selbst als Grundrezept
+ */
+export function IngredientEditor({ items, onChange, newItem, self, choices = [] }: {
+  items: Ingredient[]; onChange: (i: Ingredient[]) => void; newItem: () => Ingredient; self?: string;
+  /** Varianten des Rezepts (choices.ts) – dann gehört jede Zutat zu einer oder zu allen */
+  choices?: readonly string[];
+}) {
   const update = (idx: number, patch: Partial<Ingredient>) => onChange(items.map((it, i) => (i === idx ? { ...it, ...patch } : it)));
   const renameOpts = useRenameOptions();
+  const recipes = useRecipes();
   /** Teile des Rezepts (Julia: „Sauce“, „Salat“ – getrennt kochbar) und für welche Zutat gerade ein neuer getippt wird */
   const parts = partsOf({ ingredients: items }).filter((p) => p !== REST);
   const [newPartFor, setNewPartFor] = useState<string | null>(null);
@@ -54,6 +65,8 @@ export function IngredientEditor({ items, onChange, newItem }: { items: Ingredie
           <input className="editor__note" aria-label={`Hinweis zu ${it.name || 'Zutat'}`} placeholder="Hinweis, z. B. gewürfelt" value={it.note ?? ''}
             onChange={(e) => update(idx, { note: e.target.value || undefined })} onBlur={(e) => update(idx, { note: e.target.value.trim() || undefined })} />
           <RenameHint name={it.name} options={renameOpts} onApply={(to) => update(idx, { name: to })} />
+          <HomemadePick ingredient={it} recipes={recipes} self={self} onChange={(recipeId) => update(idx, { recipeId })} />
+          <ChoicePick value={it.choice} choices={choices} label={`Variante von ${it.name || 'Zutat'}`} onChange={(choice) => update(idx, { choice })} />
         </div>
       ))}
       <button type="button" className="link" onClick={() => onChange([...items, newItem()])}><Icon name="plus" size={16} /> Zutat hinzufügen</button>
@@ -62,7 +75,7 @@ export function IngredientEditor({ items, onChange, newItem }: { items: Ingredie
 }
 
 /** `ingredients`: die aktuelle Zutatenliste des Formulars – daraus wählt man pro Schritt aus. */
-export function StepEditor({ steps, ingredients, onChange }: { steps: Step[]; ingredients: Ingredient[]; onChange: (s: Step[]) => void }) {
+export function StepEditor({ steps, ingredients, onChange, choices = [] }: { steps: Step[]; ingredients: Ingredient[]; onChange: (s: Step[]) => void; choices?: readonly string[] }) {
   const update = (idx: number, patch: Partial<Step>) => onChange(steps.map((s, i) => (i === idx ? { ...s, ...patch } : s)));
   /** Schritt um eine Position verschieben (-1 = nach oben). Der Schritt behält ID, Timer und Zutaten. */
   const move = (idx: number, by: -1 | 1) => {
@@ -95,6 +108,7 @@ export function StepEditor({ steps, ingredients, onChange }: { steps: Step[]; in
                 </select>
               </label>
             )}
+            <ChoicePick value={s.choice} choices={choices} label={`Variante von Schritt ${idx + 1}`} onChange={(choice) => update(idx, { choice })} />
           </div>
           <div className="editor__stepactions">
             <button type="button" className="iconbtn iconbtn--sm" aria-label={`Schritt ${idx + 1} nach oben`} disabled={idx === 0} onClick={() => move(idx, -1)}>
@@ -151,6 +165,97 @@ function StepIngredientPicker({ step, ingredients, onChange }: {
 }
 
 /** „→ Milch?“ unter einer Zutat, die einheitlich anders heißt – übernehmen oder nicht mehr vorschlagen */
+/** Zu welcher Variante gehört die Zutat bzw. der Schritt? Nur, wenn das Rezept Varianten hat */
+function ChoicePick({ value, choices, label, onChange }: { value?: string; choices: readonly string[]; label: string; onChange: (choice: string | undefined) => void }) {
+  if (!choices.length) return null;
+  return (
+    <label className="editor__choice small">
+      <span className="muted">Variante</span>
+      <select value={value && choices.includes(value) ? value : ''} aria-label={label} onChange={(e) => onChange(e.target.value || undefined)}>
+        <option value="">Für alle</option>
+        {choices.map((c) => <option key={c} value={c}>{c}</option>)}
+      </select>
+    </label>
+  );
+}
+
+const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+
+/**
+ * Varianten anlegen (Julia: „mit Hähnchen“ oder „mit Tofu“). Ohne Varianten nur ein Link – die meisten Rezepte
+ * brauchen keine, und das Formular soll dafür nicht voller werden.
+ */
+export function ChoiceEditor({ content, onChange }: { content: RecipeContent; onChange: (c: RecipeContent) => void }) {
+  const list = choicesOf(content);
+  const [open, setOpen] = useState(list.length > 0);
+  const [draft, setDraft] = useState('');
+  if (!open && !list.length) {
+    return (
+      <button type="button" className="link editor__choiceopen" onClick={() => setOpen(true)}>
+        <Icon name="plus" size={16} /> Varianten anlegen, z. B. mit Hähnchen oder Tofu
+      </button>
+    );
+  }
+  const add = () => {
+    const name = draft.trim();
+    if (!name || list.includes(name)) return;
+    onChange({ ...content, choices: [...list, name] });
+    setDraft('');
+  };
+  const remove = async (name: string) => {
+    const own = ownOf(content, name);
+    const what = [own.ingredients && count(own.ingredients, 'Zutat', 'Zutaten'), own.steps && count(own.steps, 'Schritt', 'Schritte')].filter(Boolean).join(' und ');
+    // was nur zu ihr gehört, geht mit – vorher fragen (gespeichert wird erst mit „Speichern“)
+    if (what && !(await ask({ title: `Variante „${name}“ entfernen?`, text: `${what} ${own.ingredients + own.steps === 1 ? 'gehört' : 'gehören'} nur zu ihr und ${own.ingredients + own.steps === 1 ? 'wird' : 'werden'} mit entfernt.`, confirm: 'Entfernen', danger: true }))) return;
+    onChange(removeChoice(content, name));
+  };
+  return (
+    <div className="panel editor">
+      <h3 className="small muted">Varianten</h3>
+      <p className="small muted">Zutaten und Schritte gehören zu einer Variante oder zu allen. Im Rezept wählst du, welche du kochst.</p>
+      {list.map((name) => (
+        <div key={name} className="editor__choicerow">
+          <input defaultValue={name} aria-label={`Variante ${name} umbenennen`}
+            onBlur={(e) => { const next = renameChoice(content, name, e.target.value); if (next === content) e.target.value = name; else onChange(next); }}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); } }} />
+          <button type="button" className="iconbtn iconbtn--sm" aria-label={`Variante ${name} entfernen`} onClick={() => void remove(name)}>
+            <Icon name="close" size={16} />
+          </button>
+        </div>
+      ))}
+      <div className="editor__choicerow">
+        <input value={draft} placeholder={list.length ? 'Weitere Variante' : 'z. B. mit Hähnchen'} aria-label="Neue Variante"
+          onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }} />
+        <button type="button" className="iconbtn iconbtn--sm" aria-label="Variante hinzufügen" disabled={!draft.trim() || list.includes(draft.trim())} onClick={add}>
+          <Icon name="plus" size={18} />
+        </button>
+      </div>
+      {list.length === 1 && <p className="small muted">Noch eine dazu – ab zwei Varianten kannst du im Rezept wählen.</p>}
+    </div>
+  );
+}
+
+/**
+ * „Selbst machen nach …“ (Julia: gekaufte oder selbstgemachte Gnocchi) – nur, wenn ein Rezept zur Zutat passt oder schon
+ * eins verknüpft ist; sonst bliebe in jeder Zeile eine leere Auswahl stehen. Gewählt wird später auf der Rezeptseite.
+ */
+function HomemadePick({ ingredient: it, recipes, self, onChange }: {
+  ingredient: Ingredient; recipes: readonly Recipe[]; self?: string; onChange: (recipeId: string | undefined) => void;
+}) {
+  const linked = it.recipeId ? recipes.find((r) => r.id === it.recipeId) : undefined;
+  const options = [...new Set([...(linked ? [linked] : []), ...homemadeCandidates(it.name, recipes, self)])];
+  if (!options.length) return null;
+  return (
+    <label className="editor__homemade small">
+      <Icon name="pot" size={14} /> Selbst machen nach
+      <select value={linked?.id ?? ''} aria-label={`${it.name}: selbst machen nach Rezept`} onChange={(e) => onChange(e.target.value || undefined)}>
+        <option value="">– nur gekauft –</option>
+        {options.map((r) => <option key={r.id} value={r.id}>{currentContent(r).title}</option>)}
+      </select>
+    </label>
+  );
+}
+
 function RenameHint({ name, options, onApply }: { name: string; options: RenameOptions; onApply: (to: string) => void }) {
   const to = renameSuggestion(name, options);
   if (!to) return null;

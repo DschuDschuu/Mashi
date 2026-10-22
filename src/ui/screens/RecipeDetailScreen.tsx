@@ -5,6 +5,9 @@ import { useRecipeStock } from '../useRecipeStock';
 import { StockLine } from '../components/StockLine';
 import type { Stock } from '../../domain/pantry';
 import { categoryInfo, deviceInfo, DIFFICULTY_LABEL, SOURCE_INFO, STATUS_INFO } from '../../domain/catalog';
+import { MIX_ROLES, mixRole } from '../../domain/mix';
+import { cookingContent, homemadeOptions } from '../../domain/homemade';
+import { activeChoice, choicesOf } from '../../domain/choices';
 import { currentContent, currentVersion, originalVersion } from '../../domain/recipe';
 import { asCooked, formatQuantity, scaleIngredients } from '../../domain/scaling';
 import { orderByUse } from '../../domain/stepIngredients';
@@ -12,7 +15,7 @@ import { doneParts, partLabel, partOf, partsOf, REST, stepPart } from '../../dom
 import type { Recipe, RecipeContent } from '../../domain/types';
 import { describeChange, diffContent } from '../../domain/versions';
 import {
-  addToPlan, adoptToCookbook, archiveRecipe, deleteRecipe, restoreRecipe, markCooked, regenerateImage, setPlanVariants, setStatus, toggleFavorite, togglePlanCooked, uncookRecipe, updateNotes, usePantry, usePlan, useRecipe,
+  addToPlan, adoptToCookbook, archiveRecipe, deleteRecipe, restoreRecipe, markCooked, regenerateImage, setChoice, setHomemade, setMix, setPlanVariants, setStatus, toggleFavorite, togglePlanCooked, uncookRecipe, updateNotes, usePantry, usePlan, useRecipe, useRecipes,
 } from '../../data/store';
 import { cookedToast } from '../cookedToast';
 import { shareMessage, shareRecipes } from '../shareRecipes';
@@ -59,7 +62,12 @@ export function RecipeDetailScreen({ id }: { id: string }) {
 }
 
 function Detail({ recipe }: { recipe: Recipe }) {
-  const c = currentContent(recipe);
+  const recipes = useRecipes();
+  // so, wie gekocht wird: selbst gemachte Gnocchi mit ihren Zutaten und Schritten (Julia) – sonst wie geschrieben
+  const c = useMemo(() => cookingContent(recipe, recipes), [recipe, recipes]);
+  const homemade = homemadeOptions(recipe, recipes);
+  const choices = choicesOf(currentContent(recipe));
+  const choice = activeChoice(recipe);
   const planned = usePlan().items.find((i) => i.recipeId === recipe.id);
   // Im Wochenplan mit 6 Portionen → hier auch 6 (für Mengen, Kochmodus und das Abziehen beim Kochen).
   // null = nicht angefasst → folgt dem Plan; der kann beim Start erst nach dem ersten Zeichnen ankommen.
@@ -108,6 +116,9 @@ function Detail({ recipe }: { recipe: Recipe }) {
     ? { avg: recipe.feedback.reduce((s, f) => s + f.rating, 0) / recipe.feedback.length, count: recipe.feedback.length }
     : null;
 
+  // Bausteine kommen aus Mix & Match – direkt geöffnet führt „Zurück“ dorthin
+  const home = recipe.mix ? '/mix' : '/kochbuch';
+
   const onRegenerate = async () => {
     setMenu(false);
     setImgBusy(true);
@@ -120,7 +131,7 @@ function Detail({ recipe }: { recipe: Recipe }) {
     <div className="hero">
       <RecipeImage image={recipe.image} size="lg" className={imgBusy ? 'is-busy' : ''} />
       <div className="hero__bar">
-        <button className="iconbtn iconbtn--glass" onClick={() => goBack('/kochbuch')} aria-label="Zurück"><Icon name="back" /></button>
+        <button className="iconbtn iconbtn--glass" onClick={() => goBack(home)} aria-label="Zurück"><Icon name="back" /></button>
         <div className="hero__right">
           <button className={`iconbtn iconbtn--glass${recipe.favorite ? ' is-fav' : ''}`} onClick={() => toggleFavorite(recipe.id)} aria-pressed={recipe.favorite} aria-label="Favorit">
             <Icon name="heart" filled={recipe.favorite} />
@@ -137,7 +148,17 @@ function Detail({ recipe }: { recipe: Recipe }) {
           <button role="menuitem" onClick={() => { setMenu(false); void shareRecipes([recipe]).then((r) => { const m = shareMessage(r); if (m) toast(m); }); }}>
             <Icon name="share" size={18} /> Teilen
           </button>
-          <button role="menuitem" onClick={() => { archiveRecipe(recipe.id); toast('Archiviert – unter Einstellungen → Archiv wiederherstellbar', { label: 'Rückgängig', run: () => restoreRecipe(recipe.id) }); goBack('/kochbuch'); }}>
+          {/* Soßen und Beilagen (Julia): nur in Mix & Match statt im Kochbuch – jederzeit zurück */}
+          {recipe.mix ? (
+            <button role="menuitem" onClick={() => { setMenu(false); toast('Zurück im Kochbuch', { label: 'Rückgängig', run: setMix(recipe.id, undefined) }); }}>
+              <Icon name="book" size={18} /> Zurück ins Kochbuch
+            </button>
+          ) : MIX_ROLES.map((role) => (
+            <button key={role.id} role="menuitem" onClick={() => { setMenu(false); toast(`Als ${role.label} in Mix & Match`, { label: 'Rückgängig', run: setMix(recipe.id, role.id) }); }}>
+              <Icon name="shuffle" size={18} /> Als {role.label} in Mix & Match
+            </button>
+          ))}
+          <button role="menuitem" onClick={() => { archiveRecipe(recipe.id); toast('Archiviert – unter Einstellungen → Archiv wiederherstellbar', { label: 'Rückgängig', run: () => restoreRecipe(recipe.id) }); goBack(home); }}>
             <Icon name="archive" size={18} /> Archivieren
           </button>
         </MenuPanel>
@@ -150,6 +171,7 @@ const header = (
       <div className="row-gap">
         <StatusBadge status={recipe.status} withIcon />
         {recipe.source === 'ki' && recipe.status === 'kochbuch' && <span className="muted small">Ursprünglich mit KI erstellt</span>}
+        {recipe.mix && <span className="muted small"><Icon name="shuffle" size={14} /> {mixRole(recipe.mix).label} in Mix & Match</span>}
       </div>
       <h1 className="detail__title">{c.title}</h1>
       {(c.tags ?? []).length > 0 && <p className="detail__tags">{c.tags.join(' · ')}</p>}
@@ -178,13 +200,24 @@ const header = (
           <button type="button" className="link" onClick={() => setOriginal(false)}>Wie im Wochenplan</button>
         </p>
       )}
+      {/* Variante (Julia: mit Hähnchen oder Tofu) – oben, weil sie alles ändert: Nährwerte, Zutaten, Schritte, Einkauf */}
+      {choices.length > 0 && (
+        <div className="choices" role="group" aria-label="Variante">
+          {choices.map((ch) => (
+            <button key={ch} type="button" className={`segment${ch === choice ? ' is-on' : ''}`} aria-pressed={ch === choice}
+              onClick={() => ch !== choice && toast(`Variante: ${ch}`, { label: 'Rückgängig', run: setChoice(recipe.id, ch) })}>
+              {ch}
+            </button>
+          ))}
+        </div>
+      )}
       <NutritionTiles n={n} />
       <CostLine content={shown} servings={servings} pick={asPlanned ? dish.pick : undefined} />
 
       {!recipe.archivedAt && recipe.status !== 'ki_entwurf' && (
         <div className="plan-chips">
-          <PlanButton recipe={recipe} servings={servings} />
-          <CookedButton recipe={recipe} servings={servings} />
+          <PlanButton recipe={recipe} content={c} servings={servings} />
+          <CookedButton recipe={recipe} content={c} servings={servings} />
         </div>
       )}
       <StatusAction recipe={recipe} />
@@ -199,6 +232,20 @@ const header = (
       </div>
       {stock && <p className="ingredients__stock"><StockLine content={c} stock={stock} max={Infinity} /* in der Rezeptansicht alle aufzählen */ /></p>}
       <RenamePanel recipe={recipe} />
+      {/* Zutat gekauft oder selbst gemacht (Julia: Gnocchi) – gilt auch für Plan, Einkauf und Kochmodus */}
+      {homemade.map(({ ingredient: i, recipe: base, chosen }) => (
+        <div key={i.id} className="homemade" role="group" aria-label={`${i.name}: gekauft oder selbst gemacht`}>
+          <span className="homemade__name">{i.name}</span>
+          <div className="homemade__opts">
+            {[false, true].map((on) => (
+              <button key={String(on)} type="button" className={`segment${chosen === on ? ' is-on' : ''}`} aria-pressed={chosen === on}
+                onClick={() => chosen !== on && toast(on ? `${i.name} selbst gemacht – nach „${currentContent(base).title}“` : `${i.name} gekauft`, { label: 'Rückgängig', run: setHomemade(recipe.id, i.id, on) })}>
+                {on ? 'Selbst gemacht' : 'Gekauft'}
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
       {/* mit Teilen (Julia: „Sauce“, „Salat“): je Teil eine Überschrift; „Frisch“ (ohne Teil) steht zuerst, ohne Überschrift */}
       {(parts.length ? parts : ['']).map((p) => {
         const list = parts.length ? ingredients.filter((i) => partOf(i) === p) : ingredients;
@@ -351,7 +398,7 @@ function CostLine({ content, servings, pick }: { content: RecipeContent; serving
  * Steht das Rezept im Plan, ist es derselbe Haken wie dort (auch zurücknehmbar).
  * Sonst: nach dem Kochen „Heute gekocht“ – ein zweites Antippen zöge die Zutaten doppelt ab.
  */
-function CookedButton({ recipe, servings }: { recipe: Recipe; servings: number }) {
+function CookedButton({ recipe, content, servings }: { recipe: Recipe; content: RecipeContent; servings: number }) {
   const plan = usePlan();
   const prompt = useVariantPrompt();
   const planned = plan.items.some((i) => i.recipeId === recipe.id);
@@ -380,7 +427,7 @@ function CookedButton({ recipe, servings }: { recipe: Recipe; servings: number }
   return (
     <>
       <button className="plan-chip" aria-label="Als gekocht markieren"
-        onClick={() => prompt.ask(currentContent(recipe), undefined, (pick) => cookedToast(markCooked(recipe.id, servings, {}, pick)))}>
+        onClick={() => prompt.ask(content, undefined, (pick) => cookedToast(markCooked(recipe.id, servings, {}, pick)))}>
         <Icon name="pot" size={16} /> Gekocht
       </button>
       {prompt.sheet}
@@ -389,7 +436,7 @@ function CookedButton({ recipe, servings }: { recipe: Recipe; servings: number }
 }
 
 /** Für Meal Prep: mit der eingestellten Portionszahl in den Wochenplan aufnehmen. */
-function PlanButton({ recipe, servings }: { recipe: Recipe; servings: number }) {
+function PlanButton({ recipe, content, servings }: { recipe: Recipe; content: RecipeContent; servings: number }) {
   const inPlan = usePlan().items.find((i) => i.recipeId === recipe.id);
   const prompt = useVariantPrompt();
   const more = useMorePrompt();
@@ -402,8 +449,8 @@ function PlanButton({ recipe, servings }: { recipe: Recipe; servings: number }) 
   }
   return (
     <>
-      <button className="plan-chip" onClick={() => prompt.ask(currentContent(recipe), undefined, (pick) =>
-        more.ask(currentContent(recipe), servings, (amounts) => {
+      <button className="plan-chip" onClick={() => prompt.ask(content, undefined, (pick) =>
+        more.ask(content, servings, (amounts) => {
           addToPlan(recipe.id, servings, pick, amounts);
           toast(`Eingeplant: ${portionCount(servings)}`);
         }))}>

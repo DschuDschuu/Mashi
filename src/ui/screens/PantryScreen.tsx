@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { isMixPart } from '../../domain/mix';
 import { isCount, plannedOf, recipesFromPantry, type PantryItem, type PantryUnit } from '../../domain/pantry';
 import { suggestPantryUnit } from '../../domain/packs';
 import { daysLabel, daysLeft, frozenSince, specialDays, useByOf } from '../../domain/shelfLife';
@@ -8,6 +9,7 @@ import {
   useFoodTable, usePantry, usePlan, useProducts, useRecipes,
 } from '../../data/store';
 import { currentContent } from '../../domain/recipe';
+import { cookingContent } from '../../domain/homemade';
 import { asCooked } from '../../domain/scaling';
 import { DishNutrition } from '../components/DishNutrition';
 import { navigate, useRoute } from '../../router';
@@ -91,7 +93,7 @@ export function PantryScreen() {
   };
   const matches = useMemo(() => {
     const planned = new Set(plan.items.map((i) => i.recipeId));
-    return recipesFromPantry(rest, recipes.filter((r) => !planned.has(r.id)), table, 8, keys);
+    return recipesFromPantry(rest, recipes.filter((r) => !planned.has(r.id) && !isMixPart(r)), table, 8, keys);
   }, [rest, keys, plan, recipes, table]);
   const shelfLabel = (item: PantryItem) => {
     const d = useByOf(item, table, pantry.shelfDays);
@@ -156,7 +158,9 @@ export function PantryScreen() {
     date?: ReactNode;
   }) => {
     const recipe = recipeId ? recipes.find((r) => r.id === recipeId) : undefined;
-    const content = recipe && (part ? forParts(currentContent(recipe), [part]) : currentContent(recipe));
+    // mit selbst Gemachtem – sonst fände „Gnocchi für …“ seinen Teil nicht (siehe homemade.ts)
+    const full = recipe && cookingContent(recipe, recipes);
+    const content = full && (part ? forParts(full, [part]) : full);
     return (
       <li key={key} className={`pantry__item pantry__item--dish${open ? ' is-editing' : ''}`}>
         <button type="button" className="pantry__cover" onClick={onToggle} aria-expanded={open} aria-label={label} />

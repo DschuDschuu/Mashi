@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { resolveIngredient } from '../domain/mealplan';
 import { deductRecipe, pantryAfterPlan, plannedByDish, type Stock } from '../domain/pantry';
-import { currentContent } from '../domain/recipe';
+import { cookingContent } from '../domain/homemade';
 import { useUpKeys } from '../domain/shelfLife';
 import type { Recipe } from '../domain/types';
 import { useFoodTable, usePantry, usePlan, useRecipes } from '../data/store';
@@ -19,7 +19,7 @@ export function useRecipeStock(recipe: Recipe, servings: number): { stock?: Map<
   const table = useFoodTable();
   return useMemo(() => {
     if (!pantry.items.length) return { soon: new Set<string>() };
-    const c = currentContent(recipe);
+    const c = cookingContent(recipe, recipes);
     const planned = plan.items.some((i) => i.recipeId === recipe.id) && !plan.cooked.includes(recipe.id);
     const stock = planned
       ? plannedByDish(pantry, { ...plan, items: plan.items.map((i) => (i.recipeId === recipe.id ? { ...i, servings } : i)) }, recipes, table)

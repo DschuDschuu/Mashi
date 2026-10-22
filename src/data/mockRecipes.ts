@@ -19,6 +19,13 @@ interface Spec {
   /** weitere Versionen: nur geänderte Mengen (per Zutatenposition) */
   changes?: { author: VersionAuthor; label: string; amounts: Record<number, number>; daysAgo: number }[];
   feedback?: { rating: 1 | 2 | 3 | 4 | 5; note: string; onVersion: number; daysAgo: number }[];
+  /** Baustein für Mix & Match (siehe domain/mix.ts) und „passt gut zu“ (IDs) */
+  mix?: string;
+  goesWith?: string[];
+  /** Zutat selbst machen: Zutatenposition → Grundrezept (siehe domain/homemade.ts) */
+  makeWith?: Record<number, string>;
+  /** Varianten (content.choices): Position → Variante, für Zutaten und Schritte (siehe domain/choices.ts) */
+  choiceOf?: { ingredients?: Record<number, string>; steps?: Record<number, string> };
 }
 
 const day = 86_400_000;
@@ -27,10 +34,13 @@ const iso = (daysAgo: number, now: number) => new Date(now - daysAgo * day).toIS
 function build(spec: Spec, now: number): Recipe {
   const ingredients: Ingredient[] = spec.content.ingredients.map(([amount, unit, name, optional], i) => ({
     id: `${spec.id}-i${i}`, name, amount, unit, ...(optional ? { optional } : {}),
+    ...(spec.makeWith?.[i] ? { recipeId: spec.makeWith[i] } : {}),
+    ...(spec.choiceOf?.ingredients?.[i] ? { choice: spec.choiceOf.ingredients[i] } : {}),
   }));
   const steps: Step[] = spec.content.steps.map(([text, timerMinutes, fixed], i) => ({
     id: `${spec.id}-s${i}`, text, timerMinutes,
     ...(fixed ? { ingredientIds: fixed.map((n) => `${spec.id}-i${n}`) } : {}),
+    ...(spec.choiceOf?.steps?.[i] ? { choice: spec.choiceOf.steps[i] } : {}),
   }));
   const base: RecipeContent = { ...spec.content, ingredients, steps };
 
@@ -66,6 +76,8 @@ function build(spec: Spec, now: number): Recipe {
     currentVersionId: versions[versions.length - 1].id,
     versions,
     feedback,
+    ...(spec.mix ? { mix: spec.mix } : {}),
+    ...(spec.goesWith ? { goesWith: spec.goesWith } : {}),
   };
 }
 
@@ -253,6 +265,114 @@ const SPECS: Spec[] = [
         ['Kimchi klein schneiden und in Sesamöl 2 Minuten anbraten.', 2],
         ['Reis, Gochujang und Sojasauce zugeben und alles unter Rühren knusprig braten.', 5],
         ['Spiegeleier braten und auf den Reis setzen, mit Frühlingszwiebeln bestreuen.', 3],
+      ],
+    },
+  },
+
+  // ── Mix & Match: Soßen und Beilagen zum Kombinieren (stehen nicht im Kochbuch) ──
+  {
+    id: 'mix-tomatensosse', status: 'kochbuch', source: 'selbst', favorite: true, motif: 'pot', hue: 8, daysAgo: 50,
+    mix: 'sosse', goesWith: ['mix-pasta', 'mix-gnocchi'],
+    content: {
+      title: 'Tomatensoße',
+      description: 'Einfache Tomatensoße für Vorrat – lässt sich gut einfrieren.',
+      servings: 4, prepMinutes: 5, cookMinutes: 20, difficulty: 1,
+      categories: [], tags: ['Vegetarisch', 'Meal Prep'], devices: ['herd'],
+      ingredients: [[700, 'g', 'Passata'], [1, 'Stück', 'Zwiebel'], [2, 'Zehe', 'Knoblauch'], [1, 'EL', 'Olivenöl'], [1, 'Handvoll', 'Basilikum', true]],
+      steps: [
+        ['Zwiebel und Knoblauch fein würfeln und im Öl glasig dünsten.', 4],
+        ['Passata dazu, salzen und offen köcheln lassen.', 15],
+        ['Mit Basilikum abschmecken.'],
+      ],
+    },
+  },
+  {
+    id: 'mix-pesto-sahne', status: 'kochbuch', source: 'selbst', motif: 'jar', hue: 110, daysAgo: 30,
+    mix: 'sosse', goesWith: ['mix-gnocchi'],
+    content: {
+      title: 'Pesto-Sahne-Soße',
+      description: 'In zehn Minuten fertig.',
+      servings: 2, prepMinutes: 2, cookMinutes: 8, difficulty: 1,
+      categories: [], tags: ['Vegetarisch', 'Schnell'], devices: ['herd'],
+      ingredients: [[4, 'EL', 'Pesto'], [150, 'ml', 'Sahne'], [20, 'g', 'Parmesan']],
+      steps: [
+        ['Sahne aufkochen und etwas einreduzieren.', 5],
+        ['Pesto einrühren, mit Parmesan abschmecken.'],
+      ],
+    },
+  },
+  {
+    id: 'mix-kokos-curry', status: 'zum_testen', source: 'ki', motif: 'bowl', hue: 40, daysAgo: 6,
+    mix: 'sosse', goesWith: ['mix-reis'],
+    content: {
+      title: 'Kokos-Curry-Soße',
+      description: 'Milde Currysoße mit Kokosmilch.',
+      servings: 3, prepMinutes: 5, cookMinutes: 15, difficulty: 1,
+      categories: [], tags: ['Vegan'], devices: ['herd'],
+      ingredients: [[1, 'Dose', 'Kokosmilch'], [1, 'Stück', 'Zwiebel'], [2, 'TL', 'Currypulver'], [1, 'EL', 'Sojasauce'], [1, 'EL', 'Rapsöl']],
+      steps: [
+        ['Zwiebel würfeln und im Öl anschwitzen, Currypulver kurz mitrösten.', 4],
+        ['Kokosmilch und Sojasauce dazu und sämig köcheln.', 10],
+      ],
+    },
+  },
+  {
+    id: 'mix-pasta', status: 'kochbuch', source: 'selbst', motif: 'plate', hue: 45, daysAgo: 50, mix: 'beilage',
+    content: {
+      title: 'Pasta', description: '', servings: 1, prepMinutes: 0, cookMinutes: 10, difficulty: 1,
+      categories: ['beilage'], tags: [], devices: ['herd'],
+      ingredients: [[100, 'g', 'Pasta']], steps: [['Nach Packungsangabe garen.']],
+    },
+  },
+  {
+    id: 'mix-reis', status: 'kochbuch', source: 'selbst', motif: 'bowl', hue: 60, daysAgo: 50, mix: 'beilage',
+    content: {
+      title: 'Reis', description: '', servings: 1, prepMinutes: 0, cookMinutes: 15, difficulty: 1,
+      categories: ['beilage'], tags: [], devices: ['herd'],
+      ingredients: [[100, 'g', 'Reis']], steps: [['Nach Packungsangabe garen.']],
+    },
+  },
+  {
+    id: 'mix-gnocchi', status: 'kochbuch', source: 'selbst', motif: 'plate', hue: 30, daysAgo: 30, mix: 'beilage',
+    // gekauft oder selbst gemacht – auf der Rezeptseite wählbar
+    makeWith: { 0: 'gnocchi-selbst' },
+    content: {
+      title: 'Gnocchi', description: '', servings: 1, prepMinutes: 0, cookMinutes: 5, difficulty: 1,
+      categories: ['beilage'], tags: [], devices: ['herd'],
+      // gilt für gekaufte und selbst gemachte gleich
+      ingredients: [[150, 'g', 'Gnocchi']], steps: [['Gnocchi in Salzwasser garen, bis sie oben schwimmen.', 3, [0]]],
+    },
+  },
+  {
+    id: 'gnocchi-selbst', status: 'kochbuch', source: 'selbst', motif: 'plate', hue: 35, daysAgo: 30,
+    content: {
+      title: 'Selbstgemachte Gnocchi', description: 'Aus mehligen Kartoffeln – locker und schnell geformt.', servings: 2, prepMinutes: 20, cookMinutes: 25, difficulty: 2,
+      categories: ['beilage'], tags: [], devices: ['herd'],
+      ingredients: [[500, 'g', 'Kartoffeln'], [150, 'g', 'Mehl'], [1, 'Stück', 'Ei'], [1, 'Prise', 'Salz']],
+      steps: [
+        ['Mehlige Kartoffeln in der Schale weich kochen, pellen und noch warm durchpressen.', 25],
+        ['Mit Mehl, Ei und Salz rasch zu einem Teig verkneten.'],
+        ['Zu Rollen formen, in kleine Stücke schneiden und mit der Gabel andrücken.'],
+      ],
+    },
+  },
+  {
+    // Varianten: mit Hähnchen oder mit Linsen – auf der Rezeptseite wählbar
+    id: 'reis-bowl', status: 'kochbuch', source: 'selbst', motif: 'bowl', hue: 25, daysAgo: 12,
+    choiceOf: { ingredients: { 1: 'Hähnchen', 2: 'Linsen' }, steps: { 1: 'Hähnchen', 2: 'Linsen' } },
+    content: {
+      title: 'Bunte Reis-Bowl', description: 'Knackiges Gemüse, würzige Soße – mit Hähnchen oder mit Linsen.', servings: 2, prepMinutes: 15, cookMinutes: 15, difficulty: 1,
+      categories: ['salat-bowl'], tags: ['Schnell'], devices: ['herd'], choices: ['Hähnchen', 'Linsen'],
+      ingredients: [
+        [150, 'g', 'Reis'], [300, 'g', 'Hähnchenbrust'], [120, 'g', 'Rote Linsen'],
+        [2, 'EL', 'Sojasauce'], [1, 'TL', 'Sesamöl'], [1, 'Stück', 'Paprika'], [1, 'Stück', 'Karotte'],
+      ],
+      steps: [
+        ['Reis nach Packungsangabe kochen.', 15],
+        ['Hähnchen in Streifen schneiden und rundum goldbraun braten.', 8],
+        ['Linsen in Wasser bissfest garen und abgießen.', 10],
+        ['Sojasauce mit Sesamöl verrühren, Paprika und Karotte in Streifen schneiden.'],
+        ['Alles auf dem Reis anrichten und mit der Soße beträufeln.'],
       ],
     },
   },

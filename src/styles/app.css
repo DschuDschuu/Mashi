@@ -1271,6 +1271,23 @@ p { margin: 0; }
 /* Einheitliche Zutatennamen */
 .rename-hint { grid-column: 1 / -1; margin: -2px 0 4px; display: flex; flex-wrap: wrap; align-items: center; column-gap: 10px; color: var(--ink-2); }
 .rename-hint .link { padding: 2px 0; font-size: 0.8rem; }
+
+/* Zutat selbst machen (Julia: Gnocchi) – im Formular eine eigene Zeile, auf der Rezeptseite „Gekauft | Selbst gemacht“ */
+.editor__homemade { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: -2px 0 4px; min-width: 0; color: var(--ink-2); }
+/* langer Rezepttitel → die Auswahl rutscht in eine eigene Zeile, statt abgeschnitten zu werden */
+.editor__homemade select { flex: 1 1 180px; min-width: 0; padding: 6px 8px; font-size: 0.85rem; }
+.homemade { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin: 10px 0 6px; }
+.homemade__name { font-weight: 600; min-width: 0; }
+.homemade__opts { display: flex; gap: 6px; }
+/* Varianten im Formular: Zuordnung je Zutat (eigene Zeile über die ganze Breite) bzw. je Schritt */
+.editor__choice { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; margin: -2px 0 4px; min-width: 0; }
+.editor__choice select { flex: 1 1 140px; min-width: 0; max-width: 100%; padding: 6px 8px; font-size: 0.85rem; }
+.editor__choicerow { display: grid; grid-template-columns: 1fr 36px; gap: 6px; align-items: center; }
+.editor__choicerow input { min-width: 0; padding: 10px 8px; font-size: 0.95rem; }
+.editor__choiceopen { margin: 0 0 12px; }
+/* Varianten (Julia: mit Hähnchen oder Tofu) – umbrechen statt seitlich scrollen, damit alle zu sehen sind */
+.choices { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 12px; }
+.choices .segment { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 .rename-cta { display: flex; align-items: center; justify-content: center; gap: 6px; margin: 0 auto; width: 90%; min-height: 40px; padding: 5px 12px; border-radius: 999px; background: var(--primary-soft); color: var(--primary-press); font-size: 0.82rem; font-weight: 700; }
 .renames { display: flex; flex-direction: column; gap: 12px; max-height: 88vh; overflow-y: auto; }
 .renames__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
@@ -1700,3 +1717,28 @@ details.cost-line[open] > summary::after { transform: rotate(-90deg); }
 .parts-ask__choice small { color: var(--ink-2); font-size: 0.82rem; line-height: 1.35; }
 .parts-ask__choice.is-primary { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
 .parts-ask__choice.is-primary small { color: var(--on-primary); opacity: 0.85; }
+
+/* ── Mix & Match (Julia): Soßen und Beilagen frei kombinieren ── */
+.page-head__right { display: flex; align-items: center; gap: 10px; align-self: center; }
+.mix__intro { margin: 4px 0 6px; }
+.mix__role { display: flex; flex-direction: column; gap: 10px; margin-top: 18px; }
+/* Kacheln mit Icon (Julia) – 3 nebeneinander am Handy, lange Namen brechen um statt herauszuragen (375 px) */
+.mix__tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.mix-tile {
+  position: relative; display: flex; flex-direction: column; align-items: center; gap: 8px; min-width: 0;
+  padding: 14px 6px 12px; border-radius: var(--r); background: var(--surface); border: 1.5px solid var(--line);
+  color: var(--ink); font-size: 0.84rem; font-weight: 600; line-height: 1.25; text-align: center;
+}
+.mix-tile__icon { display: grid; place-items: center; width: 54px; height: 54px; border-radius: 50%; color: var(--art); }
+.mix__tiles--sosse .mix-tile__icon { background: var(--peach); }
+.mix__tiles--beilage .mix-tile__icon { background: var(--butter); }
+.mix-tile__name { max-width: 100%; overflow-wrap: anywhere; hyphens: auto; }
+.mix-tile__star { position: absolute; top: 7px; right: 7px; display: flex; color: var(--star); }
+.mix-tile.is-on { border-color: var(--primary); background: var(--primary-soft); box-shadow: inset 0 0 0 1px var(--primary); }
+.mix__open { align-self: flex-start; }
+.mix__hint { margin-top: 18px; }
+.mix__combo { margin-top: 22px; }
+.mix__combo .h3 { min-width: 0; overflow-wrap: anywhere; }
+.mix__combo .chip svg { color: var(--star); }
+.mix__combo .chip.is-on svg { color: var(--on-primary); }
+@media (min-width: 768px) { .mix__tiles { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); } }

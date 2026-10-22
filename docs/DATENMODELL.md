@@ -11,14 +11,19 @@ Recipe  (Hülle – ändert sich selten)
 ├─ archivedAt?   gesetzt = archiviert (Status bleibt erhalten)
 ├─ source        ki | selbst | import        ← ändert sich nie
 ├─ favorite, image, notes, lastCookedAt
+├─ homemade?     Zutat-IDs, die gerade selbst gemacht statt gekauft werden (nicht versioniert, siehe domain/homemade.ts)
+├─ choice?       gewählte Variante (fehlt oder gibt es nicht mehr: die erste; nicht versioniert, siehe domain/choices.ts)
 ├─ currentVersionId ─────────────┐
 ├─ versions[] ◀──────────────────┘
 │   └─ RecipeVersion { number, author: ki|nutzer|import, label, content }
 │         └─ RecipeContent  ← ALLES Inhaltliche, unveränderlich je Version
 │              title, description, servings, prepMinutes, cookMinutes, difficulty,
-│              ingredients[] { id, name, amount?, unit?, note? (Hinweis „gewürfelt“), part? (Teil „Sauce“), optional?, foodRef? },
-│              steps[] { id, text, timerMinutes?, ingredientIds?, part? (Teil – fehlt: aus den Zutaten; „-“ Frisch, „*“ Zum Schluss) },
-│              categories[], tags[], devices[], imagePrompt?
+│              ingredients[] { id, name, amount?, unit?, note? (Hinweis „gewürfelt“), part? (Teil „Sauce“), optional?, foodRef?,
+│                              recipeId? (Grundrezept zum Selbstmachen – selbst gemacht ersetzen dessen Zutaten und Schritte die Zutat, als eigener Teil),
+│                              choice? (nur in dieser Variante – fehlt: in allen) },
+│              steps[] { id, text, timerMinutes?, ingredientIds?, part? (Teil – fehlt: aus den Zutaten; „-“ Frisch, „*“ Zum Schluss), choice? },
+│              categories[], tags[], devices[], imagePrompt?,
+│              choices? (Varianten „mit Hähnchen“/„mit Tofu“ – gekocht, geplant und gerechnet wird nur die gewählte)
 └─ feedback[]  TestFeedback { versionId, rating 1–5, note }  ← hängt an der GEKOCHTEN Version
 ```
 

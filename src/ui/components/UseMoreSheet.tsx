@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { leftoverSuggestions, pantryAfterPlan, type Leftover } from '../../domain/pantry';
 import { packLabel } from '../../domain/pantryLabel';
 import { formatAmount, formatUnitAmount, scaleIngredients } from '../../domain/scaling';
-import { currentContent } from '../../domain/recipe';
+import { cookingContent } from '../../domain/homemade';
 import type { Ingredient, Recipe, RecipeContent } from '../../domain/types';
 import { useFoodTable, usePantry, usePlan, useRecipes } from '../../data/store';
 import { useSheet } from '../useSheet';
@@ -89,7 +89,7 @@ export function usePlannedMore(recipe: Recipe | undefined, servings: number | un
   const table = useFoodTable();
   return useMemo(() => {
     if (!recipe) return { uses: [], base: [] };
-    const c = currentContent(recipe);
+    const c = cookingContent(recipe, recipes);
     const base = scaleIngredients(c, servings ?? c.servings);
     const others = { ...plan, items: plan.items.filter((i) => i.recipeId !== recipe.id) };
     return { uses: leftoverSuggestions(pantryAfterPlan(pantry, others, recipes, table), base, table), base };

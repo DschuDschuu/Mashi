@@ -3,7 +3,7 @@ import PouchDB from 'pouchdb-core';
 import memory from 'pouchdb-adapter-memory';
 import { describe, expect, it, vi } from 'vitest';
 import { PouchRecipeRepository, type RecipeDb } from './pouchRepository';
-import { importProducts, saveProducts, currentProducts, clearChecked, cookParts, setPlanAmounts, addExtra, addPantryItem, dropPriceDay, editBon, setCategory, addToPlan, answerLeftover, applyInventory, clearDoneExtras, deleteRecipe, importPantry, importReceipt, importRecipes, regenerateImage, markCooked, uncookRecipe, clearCooked, createRecipe, currentLeftoverAsk, currentPantry, eatPreparedPortions, freezePantryItem, initStore, thawPantryItem, togglePlanCooked, removeFromPlan, removePantryItem, setFoodStage, setPantryAmount, toggleShoppingItem, updatePantryItem } from './store';
+import { importProducts, saveProducts, currentProducts, clearChecked, cookParts, setPlanAmounts, addExtra, addPantryItem, dropPriceDay, editBon, setCategory, addToPlan, answerLeftover, applyInventory, clearDoneExtras, deleteRecipe, importPantry, importReceipt, importRecipes, regenerateImage, markCooked, uncookRecipe, clearCooked, createRecipe, currentLeftoverAsk, currentPantry, eatPreparedPortions, freezePantryItem, initStore, thawPantryItem, togglePlanCooked, removeFromPlan, removePantryItem, setFoodStage, setPantryAmount, toggleShoppingItem, updatePantryItem, whenSaved } from './store';
 import { buildShoppingList, keyOfName } from '../domain/mealplan';
 import { emptyPantry } from '../domain/pantry';
 import { EXTRA_PREFIX, RESTOCK_PREFIX } from '../domain/restock';
@@ -12,7 +12,8 @@ import { createMockRecipes } from './mockRecipes';
 
 PouchDB.plugin(memory);
 
-const settle = () => new Promise((r) => setTimeout(r, 50));
+/** wartet, bis wirklich gespeichert ist – eine feste Wartezeit reichte unter Last nicht */
+const settle = whenSaved;
 
 /** frisches Kochbuch im Speicher – jeder Test für sich, der Name nur zum Wiederfinden */
 async function freshStore(name: string) {

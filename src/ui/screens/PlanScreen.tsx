@@ -2,9 +2,12 @@ import { useMemo, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { ask } from '../confirm';
 import { DishNutrition } from '../components/DishNutrition';
 import { recipeCost, sumCosts } from '../../domain/cost';
+import { isMixPart } from '../../domain/mix';
 import { suggestRecipes, type ShoppingItem, type Suggestion } from '../../domain/mealplan';
 import { ingredientCompletions, longNotCooked, searchRecipes } from '../../domain/recipeSearch';
 import { currentContent } from '../../domain/recipe';
+import { cookingContent } from '../../domain/homemade';
+import { activeChoice } from '../../domain/choices';
 import { asCooked } from '../../domain/scaling';
 import { doneParts, partLabel } from '../../domain/parts';
 import { pickFor } from '../../domain/nutrition/variants';
@@ -34,8 +37,8 @@ import { cookedToast } from '../cookedToast';
 import { useUseUp } from '../useUseUp';
 import { toast } from '../toast';
 
-/** Was sich planen lässt: alles außer Archiv und reinen KI-Ideen (die sind noch kein Rezept). */
-const plannable = (r: Recipe) => !r.archivedAt && r.status !== 'ki_entwurf';
+/** Was sich planen lässt: alles außer Archiv und reinen KI-Ideen (die sind noch kein Rezept); Mix-Bausteine über Mix & Match. */
+const plannable = (r: Recipe) => !r.archivedAt && !isMixPart(r) && r.status !== 'ki_entwurf';
 
 /**
  * Wochenplan – Meal Prep ohne feste Tage: Gerichte sammeln, Mashi schlägt passende vor
@@ -61,9 +64,9 @@ export function PlanScreen() {
   const { prices } = usePricing();
   // wie gekocht: „nur dieses Mal“-Mengen und dieselbe Sorte wie bei den Nährwerten (Julia: 3 statt 1 Paprika kostet auch mehr)
   const costs = useMemo(() => new Map(items.map((i) => {
-    const c = asCooked(currentContent(i.recipe), i.servings, i.amounts);
+    const c = asCooked(cookingContent(i.recipe, recipes), i.servings, i.amounts);
     return [i.recipeId, recipeCost(c, i.servings, table, prices, pickFor(choicesFor(c), i.variants))];
-  })), [items, table, prices]);
+  })), [items, recipes, table, prices]);
   const week = sumCosts([...costs.values()]);
 
   // was ein Gericht vorher auftauen muss – aus derselben Reservierung wie „Für den Wochenplan“
@@ -72,7 +75,7 @@ export function PlanScreen() {
   // wie „Zum Wochenplan“ im Rezept: läuft etwas daraus bald ab, erst fragen, wie viel davon
   const more = useMorePrompt();
   const add = (r: Recipe) => {
-    const c = currentContent(r);
+    const c = cookingContent(r, recipes);
     setPicking(false);
     more.ask(c, c.servings, (amounts) => {
       if (addToPlan(r.id, c.servings, {}, amounts)) toast(`„${c.title}“ eingeplant`);
@@ -99,6 +102,8 @@ export function PlanScreen() {
                   </span>
                   <span className="suggestion__text">
                     <span className="list__title">{currentContent(recipe).title}</span>
+                    {/* welche Variante eingekauft und gekocht wird (Julia: mit Hähnchen oder Tofu) */}
+                    {activeChoice(recipe) && <span className="small muted">{activeChoice(recipe)}</span>}
                   </span>
                 </button>
                 {/* eigene Zeile unter Bild und Titel – sonst bleibt neben dem Portionen-Regler nur ein schmaler Streifen */}
@@ -106,7 +111,7 @@ export function PlanScreen() {
                   {cooked && <PreparedLine recipeId={recipe.id} />}
                   {!cooked && <DonePartsLine recipeId={recipe.id} />}
                   {/* mit den „nur dieses Mal“-Mengen (Julia: überall dieselbe Zahl) */}
-                  <DishNutrition content={asCooked(currentContent(recipe), servings, amounts)} own={variants} recipeId={cooked ? undefined : recipe.id} />
+                  <DishNutrition content={asCooked(cookingContent(recipe, recipes), servings, amounts)} own={variants} recipeId={cooked ? undefined : recipe.id} />
                   {/* pro Portion, nur wenn alle Preise bekannt sind – sonst nichts (Julia, wie auf der Rezeptkarte) */}
                   {costs.get(recipe.id) && !costs.get(recipe.id)!.missing.length && <span className="small muted">ca. {euro(costs.get(recipe.id)!.perServing)} pro Portion</span>}
                 </div>

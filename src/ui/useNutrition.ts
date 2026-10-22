@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { computeNutrition } from '../domain/nutrition/engine';
 import { withMyProducts, type MyProduct } from '../domain/nutrition/myProducts';
 import type { FoodTable, NutritionResult } from '../domain/nutrition/types';
-import { currentContent } from '../domain/recipe';
+import { chosenContent } from '../domain/choices';
 import type { Recipe, RecipeContent } from '../domain/types';
 import { currentMacroGoal, currentNoNutrition, currentPantry, currentProducts, currentStock, useMacroGoal, useNoNutrition, usePantry, useProducts, useStock } from '../data/store';
 import { pickFor, variantChoices, type VariantChoice } from '../domain/nutrition/variants';
@@ -45,7 +45,8 @@ export function nutritionOf(content: RecipeContent, products: MyProduct[] = curr
   return n;
 }
 
-export const recipeNutrition = (r: Recipe) => nutritionOf(currentContent(r));
+// in der gewählten Variante – sonst zählten auf der Karte Hähnchen UND Tofu (siehe choices.ts)
+export const recipeNutrition = (r: Recipe) => nutritionOf(chosenContent(r));
 
 /** Bei welchen Zutaten die Sorte zählt (mind. eine im Vorrat) – jetzt, ohne Hook */
 export function choicesFor(content: RecipeContent): VariantChoice[] {

@@ -1,5 +1,5 @@
-import { addToPlan, setPlanVariants, toggleFavorite, usePlan } from '../../data/store';
-import { currentContent } from '../../domain/recipe';
+import { addToPlan, setPlanVariants, toggleFavorite, usePlan, useRecipes } from '../../data/store';
+import { cookingContent } from '../../domain/homemade';
 import type { Recipe } from '../../domain/types';
 import { navigate } from '../../router';
 import { portionCount } from '../format';
@@ -15,7 +15,7 @@ import { useVariantPrompt } from './VariantSheet';
  */
 export function RecipeQuickSheet({ recipe, onClose }: { recipe: Recipe; onClose: () => void }) {
   const ref = useSheet(onClose);
-  const c = currentContent(recipe);
+  const c = cookingContent(recipe, useRecipes());
   const planned = usePlan().items.find((i) => i.recipeId === recipe.id);
   const prompt = useVariantPrompt();
 

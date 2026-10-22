@@ -15,6 +15,8 @@ import {
 import { attachPacks, changeAmount, mergeSamePacks, openItem } from '../domain/packs';
 import { addPrepared, eatPrepared } from '../domain/prepared';
 import { currentContent, currentVersion, newId, sameContent, withNewVersion } from '../domain/recipe';
+import { planCombo, sideContent, toggleGoesWith, type ComboResult } from '../domain/mix';
+import { cookingContent } from '../domain/homemade';
 import { recordSavings, type BonSavings } from '../domain/savings';
 import { addBon, bonFromImport, dropDayPrices, editBonLine, includeBonLine, sameBonOf, withdrawBonStock, dropUnsavedDay, type BonLine, type BonLinePatch } from '../domain/bons';
 import type { PriceEntry } from '../domain/cost';
@@ -82,9 +84,26 @@ function emit() {
   listeners.forEach((l) => l());
 }
 
+/** Speichervorgänge, die noch laufen – whenSaved() wartet darauf. */
+const inFlight = new Set<Promise<unknown>>();
+
+/**
+ * Wartet, bis alles gespeichert ist – auch, was ein Speichern danach noch anstößt (z. B. Reste wieder wegräumen).
+ * Für Tests, die danach die Datenbank lesen: eine feste Wartezeit reichte nicht, wenn der Rechner ausgelastet war
+ * (alle Testdateien laufen gleichzeitig), und die Tests fielen mal hier, mal da durch.
+ */
+export async function whenSaved(): Promise<void> {
+  for (;;) {
+    // immer erst einmal abgeben: laufende .then-Ketten (auch ein Neuladen) kommen so zum Zug, bevor wir nachsehen
+    await new Promise((r) => setTimeout(r, 0));
+    if (!inFlight.size) return;
+    await Promise.all(inFlight);
+  }
+}
+
 /** Jeder Speichervorgang meldet sich hier zurück – so bleibt ein Fehler nicht nur in der Konsole. */
 function tracked<T>(p: Promise<T>): Promise<T | void> {
-  return p.then(
+  const t = p.then(
     () => {
       if (saveError) {
         saveError = null;
@@ -98,6 +117,9 @@ function tracked<T>(p: Promise<T>): Promise<T | void> {
       emit();
     },
   );
+  inFlight.add(t);
+  void t.finally(() => inFlight.delete(t));
+  return t;
 }
 
 /**
@@ -441,7 +463,7 @@ function consume(r: Recipe, servings: number, amounts: Record<string, number> = 
   const before = pantry;
   // schon fertige Teile (die Sauce von gestern): nur noch der Rest – und die gelagerte Sauce ist jetzt verbraucht
   const done = doneParts(pantry.items, r.id);
-  const d = deductRecipe(pantry, remainingContent(currentContent(r), done), servings, currentFoodTable(), amounts, variants);
+  const d = deductRecipe(pantry, remainingContent(cookingContent(r, recipes), done), servings, currentFoodTable(), amounts, variants);
   const after = done.length ? { ...d.pantry, items: d.pantry.items.filter((it) => !(it.recipeId === r.id && it.part)) } : d.pantry;
   if (!d.used.length && !d.toCheck.length && !done.length) return { used: [], toCheck: [] };
   const taken = takenBetween(before, after);
@@ -456,7 +478,7 @@ function consume(r: Recipe, servings: number, amounts: Record<string, number> = 
  */
 export function cookParts(id: string, parts: readonly string[], servings?: number, amounts: Record<string, number> = {}, variants?: Record<string, string>): CookedResult & { stored: string[] } {
   const r = get(id);
-  const c = currentContent(r);
+  const c = cookingContent(r, recipes);
   const all = partsOf(c);
   const done = doneParts(pantry.items, id);
   if (!all.length || all.every((p) => parts.includes(p) || done.includes(p))) return { ...markCooked(id, servings, amounts, variants), stored: [] };
@@ -505,6 +527,8 @@ interface CreateOptions {
   status: RecipeStatus;
   image?: RecipeImage;
   notes?: string;
+  /** gleich als Mix-&-Match-Baustein anlegen (Soße, Beilage) */
+  mix?: string;
 }
 
 /** Legt ein neues Rezept mit Version 1 an. Ohne Bild wird eines erzeugt (einmalig). */
@@ -528,6 +552,7 @@ export function createRecipe(content: RecipeContent, opts: CreateOptions): strin
       content,
     }],
     feedback: [],
+    ...(opts.mix ? { mix: opts.mix } : {}),
   };
   commit(recipe);
   if (!opts.image) void regenerateImage(recipe.id);
@@ -594,6 +619,77 @@ export function archiveRecipe(id: string) {
 export function restoreRecipe(id: string) {
   const { archivedAt: _, ...rest } = get(id);
   commit({ ...rest, updatedAt: now() });
+}
+
+// ── Mix & Match ────────────────────────────────────────────────────
+
+/** In Mix & Match verschieben (Soße, Beilage) oder zurück ins Kochbuch (undefined) – gibt „Rückgängig“ zurück. */
+export function setMix(id: string, mix: string | undefined): () => void {
+  const before = get(id).mix;
+  const apply = (m: string | undefined) => {
+    const { mix: _, ...rest } = get(id);
+    commit(m ? { ...rest, mix: m } : rest);
+  };
+  apply(mix);
+  return () => apply(before);
+}
+
+/** Zutat selbst machen oder kaufen (Julia: Gnocchi) – gibt „Rückgängig“ zurück; siehe homemade.ts */
+export function setHomemade(id: string, ingredientId: string, on: boolean): () => void {
+  const before = get(id).homemade;
+  const apply = (list: string[] | undefined) => {
+    const { homemade: _, ...rest } = get(id);
+    commit(list?.length ? { ...rest, homemade: list } : rest);
+  };
+  const others = (before ?? []).filter((x) => x !== ingredientId);
+  apply(on ? [...others, ingredientId] : others);
+  return () => apply(before);
+}
+
+/** Variante wählen (Julia: mit Hähnchen oder Tofu) – gibt „Rückgängig“ zurück; siehe choices.ts */
+export function setChoice(id: string, choice: string): () => void {
+  const before = get(id).choice;
+  const apply = (c: string | undefined) => {
+    const { choice: _, ...rest } = get(id);
+    commit(c ? { ...rest, choice: c } : rest);
+  };
+  apply(choice);
+  return () => apply(before);
+}
+
+/** „Passt gut zu“ zwischen zwei Bausteinen an/aus */
+export function toggleGoesTogether(aId: string, bId: string) {
+  const a = get(aId);
+  const b = get(bId);
+  const next = toggleGoesWith(a, b);
+  const withList = (r: Recipe, list: string[]) => {
+    const { goesWith: _, ...rest } = r;
+    return list.length ? { ...rest, goesWith: list } : rest;
+  };
+  if (JSON.stringify(a.goesWith ?? []) !== JSON.stringify(next.a)) commit(withList(a, next.a));
+  if (JSON.stringify(b.goesWith ?? []) !== JSON.stringify(next.b)) commit(withList(b, next.b));
+}
+
+/** Beilage schnell anlegen (Julia: Pasta, Reis, Gnocchi – „so 100 g pro Person“) */
+export function createSide(name: string, amount?: number): string {
+  return createRecipe(sideContent(name, amount), { source: 'selbst', status: 'kochbuch', mix: 'beilage' });
+}
+
+/**
+ * Kombination in den Wochenplan – steht ein Baustein schon drin, kommen die Portionen dazu (Julia).
+ * Gibt zurück, was passiert ist, und „Rückgängig“ (stellt genau diese Einträge wieder her).
+ */
+export function addCombo(recipeIds: readonly string[], servings: number): ComboResult & { undo: () => void } {
+  const before = new Map(plan.items.filter((i) => recipeIds.includes(i.recipeId)).map((i) => [i.recipeId, i]));
+  const result = planCombo(plan, recipeIds, servings);
+  if (result.added.length || result.more.length) commitPlan(result.plan);
+  const undo = () => {
+    const items = plan.items
+      .filter((i) => !result.added.includes(i.recipeId))
+      .map((i) => (result.more.includes(i.recipeId) && before.has(i.recipeId) ? before.get(i.recipeId)! : i));
+    commitPlan({ ...plan, items });
+  };
+  return { ...result, undo };
 }
 
 /** Endgültig löschen – gibt „Rückgängig“ zurück (legt das Rezept samt Plan-Eintrag wieder an). */

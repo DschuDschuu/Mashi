@@ -4,6 +4,7 @@ import { leftoverSuggestions, pantryAfterPlan } from '../../domain/pantry';
 import { packSuggestions } from '../../domain/packs';
 import { packLabel } from '../../domain/pantryLabel';
 import { currentContent } from '../../domain/recipe';
+import { cookingContent } from '../../domain/homemade';
 import { asCooked, formatAmount, formatQuantity, formatUnitAmount, scaleIngredients } from '../../domain/scaling';
 import { orderByUse } from '../../domain/stepIngredients';
 import type { Ingredient } from '../../domain/types';
@@ -46,23 +47,25 @@ export function CookModeScreen({ id, servings, variants }: { id: string; serving
   const pantry = usePantry();
   const plan = usePlan();
   const recipes = useRecipes();
+  /** so, wie gekocht wird – selbst gemachte Gnocchi mit ihren Zutaten und Schritten als eigener Teil (siehe homemade.ts) */
+  const full = useMemo(() => (recipe ? cookingContent(recipe, recipes) : undefined), [recipe, recipes]);
   /** Rezept-Teile, die du heute kochst (Julia: „Sauce gestern, Nudeln und Fleisch heute“) – null = alle noch nicht fertigen */
   const [chosen, setChosen] = useState<string[] | null>(null);
   /** Dialog „Was kochst du heute?“ beim Start – einmal je Besuch, solange noch mindestens zwei Teile offen sind (Julia: Mashi erkennt Vorgekochtes selbst) */
   const [askParts, setAskParts] = useState(true);
   const done = useMemo(() => (recipe ? doneParts(pantry.items, recipe.id) : []), [recipe, pantry.items]);
   const today = useMemo(() => {
-    if (!recipe) return [];
-    return chosen ?? partsOf(currentContent(recipe)).filter((p) => !done.includes(p));
-  }, [recipe, chosen, done]);
+    if (!full) return [];
+    return chosen ?? partsOf(full).filter((p) => !done.includes(p));
+  }, [full, chosen, done]);
 
   const base = useMemo(() => {
-    if (!recipe) return [];
+    if (!full) return [];
     // nur die Teile von heute – mit „zum Schluss“, wenn das Gericht damit fertig wird
-    const c = forParts(currentContent(recipe), today, done);
+    const c = forParts(full, today, done);
     // Reihenfolge wie beim Kochen: was im ersten Schritt gebraucht wird, zuerst
     return orderByUse(scaleIngredients(c, servings ?? c.servings), c.steps);
-  }, [recipe, servings, today, done]);
+  }, [full, servings, today, done]);
   // Reste mitverbrauchen – aber nicht, was andere geplante Gerichte noch brauchen
   const table = useFoodTable();
   const { leftovers, packs } = useMemo(() => {
@@ -110,8 +113,8 @@ export function CookModeScreen({ id, servings, variants }: { id: string; serving
     ring();
   });
 
-  if (!recipe) return null;
-  const c = currentContent(recipe);
+  if (!recipe || !full) return null;
+  const c = full;
   const parts = partsOf(c);
   const cook = forParts(c, today, done);
   // nur „zusammenstellen“ ohne eigene Schritte: ein Schritt, damit „Fertig“ erreichbar bleibt

@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { isMixPart } from '../domain/mix';
 import type { FoodTable } from '../domain/nutrition/types';
 import { pantryAfterPlan, plannedByDish, plannedUse, recipesFromPantry, type DishReservation, type Pantry, type PlannedUse, type Stock } from '../domain/pantry';
 import { expiringSoon, useUpKeys, type Expiring } from '../domain/shelfLife';
@@ -32,7 +33,7 @@ export function useUseUp(): {
     const keys = useUpKeys(rest, table, now);
     // Welche Rezepte brauchen etwas davon auf? (für „Rezept des Tages“)
     const usingUp = new Map(
-      keys.size ? recipesFromPantry(rest, recipes, table, recipes.length, keys).filter((m) => m.useUp.length).map((m) => [m.recipe.id, m.useUp]) : [],
+      keys.size ? recipesFromPantry(rest, recipes.filter((r) => !isMixPart(r)), table, recipes.length, keys).filter((m) => m.useUp.length).map((m) => [m.recipe.id, m.useUp]) : [],
     );
     const best = Math.max(0, ...[...usingUp.values()].map((u) => u.length));
     // wie useUpKeys ohne Vorgekochtes – „Kein Rezept braucht Joghurt, Linsen-Curry zusammen auf“ ergäbe keinen Sinn

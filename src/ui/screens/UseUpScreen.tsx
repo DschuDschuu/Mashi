@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { keyOfName } from '../../domain/mealplan';
+import { isMixPart } from '../../domain/mix';
 import { recipesFromPantry } from '../../domain/pantry';
 import { expiryLabel } from '../../domain/shelfLife';
 import { usePlan, useRecipes } from '../../data/store';
@@ -25,7 +26,7 @@ export function UseUpScreen() {
 
   const matches = useMemo(() => {
     const planned = new Set(plan.items.map((i) => i.recipeId));
-    return recipesFromPantry(rest, recipes.filter((r) => !planned.has(r.id)), table, 8, keys).filter((m) => m.useUp.length > 0);
+    return recipesFromPantry(rest, recipes.filter((r) => !planned.has(r.id) && !isMixPart(r)), table, 8, keys).filter((m) => m.useUp.length > 0);
   }, [rest, keys, plan, recipes, table]);
 
   // Nicht mehr im Rest nach dem Wochenplan = ein geplantes Gericht braucht es schon auf

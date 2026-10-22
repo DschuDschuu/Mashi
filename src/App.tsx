@@ -12,6 +12,7 @@ import { ConnectScreen } from './ui/screens/ConnectScreen';
 import { CookbookScreen } from './ui/screens/CookbookScreen';
 import { CookModeScreen } from './ui/screens/CookModeScreen';
 import { ImportScreen } from './ui/screens/ImportScreen';
+import { MixScreen } from './ui/screens/MixScreen';
 import { MoreScreen } from './ui/screens/MoreScreens';
 import { PlanScreen } from './ui/screens/PlanScreen';
 import { PantryScreen } from './ui/screens/PantryScreen';
@@ -48,6 +49,7 @@ function resolve(route: Route): { screen: ReactElement; tab?: string; section?: 
   switch (a) {
     case undefined: return { screen: <StartScreen />, tab: '/' };
     case 'kochbuch': return { screen: <CookbookScreen key={route.query.toString()} route={route} />, tab: '/kochbuch' };
+    case 'mix': return { screen: <MixScreen />, section: '/kochbuch' };
     // „Zum Testen“ lebt im Kochbuch (KI-Ideen + Rezepte zum Testen) – alte Links landen dort
     case 'testen': return { screen: <Redirect to="/kochbuch?segment=testen" /> };
     case 'plan': return { screen: <PlanScreen />, tab: '/plan' };
@@ -70,7 +72,7 @@ function resolve(route: Route): { screen: ReactElement; tab?: string; section?: 
     case 'neu':
       if (b === 'ki') return { screen: <AiCreateScreen initialPrompt={route.query.get('text') ?? ''} /> };
       if (b === 'import') return { screen: <ImportScreen /> };
-      return { screen: <RecipeFormScreen key="neu" /> };
+      return { screen: <RecipeFormScreen key={`neu${route.query.get('mix') ?? ''}`} mix={route.query.get('mix') ?? undefined} /> };
     case 'rezept':
       if (c === 'kochen') return { screen: <CookModeScreen id={b} servings={Number(route.query.get('p')) || undefined} variants={parseVariants(route.query.get('s'))} /> };
       if (c === 'test') return { screen: <TestFeedbackScreen key={b} id={b} />, section: '/kochbuch' };

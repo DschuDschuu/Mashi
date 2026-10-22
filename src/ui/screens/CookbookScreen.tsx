@@ -3,7 +3,7 @@ import { CATEGORIES, DEVICES } from '../../domain/catalog';
 import { activeFilterCount, activeFilters, filterRecipes, HIGH_PROTEIN_G, removeFilter, type RecipeFilter } from '../../domain/filter';
 import { currentContent } from '../../domain/recipe';
 import { useRecipes } from '../../data/store';
-import type { Route } from '../../router';
+import { navigate, type Route } from '../../router';
 import { ChipSelect, Empty } from '../components/Controls';
 import { Icon } from '../components/Icon';
 import { deviceIcon } from '../catalogIcons';
@@ -62,7 +62,13 @@ export function CookbookScreen({ route }: { route: Route }) {
     <main className="screen screen--tabbed">
       <header className="page-head">
         <h1>Mein Kochbuch</h1>
-        <span className="muted small">{recipeCount(result.length)}</span>
+        <span className="page-head__right">
+          <span className="muted small">{recipeCount(result.length)}</span>
+          {/* Soßen und Beilagen stehen nicht im Kochbuch, sondern hier (Julia: „oben rechts als Icon“) */}
+          <button className="iconbtn iconbtn--box" onClick={() => navigate('/mix')} aria-label="Mix & Match – Soßen und Beilagen kombinieren">
+            <Icon name="shuffle" size={22} />
+          </button>
+        </span>
       </header>
 
       <div className="search-row">

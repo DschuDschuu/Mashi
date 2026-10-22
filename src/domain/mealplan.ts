@@ -1,9 +1,11 @@
 import type { FoodEntry, FoodKind, FoodTable } from './nutrition/types';
 import { matchIngredient, spiceName, zeroOf } from './nutrition/noNutrition';
+import { isMixPart } from './mix';
 import { doneParts, remainingContent } from './parts';
 import { toGrams } from './nutrition/units';
 import { normalizeName } from './nutrition/localFoods';
 import { MY_PRODUCTS_PROVIDER } from './nutrition/myProducts';
+import { cookingContent } from './homemade';
 import { currentContent } from './recipe';
 import { formatAmount, formatUnitAmount } from './scaling';
 import type { Ingredient, Recipe, Unit } from './types';
@@ -176,9 +178,12 @@ export const resolveName = (name: string, table: FoodTable) => resolveIngredient
 /** Schlüssel eines Namens (siehe Resolved.key) – zum Vergleichen: gleiches Lebensmittel? */
 export const keyOfName = (name: string, table: FoodTable) => resolveName(name, table)?.key;
 
-/** done: schon fertige Teile (Sauce von gestern) – deren Zutaten braucht es nicht mehr (siehe parts.ts) */
-function resolveRecipe(r: Recipe, servings: number, table: FoodTable, done: readonly string[] = []): Resolved[] {
-  const c = remainingContent(currentContent(r), done);
+/**
+ * done: schon fertige Teile (Sauce von gestern) – deren Zutaten braucht es nicht mehr (siehe parts.ts)
+ * all: für selbst Gemachtes (Gnocchi nach Grundrezept, siehe homemade.ts)
+ */
+function resolveRecipe(r: Recipe, all: readonly Recipe[], servings: number, table: FoodTable, done: readonly string[] = []): Resolved[] {
+  const c = remainingContent(cookingContent(r, all), done);
   const factor = servings / c.servings;
   return c.ingredients.map((i) => resolveIngredient(i, factor, table)).filter((x): x is Resolved => x !== null);
 }
@@ -250,17 +255,17 @@ export function suggestRecipes(plan: MealPlan, all: Recipe[], table: FoodTable, 
   for (const item of plan.items) {
     const r = all.find((x) => x.id === item.recipeId);
     if (!r) continue;
-    for (const x of resolveRecipe(r, item.servings, table)) {
+    for (const x of resolveRecipe(r, all, item.servings, table)) {
       if (!x.pantry) have.set(x.key, (have.get(x.key) ?? 0) + (x.grams ?? 1));
     }
   }
 
   return all
-    .filter((r) => !planned.has(r.id) && !r.archivedAt && r.status !== 'ki_entwurf')
+    .filter((r) => !planned.has(r.id) && !r.archivedAt && !isMixPart(r) && r.status !== 'ki_entwurf')
     .map((r) => {
       const byKey = new Map<string, { name: string; grams: number; weight: number }>();
       const usedUp = new Map<string, string>();
-      for (const x of resolveRecipe(r, currentContent(r).servings, table)) {
+      for (const x of resolveRecipe(r, all, currentContent(r).servings, table)) {
         if (!x.pantry && useUp.has(x.key)) usedUp.set(x.key, x.name);
         if (x.pantry || !have.has(x.key)) continue;
         const prev = byKey.get(x.key);
@@ -317,7 +322,7 @@ export function buildShoppingList(plan: MealPlan, all: Recipe[], table: FoodTabl
     if (!r) continue;
     const title = currentContent(r).title;
     // Julia: ist die Sauce schon fertig (Vorgekocht), stehen ihre Zutaten nicht mehr auf der Liste
-    for (const x of resolveRecipe(r, item.servings, table, doneParts(pantry?.items ?? [], r.id))) {
+    for (const x of resolveRecipe(r, all, item.servings, table, doneParts(pantry?.items ?? [], r.id))) {
       const g = groups.get(x.key) ?? { name: x.name, pantry: x.pantry, kind: x.kind, parts: [], from: new Set<string>() };
       g.parts.push(x);
       g.from.add(title);

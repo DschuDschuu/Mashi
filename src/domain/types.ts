@@ -50,6 +50,10 @@ export interface Ingredient {
   optional?: boolean;
   /** Vom Nutzer oder Provider bestätigte Zuordnung. Fehlt sie, wird über den Namen gesucht. */
   foodRef?: FoodRef;
+  /** Lässt sich auch selbst machen – nach diesem Rezept (Julia: gekaufte oder selbstgemachte Gnocchi), siehe homemade.ts */
+  recipeId?: string;
+  /** Nur in dieser Variante (RecipeContent.choices) – fehlt: in allen, siehe choices.ts */
+  choice?: string;
 }
 
 export interface Step {
@@ -69,6 +73,8 @@ export interface Step {
    * REST = „Frisch“, FINISH = „Zum Schluss“ (bringt Teile zusammen)
    */
   part?: string;
+  /** Nur in dieser Variante (RecipeContent.choices) – fehlt: in allen, siehe choices.ts */
+  choice?: string;
 }
 
 /** Alles, was ein Rezept inhaltlich ausmacht – und damit versioniert wird. */
@@ -86,6 +92,8 @@ export interface RecipeContent {
   devices: DeviceId[];
   /** Nur für KI-Bilder: Beschreibung des Gerichts, ohne Stilvorgaben (die kommen zentral dazu). */
   imagePrompt?: string;
+  /** Varianten des Rezepts (Julia: „mit Hähnchen“ oder „mit Tofu“) – Zutaten und Schritte gehören zu einer oder zu allen */
+  choices?: string[];
 }
 
 export interface RecipeVersion {
@@ -145,4 +153,18 @@ export interface Recipe {
   currentVersionId: string;
   versions: RecipeVersion[];
   feedback: TestFeedback[];
+  /**
+   * Gesetzt = Baustein für Mix & Match (Julia: Soßen und Beilagen frei kombinieren) – steht dann nur dort,
+   * nicht im Kochbuch. Offener String wie bei den Kategorien (siehe MIX_ROLES in mix.ts), später z. B. „gemuese“.
+   */
+  mix?: string;
+  /** „Passt gut zu“ – IDs anderer Mix-Bausteine; gilt in beide Richtungen (siehe goesTogether) */
+  goesWith?: string[];
+  /**
+   * Zutaten (IDs), die gerade selbst gemacht statt gekauft werden – Julias Wahl, gilt für Plan, Einkauf und Kochmodus.
+   * Bewusst nicht versioniert (wie der Favorit): umschalten ist keine neue Fassung des Rezepts.
+   */
+  homemade?: string[];
+  /** gewählte Variante (RecipeContent.choices) – fehlt oder gibt es nicht mehr: die erste; wie homemade nicht versioniert */
+  choice?: string;
 }

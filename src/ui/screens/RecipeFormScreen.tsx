@@ -3,10 +3,12 @@ import { CATEGORIES } from '../../domain/catalog';
 import { cloneContent, currentContent, newId, sameContent } from '../../domain/recipe';
 import type { Difficulty, RecipeContent, RecipeImage, ImageCrop } from '../../domain/types';
 import type { TextImport } from '../../domain/importText';
+import { mixRole } from '../../domain/mix';
 import { createRecipe, regenerateImage, saveContent, setImage as storeImage, useRecipe } from '../../data/store';
 import { goBack, navigate } from '../../router';
 import { ChipSelect, DevicePicker, FileButton, Stepper } from '../components/Controls';
-import { IngredientEditor, StepEditor } from '../components/ContentEditors';
+import { ChoiceEditor, IngredientEditor, StepEditor } from '../components/ContentEditors';
+import { choicesOf } from '../../domain/choices';
 import { RecipeImage as RecipeImageView } from '../components/RecipeImage';
 import { Icon } from '../components/Icon';
 import { TopBar } from '../components/TopBar';
@@ -24,7 +26,10 @@ const EMPTY: RecipeContent = {
  * Formular für „Eigenes Rezept“, „Bearbeiten“ (dann entsteht eine neue Version)
  * und zum Prüfen eines Text-Imports (draft: vorausgefüllt, mit Hinweisen).
  */
-export function RecipeFormScreen({ editId, draft, onBack }: { editId?: string; draft?: TextImport; /** Import: zurück zum eingefügten Text */ onBack?: () => void }) {
+export function RecipeFormScreen({ editId, draft, onBack, mix }: {
+  editId?: string; draft?: TextImport; /** Import: zurück zum eingefügten Text */ onBack?: () => void;
+  /** aus Mix & Match: gleich als Baustein anlegen (z. B. „sosse“) */ mix?: string;
+}) {
   const existing = useRecipe(editId);
   const [c, setC] = useState<RecipeContent>(() =>
     existing ? cloneContent(currentContent(existing)) : cloneContent(draft?.content ?? EMPTY));
@@ -79,15 +84,15 @@ export function RecipeFormScreen({ editId, draft, onBack }: { editId?: string; d
       toast(changed ? `Gespeichert als Version ${existing.versions.length + 1}` : photoChanged ? 'Foto gespeichert' : 'Keine Änderungen');
       goBack(`/rezept/${existing.id}`);
     } else {
-      const id = createRecipe(content, { source: draft ? 'import' : 'selbst', status: tested === 'ja' ? 'kochbuch' : 'zum_testen', image, notes });
-      toast('Rezept gespeichert');
+      const id = createRecipe(content, { source: draft ? 'import' : 'selbst', status: tested === 'ja' ? 'kochbuch' : 'zum_testen', image, notes, mix });
+      toast(mix ? `${mixRole(mix).label} gespeichert – steht in Mix & Match` : 'Rezept gespeichert');
       navigate(`/rezept/${id}`, { replace: true });
     }
   };
 
   return (
     <main className="screen screen--cta">
-      <TopBar title={existing ? 'Rezept bearbeiten' : draft ? 'Import prüfen' : 'Eigenes Rezept'} onBack={onBack}
+      <TopBar title={existing ? 'Rezept bearbeiten' : draft ? 'Import prüfen' : mix ? `Neue ${mixRole(mix).label}` : 'Eigenes Rezept'} onBack={onBack}
         confirmBack={dirty ? (draft && onBack ? 'Zurück zum Text? Deine Änderungen am Rezept gehen verloren.' : 'Verwerfen? Deine Änderungen gehen verloren.') : undefined} />
       <form className="stack" onSubmit={submit} noValidate>
         {draft && (
@@ -136,11 +141,13 @@ export function RecipeFormScreen({ editId, draft, onBack }: { editId?: string; d
             selected={[String(c.difficulty)]} onChange={([v]) => v && set({ difficulty: Number(v) as Difficulty })} />
         </div>
 
+        {/* Varianten (Julia: mit Hähnchen oder Tofu) – choices ausdrücklich setzen, auch wenn sie wegfallen */}
+        <ChoiceEditor content={c} onChange={(next) => set({ choices: next.choices, ingredients: next.ingredients, steps: next.steps })} />
         <div className="panel">
-          <IngredientEditor items={c.ingredients} onChange={(ingredients) => set({ ingredients })} newItem={() => ({ id: newId('i'), name: '' })} />
+          <IngredientEditor items={c.ingredients} onChange={(ingredients) => set({ ingredients })} newItem={() => ({ id: newId('i'), name: '' })} self={existing?.id} choices={choicesOf(c)} />
         </div>
         <div className="panel">
-          <StepEditor steps={c.steps} ingredients={c.ingredients} onChange={(steps) => set({ steps })} />
+          <StepEditor steps={c.steps} ingredients={c.ingredients} onChange={(steps) => set({ steps })} choices={choicesOf(c)} />
         </div>
 
         <div className="panel">
