@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { currentContent, newId } from '../../domain/recipe';
 import {
-  DAY_LONG, DAY_SHORT, addBase, addToBase, canSwap, earlierCookDay, mealTitle, mhdFinds, moveBase, setExtra, sortCookDays, swapDays, toggleLunch,
+  DAY_LONG, DAY_SHORT, addBase, addToBase, canSwap, earlierCookDay, mealTitle, mhdFinds, moveBase, removeMeal, setExtra, sortCookDays, swapDays, toggleLunch,
   weekStarted, weekView, withCookDays, type BaseView, type DayView, type MealView, type MhdFind,
 } from '../../domain/week';
 import type { Week, Weekday } from '../../domain/mealplan';
@@ -92,6 +92,12 @@ export function WeekPlan({ week }: { week: Week }) {
             <div className="week__swapbar" role="status">
               <Icon name="shuffle" size={16} />
               <span><b>{mealText(view.days.find((d) => d.day === swapFrom)?.meal)}</b> – mit welchem Abend tauschen?</span>
+              {/* oder ganz rausnehmen (Julia) – mit Rückgängig wie jede Änderung der Woche */}
+              <button type="button" className="link small" onClick={() => {
+                const m = view.days.find((d) => d.day === swapFrom)?.meal;
+                setSwapFrom(null);
+                if (m) change(removeMeal(week, m.meal.id), `${mealText(m)} gestrichen`);
+              }}>Abend löschen</button>
               <button type="button" className="link small" onClick={() => setSwapFrom(null)}>Abbrechen</button>
             </div>
           )

@@ -5,7 +5,8 @@ import { reverseKeyed, reverseList, reverseRecord } from '../domain/undo';
 import { EXTRA_PREFIX, RESTOCK_PREFIX, shoppingList, type RestockRule } from '../domain/restock';
 import { exclusiveStages, stageOf, withStage, type FoodStage } from '../domain/stage';
 import { DEFAULT_HOUSEHOLD, emptyPlan, keyOfName, normalizePlan, toggleCooked, type Household, type MealPlan, type Week, type Weekday } from '../domain/mealplan';
-import { mealPortions, shiftFrom, weekItems, weekView } from '../domain/week';
+import { mealPortions, shiftFrom, weekBaseIds, weekItems, weekView } from '../domain/week';
+import { baseSupply, coveredShare, type BaseSupply } from '../domain/baseStock';
 import { mergeRecipes } from '../domain/merge';
 import { pantryFromBackup, unionProducts } from '../domain/syncMerge';
 import { fillOrAdd, nameOf, productsFor, withMyProducts, type MyProduct } from '../domain/nutrition/myProducts';
@@ -23,7 +24,7 @@ import { recordSavings, type BonSavings } from '../domain/savings';
 import { addBon, bonFromImport, dropDayPrices, editBonLine, includeBonLine, sameBonOf, withdrawBonStock, dropUnsavedDay, type BonLine, type BonLinePatch } from '../domain/bons';
 import type { PriceEntry } from '../domain/cost';
 import { assignPrices, moveSort } from '../domain/sortRefs';
-import { doneParts, extractPart, forParts, partLabel, partsOf, REST, remainingContent } from '../domain/parts';
+import { doneParts, extractPart, extractToBase, forParts, partLabel, partsOf, REST, remainingContent } from '../domain/parts';
 import { withCategory, type FoodCategory } from '../domain/categories';
 import { relinkOldImport, renameFood, syncProductNames } from '../domain/renameFood';
 import { specialDays, type ShelfDays } from '../domain/shelfLife';
@@ -472,6 +473,16 @@ export function uncookRecipe(id: string): CookedResult | null {
 }
 
 /**
+ * Woher die Grundlagen eines Gerichts kommen, wenn es jetzt gekocht wird: die der Vorkoch-Woche fallen weg, sonst deckt
+ * Vorgekochtes aus der Speisekammer, was da ist – nur für dieses Gericht gerechnet (es wird ja jetzt gekocht).
+ */
+export function basesFor(r: Recipe, servings: number): { without: string[]; supply: BaseSupply[] } {
+  const without = weekBaseIds(plan.week).filter((b) => b !== r.id);
+  const supply = baseSupply({ items: [{ recipeId: r.id, servings }], cooked: [] }, recipes, pantry.items, without).get(r.id) ?? [];
+  return { without, supply };
+}
+
+/**
  * Zutaten abziehen. undo legt genau das Genommene zurück. log = im Wochenplan abgehakt →
  * merken, damit auch späteres Zurücknehmen des Hakens die Zutaten zurückbringt.
  */
@@ -480,9 +491,13 @@ function consume(r: Recipe, servings: number, amounts: Record<string, number> = 
   const before = pantry;
   // schon fertige Teile (die Sauce von gestern): nur noch der Rest – und die gelagerte Sauce ist jetzt verbraucht
   const done = doneParts(pantry.items, r.id);
-  const d = deductRecipe(pantry, remainingContent(cookingContent(r, recipes), done), servings, currentFoodTable(), amounts, variants);
-  const after = done.length ? { ...d.pantry, items: d.pantry.items.filter((it) => !(it.recipeId === r.id && it.part)) } : d.pantry;
-  if (!d.used.length && !d.toCheck.length && !done.length) return { used: [], toCheck: [] };
+  // Grundlagen: aus der Vorkoch-Woche kommen sie aus dem Vorgekochten (eatMeal), sonst deckt Vorgekochtes seinen Teil –
+  // dann gehen dessen Portionen aus der Speisekammer, nicht die Zutaten der Grundlage (baseStock.ts)
+  const { without, supply } = basesFor(r, servings);
+  const d = deductRecipe(pantry, remainingContent(cookingContent(r, recipes, without, coveredShare(supply)), done), servings, currentFoodTable(), amounts, variants);
+  const eaten = supply.reduce((items, s) => eatBase(items, s.baseId, s.have), d.pantry.items);
+  const after = { ...d.pantry, items: done.length ? eaten.filter((it) => !(it.recipeId === r.id && it.part)) : eaten };
+  if (!d.used.length && !d.toCheck.length && !done.length && !supply.length) return { used: [], toCheck: [] };
   const taken = takenBetween(before, after);
   commitPantry(log ? { ...after, cookLog: { ...pruneCookLog(after.cookLog), [r.id]: taken } } : after);
   return { used: d.used, toCheck: d.toCheck, undo: () => putBack(r.id, taken) };
@@ -591,6 +606,30 @@ export function extractPartToBase(id: string, part: string): { baseId: string; t
   commit(withNewVersion(get(id), dish, 'nutzer', `${part} als Grundlage herausgelöst`));
   return {
     baseId: created, title,
+    undo: () => {
+      commit({ ...get(id), versions: before.versions, currentVersionId: before.currentVersionId });
+      deleteRecipe(created);
+    },
+  };
+}
+
+/**
+ * Grundlage daraus machen (Julia: aus „Chili mit Reis“ die Grundlage „Chili“): Was nicht frisch dazukommt, wird ein
+ * eigenes Rezept; das Gericht bekommt eine neue Version mit der Grundlage als Zutat. Vorkoch-Infos (hält X Tage,
+ * einfrierbar) gehören zur Grundlage – die wird ja vorgekocht. Gibt die ID der Grundlage und „Rückgängig“ zurück.
+ */
+export function makeBase(id: string, title: string, baseIngredientIds: readonly string[]): { baseId: string; undo: () => void } | null {
+  const before = get(id);
+  const c = currentContent(before);
+  const name = title.trim();
+  if (!name || !baseIngredientIds.some((x) => c.ingredients.some((i) => i.id === x))) return null;
+  const baseId = newId('r');
+  const { base, dish } = extractToBase(c, baseIngredientIds, { id: baseId, title: name }, () => newId('i'));
+  const created = createRecipe(base, { source: 'selbst', status: before.status === 'ki_entwurf' ? 'zum_testen' : before.status, ...(before.image ? { image: before.image } : {}) }, baseId);
+  if (before.keepsDays || before.freezable) setPrepInfo(created, { keepsDays: before.keepsDays, freezable: before.freezable });
+  commit(withNewVersion(get(id), dish, 'nutzer', `Grundlage „${name}“ daraus gemacht`));
+  return {
+    baseId: created,
     undo: () => {
       commit({ ...get(id), versions: before.versions, currentVersionId: before.currentVersionId });
       deleteRecipe(created);

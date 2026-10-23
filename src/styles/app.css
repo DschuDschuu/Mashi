@@ -1316,6 +1316,9 @@ p { margin: 0; }
 /* Woche planen: Bildkarten zum Antippen */
 .week-setup__title { font-size: 1.4rem; margin: 4px 0 2px; }
 .week-setup__grid, .week-setup__base { margin-top: 14px; }
+/* Schritt 1: „Grundlagen“ und „Gerichte“ getrennt (Julia) */
+.week-setup__group { margin-top: 18px; }
+.week-setup__group .week-setup__grid { margin-top: 8px; }
 .week-setup__base { display: grid; gap: 10px; justify-items: start; }
 .week-setup__base > .grid { width: 100%; }
 .week-setup__head { display: flex; align-items: center; gap: 12px; }
@@ -1393,10 +1396,10 @@ p { margin: 0; }
 .week-today__hint { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 0; padding: 10px 12px; border-radius: var(--r-sm); background: var(--sky); color: var(--ink-2); font-size: 0.86rem; }
 .week-today__hint span { flex: 1; min-width: 12em; }
 .week-today__done { display: flex; align-items: center; gap: 6px; margin: 0; color: var(--primary-text); font-weight: 700; }
-/* Woche planen: „Mit Beilage …“ klappt die Beilagen auf (Julia: Bolognese mit Spätzle) */
-.week-setup__sidebtn { margin-top: 10px; }
-.week-setup__sidebtn.is-open { background: var(--primary); color: var(--on-primary); }
-.week-setup__sides { margin: 8px 0 4px; }
+/* Woche planen: oben „Mit Beilage“ (Julia: am einfachsten), darunter „Daraus machen“; „ohne Beilage“ bewusst unauffällig */
+.week-setup__label { margin: 12px 0 6px; }
+.week-setup__sides { margin-bottom: 4px; }
+.week-setup__plain:not(.is-on) { background: transparent; border: 1px solid var(--line); color: var(--ink-3); }
 .household__sides summary { cursor: pointer; padding: 4px 0; }
 .household__sides[open] summary { margin-bottom: 6px; }
 .household__sides .row-between { padding: 4px 0; }
@@ -1785,6 +1788,11 @@ details.cost-line[open] > summary::after { transform: rotate(-90deg); }
 .plan-amounts__soon { background: var(--peach); color: #9a5a2f; }
 /* Wochenplan: schon fertige Rezept-Teile (Julia) */
 .plan-done-parts { display: inline-flex; align-items: center; gap: 4px; color: var(--primary-text); }
+/* Grundlage aus dem Vorgekochten (baseStock.ts) – reicht es nicht, als Hinweis mit „Auf 2 Portionen planen“ */
+.plan-base { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; min-width: 0; }
+.plan-base--short { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; color: var(--ink-2); }
+.plan-base--short svg { vertical-align: -2px; }
+.plan-base--short .link { padding: 2px 0; }
 /* Chips sind sonst einzeilig – hier lieber umbrechen als aus der Karte ragen (machte die Seite breiter als das Handy) */
 .plan-amounts .chip { white-space: normal; max-width: 100%; text-align: left; }
 @container (max-width: 640px) { .plan-amounts { padding-left: 0; } }

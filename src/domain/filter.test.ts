@@ -67,5 +67,8 @@ describe('Segment „Grundlagen“ (Julia: im Kochbuch sehen, woraus Gerichte en
     expect(filterRecipes(all, { basesOnly: true }, noNutrition).map((r) => r.id)).toEqual(['bolo']);
     // ohne den Filter: alles außer Verwandlungen und Archiv
     expect(filterRecipes(all, {}, noNutrition).map((r) => r.id)).toEqual(['bolo', 'pasta', 'chili', 'salat']);
+    // „Alle“ (Julia: ohne Grundrezepte) – beim Suchen aber doch, sonst fände man die Bolognese nirgends über die Suche
+    expect(filterRecipes(all, { basesHidden: true }, noNutrition).map((r) => r.id)).toEqual(['pasta', 'chili', 'salat']);
+    expect(filterRecipes(all, { basesHidden: true, query: 'bolo' }, noNutrition).map((r) => r.id)).toContain('bolo');
   });
 });

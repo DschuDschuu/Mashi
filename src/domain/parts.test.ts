@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { doneParts, extractPart, FINISH, forParts, partsOf, remainingContent, REST, stepPart } from './parts';
+import { doneParts, extractPart, extractToBase, FINISH, forParts, partsOf, remainingContent, REST, stepPart } from './parts';
 import type { RecipeContent } from './types';
 import { describeChange, diffContent } from './versions';
 
@@ -77,5 +77,35 @@ describe('Rezept-Teile (Julia: Sauce gestern, Nudeln und Fleisch heute)', () => 
     expect(ids(dish.ingredients.slice(1))).toEqual(['i3', 'i4']);
     expect(ids(dish.steps)).toEqual(['s2', 's3', 's4']); // „Alles zusammen“ (zum Schluss) bleibt im Gericht
     expect(partsOf(dish)).toEqual([]); // keine Teile mehr
+  });
+});
+
+describe('Grundlage daraus machen (Julia: aus „Chili mit Reis“ wird die Grundlage „Chili“)', () => {
+  // erfundenes Rezept – keine echten (das Repo ist öffentlich)
+  const chiliReis: RecipeContent = {
+    title: 'Testchili mit Reis', description: '', servings: 4, prepMinutes: 10, cookMinutes: 30, difficulty: 1, categories: [], tags: [], devices: [],
+    ingredients: [
+      { id: 'b', name: 'Kidneybohnen', amount: 2, unit: 'Dose' },
+      { id: 't', name: 'Passierte Tomaten', amount: 500, unit: 'g' },
+      { id: 'r', name: 'Reis', amount: 250, unit: 'g' },
+    ],
+    steps: [
+      { id: 's1', text: 'Kidneybohnen und Passierte Tomaten köcheln lassen.' },
+      { id: 's2', text: 'Reis kochen.' },
+      { id: 's3', text: 'Passierte Tomaten mit Reis anrichten.' },
+    ],
+  };
+  let n = 0;
+  const { base, dish } = extractToBase(chiliReis, ['b', 't'], { id: 'chili', title: 'Testchili' }, () => `x${++n}`);
+
+  it('was nicht frisch dazukommt, wird die Grundlage – ohne Teil-Markierung', () => {
+    expect(base.title).toBe('Testchili');
+    expect(base.ingredients.map((i) => [i.name, i.part])).toEqual([['Kidneybohnen', undefined], ['Passierte Tomaten', undefined]]);
+    expect(base.steps.map((s) => s.id)).toEqual(['s1']);
+  });
+
+  it('das Gericht verweist mit 4 Portionen darauf; Reis und der gemischte Schritt bleiben', () => {
+    expect(dish.ingredients.map((i) => [i.name, i.amount, i.unit, i.recipeId])).toEqual([['Testchili', 4, 'Portion', 'chili'], ['Reis', 250, 'g', undefined]]);
+    expect(dish.steps.map((s) => s.id)).toEqual(['s2', 's3']);
   });
 });

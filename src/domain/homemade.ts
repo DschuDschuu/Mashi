@@ -88,11 +88,29 @@ export function withHomemade(content: RecipeContent, chosen: readonly string[], 
  * seinen Grundlagen (isBaseLink) – für Plan, Einkauf, Vorrat, Nährwerte, Kochmodus.
  * @param without Grundlagen, die schon vorgekocht sind (Vorkoch-Woche): fallen ganz weg, statt aufgelöst zu werden –
  *   sonst kämen ihre Zutaten doppelt auf die Einkaufsliste und gingen doppelt aus dem Vorrat
+ * @param covered Anteil je Grundlage, der schon da ist (baseStock.ts: Vorgekochtes im normalen Plan) – nur der Rest
+ *   wird frisch gemacht; 1 = ganz da, dann fällt sie weg wie bei `without`
  */
-export function cookingContent(r: Recipe, all: readonly Recipe[], without: readonly string[] = []): RecipeContent {
-  const c = withoutBases(chosenContent(r), without);
+export function cookingContent(r: Recipe, all: readonly Recipe[], without: readonly string[] = [], covered: ReadonlyMap<string, number> = NONE): RecipeContent {
+  const c = withCovered(withoutBases(chosenContent(r), without), covered);
   const chosen = [...(r.homemade ?? []), ...c.ingredients.filter(isBaseLink).map((i) => i.id)];
   return chosen.length ? withHomemade(c, chosen, all, r.id) : c;
+}
+
+const NONE: ReadonlyMap<string, number> = new Map();
+
+/** Grundlagen, die teils schon da sind: nur noch der fehlende Teil steht im Rezept */
+function withCovered(c: RecipeContent, covered: ReadonlyMap<string, number>): RecipeContent {
+  if (!covered.size || !c.ingredients.some((i) => isBaseLink(i) && covered.has(i.recipeId!))) return c;
+  return {
+    ...c,
+    ingredients: c.ingredients.flatMap((i) => {
+      const f = isBaseLink(i) ? covered.get(i.recipeId!) : undefined;
+      if (f === undefined) return [i];
+      if (f >= 1) return [];
+      return [{ ...i, amount: (i.amount ?? c.servings) * (1 - f) }];
+    }),
+  };
 }
 
 /**

@@ -8,7 +8,8 @@ import { currentContent } from '../../domain/recipe';
 import { cookingContent } from '../../domain/homemade';
 import { weekBaseIds } from '../../domain/weekBases';
 import { activeChoice } from '../../domain/choices';
-import { asCooked } from '../../domain/scaling';
+import { asCooked, formatAmount } from '../../domain/scaling';
+import { baseSupply, type BaseSupply } from '../../domain/baseStock';
 import { doneParts, partLabel } from '../../domain/parts';
 import { pickFor } from '../../domain/nutrition/variants';
 import type { Recipe } from '../../domain/types';
@@ -49,7 +50,10 @@ const plannable = (r: Recipe) => !r.archivedAt && r.status !== 'ki_entwurf';
 export function PlanScreen() {
   const recipes = useRecipes();
   const plan = usePlan();
+  const pantry = usePantry();
   const [picking, setPicking] = useState(false);
+  // Vorgekochtes deckt Grundlagen (Julia: „Meldung, dass nur 2 da sind“) – gleiche Verteilung wie auf der Einkaufsliste
+  const supply = useMemo(() => baseSupply(plan, recipes, pantry.items, weekBaseIds(plan.week)), [plan, recipes, pantry.items]);
 
   const table = useFoodTable();
   // die Einträge der Vorkoch-Woche stehen oben in „Deine Woche“ – hier nur, was von Hand eingeplant ist
@@ -124,6 +128,7 @@ export function PlanScreen() {
                 <div className="plan-list__meta">
                   {cooked && <PreparedLine recipeId={recipe.id} />}
                   {!cooked && <DonePartsLine recipeId={recipe.id} />}
+                  {!cooked && <BaseSupplyLine list={supply.get(recipe.id)} recipeId={recipe.id} servings={servings} />}
                   {/* mit den „nur dieses Mal“-Mengen (Julia: überall dieselbe Zahl) */}
                   <DishNutrition content={asCooked(cookingContent(recipe, recipes), servings, amounts)} own={variants} recipeId={cooked ? undefined : recipe.id} />
                   {/* pro Portion, nur wenn alle Preise bekannt sind – sonst nichts (Julia, wie auf der Rezeptkarte) */}
@@ -474,6 +479,36 @@ function DonePartsLine({ recipeId }: { recipeId: string }) {
   const done = doneParts(usePantry().items, recipeId);
   if (!done.length) return null;
   return <span className="small plan-done-parts"><Icon name="check" size={13} /> {done.map(partLabel).join(', ')} fertig</span>;
+}
+
+/**
+ * Woher die Grundlage kommt (baseStock.ts): aus dem Vorrat, aus dem Plan – oder es reicht nicht (Julia: „Meldung,
+ * dass nur 2 da sind“): dann wird der Rest frisch gemacht, und ein Tipp plant so viele Portionen, wie da sind.
+ */
+function BaseSupplyLine({ list, recipeId, servings }: { list?: BaseSupply[]; recipeId: string; servings: number }) {
+  if (!list?.length) return null;
+  const portions = (n: number) => `${formatAmount(n)} ${n === 1 ? 'Portion' : 'Portionen'}`;
+  return (
+    <>
+      {list.map((s) => {
+        if (s.source === 'plan') return <span key={s.baseId} className="small muted plan-base"><Icon name="check" size={13} /> {s.name} kommt aus dem Plan</span>;
+        if (s.have >= s.need) return <span key={s.baseId} className="small plan-done-parts plan-base"><Icon name="check" size={13} /> {s.name} aus dem Vorrat</span>;
+        // so viele Portionen des Gerichts, wie die vorgekochte Grundlage reicht
+        const fit = Math.floor((servings * s.have) / s.need + 1e-9);
+        return (
+          <span key={s.baseId} className="small plan-base--short" role="note">
+            <span><Icon name="info" size={13} /> Nur {formatAmount(s.have)} von {portions(s.need)} {s.name} vorgekocht – der Rest kommt auf die Einkaufsliste.</span>
+            {fit >= 1 && (
+              <button type="button" className="link small" onClick={() => {
+                setPlanServings(recipeId, fit);
+                toast(`Auf ${portions(fit)} geplant`, { label: 'Rückgängig', run: () => setPlanServings(recipeId, servings) });
+              }}>Auf {portions(fit)} planen</button>
+            )}
+          </span>
+        );
+      })}
+    </>
+  );
 }
 
 /** Gekocht – und wenn etwas übrig ist: „Vorgekocht · noch 3 Portionen“ mit „1 essen“ (Aktiv wie in der Speisekammer) */

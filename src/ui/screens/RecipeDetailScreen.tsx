@@ -14,12 +14,12 @@ import { doneParts, partLabel, partOf, partsOf, REST, stepPart } from '../../dom
 import type { Recipe, RecipeContent } from '../../domain/types';
 import { describeChange, diffContent } from '../../domain/versions';
 import {
-  addToPlan, adoptToCookbook, archiveRecipe, deleteRecipe, extractPartToBase, restoreRecipe, markCooked, regenerateImage, setChoice, setHomemade, setPlanVariants, setStatus, toggleFavorite, togglePlanCooked, uncookRecipe, updateNotes, usePantry, usePlan, useRecipe, useRecipes,
+  addToPlan, adoptToCookbook, archiveRecipe, deleteRecipe, extractPartToBase, makeBase, restoreRecipe, markCooked, regenerateImage, setChoice, setHomemade, setPlanVariants, setStatus, toggleFavorite, togglePlanCooked, uncookRecipe, updateNotes, usePantry, usePlan, useRecipe, useRecipes,
 } from '../../data/store';
 import { cookedToast } from '../cookedToast';
 import { shareMessage, shareRecipes } from '../shareRecipes';
 import { goBack, navigate } from '../../router';
-import { Empty, Stars, Stepper } from '../components/Controls';
+import { ChipSelect, Empty, Stars, Stepper } from '../components/Controls';
 import { Icon } from '../components/Icon';
 import { deviceIcon } from '../catalogIcons';
 import { NutritionDetails, NutritionTiles } from '../components/Nutrition';
@@ -82,6 +82,7 @@ function Detail({ recipe }: { recipe: Recipe }) {
   const shown = useMemo(() => (asPlanned ? asCooked(c, servings, planAmounts) : c), [asPlanned, c, servings, planAmounts]);
   const [tab, setTab] = useState<Tab>('Zutaten');
   const [menu, setMenu] = useState(false);
+  const [makingBase, setMakingBase] = useState(false);
   const [imgBusy, setImgBusy] = useState(false);
   const written = useNutrition(c);
   // wie die Plan-Karte: mit der Sorte, die dort gewählt ist
@@ -158,11 +159,18 @@ function Detail({ recipe }: { recipe: Recipe }) {
               <Icon name="pot" size={18} /> „{p}“ als Grundlage herauslösen
             </button>
           ))}
+          {/* ganzes Rezept → Grundlage + Gericht (Julia: aus „Chili mit Reis“ die Grundlage „Chili“) – nicht bei Verwandlungen */}
+          {!recipe.fromBase && (
+            <button role="menuitem" onClick={() => { setMenu(false); setMakingBase(true); }}>
+              <Icon name="pot" size={18} /> Grundlage daraus machen …
+            </button>
+          )}
           <button role="menuitem" onClick={() => { archiveRecipe(recipe.id); toast('Archiviert – unter Einstellungen → Archiv wiederherstellbar', { label: 'Rückgängig', run: () => restoreRecipe(recipe.id) }); goBack(home); }}>
             <Icon name="archive" size={18} /> Archivieren
           </button>
         </MenuPanel>
       )}
+      {makingBase && <MakeBaseSheet recipe={recipe} onClose={() => setMakingBase(false)} />}
     </div>
 );
 
@@ -569,6 +577,43 @@ function Infos({ recipe }: { recipe: Recipe }) {
           ))}
         </ol>
       </details>
+    </div>
+  );
+}
+
+/**
+ * Grundlage daraus machen (Julia: aus „Chili mit Reis“ die Grundlage „Chili“): Name und was jeden Abend frisch dazukommt –
+ * alles andere wird die Grundlage, das Gericht verweist darauf (store: makeBase, mit Rückgängig).
+ */
+function MakeBaseSheet({ recipe, onClose }: { recipe: Recipe; onClose: () => void }) {
+  const ref = useSheet(onClose);
+  const c = currentContent(recipe);
+  const [name, setName] = useState(c.title);
+  const [fresh, setFresh] = useState<string[]>([]);
+  const baseIds = c.ingredients.filter((i) => !fresh.includes(i.id)).map((i) => i.id);
+  const ok = !!name.trim() && baseIds.length > 0;
+  const create = () => {
+    const r = makeBase(recipe.id, name, baseIds);
+    if (r) toast(`„${name.trim()}“ ist jetzt eine Grundlage`, { label: 'Rückgängig', run: r.undo });
+    onClose();
+  };
+  return (
+    <div className="sheet-backdrop" onClick={onClose}>
+      <div className="sheet" role="dialog" aria-modal="true" aria-label="Grundlage daraus machen" onClick={(e) => e.stopPropagation()} ref={ref}>
+        <div className="sheet__grip" />
+        <h2 className="sheet__title">Grundlage daraus machen</h2>
+        <p className="small muted">Die Grundlage kochst du vor, „{c.title}“ verweist dann darauf. Was jeden Abend frisch dazukommt, bleibt im Gericht.</p>
+        <label className="field"><span>Name der Grundlage</span>
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="z. B. Chili" />
+        </label>
+        <h3 className="small muted">Was kommt jeden Abend frisch dazu?</h3>
+        <ChipSelect options={c.ingredients.map((i) => ({ value: i.id, label: i.name }))} selected={fresh} onChange={setFresh} />
+        {!baseIds.length && <p className="small error">Mindestens eine Zutat muss in die Grundlage.</p>}
+        <div className="variants__actions">
+          <button type="button" className="btn btn--ghost" onClick={onClose}>Abbrechen</button>
+          <button type="button" className="btn btn--primary" disabled={!ok} onClick={create}>Grundlage anlegen</button>
+        </div>
+      </div>
     </div>
   );
 }

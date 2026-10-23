@@ -3,7 +3,7 @@ import PouchDB from 'pouchdb-core';
 import memory from 'pouchdb-adapter-memory';
 import { describe, expect, it } from 'vitest';
 import { PouchRecipeRepository, type RecipeDb } from './pouchRepository';
-import { addPantryItem, cookBase, createRecipe, currentPantry, currentPlan, extractPartToBase, eatMeal, eatOutToday, initStore, setHousehold, setPrepInfo, setWeek, whenSaved } from './store';
+import { addPantryItem, answerLeftover, cookBase, createRecipe, makeBase, markCooked, currentPantry, currentPlan, extractPartToBase, eatMeal, eatOutToday, initStore, setHousehold, setPrepInfo, setWeek, togglePlanCooked, whenSaved } from './store';
 import { buildShoppingList } from '../domain/mealplan';
 import { shoppingList } from '../domain/restock';
 import { mealKey, suggestWeek } from '../domain/week';
@@ -49,6 +49,32 @@ describe('Store: Teil als Grundlage herauslösen', () => {
     expect(after.some((x) => x.id === r.baseId)).toBe(false);
     expect(after.find((x) => x.id === id)!.currentVersionId).toBe(dish.versions[0].id);
   });
+  it('Grundlage daraus machen: Chili wird eigene Grundlage mit den Vorkoch-Infos, Reis bleibt im Gericht; Rückgängig', async () => {
+    const repo = await freshStore('make-base');
+    const id = createRecipe({
+      ...content('Testchili mit Reis', [
+        { id: 'b', name: 'Kidneybohnen', amount: 2, unit: 'Dose' },
+        { id: 'r', name: 'Reis', amount: 250, unit: 'g' },
+      ]),
+      servings: 4,
+    }, { source: 'selbst', status: 'kochbuch' });
+    setPrepInfo(id, { keepsDays: 4, freezable: true });
+    expect(makeBase(id, '  ', ['b'])).toBeNull();
+    const r = makeBase(id, 'Testchili', ['b'])!;
+    await whenSaved();
+    const all = await repo.list();
+    const base = all.find((x) => x.id === r.baseId)!;
+    expect([base.versions[0].content.title, base.keepsDays, base.freezable]).toEqual(['Testchili', 4, true]);
+    expect(all.find((x) => x.id === id)!.versions.at(-1)!.content.ingredients.map((i) => i.name)).toEqual(['Testchili', 'Reis']);
+    r.undo();
+    await whenSaved();
+    const after = await repo.list();
+    expect(after.some((x) => x.id === r.baseId)).toBe(false);
+    // wieder die ursprüngliche Fassung (die Zwischenversion bleibt im Verlauf, wie beim Herauslösen)
+    const dish = after.find((x) => x.id === id)!;
+    expect(dish.currentVersionId).toBe(dish.versions[0].id);
+  });
+
   it('„Frisch“ (ohne Teil) und unbekannte Teile lassen sich nicht herauslösen', async () => {
     await freshStore('extract-no');
     const id = createRecipe(content('Testsuppe', [{ id: 'a', name: 'Kürbis', amount: 1, unit: 'Stück' }]), { source: 'selbst', status: 'kochbuch' });
@@ -115,6 +141,44 @@ describe('Store: Vorkoch-Woche (Julia: Bolo am Sonntag, unter der Woche Nudeln u
     expect(spaetzle()).toBe(300);
     meal.undo();
     expect(spaetzle()).toBe(500);
+  });
+
+  it('normaler Plan: vorgekochte Bolognese wird gegessen statt Hack abzuziehen; „Rückgängig“ legt sie zurück', async () => {
+    await freshStore('base-stock');
+    const bolo = createRecipe({ ...content('Testbolo', [{ id: 'h', name: 'Hackfleisch', amount: 100, unit: 'g' }]), servings: 1 }, { source: 'selbst', status: 'kochbuch' });
+    const nudeln = createRecipe(content('Testnudeln mit Bolo', [
+      { id: 'b', name: 'Testbolo', amount: 1, unit: 'Portion', recipeId: bolo },
+      { id: 'n', name: 'Spaghetti', amount: 100, unit: 'g' },
+    ]), { source: 'selbst', status: 'kochbuch' });
+    addPantryItem('Hackfleisch', 500, 'g');
+    addPantryItem('Spaghetti', 500, 'g');
+    markCooked(bolo, 3);
+    answerLeftover(3); // 3 Portionen Bolognese vorgekocht
+    const amount = (name: string) => currentPantry().items.find((i) => i.name === name && !i.recipeId)?.amount;
+    const prepared = () => currentPantry().items.filter((i) => i.recipeId === bolo).reduce((n, i) => n + (i.amount ?? 0), 0);
+    expect([amount('Hackfleisch'), prepared()]).toEqual([200, 3]);
+
+    const cooked = markCooked(nudeln, 2);
+    expect([amount('Hackfleisch'), amount('Spaghetti'), prepared()]).toEqual([200, 300, 1]);
+    expect(cooked.undo).toBeDefined();
+    cooked.undo!();
+    expect([amount('Hackfleisch'), amount('Spaghetti'), prepared()]).toEqual([200, 500, 3]);
+  });
+
+  it('Gericht der Woche im Plan abgehakt: die Grundlage kommt aus dem Vorgekochten – ihr Hack bleibt liegen', async () => {
+    await freshStore('week-toggle');
+    const bolo = createRecipe(content('Testbolo', [{ id: 'h', name: 'Hackfleisch', amount: 125, unit: 'g' }]), { source: 'selbst', status: 'kochbuch' });
+    const nudeln = createRecipe(content('Testnudeln mit Bolo', [
+      { id: 'b', name: 'Testbolo', amount: 1, unit: 'Portion', recipeId: bolo },
+      { id: 'n', name: 'Spaghetti', amount: 100, unit: 'g' },
+    ]), { source: 'selbst', status: 'kochbuch' });
+    setHousehold({ portions: 1, lunchDays: [] });
+    setWeek(suggestWeek([6], [{ baseId: bolo, meals: [nudeln] }], () => 't1'));
+    addPantryItem('Hackfleisch', 500, 'g');
+    addPantryItem('Spaghetti', 500, 'g');
+    togglePlanCooked(nudeln);
+    const amount = (name: string) => currentPantry().items.find((i) => i.name === name && !i.recipeId)?.amount;
+    expect([amount('Hackfleisch'), amount('Spaghetti')]).toEqual([500, 400]);
   });
 
   it('Heute auswärts: das Abendessen rückt einen Tag weiter, „Rückgängig“ holt es zurück', async () => {

@@ -4,7 +4,7 @@ import type { Week } from './mealplan';
 import type { Ingredient, Recipe } from './types';
 import { buildShoppingList, emptyPlan } from './mealplan';
 import { localFoodTable } from './nutrition/localFoods';
-import { addBase, addToBase, byEffort, choicesOf, mealKey, mealTitle, mhdFinds, splitMealKey, weekSideNeeds, weekStarted, withCookDays } from './week';
+import { addBase, addToBase, byEffort, choicesOf, mealKey, mealTitle, mhdFinds, removeMeal, splitMealKey, weekSideNeeds, weekStarted, withCookDays } from './week';
 import type { PantryItem } from './pantry';
 import { baseIdOf, canSwap, mealPortions, weekItems, withoutBases, earlierCookDay, moveBase, setExtra, shiftFrom, sortCookDays, suggestWeek, swapDays, toggleLunch, transformsOf, weekdayOf, weekOrder, weekView } from './week';
 
@@ -240,5 +240,28 @@ describe('Mit Beilage (Julia: „Bolognese mit Spätzle“ ohne eigenes Rezept) 
     };
     const list = [timed('lasagne', 30, 2), timed('wraps', 5, 1), timed('auflauf', 30, 1), timed('bolo', 60, 2), timed('bowl', 5, 1)];
     expect(byEffort(list, 'bolo').map((r) => r.id)).toEqual(['bolo', 'bowl', 'wraps', 'auflauf', 'lasagne']);
+  });
+});
+
+describe('Abend rausnehmen (Julia: „simple Gerichte aus dem Wochenplan entfernen“)', () => {
+  it('der Abend fällt weg, die Grundlage bleibt mit weniger Portionen; Gegessenes bleibt', () => {
+    const w = suggestWeek([SO], [{ baseId: 'bolo', meals: ['spag', 'wraps'] }], newId);
+    const wrapsMeal = w.meals.find((m) => m.recipeId === 'wraps')!;
+    const out = removeMeal(w, wrapsMeal.id);
+    expect(out.meals.map((m) => m.recipeId)).toEqual(['spag']);
+    expect(weekView(out, all).bases[0].portions).toBe(1);
+    const eaten = { ...w, meals: w.meals.map((m) => (m.id === wrapsMeal.id ? { ...m, done: true } : m)) };
+    expect(removeMeal(eaten, wrapsMeal.id)).toBe(eaten);
+    expect(removeMeal(w, 'gibt-es-nicht')).toBe(w);
+  });
+
+  it('letzter Abend aus einer Grundlage: ihr Kochtag fällt mit weg – außer mit Extra-Portionen oder schon gekocht', () => {
+    const w = suggestWeek([SO, MI], [{ baseId: 'bolo', meals: ['spag'] }, { baseId: 'salat', meals: ['salat'] }], newId);
+    const salatMeal = w.meals.find((m) => m.recipeId === 'salat')!;
+    expect(removeMeal(w, salatMeal.id).bases.map((b) => b.recipeId)).toEqual(['bolo']);
+    const extra = { ...w, bases: w.bases.map((b) => (b.recipeId === 'salat' ? { ...b, extra: 2 } : b)) };
+    expect(removeMeal(extra, salatMeal.id).bases.map((b) => b.recipeId)).toEqual(['bolo', 'salat']);
+    const cooked = { ...w, bases: w.bases.map((b) => (b.recipeId === 'salat' ? { ...b, cooked: true } : b)) };
+    expect(removeMeal(cooked, salatMeal.id).bases).toHaveLength(2);
   });
 });

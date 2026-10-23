@@ -8,7 +8,8 @@ import { cookingContent } from '../../domain/homemade';
 import { asCooked, formatAmount, formatQuantity, formatUnitAmount, scaleIngredients } from '../../domain/scaling';
 import { orderByUse } from '../../domain/stepIngredients';
 import type { Ingredient } from '../../domain/types';
-import { cookBase, cookParts, currentPlan, eatMeal, householdOf, markCooked, setPlanAmounts, useFoodTable, usePantry, usePlan, useRecipe, useRecipes } from '../../data/store';
+import { basesFor, cookBase, cookParts, currentPlan, eatMeal, householdOf, markCooked, setPlanAmounts, useFoodTable, usePantry, usePlan, useRecipe, useRecipes } from '../../data/store';
+import { coveredShare } from '../../domain/baseStock';
 import { weekView } from '../../domain/week';
 import { doneParts, forParts, partLabel, partsOf, REST } from '../../domain/parts';
 import { goBack, navigate } from '../../router';
@@ -57,7 +58,13 @@ export function CookModeScreen({ id, servings, variants, prep, mealId }: {
   /** so, wie gekocht wird – selbst gemachte Gnocchi mit ihren Zutaten und Schritten als eigener Teil (siehe homemade.ts) */
   // Abendessen der Vorkoch-Woche (?meal=): die Grundlage kommt aus dem Kühlschrank – nicht noch einmal kochen
   const mealBase = mealId ? plan.week?.meals.find((m) => m.id === mealId)?.baseId : undefined;
-  const full = useMemo(() => (recipe ? cookingContent(recipe, recipes, mealBase ? [mealBase] : []) : undefined), [recipe, recipes, mealBase]);
+  // sonst: Vorgekochtes deckt seine Grundlage (baseStock.ts) – wie beim Abziehen, wenn du fertig bist (store: basesFor)
+  const full = useMemo(() => {
+    if (!recipe) return undefined;
+    if (mealBase) return cookingContent(recipe, recipes, [mealBase]);
+    const { without, supply } = basesFor(recipe, servings ?? currentContent(recipe).servings);
+    return cookingContent(recipe, recipes, without, coveredShare(supply));
+  }, [recipe, recipes, mealBase, servings, pantry.items, plan.week]);
   /** Rezept-Teile, die du heute kochst (Julia: „Sauce gestern, Nudeln und Fleisch heute“) – null = alle noch nicht fertigen */
   const [chosen, setChosen] = useState<string[] | null>(null);
   /** Dialog „Was kochst du heute?“ beim Start – einmal je Besuch, solange noch mindestens zwei Teile offen sind (Julia: Mashi erkennt Vorgekochtes selbst) */

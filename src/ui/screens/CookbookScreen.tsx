@@ -23,7 +23,8 @@ const SEGMENTS: { value: Segment; label: string }[] = [
 
 /** Was ein Segment zusätzlich zu den Filtern verlangt. */
 const SEGMENT_FILTER: Record<Segment, Partial<RecipeFilter>> = {
-  alle: {},
+  // Grundlagen stehen unter „Grundlagen“ (Julia) – beim Suchen aber auch hier
+  alle: { basesHidden: true },
   favoriten: { favoritesOnly: true },
   // KI-Ideen gehören hierher – sonst wären sie nach dem Zurückgehen nirgends mehr zu finden
   zum_testen: { statuses: ['ki_entwurf', 'zum_testen'] },

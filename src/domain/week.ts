@@ -279,6 +279,19 @@ export function earlierCookDay(week: Week, baseId: string, recipes: readonly Rec
   return { day: first, needsFreeze };
 }
 
+/**
+ * Einen Abend rausnehmen (Julia: „simple Gerichte aus dem Wochenplan entfernen“) – Gegessenes bleibt. Die Grundlage
+ * bleibt, solange noch ein Abend daraus geplant ist (ihre Portionen rechnet weekView neu); war es der letzte und gibt es
+ * keine Extra-Portionen, fällt auch ihr Kochtag weg – sonst stünde „Lasagne kochen · 0 Portionen“ da.
+ */
+export function removeMeal(week: Week, mealId: string): Week {
+  const meal = week.meals.find((m) => m.id === mealId);
+  if (!meal || meal.done) return week;
+  const meals = week.meals.filter((m) => m.id !== mealId);
+  const keep = (b: WeekBase) => b.recipeId !== meal.baseId || b.cooked || !!b.extra || meals.some((m) => m.baseId === b.recipeId);
+  return { ...week, meals, bases: week.bases.filter(keep) };
+}
+
 /** Grundlage auf einen anderen Kochtag legen – nicht nach einem ihrer Gerichte (dann bliebe es ungekocht) */
 export function moveBase(week: Week, baseId: string, day: Weekday): Week {
   const order = weekOrder(week);

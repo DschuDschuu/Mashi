@@ -70,6 +70,20 @@ export function doneParts(items: readonly { recipeId?: string; part?: string; am
   return [...new Set(items.filter((i) => i.recipeId === recipeId && i.part && (i.amount === undefined || i.amount > 0)).map((i) => i.part!))];
 }
 
+/** vorübergehender Teil für „Grundlage daraus machen“ – kann kein echter Teilname sein */
+const AS_BASE = '\u0000grundlage';
+
+/**
+ * Ganzes Rezept → Grundlage + Gericht (Julia: aus „Chili mit Reis“ wird die Grundlage „Chili“, das Gericht verweist
+ * darauf): Alles außer dem, was jeden Abend frisch dazukommt (Reis), wandert in die Grundlage. Dafür werden diese Zutaten
+ * kurz zu einem eigenen Teil und extractPart macht den Rest – Schritte nur mit Grundlagen-Zutaten wandern mit, gemischte
+ * („Chili über den Reis“) bleiben als „Zum Schluss“ im Gericht.
+ */
+export function extractToBase(c: RecipeContent, baseIngredientIds: readonly string[], base: { id: string; title: string }, newId: () => string): { base: RecipeContent; dish: RecipeContent } {
+  const marked = { ...c, ingredients: c.ingredients.map((i) => (baseIngredientIds.includes(i.id) ? { ...i, part: AS_BASE } : i)) };
+  return extractPart(marked, AS_BASE, base, newId);
+}
+
 /**
  * Teil als Grundlage herauslösen (Julia: „aus meinen Rezepten Grundlagen exportieren“ – die Sauce der Lasagne wird
  * zur eigenen Grundlage): Ihre Zutaten und Schritte wandern in ein neues Rezept; im Gericht steht stattdessen eine

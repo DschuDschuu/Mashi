@@ -5,6 +5,7 @@ import { toGrams } from './nutrition/units';
 import { normalizeName } from './nutrition/localFoods';
 import { MY_PRODUCTS_PROVIDER } from './nutrition/myProducts';
 import { cookingContent } from './homemade';
+import { baseSupply, coveredShare } from './baseStock';
 import { weekBaseIds } from './weekBases';
 import { currentContent } from './recipe';
 import { formatAmount, formatUnitAmount } from './scaling';
@@ -242,10 +243,11 @@ export const keyOfName = (name: string, table: FoodTable) => resolveName(name, t
  * done: schon fertige Teile (Sauce von gestern) – deren Zutaten braucht es nicht mehr (siehe parts.ts)
  * all: für selbst Gemachtes (Gnocchi nach Grundrezept, siehe homemade.ts)
  */
-function resolveRecipe(r: Recipe, all: readonly Recipe[], servings: number, table: FoodTable, done: readonly string[] = [], bases: readonly string[] = []): Resolved[] {
+function resolveRecipe(r: Recipe, all: readonly Recipe[], servings: number, table: FoodTable, done: readonly string[] = [], bases: readonly string[] = [], covered?: ReadonlyMap<string, number>): Resolved[] {
   // Gerichte der Vorkoch-Woche: ihre Grundlage („1 Bolognese“) kommt aus dem Vorgekochten, nicht vom Einkauf
-  // (vor dem Auflösen weglassen – siehe cookingContent, sonst kämen die Zutaten der Grundlage doch auf die Liste)
-  const c = remainingContent(cookingContent(r, all, bases.filter((b) => b !== r.id)), done);
+  // (vor dem Auflösen weglassen – siehe cookingContent, sonst kämen die Zutaten der Grundlage doch auf die Liste);
+  // im normalen Plan deckt Vorgekochtes bzw. die eingeplante Grundlage ihren Teil (covered, baseStock.ts)
+  const c = remainingContent(cookingContent(r, all, bases.filter((b) => b !== r.id), covered), done);
   const factor = servings / c.servings;
   return c.ingredients.map((i) => resolveIngredient(i, factor, table)).filter((x): x is Resolved => x !== null);
 }
@@ -386,13 +388,15 @@ export function buildShoppingList(plan: MealPlan, all: Recipe[], table: FoodTabl
     g.from.add(from);
     groups.set(x.key, g);
   };
+  const weekBases = weekBaseIds(plan.week);
+  const supply = baseSupply(plan, all, pantry?.items ?? [], weekBases);
   for (const item of plan.items) {
     if (plan.cooked.includes(item.recipeId)) continue; // schon gekocht → nichts mehr einzukaufen
     const r = all.find((x) => x.id === item.recipeId);
     if (!r) continue;
     const title = currentContent(r).title;
     // Julia: ist die Sauce schon fertig (Vorgekocht), stehen ihre Zutaten nicht mehr auf der Liste
-    for (const x of resolveRecipe(r, all, item.servings, table, doneParts(pantry?.items ?? [], r.id), weekBaseIds(plan.week))) add(x, title);
+    for (const x of resolveRecipe(r, all, item.servings, table, doneParts(pantry?.items ?? [], r.id), weekBases, coveredShare(supply.get(r.id)))) add(x, title);
   }
   for (const s of sides) {
     const x = resolveIngredient(s, 1, table);

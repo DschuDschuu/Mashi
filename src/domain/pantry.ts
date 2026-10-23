@@ -9,6 +9,7 @@ import type { SavedBon } from './bons';
 import type { FoodCategory } from './categories';
 import { specialDays, useByOf, type ShelfDays } from './shelfLife';
 import { cookingContent } from './homemade';
+import { baseSupply, coveredShare } from './baseStock';
 import { weekBaseIds } from './weekBases';
 import type { MealPlan } from './mealplan';
 import type { RestockRule } from './restock';
@@ -506,6 +507,8 @@ export interface PantryMatch {
  */
 export function pantryAfterPlan(pantry: Pantry, plan: MealPlan, recipes: Recipe[], table: FoodTable): Pantry {
   let rest = pantry;
+  // Vorgekochtes bzw. eingeplante Grundlagen decken ihren Teil (baseStock.ts) – wie auf der Einkaufsliste
+  const supply = baseSupply(plan, recipes, pantry.items, weekBaseIds(plan.week));
   // nach ID, nicht nach Name – sonst fiele „Paprika 3 Stück“ mit raus, nur weil es auch „Paprika“ ohne Menge gibt
   const reserved = new Set<string>();
   for (const item of plan.items) {
@@ -513,7 +516,7 @@ export function pantryAfterPlan(pantry: Pantry, plan: MealPlan, recipes: Recipe[
     const r = recipes.find((x) => x.id === item.recipeId);
     if (!r) continue;
     // schon fertige Teile (die Sauce von gestern) brauchen nichts mehr
-    const d = deductRecipe(rest, remainingContent(cookingContent(r, recipes, weekBaseIds(plan.week).filter((b) => b !== r.id)), doneParts(pantry.items, r.id)), item.servings, table, item.amounts ?? {}, item.variants);
+    const d = deductRecipe(rest, remainingContent(cookingContent(r, recipes, weekBaseIds(plan.week).filter((b) => b !== r.id), coveredShare(supply.get(r.id))), doneParts(pantry.items, r.id)), item.servings, table, item.amounts ?? {}, item.variants);
     d.checkIds.forEach((id) => reserved.add(id));
     rest = d.pantry;
   }
@@ -698,12 +701,14 @@ export interface DishReservation {
 export function plannedByDish(pantry: Pantry, plan: MealPlan, recipes: Recipe[], table: FoodTable): DishReservation[] {
   const originalCheck = new Map(pantry.items.map((it) => [it.id, it.check]));
   let rest = pantry;
+  // Vorgekochtes bzw. eingeplante Grundlagen decken ihren Teil (baseStock.ts) – wie auf der Einkaufsliste
+  const supply = baseSupply(plan, recipes, pantry.items, weekBaseIds(plan.week));
   const out: DishReservation[] = [];
   for (const item of plan.items) {
     if (plan.cooked.includes(item.recipeId)) continue;
     const r = recipes.find((x) => x.id === item.recipeId);
     if (!r) continue;
-    const d = deductRecipe(rest, remainingContent(cookingContent(r, recipes, weekBaseIds(plan.week).filter((b) => b !== r.id)), doneParts(pantry.items, r.id)), item.servings, table, item.amounts ?? {}, item.variants);
+    const d = deductRecipe(rest, remainingContent(cookingContent(r, recipes, weekBaseIds(plan.week).filter((b) => b !== r.id), coveredShare(supply.get(r.id))), doneParts(pantry.items, r.id)), item.servings, table, item.amounts ?? {}, item.variants);
     out.push({ recipeId: r.id, taken: takenBetween(rest, d.pantry), stock: d.stock });
     // „Noch da?“-Markierung nur gedacht – fürs nächste Gericht wieder wie vorher
     rest = { ...d.pantry, items: d.pantry.items.map((it) => ({ ...it, check: originalCheck.get(it.id) })) };
