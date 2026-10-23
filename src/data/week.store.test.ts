@@ -3,7 +3,7 @@ import PouchDB from 'pouchdb-core';
 import memory from 'pouchdb-adapter-memory';
 import { describe, expect, it } from 'vitest';
 import { PouchRecipeRepository, type RecipeDb } from './pouchRepository';
-import { addPantryItem, answerLeftover, cookBase, createRecipe, makeBase, markCooked, currentPantry, currentPlan, extractPartToBase, eatMeal, eatOutToday, initStore, setHousehold, setPrepInfo, setWeek, togglePlanCooked, whenSaved } from './store';
+import { addPantryItem, answerLeftover, cookBase, createRecipe, makeBase, markCooked, currentPantry, currentPlan, eatMeal, eatOutToday, initStore, setHousehold, setPrepInfo, setWeek, togglePlanCooked, whenSaved } from './store';
 import { buildShoppingList } from '../domain/mealplan';
 import { shoppingList } from '../domain/restock';
 import { mealKey, suggestWeek } from '../domain/week';
@@ -24,7 +24,7 @@ const content = (title: string, ingredients: RecipeContent['ingredients']): Reci
 });
 
 describe('Store: Teil als Grundlage herauslösen', () => {
-  it('Sauce wird eigene Grundlage, das Gericht nimmt sie als Zutat; Rückgängig stellt alles wieder her', async () => {
+  it('Schnellwahl „Nur Sauce“: der Teil wird eigene Grundlage samt seiner Schritte, das Gericht nimmt sie als Zutat; Rückgängig', async () => {
     const repo = await freshStore('extract');
     const id = createRecipe({
       ...content('Testlasagne', [
@@ -34,13 +34,13 @@ describe('Store: Teil als Grundlage herauslösen', () => {
       servings: 4,
       steps: [{ id: 's1', text: 'Passata köcheln.', part: 'Sauce' }, { id: 's2', text: 'Schichten und backen.' }],
     }, { source: 'selbst', status: 'kochbuch' });
-    const r = extractPartToBase(id, 'Sauce')!;
-    expect(r.title).toBe('Sauce für Testlasagne');
+    const r = makeBase(id, 'Sauce für Testlasagne', ['a'])!;
     await whenSaved();
     const all = await repo.list();
     const base = all.find((x) => x.id === r.baseId)!;
     const dish = all.find((x) => x.id === id)!;
     expect(base.versions[0].content.ingredients.map((i) => i.name)).toEqual(['Passata']);
+    expect(base.versions[0].content.steps.map((s) => s.id)).toEqual(['s1']); // dem Teil zugeordnet → wandert mit
     expect(dish.versions).toHaveLength(2);
     expect(dish.versions[1].content.ingredients.map((i) => `${i.name}${i.recipeId ? ' →' : ''}`)).toEqual(['Sauce für Testlasagne →', 'Lasagneplatten']);
     r.undo();
@@ -75,11 +75,11 @@ describe('Store: Teil als Grundlage herauslösen', () => {
     expect(dish.currentVersionId).toBe(dish.versions[0].id);
   });
 
-  it('„Frisch“ (ohne Teil) und unbekannte Teile lassen sich nicht herauslösen', async () => {
+  it('ohne Zutat für die Grundlage oder mit unbekannten Zutaten passiert nichts', async () => {
     await freshStore('extract-no');
     const id = createRecipe(content('Testsuppe', [{ id: 'a', name: 'Kürbis', amount: 1, unit: 'Stück' }]), { source: 'selbst', status: 'kochbuch' });
-    expect(extractPartToBase(id, '-')).toBeNull();
-    expect(extractPartToBase(id, 'Sauce')).toBeNull();
+    expect(makeBase(id, 'Grundlage', [])).toBeNull();
+    expect(makeBase(id, 'Grundlage', ['gibt-es-nicht'])).toBeNull();
   });
 });
 

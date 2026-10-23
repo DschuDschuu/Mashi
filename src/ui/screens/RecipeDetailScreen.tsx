@@ -14,7 +14,7 @@ import { doneParts, partLabel, partOf, partsOf, REST, stepPart } from '../../dom
 import type { Recipe, RecipeContent } from '../../domain/types';
 import { describeChange, diffContent } from '../../domain/versions';
 import {
-  addToPlan, adoptToCookbook, archiveRecipe, deleteRecipe, extractPartToBase, makeBase, restoreRecipe, markCooked, regenerateImage, setChoice, setHomemade, setPlanVariants, setStatus, toggleFavorite, togglePlanCooked, uncookRecipe, updateNotes, usePantry, usePlan, useRecipe, useRecipes,
+  addToPlan, adoptToCookbook, archiveRecipe, deleteRecipe, makeBase, restoreRecipe, markCooked, regenerateImage, setChoice, setHomemade, setPlanVariants, setStatus, toggleFavorite, togglePlanCooked, uncookRecipe, updateNotes, usePantry, usePlan, useRecipe, useRecipes,
 } from '../../data/store';
 import { cookedToast } from '../cookedToast';
 import { shareMessage, shareRecipes } from '../shareRecipes';
@@ -149,17 +149,7 @@ function Detail({ recipe }: { recipe: Recipe }) {
           <button role="menuitem" onClick={() => { setMenu(false); void shareRecipes([recipe]).then((r) => { const m = shareMessage(r); if (m) toast(m); }); }}>
             <Icon name="share" size={18} /> Teilen
           </button>
-          {/* Teil als Grundlage herauslösen (Julia: die Sauce der Lasagne vorkochen und verwandeln) */}
-          {partsOf(currentContent(recipe)).filter((p) => p !== REST).map((p) => (
-            <button key={p} role="menuitem" onClick={() => {
-              setMenu(false);
-              const r = extractPartToBase(recipe.id, p);
-              if (r) toast(`„${r.title}“ ist jetzt eine Grundlage`, { label: 'Rückgängig', run: r.undo });
-            }}>
-              <Icon name="pot" size={18} /> „{p}“ als Grundlage herauslösen
-            </button>
-          ))}
-          {/* ganzes Rezept → Grundlage + Gericht (Julia: aus „Chili mit Reis“ die Grundlage „Chili“) – nicht bei Verwandlungen */}
+          {/* ein Weg zur Grundlage (Julia: „Teil herauslösen“ und „Grundlage daraus machen“ zusammen) – Teile als Schnellwahl im Dialog; nicht bei Verwandlungen */}
           {!recipe.fromBase && (
             <button role="menuitem" onClick={() => { setMenu(false); setMakingBase(true); }}>
               <Icon name="pot" size={18} /> Grundlage daraus machen …
@@ -591,6 +581,14 @@ function MakeBaseSheet({ recipe, onClose }: { recipe: Recipe; onClose: () => voi
   const [name, setName] = useState(c.title);
   const [fresh, setFresh] = useState<string[]>([]);
   const baseIds = c.ingredients.filter((i) => !fresh.includes(i.id)).map((i) => i.id);
+  // Schnellwahl (früher „Sauce als Grundlage herauslösen“): nur die Zutaten dieses Teils in die Grundlage
+  const parts = partsOf(c).filter((p) => p !== REST);
+  const freshFor = (p: string) => c.ingredients.filter((i) => partOf(i) !== p).map((i) => i.id);
+  const isPart = (p: string) => baseIds.length > 0 && c.ingredients.every((i) => (partOf(i) === p) === baseIds.includes(i.id));
+  const pickPart = (p: string | null) => {
+    setFresh(p ? freshFor(p) : []);
+    setName(p ? `${p} für ${c.title}` : c.title);
+  };
   const ok = !!name.trim() && baseIds.length > 0;
   const create = () => {
     const r = makeBase(recipe.id, name, baseIds);
@@ -603,6 +601,14 @@ function MakeBaseSheet({ recipe, onClose }: { recipe: Recipe; onClose: () => voi
         <div className="sheet__grip" />
         <h2 className="sheet__title">Grundlage daraus machen</h2>
         <p className="small muted">Die Grundlage kochst du vor, „{c.title}“ verweist dann darauf. Was jeden Abend frisch dazukommt, bleibt im Gericht.</p>
+        {parts.length > 0 && (
+          <div className="chips" role="group" aria-label="Schnellwahl">
+            <button type="button" className={`chip${!fresh.length ? ' is-on' : ''}`} aria-pressed={!fresh.length} onClick={() => pickPart(null)}>Ganzes Rezept</button>
+            {parts.map((p) => (
+              <button key={p} type="button" className={`chip${isPart(p) ? ' is-on' : ''}`} aria-pressed={isPart(p)} onClick={() => pickPart(p)}>Nur „{p}“</button>
+            ))}
+          </div>
+        )}
         <label className="field"><span>Name der Grundlage</span>
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder="z. B. Chili" />
         </label>

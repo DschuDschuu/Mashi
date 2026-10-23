@@ -24,7 +24,7 @@ import { recordSavings, type BonSavings } from '../domain/savings';
 import { addBon, bonFromImport, dropDayPrices, editBonLine, includeBonLine, sameBonOf, withdrawBonStock, dropUnsavedDay, type BonLine, type BonLinePatch } from '../domain/bons';
 import type { PriceEntry } from '../domain/cost';
 import { assignPrices, moveSort } from '../domain/sortRefs';
-import { doneParts, extractPart, extractToBase, forParts, partLabel, partsOf, REST, remainingContent } from '../domain/parts';
+import { doneParts, extractPart, extractToBase, forParts, partLabel, partOf, partsOf, REST, remainingContent } from '../domain/parts';
 import { withCategory, type FoodCategory } from '../domain/categories';
 import { relinkOldImport, renameFood, syncProductNames } from '../domain/renameFood';
 import { specialDays, type ShelfDays } from '../domain/shelfLife';
@@ -592,31 +592,10 @@ export function createRecipe(content: RecipeContent, opts: CreateOptions, id = n
 }
 
 /**
- * Teil als Grundlage herauslösen (Julia): neues Rezept aus dem Teil, das Gericht bekommt eine neue Version mit der
- * verknüpften Grundlage als Zutat. Gibt die ID der Grundlage und „Rückgängig“ zurück.
- */
-export function extractPartToBase(id: string, part: string): { baseId: string; title: string; undo: () => void } | null {
-  const before = get(id);
-  const c = currentContent(before);
-  if (part === REST || !partsOf(c).includes(part)) return null;
-  const title = `${part} für ${c.title}`;
-  const baseId = newId('r');
-  const { base, dish } = extractPart(c, part, { id: baseId, title }, () => newId('i'));
-  const created = createRecipe(base, { source: 'selbst', status: before.status === 'ki_entwurf' ? 'zum_testen' : before.status, ...(before.image ? { image: before.image } : {}) }, baseId);
-  commit(withNewVersion(get(id), dish, 'nutzer', `${part} als Grundlage herausgelöst`));
-  return {
-    baseId: created, title,
-    undo: () => {
-      commit({ ...get(id), versions: before.versions, currentVersionId: before.currentVersionId });
-      deleteRecipe(created);
-    },
-  };
-}
-
-/**
  * Grundlage daraus machen (Julia: aus „Chili mit Reis“ die Grundlage „Chili“): Was nicht frisch dazukommt, wird ein
  * eigenes Rezept; das Gericht bekommt eine neue Version mit der Grundlage als Zutat. Vorkoch-Infos (hält X Tage,
  * einfrierbar) gehören zur Grundlage – die wird ja vorgekocht. Gibt die ID der Grundlage und „Rückgängig“ zurück.
+ * Ist genau ein Teil gewählt („Sauce“), wird er wie beim Herauslösen getrennt – samt der Schritte, die ihm zugeordnet sind.
  */
 export function makeBase(id: string, title: string, baseIngredientIds: readonly string[]): { baseId: string; undo: () => void } | null {
   const before = get(id);
@@ -624,7 +603,11 @@ export function makeBase(id: string, title: string, baseIngredientIds: readonly 
   const name = title.trim();
   if (!name || !baseIngredientIds.some((x) => c.ingredients.some((i) => i.id === x))) return null;
   const baseId = newId('r');
-  const { base, dish } = extractToBase(c, baseIngredientIds, { id: baseId, title: name }, () => newId('i'));
+  const chosen = new Set(baseIngredientIds);
+  const part = partsOf(c).find((p) => p !== REST && c.ingredients.every((i) => (partOf(i) === p) === chosen.has(i.id)));
+  const { base, dish } = part
+    ? extractPart(c, part, { id: baseId, title: name }, () => newId('i'))
+    : extractToBase(c, baseIngredientIds, { id: baseId, title: name }, () => newId('i'));
   const created = createRecipe(base, { source: 'selbst', status: before.status === 'ki_entwurf' ? 'zum_testen' : before.status, ...(before.image ? { image: before.image } : {}) }, baseId);
   if (before.keepsDays || before.freezable) setPrepInfo(created, { keepsDays: before.keepsDays, freezable: before.freezable });
   commit(withNewVersion(get(id), dish, 'nutzer', `Grundlage „${name}“ daraus gemacht`));
