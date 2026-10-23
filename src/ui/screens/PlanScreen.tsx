@@ -6,6 +6,7 @@ import { suggestRecipes, type ShoppingItem, type Suggestion } from '../../domain
 import { ingredientCompletions, longNotCooked, searchRecipes } from '../../domain/recipeSearch';
 import { currentContent } from '../../domain/recipe';
 import { cookingContent } from '../../domain/homemade';
+import { weekBaseIds } from '../../domain/weekBases';
 import { activeChoice } from '../../domain/choices';
 import { asCooked } from '../../domain/scaling';
 import { doneParts, partLabel } from '../../domain/parts';
@@ -65,10 +66,12 @@ export function PlanScreen() {
   const portions = items.reduce((s, i) => s + i.servings, 0);
   const { prices } = usePricing();
   // wie gekocht: „nur dieses Mal“-Mengen und dieselbe Sorte wie bei den Nährwerten (Julia: 3 statt 1 Paprika kostet auch mehr)
+  // Grundlagen der Vorkoch-Woche zählen bei sich selbst, nicht noch einmal in jedem Abendessen daraus
+  const bases = useMemo(() => weekBaseIds(plan.week), [plan.week]);
   const costs = useMemo(() => new Map(items.map((i) => {
-    const c = asCooked(cookingContent(i.recipe, recipes), i.servings, i.amounts);
+    const c = asCooked(cookingContent(i.recipe, recipes, bases.filter((b) => b !== i.recipeId)), i.servings, i.amounts);
     return [i.recipeId, recipeCost(c, i.servings, table, prices, pickFor(choicesFor(c), i.variants))];
-  })), [items, recipes, table, prices]);
+  })), [items, recipes, table, prices, bases]);
   const week = sumCosts([...costs.values()]);
 
   // was ein Gericht vorher auftauen muss – aus derselben Reservierung wie „Für den Wochenplan“

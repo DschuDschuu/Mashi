@@ -4,9 +4,10 @@ import type { PantryItem } from './pantry';
 import { currentContent } from './recipe';
 import { SPECIAL_DAYS } from './shelfLife';
 import { weekBaseIds, withoutBases } from './weekBases';
+import { sideIngredient, sideOf } from './sides';
 
 export { weekBaseIds, withoutBases };
-import type { Recipe } from './types';
+import type { Ingredient, Recipe } from './types';
 
 /**
  * Vorkoch-Woche (Julia: „nicht 5 unterschiedliche Gerichte kochen – eine Bolo machen und daraus einmal Nudeln,
@@ -49,10 +50,52 @@ export function transformsOf(baseId: string, recipes: readonly Recipe[]): Recipe
   return recipes.filter((r) => r.id !== baseId && !r.archivedAt && currentContent(r).ingredients.some((i) => i.recipeId === baseId));
 }
 
-/** Julias Auswahl: eine Grundlage und was sie daraus macht – dasselbe Gericht zweimal = zwei Abende */
+/**
+ * Wie viele Gerichte aus jeder Grundlage entstehen (gleiche Regel wie transformsOf) – fürs Kochbuch: Segment
+ * „Grundlagen“ und „3 Gerichte daraus“ auf der Karte. Einmal für alle, statt je Karte alle Rezepte zu durchsuchen.
+ */
+export function transformCounts(recipes: readonly Recipe[]): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const r of recipes) {
+    if (r.archivedAt) continue;
+    const bases = new Set(currentContent(r).ingredients.flatMap((i) => (i.recipeId && i.recipeId !== r.id ? [i.recipeId] : [])));
+    for (const id of bases) counts.set(id, (counts.get(id) ?? 0) + 1);
+  }
+  return counts;
+}
+
+/**
+ * Julias Auswahl: eine Grundlage und was sie daraus macht – dasselbe Gericht zweimal = zwei Abende.
+ * Ein Eintrag ist eine Rezept-ID oder „Rezept+Beilage“ (mealKey) – so bleibt die Auswahl eine einfache Liste zum Zählen.
+ */
 export interface WeekChoice {
   baseId: string;
   meals: string[];
+}
+
+/** „bolo+spaetzle“ = Bolognese mit Spätzle (Beilage siehe sides.ts); ohne Beilage nur die Rezept-ID */
+export const mealKey = (recipeId: string, side?: string): string => (side ? `${recipeId}+${side}` : recipeId);
+export function splitMealKey(key: string): { recipeId: string; side?: string } {
+  const at = key.lastIndexOf('+');
+  return at > 0 ? { recipeId: key.slice(0, at), side: key.slice(at + 1) } : { recipeId: key };
+}
+
+/** „Bolognese mit Spätzle“ – der Titel eines Abendessens, mit seiner Beilage */
+export function mealTitle(meal: Pick<WeekMeal, 'side'>, recipe: Recipe | undefined): string {
+  const title = recipe ? currentContent(recipe).title : 'Gelöschtes Rezept';
+  const side = sideOf(meal.side);
+  return side ? `${title} mit ${side.name}` : title;
+}
+
+/**
+ * Was Julia am Abend noch tun muss, wenig zuerst (Julia: „aufsteigend nach Aufwand“): Zeit (Vorbereitung + Kochen),
+ * dann Schwierigkeit, dann Name. Die Grundlage selbst ist nur aufwärmen und steht deshalb vor allen.
+ */
+export function byEffort(recipes: readonly Recipe[], baseId?: string): Recipe[] {
+  const key = (r: Recipe) => { const c = currentContent(r); return { base: r.id === baseId, minutes: c.prepMinutes + c.cookMinutes, diff: c.difficulty, title: c.title }; };
+  return [...recipes].map((r) => ({ r, k: key(r) }))
+    .sort((a, b) => Number(b.k.base) - Number(a.k.base) || a.k.minutes - b.k.minutes || a.k.diff - b.k.diff || a.k.title.localeCompare(b.k.title, 'de'))
+    .map((x) => x.r);
 }
 
 /**
@@ -69,10 +112,11 @@ export function suggestWeek(cookDays: readonly Weekday[], choices: readonly Week
     const day = cook[Math.min(i, cook.length - 1)] ?? 0;
     bases.push({ recipeId: c.baseId, day });
     let k = order.indexOf(day);
-    for (const recipeId of c.meals) {
+    for (const key of c.meals) {
       while (k < 7 && taken.has(order[k])) k++;
       if (k >= 7) break;
-      meals.push({ id: newId(), day: order[k], recipeId, baseId: c.baseId });
+      const { recipeId, side } = splitMealKey(key);
+      meals.push({ id: newId(), day: order[k], recipeId, baseId: c.baseId, ...(side ? { side } : {}) });
       taken.add(order[k]);
       k++;
     }
@@ -93,7 +137,7 @@ export interface MealView {
 }
 
 export type LunchView =
-  | { day: Weekday; kind: 'rest'; recipe: Recipe; baseId: string; age: number; frost: boolean; tooOld: boolean }
+  | { day: Weekday; kind: 'rest'; recipe: Recipe; baseId: string; age: number; frost: boolean; tooOld: boolean; side?: string }
   | { day: Weekday; kind: 'box'; recipe: Recipe; baseId: string; age: number; frost: boolean; tooOld: boolean; reason: 'nicht-mitnehmbar' | 'abend-frei' }
   | { day: Weekday; kind: 'none'; reason: 'nichts-gekocht' | 'nichts-mitnehmbar' };
 
@@ -149,7 +193,7 @@ export function weekView(week: Week, recipes: readonly Recipe[], household: Hous
   const lunchOf = (day: Weekday): LunchView => {
     const prev = ord(day) > 0 ? meals.get(order[ord(day) - 1]) : undefined;
     if (prev?.recipe?.togo) {
-      return { day, kind: 'rest', recipe: prev.recipe, baseId: prev.meal.baseId, ...freshness(order, day, prev.cookDay, byId.get(prev.meal.baseId), keepsFallback) };
+      return { day, kind: 'rest', recipe: prev.recipe, baseId: prev.meal.baseId, ...(prev.meal.side ? { side: prev.meal.side } : {}), ...freshness(order, day, prev.cookDay, byId.get(prev.meal.baseId), keepsFallback) };
     }
     const reason = prev ? 'nicht-mitnehmbar' as const : 'abend-frei' as const;
     const cooked = week.bases.filter((b) => ord(b.day) < ord(day)).sort((a, b) => ord(b.day) - ord(a.day));
@@ -301,12 +345,27 @@ export function weekItems(week: Week, recipes: readonly Recipe[], household: Hou
   return [...servings].map(([recipeId, n]) => ({ recipeId, servings: n, fromWeek: true as const }));
 }
 
+/**
+ * Beilagen der offenen Abende (Julia: „Bolognese mit Spätzle“) als Zutaten für die Einkaufsliste – je Beilage
+ * zusammengezählt, mit den Portionen des Abends samt Rest für den Mittag. Gegessenes zählt nicht mehr.
+ */
+export function weekSideNeeds(week: Week | undefined, recipes: readonly Recipe[], household: Household = DEFAULT_HOUSEHOLD): Ingredient[] {
+  if (!week?.meals.some((m) => m.side && !m.done)) return [];
+  const view = weekView(week, recipes, household);
+  const portions = new Map<string, number>();
+  for (const d of view.days) {
+    const m = d.meal?.meal;
+    if (m?.side && !m.done && sideOf(m.side)) portions.set(m.side, (portions.get(m.side) ?? 0) + mealPortions(view, d.day, household));
+  }
+  return [...portions].flatMap(([id, n]) => sideIngredient(id, n, household) ?? []);
+}
+
 /** Was Julia gewählt hat, aus einer Woche zurückgelesen (Grundlagen in Reihenfolge, ihre Gerichte nach Abend) */
 export function choicesOf(week: Week): WeekChoice[] {
   const order = weekOrder(week);
   return week.bases.map((b) => ({
     baseId: b.recipeId,
-    meals: week.meals.filter((m) => m.baseId === b.recipeId).sort((x, y) => order.indexOf(x.day) - order.indexOf(y.day)).map((m) => m.recipeId),
+    meals: week.meals.filter((m) => m.baseId === b.recipeId).sort((x, y) => order.indexOf(x.day) - order.indexOf(y.day)).map((m) => mealKey(m.recipeId, m.side)),
   }));
 }
 

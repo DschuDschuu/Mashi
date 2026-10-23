@@ -1,5 +1,7 @@
 import { currentContent } from '../../domain/recipe';
-import { DAY_LONG, mealPortions, weekdayOf, weekView } from '../../domain/week';
+import { DAY_LONG, mealPortions, mealTitle, weekdayOf, weekView } from '../../domain/week';
+import { sideGrams, sideOf } from '../../domain/sides';
+import { formatAmount } from '../../domain/scaling';
 import type { Week } from '../../domain/mealplan';
 import type { Recipe } from '../../domain/types';
 import { specialDays } from '../../domain/shelfLife';
@@ -28,6 +30,7 @@ export function WeekToday({ week }: { week: Week }) {
   const tomorrow = view.days[i + 1];
   const cookToday = view.bases.filter((b) => b.base.day === today && !b.base.cooked);
   const meal = d?.meal;
+  const side = sideOf(meal?.meal.side);
   const lunch = d?.lunch;
   // nächster Kochtag mit noch Ungekochtem – auch über das Wochenende hinweg (die Woche hat keine Daten, nur Tage)
   const uncooked = view.bases.filter((b) => !b.base.cooked).map((b) => b.base.day);
@@ -54,7 +57,7 @@ export function WeekToday({ week }: { week: Week }) {
           <RecipeImage image={lunch.recipe.image} size="sm" />
           <span className="week-today__text">
             <small>Heute Mittag</small>
-            <strong>{title(lunch.recipe)}</strong>
+            <strong>{lunch.kind === 'rest' ? mealTitle(lunch, lunch.recipe) : title(lunch.recipe)}</strong>
             <small>{lunch.kind === 'rest' ? 'Rest von gestern Abend' : lunch.frost ? 'aus dem Gefrierfach' : 'Box aus dem Kühlschrank'}</small>
           </span>
           {lunch.kind === 'box' && !(week.doneLunch ?? []).includes(today) && (
@@ -70,16 +73,18 @@ export function WeekToday({ week }: { week: Week }) {
         <div className="week-today__dinner">
           <h2 className="today__title"><Icon name="cloche" size={18} /> Heute Abend</h2>
           <article className="bigcard">
-            <button type="button" className="bigcard__media" onClick={() => navigate(`/rezept/${meal.meal.recipeId}`)} aria-label={title(meal.recipe)}>
+            <button type="button" className="bigcard__media" onClick={() => navigate(`/rezept/${meal.meal.recipeId}`)} aria-label={mealTitle(meal.meal, meal.recipe)}>
               <RecipeImage image={meal.recipe?.image} size="lg" />
               <span className={`week-today__badge tag ${meal.frost ? 'tag--frost' : 'tag--eat'}`}>
                 {meal.age === 0 ? 'frisch vom Kochtag' : meal.frost ? 'aufgetaut' : `${title(recipes.find((r) => r.id === meal.meal.baseId))} ist fertig`}
               </span>
             </button>
             <div className="bigcard__body">
-              <h3 className="bigcard__title">{title(meal.recipe)}</h3>
+              <h3 className="bigcard__title">{mealTitle(meal.meal, meal.recipe)}</h3>
               <p className="small muted">
-                {meal.meal.recipeId === meal.meal.baseId ? 'Nur aufwärmen' : `${title(recipes.find((r) => r.id === meal.meal.baseId))} aus dem ${meal.frost ? 'Gefrierfach' : 'Kühlschrank'} + frisch dazu`}
+                {meal.meal.recipeId !== meal.meal.baseId ? `${title(recipes.find((r) => r.id === meal.meal.baseId))} aus dem ${meal.frost ? 'Gefrierfach' : 'Kühlschrank'} + frisch dazu`
+                  : side ? `Aufwärmen · ${formatAmount(sideGrams(side.id, hh) * mealPortions(view, today, hh))} g ${side.name} dazu`
+                    : 'Nur aufwärmen'}
               </p>
               <div className="week-today__actions">
                 {meal.meal.recipeId === meal.meal.baseId
@@ -100,7 +105,7 @@ export function WeekToday({ week }: { week: Week }) {
                   // nach dem Verschieben: wird es dadurch zu alt, gleich sagen
                   const moved = currentPlan().week;
                   const frost = moved && weekView(moved, recipes, hh).days.find((x) => x.day === r.to)?.meal?.frost;
-                  toast(`Heute auswärts – ${title(meal.recipe)} auf ${DAY_LONG[r.to]} geschoben${frost ? ', bis dahin einfrieren' : ''}`, { label: 'Rückgängig', run: r.undo });
+                  toast(`Heute auswärts – ${mealTitle(meal.meal, meal.recipe)} auf ${DAY_LONG[r.to]} geschoben${frost ? ', bis dahin einfrieren' : ''}`, { label: 'Rückgängig', run: r.undo });
                 }}>Heute auswärts</button>
               </div>
             </div>
@@ -108,7 +113,7 @@ export function WeekToday({ week }: { week: Week }) {
           {fillForLunch && <p className="week-today__hint"><Icon name="bag" size={16} /> Eine Portion gleich für morgen Mittag abfüllen.</p>}
         </div>
       ) : meal?.meal.done ? (
-        <p className="week-today__done"><Icon name="check" size={16} /> Heute Abend: {title(meal.recipe)} – gegessen</p>
+        <p className="week-today__done"><Icon name="check" size={16} /> Heute Abend: {mealTitle(meal.meal, meal.recipe)} – gegessen</p>
       ) : (
         <p className="small muted">Heute Abend ist nichts aus der Woche geplant{nextCook !== undefined ? ` – nächster Kochtag: ${DAY_LONG[nextCook]}` : ''}.</p>
       )}
@@ -116,7 +121,7 @@ export function WeekToday({ week }: { week: Week }) {
       {thaw && (
         <div className="week-today__hint">
           <Icon name="snow" size={16} />
-          <span>Für morgen ({title(tomorrow!.meal!.recipe)}): eine Portion {title(recipes.find((r) => r.id === tomorrow!.meal!.meal.baseId))} aus dem Gefrierfach nehmen.</span>
+          <span>Für morgen ({mealTitle(tomorrow!.meal!.meal, tomorrow!.meal!.recipe)}): eine Portion {title(recipes.find((r) => r.id === tomorrow!.meal!.meal.baseId))} aus dem Gefrierfach nehmen.</span>
           <button type="button" className="btn btn--soft btn--sm" onClick={() => toast('Zum Auftauen in den Kühlschrank', { label: 'Rückgängig', run: thawPantryItem(thaw.id, mealPortions(view, tomorrow!.day, hh)) })}>Auftauen</button>
         </div>
       )}

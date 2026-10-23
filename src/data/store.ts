@@ -5,7 +5,7 @@ import { reverseKeyed, reverseList, reverseRecord } from '../domain/undo';
 import { EXTRA_PREFIX, RESTOCK_PREFIX, shoppingList, type RestockRule } from '../domain/restock';
 import { exclusiveStages, stageOf, withStage, type FoodStage } from '../domain/stage';
 import { DEFAULT_HOUSEHOLD, emptyPlan, keyOfName, normalizePlan, toggleCooked, type Household, type MealPlan, type Week, type Weekday } from '../domain/mealplan';
-import { mealPortions, shiftFrom, weekItems, weekView, withoutBases } from '../domain/week';
+import { mealPortions, shiftFrom, weekItems, weekView } from '../domain/week';
 import { mergeRecipes } from '../domain/merge';
 import { pantryFromBackup, unionProducts } from '../domain/syncMerge';
 import { fillOrAdd, nameOf, productsFor, withMyProducts, type MyProduct } from '../domain/nutrition/myProducts';
@@ -16,7 +16,8 @@ import {
 import { attachPacks, changeAmount, mergeSamePacks, openItem } from '../domain/packs';
 import { addPrepared, eatPrepared } from '../domain/prepared';
 import { currentContent, currentVersion, newId, sameContent, withNewVersion } from '../domain/recipe';
-import { retireMix } from '../domain/mix';
+import { retireMix, sideContent } from '../domain/mix';
+import { sideGrams, sideOf } from '../domain/sides';
 import { cookingContent } from '../domain/homemade';
 import { recordSavings, type BonSavings } from '../domain/savings';
 import { addBon, bonFromImport, dropDayPrices, editBonLine, includeBonLine, sameBonOf, withdrawBonStock, dropUnsavedDay, type BonLine, type BonLinePatch } from '../domain/bons';
@@ -947,7 +948,11 @@ export function eatMeal(mealId: string): WeekResult | null {
   const r = recipes.find((x) => x.id === meal.recipeId);
   const before = { pantry, plan, recipe: r };
   if (r) commit(stampCooked(r));
-  const d = r && r.id !== meal.baseId ? deductContent(pantry, withoutBases(cookingContent(r, recipes), [meal.baseId]), n) : { pantry, used: [], toCheck: [] };
+  const dish = r && r.id !== meal.baseId ? deductContent(pantry, cookingContent(r, recipes, [meal.baseId]), n) : { pantry, used: [], toCheck: [] };
+  // frisch dazu (Julia: „Bolognese mit Spätzle“) – die Beilage geht wie eine Zutat aus der Speisekammer
+  const side = sideOf(meal.side);
+  const s = side ? deductContent(dish.pantry, sideContent(side.name, sideGrams(side.id, hh)), n) : undefined;
+  const d = s ? { pantry: s.pantry, used: [...dish.used, ...s.used], toCheck: [...dish.toCheck, ...s.toCheck] } : dish;
   const after = { ...d.pantry, items: eatBase(d.pantry.items, meal.baseId, n) };
   commitPantry(after);
   commitPlan(withWeek(plan, { ...week, meals: week.meals.map((m) => (m.id === mealId ? { ...m, done: true } : m)) }));
@@ -962,7 +967,7 @@ export function eatLunchBox(day: Weekday): WeekResult | null {
   const lunch = weekView(week, recipes, hh, keepsFallback()).days.find((d) => d.day === day)?.lunch;
   if (!lunch || lunch.kind !== 'box') return null;
   const before = { pantry, plan };
-  const d = lunch.recipe.id !== lunch.baseId ? deductContent(pantry, withoutBases(cookingContent(lunch.recipe, recipes), [lunch.baseId]), hh.portions) : { pantry, used: [], toCheck: [] };
+  const d = lunch.recipe.id !== lunch.baseId ? deductContent(pantry, cookingContent(lunch.recipe, recipes, [lunch.baseId]), hh.portions) : { pantry, used: [], toCheck: [] };
   const after = { ...d.pantry, items: eatBase(d.pantry.items, lunch.baseId, hh.portions) };
   commitPantry(after);
   commitPlan(withWeek(plan, { ...week, doneLunch: [...new Set([...(week.doneLunch ?? []), day])] }));

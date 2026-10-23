@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { cookingContent, homemadeCandidates, homemadeOptions, withHomemade } from './homemade';
+import { cookingContent, homemadeCandidates, homemadeOptions, isBaseLink, withHomemade } from './homemade';
+import { buildShoppingList, emptyPlan, type Week } from './mealplan';
+import { foodTable } from '../services';
 import { sideContent } from './mix';
 import { FINISH, forParts, partsOf, REST } from './parts';
 import { currentContent } from './recipe';
@@ -93,5 +95,43 @@ describe('Zutat selbst machen (Julia: gekaufte oder selbstgemachte Gnocchi)', ()
     expect(homemadeCandidates('Bärlauch Pesto', list).map((r) => r.id)).toEqual(['p']);
     expect(homemadeCandidates('Tomaten', list)).toEqual([]);
     expect(homemadeCandidates('Ei', list)).toEqual([]);
+  });
+});
+
+describe('Grundlagen („1 Portion Bolognese“) – immer selbst gemacht, in der Vorkoch-Woche aus dem Vorgekochten', () => {
+  const bolo = recipe('bolo', 'Testbolognese', 4, [
+    { id: 'h', name: 'Rinderhack', amount: 500, unit: 'g' },
+    { id: 't', name: 'Passierte Tomaten', amount: 700, unit: 'g' },
+  ], [{ id: 'b1', text: 'Rinderhack braten, Tomaten dazu, köcheln lassen.' }]);
+  const wraps = (amount = 1) => recipe('wraps', 'Testwraps', 1, [
+    { id: 'l', name: 'Testbolognese', amount, unit: 'Portion', recipeId: 'bolo' },
+    { id: 'w', name: 'Wraps', amount: 2, unit: 'Stück' },
+  ], [{ id: 'w1', text: 'Testbolognese erwärmen, Wraps füllen.' }], { fromBase: 'bolo' });
+  const list = (r: Recipe, week?: Week) => buildShoppingList({ ...emptyPlan(), items: [{ recipeId: r.id, servings: 1 }], ...(week ? { week } : {}) }, [bolo, r], foodTable).map((x) => x.name).sort();
+  // nur das, was die Einkaufsliste braucht – die übrigen Felder der Woche spielen hier keine Rolle
+  const weekWith = (...bases: string[]) => ({ cookDays: [], bases: bases.map((recipeId) => ({ recipeId })), meals: [] }) as unknown as Week;
+
+  it('keine Wahl „gekauft“: eine Portion Grundlage kann man nicht kaufen', () => {
+    expect(isBaseLink({ recipeId: 'bolo', unit: 'Portion' })).toBe(true);
+    expect(isBaseLink({ recipeId: 'g', unit: 'g' })).toBe(false);
+    expect(homemadeOptions(wraps(), [bolo, wraps()])).toEqual([]);
+  });
+
+  it('aufgelöst nach der Menge: 1 Portion = ein Viertel der Bolognese für 4, 2 Portionen = die Hälfte', () => {
+    expect(cookingContent(wraps(), [bolo]).ingredients.map((i) => [i.name, i.amount])).toEqual([['Rinderhack', 125], ['Passierte Tomaten', 175], ['Wraps', 2]]);
+    expect(cookingContent(wraps(2), [bolo]).ingredients[0].amount).toBe(250);
+    // erst die Bolognese, dann „Wraps füllen“ zum Schluss
+    expect(cookingContent(wraps(), [bolo]).steps.map((s) => s.part)).toEqual(['Testbolognese', FINISH]);
+  });
+
+  it('normaler Wochenplan: die Zutaten der Grundlage kommen auf die Einkaufsliste, nicht „1 Portion Testbolognese“', () => {
+    expect(list(wraps())).toEqual(['Passierte Tomaten', 'Rinderhack', 'Wraps']);
+  });
+
+  it('Vorkoch-Woche: die Grundlage kommt aus dem Vorgekochten – ihre Zutaten nicht noch einmal (vorher: doppelt)', () => {
+    expect(list(wraps(), weekWith('bolo'))).toEqual(['Wraps']);
+    // auch, wenn „selbst gemacht“ von Hand gewählt war (der alte Weg)
+    expect(list({ ...wraps(), homemade: ['l'] }, weekWith('bolo'))).toEqual(['Wraps']);
+    expect(cookingContent(wraps(), [bolo], ['bolo']).ingredients.map((i) => i.name)).toEqual(['Wraps']);
   });
 });

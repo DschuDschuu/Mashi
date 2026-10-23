@@ -4,6 +4,7 @@ import { currentContent } from './recipe';
 import { scaleIngredients } from './scaling';
 import { stepIngredients } from './stepIngredients';
 import type { Ingredient, Recipe, RecipeContent } from './types';
+import { withoutBases } from './weekBases';
 
 /**
  * Zutat selbst machen (Julia: „gekaufte Gnocchi und selbstgemachte – und dann kann ich wählen“): Eine Zutat kann auf ein
@@ -18,11 +19,18 @@ export interface HomemadeOption {
   chosen: boolean;
 }
 
-/** Zutaten mit Grundrezept – nur, wenn es das Rezept noch gibt (gelöscht = wieder gekauft) */
+/**
+ * „1 Portion Bolognese“ – eine Grundlage (herausgelöst oder Verwandlung, siehe week.ts). Die kann man nicht kaufen:
+ * sie ist immer selbst gemacht, ohne Wahl. In einer Vorkoch-Woche kommt sie aus dem Vorgekochten (cookingContent, without).
+ */
+export const isBaseLink = (i: Pick<Ingredient, 'recipeId' | 'unit'>): boolean => !!i.recipeId && i.unit === 'Portion';
+
+/** Zutaten mit Grundrezept zum Wählen (gekauft oder selbst) – nur, wenn es das Rezept noch gibt (gelöscht = wieder gekauft) */
 export function homemadeOptions(r: Recipe, all: readonly Recipe[]): HomemadeOption[] {
   const chosen = new Set(r.homemade ?? []);
-  // nur, was in der gewählten Variante vorkommt (siehe choices.ts)
+  // nur, was in der gewählten Variante vorkommt (siehe choices.ts); Grundlagen sind immer selbst gemacht
   return chosenContent(r).ingredients.flatMap((ingredient) => {
+    if (isBaseLink(ingredient)) return [];
     const recipe = linked(ingredient, all, r.id);
     return recipe ? [{ ingredient, recipe, chosen: chosen.has(ingredient.id) }] : [];
   });
@@ -37,23 +45,24 @@ const subId = (ingredientId: string, id: string) => `${ingredientId}>${id}`;
 
 /**
  * Das Rezept mit den gewählten Zutaten selbst gemacht. Das Grundrezept kommt auf die Portionen des Gerichts
- * (Gnocchi für 2 = Grundrezept für 2 – wie bei Mix & Match je Portion), seine Schritte stehen vorne.
+ * (Gnocchi für 2 = Grundrezept für 2 – wie bei Mix & Match je Portion), seine Schritte stehen vorne. Bei einer
+ * Grundlage („2 Portionen Sauce“) zählt die Menge: so viele Portionen der Grundlage.
  * Ein Schritt, der die gekaufte Zutat brauchte („Gnocchi in die Sauce“), bringt jetzt Teile zusammen → „Zum Schluss“.
  * Nur eine Ebene: Was das Grundrezept selbst wieder selbst machen könnte, bleibt gekauft.
  * @param self ID des Rezepts – zeigt eine Zutat auf das Rezept selbst, bleibt sie gekauft
  */
 export function withHomemade(content: RecipeContent, chosen: readonly string[], all: readonly Recipe[], self?: string): RecipeContent {
-  const subs = new Map<string, { name: string; c: RecipeContent }>();
+  const subs = new Map<string, { name: string; c: RecipeContent; portions: number }>();
   for (const i of content.ingredients) {
     const r = chosen.includes(i.id) ? linked(i, all, self) : undefined;
-    if (r) subs.set(i.id, { name: i.name, c: chosenContent(r) });
+    if (r) subs.set(i.id, { name: i.name, c: chosenContent(r), portions: isBaseLink(i) && i.amount ? i.amount : content.servings });
   }
   if (!subs.size) return content;
 
   const ingredients = content.ingredients.flatMap((i): Ingredient[] => {
     const sub = subs.get(i.id);
     if (!sub) return [i];
-    return scaleIngredients(sub.c, content.servings).map(({ recipeId: _r, ...x }) => ({
+    return scaleIngredients(sub.c, sub.portions).map(({ recipeId: _r, ...x }) => ({
       ...x, id: subId(i.id, x.id), part: sub.name, ...(i.optional ? { optional: true } : {}),
     }));
   });
@@ -75,12 +84,15 @@ export function withHomemade(content: RecipeContent, chosen: readonly string[], 
 }
 
 /**
- * So wird das Rezept gekocht: in der gewählten Variante (choices.ts) und mit dem, was Julia gerade selbst macht –
- * für Plan, Einkauf, Vorrat, Nährwerte, Kochmodus
+ * So wird das Rezept gekocht: in der gewählten Variante (choices.ts), mit dem, was Julia gerade selbst macht, und mit
+ * seinen Grundlagen (isBaseLink) – für Plan, Einkauf, Vorrat, Nährwerte, Kochmodus.
+ * @param without Grundlagen, die schon vorgekocht sind (Vorkoch-Woche): fallen ganz weg, statt aufgelöst zu werden –
+ *   sonst kämen ihre Zutaten doppelt auf die Einkaufsliste und gingen doppelt aus dem Vorrat
  */
-export function cookingContent(r: Recipe, all: readonly Recipe[]): RecipeContent {
-  const c = chosenContent(r);
-  return r.homemade?.length ? withHomemade(c, r.homemade, all, r.id) : c;
+export function cookingContent(r: Recipe, all: readonly Recipe[], without: readonly string[] = []): RecipeContent {
+  const c = withoutBases(chosenContent(r), without);
+  const chosen = [...(r.homemade ?? []), ...c.ingredients.filter(isBaseLink).map((i) => i.id)];
+  return chosen.length ? withHomemade(c, chosen, all, r.id) : c;
 }
 
 /**

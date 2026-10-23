@@ -5,7 +5,7 @@ import { toGrams } from './nutrition/units';
 import { normalizeName } from './nutrition/localFoods';
 import { MY_PRODUCTS_PROVIDER } from './nutrition/myProducts';
 import { cookingContent } from './homemade';
-import { weekBaseIds, withoutBases } from './weekBases';
+import { weekBaseIds } from './weekBases';
 import { currentContent } from './recipe';
 import { formatAmount, formatUnitAmount } from './scaling';
 import type { Ingredient, Recipe, Unit } from './types';
@@ -67,6 +67,8 @@ export interface WeekMeal {
   recipeId: string;
   /** aus welcher Grundlage (WeekBase.recipeId) – gespeichert, damit Tauschen nicht jedes Mal suchen muss */
   baseId: string;
+  /** frisch dazu (Julia: „Bolognese mit Spätzle“) – nur zur Grundlage selbst, siehe sides.ts */
+  side?: string;
   /** gegessen (mit dem Rest für den nächsten Mittag) */
   done?: boolean;
 }
@@ -87,6 +89,8 @@ export interface Household {
   portions: number;
   /** Mittagessen mitplanen an diesen Tagen – leer = aus (Julia: wählbar, Standard Mo–Fr) */
   lunchDays: Weekday[];
+  /** eigene Beilagen-Mengen (Gramm pro Portion, je Beilage) – fehlt: die Werte aus sides.ts */
+  sides?: Record<string, number>;
 }
 
 export const DEFAULT_HOUSEHOLD: Household = { portions: 1, lunchDays: [] };
@@ -240,7 +244,8 @@ export const keyOfName = (name: string, table: FoodTable) => resolveName(name, t
  */
 function resolveRecipe(r: Recipe, all: readonly Recipe[], servings: number, table: FoodTable, done: readonly string[] = [], bases: readonly string[] = []): Resolved[] {
   // Gerichte der Vorkoch-Woche: ihre Grundlage („1 Bolognese“) kommt aus dem Vorgekochten, nicht vom Einkauf
-  const c = withoutBases(remainingContent(cookingContent(r, all), done), bases.filter((b) => b !== r.id));
+  // (vor dem Auflösen weglassen – siehe cookingContent, sonst kämen die Zutaten der Grundlage doch auf die Liste)
+  const c = remainingContent(cookingContent(r, all, bases.filter((b) => b !== r.id)), done);
   const factor = servings / c.servings;
   return c.ingredients.map((i) => resolveIngredient(i, factor, table)).filter((x): x is Resolved => x !== null);
 }
@@ -370,21 +375,28 @@ export interface ShoppingItem {
  * Was sich nicht umrechnen lässt, steht getrennt da – nie falsch zusammengezählt.
  * Schon Gekochtes fällt weg. Mit Speisekammer: Vorrat wird abgezogen (600 g geplant, 500 g da →
  * „100 g“ mit „500 g vorrätig“); reicht er ganz, ist der Eintrag „covered“.
+ * @param sides Beilagen der Vorkoch-Woche (week.ts: weekSideNeeds) – kommen von außen, weil week.ts dieses Modul
+ *   braucht (sonst ein Kreis zwischen den Modulen)
  */
-export function buildShoppingList(plan: MealPlan, all: Recipe[], table: FoodTable, pantry?: Pantry): ShoppingItem[] {
+export function buildShoppingList(plan: MealPlan, all: Recipe[], table: FoodTable, pantry?: Pantry, sides: readonly Ingredient[] = []): ShoppingItem[] {
   const groups = new Map<string, { name: string; pantry: boolean; kind?: FoodKind; parts: Resolved[]; from: Set<string> }>();
+  const add = (x: Resolved, from: string) => {
+    const g = groups.get(x.key) ?? { name: x.name, pantry: x.pantry, kind: x.kind, parts: [], from: new Set<string>() };
+    g.parts.push(x);
+    g.from.add(from);
+    groups.set(x.key, g);
+  };
   for (const item of plan.items) {
     if (plan.cooked.includes(item.recipeId)) continue; // schon gekocht → nichts mehr einzukaufen
     const r = all.find((x) => x.id === item.recipeId);
     if (!r) continue;
     const title = currentContent(r).title;
     // Julia: ist die Sauce schon fertig (Vorgekocht), stehen ihre Zutaten nicht mehr auf der Liste
-    for (const x of resolveRecipe(r, all, item.servings, table, doneParts(pantry?.items ?? [], r.id), weekBaseIds(plan.week))) {
-      const g = groups.get(x.key) ?? { name: x.name, pantry: x.pantry, kind: x.kind, parts: [], from: new Set<string>() };
-      g.parts.push(x);
-      g.from.add(title);
-      groups.set(x.key, g);
-    }
+    for (const x of resolveRecipe(r, all, item.servings, table, doneParts(pantry?.items ?? [], r.id), weekBaseIds(plan.week))) add(x, title);
+  }
+  for (const s of sides) {
+    const x = resolveIngredient(s, 1, table);
+    if (x) add(x, 'Beilage');
   }
 
   // „Immer im Haus“ → auf der Liste unter „Basics“

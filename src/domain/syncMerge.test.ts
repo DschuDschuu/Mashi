@@ -81,6 +81,17 @@ describe('Wochenplan: merge3', () => {
     expect(m.household).toEqual({ portions: 1, lunchDays: [0, 1, 2, 3, 4] });
   });
 
+  it('Beilagen-Mengen je Beilage: Handy ändert Pasta, Tablet Reis – beides bleibt; Beilage am Abend geht mit', () => {
+    const b2: MealPlan = { ...week, household: { portions: 1, lunchDays: [], sides: { pasta: 120 } } };
+    const handy: MealPlan = { ...b2, household: { ...b2.household!, sides: { pasta: 90 } }, week: { ...week.week!, meals: week.week!.meals.map((m) => (m.id === 'm1' ? { ...m, recipeId: 'bolo', side: 'spaetzle' } : m)) } };
+    const tablet: MealPlan = { ...b2, household: { ...b2.household!, sides: { pasta: 120, reis: 100 } } };
+    const m = merge3Plan(b2, handy, tablet);
+    expect(m.household!.sides).toEqual({ pasta: 90, reis: 100 });
+    expect(m.week!.meals.find((x) => x.id === 'm1')).toMatchObject({ recipeId: 'bolo', side: 'spaetzle' });
+    // ohne eigene Mengen bleibt das Feld weg
+    expect(merge3Plan(week, week, { ...week, household: { portions: 2, lunchDays: [] } }).household).toEqual({ portions: 2, lunchDays: [] });
+  });
+
   it('Woche: beide legen ein Gericht auf denselben freien Abend – eines rückt weiter statt zu verschwinden', () => {
     const move = (id: string, day: number): MealPlan => ({ ...week, week: { ...week.week!, meals: week.week!.meals.map((m) => (m.id === id ? { ...m, day } : m)) } });
     const m = merge3Plan(week, move('m2', 4), move('m3', 4));

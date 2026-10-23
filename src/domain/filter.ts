@@ -3,6 +3,7 @@ import { currentContent, totalMinutes } from './recipe';
 import { isInCookbook } from './status';
 import type { NutritionResult } from './nutrition/types';
 import type { Recipe, RecipeStatus } from './types';
+import { transformCounts } from './week';
 
 export interface RecipeFilter {
   query?: string;
@@ -14,6 +15,8 @@ export interface RecipeFilter {
   maxKcal?: number;
   minProtein?: number;
   favoritesOnly?: boolean;
+  /** nur Grundlagen – Rezepte, aus denen andere Gerichte gemacht werden (week.ts: transformsOf) */
+  basesOnly?: boolean;
 }
 
 /** Ab so viel Protein pro Portion gilt ein Rezept als „proteinreich“ (Schnellfilter). */
@@ -32,11 +35,13 @@ export function filterRecipes(
   nutritionOf: (r: Recipe) => NutritionResult,
 ): Recipe[] {
   const q = f.query?.trim() ? norm(f.query.trim()) : '';
+  const bases = f.basesOnly ? transformCounts(recipes) : undefined;
 
   return recipes.filter((r) => {
     if (r.archivedAt || r.fromBase) return false; // Verwandlungen stehen unter ihrer Grundlage
     if (f.statuses?.length ? !f.statuses.includes(r.status) : !isInCookbook(r.status)) return false;
     if (f.favoritesOnly && !r.favorite) return false;
+    if (bases && !bases.has(r.id)) return false;
 
     const c = currentContent(r);
     if (f.categories?.length && !c.categories.some((x) => f.categories!.includes(x))) return false;

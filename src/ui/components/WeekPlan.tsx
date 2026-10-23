@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
 import { currentContent, newId } from '../../domain/recipe';
 import {
-  DAY_LONG, DAY_SHORT, addBase, addToBase, canSwap, earlierCookDay, mhdFinds, moveBase, setExtra, sortCookDays, swapDays, toggleLunch,
-  weekStarted, weekView, withCookDays, type BaseView, type DayView, type MhdFind,
+  DAY_LONG, DAY_SHORT, addBase, addToBase, canSwap, earlierCookDay, mealTitle, mhdFinds, moveBase, setExtra, sortCookDays, swapDays, toggleLunch,
+  weekStarted, weekView, withCookDays, type BaseView, type DayView, type MealView, type MhdFind,
 } from '../../domain/week';
 import type { Week, Weekday } from '../../domain/mealplan';
 import type { Recipe } from '../../domain/types';
@@ -15,6 +15,8 @@ import { Icon } from './Icon';
 import { RecipeImage } from './RecipeImage';
 
 const title = (r?: Recipe) => (r ? currentContent(r).title : 'Gelöschtes Rezept');
+/** ein Abend mit seiner Beilage („Bolognese mit Spätzle“) */
+const mealText = (m?: MealView) => (m ? mealTitle(m.meal, m.recipe) : title(undefined));
 const portionText = (n: number) => `${n} ${n === 1 ? 'Portion' : 'Portionen'}`;
 
 /**
@@ -56,7 +58,7 @@ export function WeekPlan({ week }: { week: Week }) {
     if (!canSwap(week, swapFrom, d.day)) return;
     const a = view.days.find((x) => x.day === swapFrom)?.meal, b = d.meal;
     setSwapFrom(null);
-    change(swapDays(week, swapFrom, d.day), b ? `${title(a?.recipe)} und ${title(b.recipe)} getauscht` : `${title(a?.recipe)} auf ${DAY_LONG[d.day]} verschoben`);
+    change(swapDays(week, swapFrom, d.day), b ? `${mealText(a)} und ${mealText(b)} getauscht` : `${mealText(a)} auf ${DAY_LONG[d.day]} verschoben`);
   };
 
   const finds = mhdFinds(pantry.items, week, recipes, table, new Date());
@@ -89,7 +91,7 @@ export function WeekPlan({ week }: { week: Week }) {
           ? (
             <div className="week__swapbar" role="status">
               <Icon name="shuffle" size={16} />
-              <span><b>{title(view.days.find((d) => d.day === swapFrom)?.meal?.recipe)}</b> – mit welchem Abend tauschen?</span>
+              <span><b>{mealText(view.days.find((d) => d.day === swapFrom)?.meal)}</b> – mit welchem Abend tauschen?</span>
               <button type="button" className="link small" onClick={() => setSwapFrom(null)}>Abbrechen</button>
             </div>
           )
@@ -195,7 +197,7 @@ function LunchRow({ d, onToggle }: { d: DayView; onToggle: () => void }) {
     );
   }
   const l = d.lunch;
-  const text = !l ? '' : l.kind === 'rest' ? <>Rest vom Vorabend: <b>{title(l.recipe)}</b></>
+  const text = !l ? '' : l.kind === 'rest' ? <>Rest vom Vorabend: <b>{mealTitle(l, l.recipe)}</b></>
     : l.kind === 'box' ? <><b>{title(l.recipe)}</b> <span className="muted">· {l.reason === 'abend-frei' ? 'gestern Abend war frei' : 'der Vorabend lässt sich schlecht mitnehmen'}</span></>
     : <span className="muted">{l.reason === 'nichts-gekocht' ? 'noch nichts vorgekocht' : 'nichts zum Mitnehmen – Rezept als „zum Mitnehmen“ markieren'}</span>;
   return (
@@ -228,10 +230,10 @@ function MealRow({ d, swapFrom, week, onTap }: { d: DayView; swapFrom: Weekday |
     : <span className="tag tag--eat">{base ? 'aufwärmen' : `vom ${DAY_LONG[m.cookDay]}`}</span>;
   return (
     <button type="button" className={`meal${mode}${m.meal.done ? ' is-done' : ''}`} disabled={m.meal.done || mode === ' is-blocked'} onClick={onTap}
-      aria-label={`${title(m.recipe)} am ${DAY_LONG[d.day]}${swapFrom === null && !m.meal.done ? ' – antippen zum Tauschen' : ''}`}>
+      aria-label={`${mealText(m)} am ${DAY_LONG[d.day]}${swapFrom === null && !m.meal.done ? ' – antippen zum Tauschen' : ''}`}>
       <span className="meal__day">{DAY_SHORT[d.day]}</span>
       <RecipeImage image={m.recipe?.image} size="sm" />
-      <span className="meal__text"><strong>{title(m.recipe)}</strong>{note}</span>
+      <span className="meal__text"><strong>{mealText(m)}</strong>{note}</span>
       {hint ?? (swapFrom === d.day ? <span className="meal__hint">gewählt</span> : !m.meal.done && <span className="meal__grip" aria-hidden="true"><Icon name="dots" size={18} /></span>)}
     </button>
   );

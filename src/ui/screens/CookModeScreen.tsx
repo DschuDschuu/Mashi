@@ -55,7 +55,9 @@ export function CookModeScreen({ id, servings, variants, prep, mealId }: {
   const plan = usePlan();
   const recipes = useRecipes();
   /** so, wie gekocht wird – selbst gemachte Gnocchi mit ihren Zutaten und Schritten als eigener Teil (siehe homemade.ts) */
-  const full = useMemo(() => (recipe ? cookingContent(recipe, recipes) : undefined), [recipe, recipes]);
+  // Abendessen der Vorkoch-Woche (?meal=): die Grundlage kommt aus dem Kühlschrank – nicht noch einmal kochen
+  const mealBase = mealId ? plan.week?.meals.find((m) => m.id === mealId)?.baseId : undefined;
+  const full = useMemo(() => (recipe ? cookingContent(recipe, recipes, mealBase ? [mealBase] : []) : undefined), [recipe, recipes, mealBase]);
   /** Rezept-Teile, die du heute kochst (Julia: „Sauce gestern, Nudeln und Fleisch heute“) – null = alle noch nicht fertigen */
   const [chosen, setChosen] = useState<string[] | null>(null);
   /** Dialog „Was kochst du heute?“ beim Start – einmal je Besuch, solange noch mindestens zwei Teile offen sind (Julia: Mashi erkennt Vorgekochtes selbst) */

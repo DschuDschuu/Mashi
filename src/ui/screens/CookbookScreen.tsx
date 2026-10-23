@@ -2,6 +2,7 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { CATEGORIES, DEVICES } from '../../domain/catalog';
 import { activeFilterCount, activeFilters, filterRecipes, HIGH_PROTEIN_G, removeFilter, type RecipeFilter } from '../../domain/filter';
 import { currentContent } from '../../domain/recipe';
+import { transformCounts } from '../../domain/week';
 import { useRecipes } from '../../data/store';
 import { type Route } from '../../router';
 import { ChipSelect, Empty } from '../components/Controls';
@@ -11,12 +12,13 @@ import { RecipeCard } from '../components/RecipeCard';
 import { recipeCount } from '../format';
 import { recipeNutrition } from '../useNutrition';
 
-/** Oben im Kochbuch: die drei Ansichten, die man am häufigsten braucht. */
-type Segment = 'alle' | 'favoriten' | 'zum_testen';
+/** Oben im Kochbuch: die Ansichten, die man am häufigsten braucht. */
+type Segment = 'alle' | 'favoriten' | 'zum_testen' | 'grundlagen';
 const SEGMENTS: { value: Segment; label: string }[] = [
   { value: 'alle', label: 'Alle' },
   { value: 'favoriten', label: 'Favoriten' },
   { value: 'zum_testen', label: 'Zum Testen' },
+  { value: 'grundlagen', label: 'Grundlagen' },
 ];
 
 /** Was ein Segment zusätzlich zu den Filtern verlangt. */
@@ -25,6 +27,8 @@ const SEGMENT_FILTER: Record<Segment, Partial<RecipeFilter>> = {
   favoriten: { favoritesOnly: true },
   // KI-Ideen gehören hierher – sonst wären sie nach dem Zurückgehen nirgends mehr zu finden
   zum_testen: { statuses: ['ki_entwurf', 'zum_testen'] },
+  // Julia: der Einstieg ins Vorkochen – woraus unter der Woche verschiedene Gerichte werden
+  grundlagen: { basesOnly: true },
 };
 
 /** Filter aus der URL lesen – so funktionieren die Schnellfilter der Startseite als Links. */
@@ -43,7 +47,7 @@ export function CookbookScreen({ route }: { route: Route }) {
   const recipes = useRecipes();
   // „Favoriten“ auf der Startseite verlinkt ?fav=1 → gleich im passenden Segment öffnen
   const [segment, setSegment] = useState<Segment>(
-    route.query.get('segment') === 'testen' ? 'zum_testen' : route.query.get('fav') === '1' ? 'favoriten' : 'alle',
+    route.query.get('segment') === 'testen' ? 'zum_testen' : route.query.get('segment') === 'grundlagen' ? 'grundlagen' : route.query.get('fav') === '1' ? 'favoriten' : 'alle',
   );
   const [f, setF] = useState<RecipeFilter>(() => filterFromQuery(route.query));
   // Bewusst zu: Wer vom Schnellfilter kommt, will Ergebnisse sehen, nicht das Panel.
@@ -55,6 +59,8 @@ export function CookbookScreen({ route }: { route: Route }) {
     [recipes],
   );
   const result = filterRecipes(recipes, { ...f, ...SEGMENT_FILTER[segment] }, recipeNutrition);
+  // „3 Gerichte daraus“ auf Grundlagen – einmal für alle Karten gezählt
+  const made = useMemo(() => transformCounts(recipes), [recipes]);
   const count = activeFilterCount(f);
   const badges = activeFilters(f);
 
@@ -140,7 +146,7 @@ export function CookbookScreen({ route }: { route: Route }) {
       )}
 
       {result.length ? (
-        <div className="grid">{result.map((r) => <RecipeCard key={r.id} recipe={r} />)}</div>
+        <div className="grid">{result.map((r) => <RecipeCard key={r.id} recipe={r} made={made.get(r.id)} />)}</div>
       ) : (
         <Empty icon="search">{emptyText(segment, badges.length > 0 || !!f.query?.trim())}</Empty>
       )}
@@ -162,5 +168,6 @@ function emptyText(segment: Segment, filtered: boolean): string {
   if (filtered) return 'Keine Rezepte gefunden. Probier weniger Filter oder eine andere Suche.';
   if (segment === 'favoriten') return 'Noch keine Favoriten – tippe auf einem Rezept auf das Herz.';
   if (segment === 'zum_testen') return 'Nichts zum Testen. Neue Ideen kommen über ＋ → „Mit KI erstellen“ oder „Eigenes Rezept“.';
+  if (segment === 'grundlagen') return 'Noch keine Grundlagen. Lös in einem Rezept einen Teil (z. B. die Sauce) als Grundlage heraus – oder leg auf einem Rezept eine Verwandlung an.';
   return 'Noch keine Rezepte im Kochbuch. Leg über ＋ eins an.';
 }

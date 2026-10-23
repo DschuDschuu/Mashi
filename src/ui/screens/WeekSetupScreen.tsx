@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { currentContent, newId, totalMinutes } from '../../domain/recipe';
-import { DAY_SHORT, choicesOf, keepsOf, sortCookDays, suggestWeek, transformsOf, weekStarted } from '../../domain/week';
+import { DAY_SHORT, byEffort, choicesOf, keepsOf, mealKey, sortCookDays, splitMealKey, suggestWeek, transformsOf, weekStarted } from '../../domain/week';
+import { SIDES } from '../../domain/sides';
 import type { Weekday } from '../../domain/mealplan';
 import type { Recipe } from '../../domain/types';
 import { setWeek, usePantry, usePlan, useRecipes } from '../../data/store';
@@ -33,6 +34,8 @@ export function WeekSetupScreen() {
   const [picks, setPicks] = useState<Record<string, string[]>>(() => old ? Object.fromEntries(choicesOf(old).map((c) => [c.baseId, c.meals])) : {});
   const [cook, setCook] = useState<Weekday[]>(() => old?.cookDays ?? [6, 2]);
   const [step, setStep] = useState<'basis' | 'daraus'>('basis');
+  /** bei welcher Grundlage die Beilagen aufgeklappt sind */
+  const [sideOpen, setSideOpen] = useState<string | null>(null);
 
   const candidates = useMemo(() => recipes.filter(baseCandidate)
     .map((r) => ({ r, made: transformsOf(r.id, recipes), title: currentContent(r).title }))
@@ -102,8 +105,9 @@ export function WeekSetupScreen() {
       {chosen.map(({ id, meals }) => {
         const base = recipes.find((r) => r.id === id)!;
         const title = currentContent(base).title;
-        // die Grundlage selbst („so essen“) und ihre Verwandlungen
-        const options = [base, ...transformsOf(id, recipes)];
+        // die Grundlage selbst („so essen“) und ihre Verwandlungen – wenig Aufwand am Abend zuerst (Julia)
+        const options = byEffort([base, ...transformsOf(id, recipes)], id);
+        const withSide = meals.filter((k) => splitMealKey(k).side).length;
         return (
           <section key={id} className="week-setup__base">
             <div className="week-setup__head">
@@ -132,6 +136,24 @@ export function WeekSetupScreen() {
                 );
               })}
             </div>
+            {/* Grundlage mit Beilage (Julia: „Bolognese mit Spätzle“) – ohne eigenes Rezept; Antippen = ein Abend wie oben */}
+            <button type="button" className={`btn btn--soft btn--sm week-setup__sidebtn${sideOpen === id ? ' is-open' : ''}`} aria-expanded={sideOpen === id}
+              onClick={() => setSideOpen((x) => (x === id ? null : id))}>
+              <Icon name="plus" size={16} /> Mit Beilage …{withSide ? ` (${withSide})` : ''}
+            </button>
+            {sideOpen === id && (
+              <div className="chips week-setup__sides" role="group" aria-label={`${title} mit Beilage`}>
+                {SIDES.map((s) => {
+                  const n = meals.filter((x) => x === mealKey(id, s.id)).length;
+                  return (
+                    <button key={s.id} type="button" className={`chip${n ? ' is-on' : ''}`} aria-pressed={n > 0} onClick={() => tapMeal(id, mealKey(id, s.id))}
+                      aria-label={`${title} mit ${s.name}${n ? `, ${n}× gewählt` : ''}`}>
+                      {n > 1 ? `${n}× ` : ''}{s.name}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
             <button type="button" className="link small" onClick={() => navigate(`/neu?aus=${id}`)}>
               <Icon name="plus" size={14} /> Verwandlung anlegen
             </button>

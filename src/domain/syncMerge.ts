@@ -165,10 +165,19 @@ function merge3Week(base: Week | undefined, ours: Week | undefined, theirs: Week
   });
 }
 
-/** Haushalt: Portionen und Mittagstage einzeln – wer etwas geändert hat, gewinnt dort */
+/** Haushalt: Portionen, Mittagstage und Beilagen-Mengen einzeln – wer etwas geändert hat, gewinnt dort */
 function merge3Household(base: Household | undefined, ours: Household | undefined, theirs: Household | undefined): Household {
   const [b, o, t] = [base, ours, theirs].map((h) => h ?? DEFAULT_HOUSEHOLD);
-  return { portions: merge3Value(b.portions, o.portions, t.portions), lunchDays: merge3Value(b.lunchDays, o.lunchDays, t.lunchDays) };
+  // Beilagen je Beilage (am Handy Pasta geändert, am Tablet Reis → beides)
+  const ids = [...new Set([b, o, t].flatMap((h) => Object.keys(h.sides ?? {})))];
+  const sides = Object.fromEntries(ids.flatMap((id) => {
+    const v = merge3Value(b.sides?.[id], o.sides?.[id], t.sides?.[id]);
+    return v === undefined ? [] : [[id, v]];
+  }));
+  return {
+    portions: merge3Value(b.portions, o.portions, t.portions), lunchDays: merge3Value(b.lunchDays, o.lunchDays, t.lunchDays),
+    ...(ids.length && Object.keys(sides).length ? { sides } : {}),
+  };
 }
 
 export function merge3Products(base: MyProduct[], ours: MyProduct[], theirs: MyProduct[]): MyProduct[] {

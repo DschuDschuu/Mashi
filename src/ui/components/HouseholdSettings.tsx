@@ -1,5 +1,6 @@
 import { DAY_SHORT } from '../../domain/week';
 import { WORKDAYS } from '../../domain/mealplan';
+import { SIDES, sideGrams } from '../../domain/sides';
 import { householdOf, setHousehold, usePlan } from '../../data/store';
 import { toast } from '../toast';
 import { Stepper, Switch } from './Controls';
@@ -39,6 +40,22 @@ export function HouseholdSettings() {
         <Stepper small value={hh.portions} min={1} max={8} label="Portionen pro Mahlzeit"
           onChange={(portions) => set({ portions }, `${portions} ${portions === 1 ? 'Portion' : 'Portionen'} pro Mahlzeit`)} />
       </div>
+      {/* Beilagen der Woche (Julia: feste Mengen, einmal hier anpassen statt bei jedem Abend) */}
+      <details className="household__sides">
+        <summary><strong>Beilagen pro Portion</strong> <small className="muted">für „mit Beilage“ in der Woche</small></summary>
+        {SIDES.map((s) => (
+          <div key={s.id} className="row-between">
+            <span>{s.name} <small className="muted">in g</small></span>
+            <Stepper small value={sideGrams(s.id, hh)} min={25} max={600} step={25} label={`${s.name} pro Portion in Gramm`}
+              onChange={(g) => {
+                // Standardwert = keine eigene Angabe – so gelten spätere bessere Standardwerte auch hier
+                const { [s.id]: _old, ...rest } = hh.sides ?? {};
+                const sides = g === s.grams ? rest : { ...rest, [s.id]: g };
+                set({ sides: Object.keys(sides).length ? sides : undefined }, `${s.name}: ${g} g pro Portion`);
+              }} />
+          </div>
+        ))}
+      </details>
     </div>
   );
 }

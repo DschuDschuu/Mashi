@@ -4,7 +4,7 @@ import type { Week } from './mealplan';
 import type { Ingredient, Recipe } from './types';
 import { buildShoppingList, emptyPlan } from './mealplan';
 import { localFoodTable } from './nutrition/localFoods';
-import { addBase, addToBase, choicesOf, mhdFinds, weekStarted, withCookDays } from './week';
+import { addBase, addToBase, byEffort, choicesOf, mealKey, mealTitle, mhdFinds, splitMealKey, weekSideNeeds, weekStarted, withCookDays } from './week';
 import type { PantryItem } from './pantry';
 import { baseIdOf, canSwap, mealPortions, weekItems, withoutBases, earlierCookDay, moveBase, setExtra, shiftFrom, sortCookDays, suggestWeek, swapDays, toggleLunch, transformsOf, weekdayOf, weekOrder, weekView } from './week';
 
@@ -190,5 +190,55 @@ describe('Vorkoch-Woche (Julia: eine Bolo kochen, daraus Nudeln, Wraps …)', ()
     ], w, [sauce, huhn], localFoodTable, now);
     expect(finds.map((f) => `${f.item.name}:${f.kind}`)).toEqual(['Hackfleisch:covered', 'Hähnchenbrust:match', 'Testquatsch:free']);
     expect(mhdFinds([item('Testquatsch')], addToBase(w, 'bolo', 'Testquatsch'), [sauce], localFoodTable, now)).toEqual([]); // schon zugeordnet
+  });
+});
+
+describe('Mit Beilage (Julia: „Bolognese mit Spätzle“ ohne eigenes Rezept) und nach Aufwand sortiert', () => {
+  const sideWeek = (meals: string[]) => suggestWeek([SO], [{ baseId: 'bolo', meals }], newId);
+
+  it('„bolo+spaetzle“ wird ein Abend der Grundlage mit Beilage – und lässt sich zurücklesen', () => {
+    expect(splitMealKey(mealKey('bolo', 'spaetzle'))).toEqual({ recipeId: 'bolo', side: 'spaetzle' });
+    expect(splitMealKey('wraps')).toEqual({ recipeId: 'wraps' });
+    const w = sideWeek(['bolo+spaetzle', 'wraps', 'bolo+reis']);
+    expect(w.meals.map((m) => [m.day, m.recipeId, m.side])).toEqual([[SO, 'bolo', 'spaetzle'], [MO, 'wraps', undefined], [DI, 'bolo', 'reis']]);
+    expect(choicesOf(w)).toEqual([{ baseId: 'bolo', meals: ['bolo+spaetzle', 'wraps', 'bolo+reis'] }]);
+  });
+
+  it('Titel mit Beilage; unbekannte Beilage fällt still weg', () => {
+    expect(mealTitle({ side: 'spaetzle' }, bolo)).toBe('Testbolognese mit Spätzle');
+    expect(mealTitle({}, bolo)).toBe('Testbolognese');
+    expect(mealTitle({ side: 'quinoa' }, bolo)).toBe('Testbolognese');
+  });
+
+  it('Einkauf: je Beilage zusammengezählt, feste Menge pro Portion, eigene Menge aus dem Haushalt', () => {
+    const w = sideWeek(['bolo+spaetzle', 'wraps', 'bolo+reis', 'bolo+spaetzle']);
+    expect(weekSideNeeds(w, all).map((i) => [i.name, i.amount, i.unit])).toEqual([['Spätzle', 500, 'g'], ['Reis', 75, 'g']]);
+    expect(weekSideNeeds(w, all, { portions: 2, lunchDays: [], sides: { reis: 100 } }).map((i) => i.amount)).toEqual([1000, 200]);
+    // Gegessenes zählt nicht mehr
+    const eaten = { ...w, meals: w.meals.map((m) => (m.side === 'reis' ? { ...m, done: true } : m)) };
+    expect(weekSideNeeds(eaten, all).map((i) => i.name)).toEqual(['Spätzle']);
+    expect(weekSideNeeds(undefined, all)).toEqual([]);
+  });
+
+  it('Rest für den Mittag: lässt sich die Grundlage mitnehmen, kommt die Beilage doppelt', () => {
+    const togoBolo = { ...bolo, togo: true };
+    const w = sideWeek(['bolo+spaetzle']);
+    expect(weekSideNeeds(w, [togoBolo, ...all.filter((r) => r.id !== 'bolo')], { portions: 1, lunchDays: [MO] })[0].amount).toBe(500);
+    expect(weekView(w, [togoBolo], { portions: 1, lunchDays: [MO] }).days.find((d) => d.day === MO)!.lunch).toMatchObject({ kind: 'rest', side: 'spaetzle' });
+  });
+
+  it('auf der Einkaufsliste – mit der Beilage, ohne „1 Portion Bolognese“', () => {
+    const w = sideWeek(['bolo+spaetzle']);
+    const list = buildShoppingList({ ...emptyPlan(), week: w }, all, localFoodTable, undefined, weekSideNeeds(w, all));
+    expect(list.map((x) => [x.name, x.quantity, x.from])).toEqual([['Spätzle', '250 g', ['Beilage']]]);
+  });
+
+  it('nach Aufwand: die Grundlage (nur aufwärmen) vorne, dann wenig Zeit, dann einfach, dann nach Name', () => {
+    const timed = (id: string, prepMinutes: number, difficulty: 1 | 2 | 3): Recipe => {
+      const r = recipe(id, id);
+      return { ...r, versions: [{ ...r.versions[0], content: { ...r.versions[0].content, prepMinutes, cookMinutes: 5, difficulty } }] };
+    };
+    const list = [timed('lasagne', 30, 2), timed('wraps', 5, 1), timed('auflauf', 30, 1), timed('bolo', 60, 2), timed('bowl', 5, 1)];
+    expect(byEffort(list, 'bolo').map((r) => r.id)).toEqual(['bolo', 'bowl', 'wraps', 'auflauf', 'lasagne']);
   });
 });

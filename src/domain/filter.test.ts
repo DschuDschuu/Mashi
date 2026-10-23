@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { activeFilterCount, activeFilters, removeFilter, type RecipeFilter } from './filter';
+import { activeFilterCount, activeFilters, filterRecipes, removeFilter, type RecipeFilter } from './filter';
+import { sideContent } from './mix';
+import type { NutritionResult } from './nutrition/types';
+import type { Recipe } from './types';
+import { transformCounts } from './week';
 
 describe('Aktive Filter als Badges', () => {
   const f: RecipeFilter = {
@@ -41,5 +45,27 @@ describe('Aktive Filter als Badges', () => {
 
   it('funktioniert mit dem, was die Startseite schickt (nur ein Gerät)', () => {
     expect(activeFilters({ devices: ['monsieur-cuisine'] }).map((a) => a.label)).toEqual(['Monsieur Cuisine']);
+  });
+});
+
+describe('Segment „Grundlagen“ (Julia: im Kochbuch sehen, woraus Gerichte entstehen)', () => {
+  // erfundene Rezepte – keine echten (das Repo ist öffentlich)
+  const recipe = (id: string, links: string[] = [], extra: Partial<Recipe> = {}): Recipe => ({
+    id, createdAt: '', updatedAt: '', status: 'kochbuch', source: 'selbst', favorite: false, notes: '', currentVersionId: 'v', feedback: [],
+    versions: [{ id: 'v', number: 1, createdAt: '', author: 'nutzer', content: { ...sideContent(id), ingredients: links.map((l) => ({ id: `i-${l}`, name: l, amount: 1, unit: 'Portion', recipeId: l })) } }],
+    ...extra,
+  });
+  const all = [
+    recipe('bolo'), recipe('wraps', ['bolo'], { fromBase: 'bolo' }), recipe('pasta', ['bolo']), // herausgelöst: ohne fromBase
+    recipe('chili'), recipe('alt', ['chili'], { archivedAt: '2026-01-01' }), // nur Archiviertes zeigt auf Chili
+    recipe('salat'),
+  ];
+  const noNutrition = () => ({}) as NutritionResult;
+
+  it('Grundlage = woraus mindestens ein (nicht archiviertes) Gericht gemacht wird – gezählt für die Karte', () => {
+    expect(Object.fromEntries(transformCounts(all))).toEqual({ bolo: 2 });
+    expect(filterRecipes(all, { basesOnly: true }, noNutrition).map((r) => r.id)).toEqual(['bolo']);
+    // ohne den Filter: alles außer Verwandlungen und Archiv
+    expect(filterRecipes(all, {}, noNutrition).map((r) => r.id)).toEqual(['bolo', 'pasta', 'chili', 'salat']);
   });
 });

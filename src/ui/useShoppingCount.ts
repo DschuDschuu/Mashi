@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { buildShoppingList, type ShoppingItem } from '../domain/mealplan';
 import { restockStatus, shoppingList, type RestockStatus } from '../domain/restock';
 import { pantryAfterPlan } from '../domain/pantry';
+import { weekSideNeeds } from '../domain/week';
 import { useFoodTable, usePantry, usePlan, useProducts, useRecipes } from '../data/store';
 
 const open = (plan: { checked: string[] }) => (i: ShoppingItem) => !i.pantry && !i.covered && !plan.checked.includes(i.key);
@@ -13,7 +14,8 @@ export function useMissing(): ShoppingItem[] {
   const pantry = usePantry();
   const table = useFoodTable();
   return useMemo(() => {
-    return buildShoppingList(plan, recipes, table, pantry).filter(open(plan));
+    // mit den Beilagen der Vorkoch-Woche – wie die Einkaufsliste (restock.ts: shoppingList)
+    return buildShoppingList(plan, recipes, table, pantry, weekSideNeeds(plan.week, recipes, plan.household)).filter(open(plan));
   }, [plan, recipes, table, pantry]);
 }
 

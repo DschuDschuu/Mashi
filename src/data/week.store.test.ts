@@ -5,7 +5,8 @@ import { describe, expect, it } from 'vitest';
 import { PouchRecipeRepository, type RecipeDb } from './pouchRepository';
 import { addPantryItem, cookBase, createRecipe, currentPantry, currentPlan, extractPartToBase, eatMeal, eatOutToday, initStore, setHousehold, setPrepInfo, setWeek, whenSaved } from './store';
 import { buildShoppingList } from '../domain/mealplan';
-import { suggestWeek } from '../domain/week';
+import { shoppingList } from '../domain/restock';
+import { mealKey, suggestWeek } from '../domain/week';
 import { foodTable } from '../services';
 import type { RecipeContent } from '../domain/types';
 
@@ -96,6 +97,24 @@ describe('Store: Vorkoch-Woche (Julia: Bolo am Sonntag, unter der Woche Nudeln u
     cooked.undo();
     expect(amount('Hackfleisch')).toBe(500);
     expect(prepared()).toEqual([]);
+  });
+
+  it('mit Beilage: Spätzle auf die Einkaufsliste, beim Essen aus der Speisekammer; „Rückgängig“ legt sie zurück', async () => {
+    const repo = await freshStore('week-side');
+    const bolo = createRecipe(content('Testbolo', [{ id: 'h', name: 'Hackfleisch', amount: 125, unit: 'g' }]), { source: 'selbst', status: 'kochbuch' });
+    setHousehold({ portions: 1, lunchDays: [], sides: { spaetzle: 200 } });
+    setWeek(suggestWeek([6], [{ baseId: bolo, meals: [mealKey(bolo, 'spaetzle')] }], () => 'b1')); // Sonntag: Bolo mit Spätzle
+    await whenSaved();
+    const list = shoppingList(currentPlan(), await repo.list(), foodTable, currentPantry());
+    expect(list.find((x) => x.name === 'Spätzle')?.quantity).toBe('200 g');
+
+    addPantryItem('Spätzle', 500, 'g');
+    cookBase(bolo);
+    const meal = eatMeal('b1')!;
+    const spaetzle = () => currentPantry().items.find((i) => i.name === 'Spätzle')?.amount;
+    expect(spaetzle()).toBe(300);
+    meal.undo();
+    expect(spaetzle()).toBe(500);
   });
 
   it('Heute auswärts: das Abendessen rückt einen Tag weiter, „Rückgängig“ holt es zurück', async () => {

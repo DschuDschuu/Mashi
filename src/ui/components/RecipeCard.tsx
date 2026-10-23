@@ -12,8 +12,11 @@ import { Icon } from './Icon';
 import { RecipeImage } from './RecipeImage';
 import { StatusBadge } from './StatusBadge';
 
-/** Bildorientierte Rezeptkarte: Bild, Titel, zwei kompakte Infozeilen, wenige Chips. */
-export function RecipeCard({ recipe, wide = false }: { recipe: Recipe; wide?: boolean }) {
+/**
+ * Bildorientierte Rezeptkarte: Bild, Titel, zwei kompakte Infozeilen, wenige Chips.
+ * @param made bei einer Grundlage: wie viele Gerichte daraus entstehen (week.ts: transformCounts)
+ */
+export function RecipeCard({ recipe, wide = false, made }: { recipe: Recipe; wide?: boolean; made?: number }) {
   const c = currentContent(recipe);
   const planned = usePlan().items.some((i) => i.recipeId === recipe.id);
   // lange drücken → kleines Menü (Julia: am Handy schnell einplanen); rechte Maustaste / Android-Langdruck ebenso
@@ -72,7 +75,9 @@ export function RecipeCard({ recipe, wide = false }: { recipe: Recipe; wide?: bo
             {n.perServing ? <><span>{kcal}</span><span>{Math.round(n.perServing.protein)} g Eiweiß</span></> : ' '}
           </p>
           <div className="card__chips">
-            {category && <span className="chip chip--xs">{category.label}</span>}
+            {/* Grundlage (Julia: sonst sieht „Tomatensauce“ aus wie ein fertiges Abendessen) – statt der Kategorie, damit es auf 375 px in eine Zeile passt */}
+            {made ? <span className="chip chip--xs chip--base">{made} {made === 1 ? 'Gericht' : 'Gerichte'} daraus</span>
+              : category && <span className="chip chip--xs">{category.label}</span>}
           </div>
         </div>
       </div>
