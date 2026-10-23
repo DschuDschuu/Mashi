@@ -2,7 +2,6 @@ import { useMemo, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { ask } from '../confirm';
 import { DishNutrition } from '../components/DishNutrition';
 import { recipeCost, sumCosts } from '../../domain/cost';
-import { isMixPart } from '../../domain/mix';
 import { suggestRecipes, type ShoppingItem, type Suggestion } from '../../domain/mealplan';
 import { ingredientCompletions, longNotCooked, searchRecipes } from '../../domain/recipeSearch';
 import { currentContent } from '../../domain/recipe';
@@ -38,8 +37,8 @@ import { useUseUp } from '../useUseUp';
 import { toast } from '../toast';
 import { WeekPlan } from '../components/WeekPlan';
 
-/** Was sich planen lässt: alles außer Archiv und reinen KI-Ideen (die sind noch kein Rezept); Mix-Bausteine über Mix & Match. */
-const plannable = (r: Recipe) => !r.archivedAt && !isMixPart(r) && r.status !== 'ki_entwurf';
+/** Was sich planen lässt: alles außer Archiv und reinen KI-Ideen (die sind noch kein Rezept). */
+const plannable = (r: Recipe) => !r.archivedAt && r.status !== 'ki_entwurf';
 
 /**
  * Wochenplan – Meal Prep ohne feste Tage: Gerichte sammeln, Mashi schlägt passende vor

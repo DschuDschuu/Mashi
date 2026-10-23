@@ -16,7 +16,7 @@ import { useRenameOptions } from '../useRenames';
 /** Auswahl „＋ Neuer Teil …“ – kein echter Teil, öffnet das Eingabefeld */
 const NEW_PART = '\u0000neu';
 
-const UNITS: Unit[] = ['g', 'kg', 'ml', 'l', 'EL', 'TL', 'Prise', 'Stück', 'Zehe', 'Dose', 'Glas', 'Bund', 'Handvoll', 'cm', 'Messlöffel'];
+const UNITS: Unit[] = ['g', 'kg', 'ml', 'l', 'EL', 'TL', 'Prise', 'Stück', 'Zehe', 'Dose', 'Glas', 'Bund', 'Handvoll', 'cm', 'Messlöffel', 'Portion'];
 
 /**
  * Zutatenliste bearbeiten – geteilt von Testfeedback und Rezeptformular.

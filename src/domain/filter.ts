@@ -1,6 +1,5 @@
 import { categoryInfo, deviceInfo } from './catalog';
 import { currentContent, totalMinutes } from './recipe';
-import { isMixPart } from './mix';
 import { isInCookbook } from './status';
 import type { NutritionResult } from './nutrition/types';
 import type { Recipe, RecipeStatus } from './types';
@@ -35,8 +34,7 @@ export function filterRecipes(
   const q = f.query?.trim() ? norm(f.query.trim()) : '';
 
   return recipes.filter((r) => {
-    // Mix-&-Match-Bausteine stehen nur dort (Julia)
-    if (r.archivedAt || isMixPart(r) || r.fromBase) return false; // Verwandlungen stehen unter ihrer Grundlage
+    if (r.archivedAt || r.fromBase) return false; // Verwandlungen stehen unter ihrer Grundlage
     if (f.statuses?.length ? !f.statuses.includes(r.status) : !isInCookbook(r.status)) return false;
     if (f.favoritesOnly && !r.favorite) return false;
 

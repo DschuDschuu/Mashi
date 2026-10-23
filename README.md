@@ -16,7 +16,8 @@ Live: <https://dschudschuu.github.io/Mashi/> · installierbar als App (PWA), fun
 - **Vorkoch-Woche**: eine oder zwei Grundlagen (Bolognese, Curry …) an wählbaren Kochtagen vorkochen, unter der Woche
   daraus verschiedene Abendessen (Verwandlungen wie Wraps oder Pasta, die nur unter ihrer Grundlage stehen). Mashi
   verteilt die Abende (nie vor den Kochtag, zu Altes einfrieren), plant auf Wunsch Mittagessen mit (Rest vom Vorabend,
-  sonst eine Box), rechnet Portionen und Einkauf, schlägt MHD-Funde vor; Startseite: Heute Mittag/Abend, „Heute auswärts“
+  sonst eine Box), rechnet Portionen und Einkauf, schlägt MHD-Funde vor; Startseite: Heute Mittag/Abend, „Heute auswärts“;
+  einen Teil eines Rezepts (die Sauce der Lasagne) per Menü als Grundlage herauslösen
 - **Wochenplan** (laufend, ohne Wochenwechsel) mit Vorschlägen (gemeinsame Zutaten), Nährwerten pro Portion,
   „Gekocht“-Haken und **Vorgekocht**: übrige Portionen in der Speisekammer mit Erinnerung, einfrierbar, „1 gegessen“
 - **Einkaufsliste** aus dem Plan, zieht den Vorrat ab, Basics, „Doch kaufen“, eigene Einträge, Kassenbon hakt ab,

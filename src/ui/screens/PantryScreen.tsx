@@ -1,5 +1,4 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { isMixPart } from '../../domain/mix';
 import { isCount, plannedOf, recipesFromPantry, type PantryItem, type PantryUnit } from '../../domain/pantry';
 import { suggestPantryUnit } from '../../domain/packs';
 import { daysLabel, daysLeft, frozenSince, specialDays, useByOf } from '../../domain/shelfLife';
@@ -93,7 +92,7 @@ export function PantryScreen() {
   };
   const matches = useMemo(() => {
     const planned = new Set(plan.items.map((i) => i.recipeId));
-    return recipesFromPantry(rest, recipes.filter((r) => !planned.has(r.id) && !isMixPart(r)), table, 8, keys);
+    return recipesFromPantry(rest, recipes.filter((r) => !planned.has(r.id)), table, 8, keys);
   }, [rest, keys, plan, recipes, table]);
   const shelfLabel = (item: PantryItem) => {
     const d = useByOf(item, table, pantry.shelfDays);

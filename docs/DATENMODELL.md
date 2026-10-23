@@ -14,7 +14,8 @@ Recipe  (Hülle – ändert sich selten)
 ├─ homemade?     Zutat-IDs, die gerade selbst gemacht statt gekauft werden (nicht versioniert, siehe domain/homemade.ts)
 ├─ choice?       gewählte Variante (fehlt oder gibt es nicht mehr: die erste; nicht versioniert, siehe domain/choices.ts)
 ├─ keepsDays?, freezable?, togo?  Vorkochen: hält gekocht X Tage (sonst shelfDays.prepared), einfrierbar, zum Mitnehmen (nicht versioniert, siehe domain/week.ts)
-├─ fromBase?    Verwandlung dieser Grundlage (steht nur unter ihr, nicht im Kochbuch-Raster; ihre Zutat mit recipeId zeigt auf die Grundlage)
+├─ fromBase?    Verwandlung dieser Grundlage (steht nur unter ihr, nicht im Kochbuch-Raster; ihre Zutat mit recipeId zeigt auf die Grundlage, Einheit `Portion`)
+├─ mix?, goesWith?  veraltet (früheres Mix & Match) – beim Start weggeräumt: Saucen ins Kochbuch, Beilagen ins Archiv (domain/mix.ts)
 ├─ currentVersionId ─────────────┐
 ├─ versions[] ◀──────────────────┘
 │   └─ RecipeVersion { number, author: ki|nutzer|import, label, content }

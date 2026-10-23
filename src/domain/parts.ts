@@ -69,3 +69,23 @@ export function remainingContent<C extends RecipeContent>(c: C, done: readonly s
 export function doneParts(items: readonly { recipeId?: string; part?: string; amount?: number }[], recipeId: string): string[] {
   return [...new Set(items.filter((i) => i.recipeId === recipeId && i.part && (i.amount === undefined || i.amount > 0)).map((i) => i.part!))];
 }
+
+/**
+ * Teil als Grundlage herauslösen (Julia: „aus meinen Rezepten Grundlagen exportieren“ – die Sauce der Lasagne wird
+ * zur eigenen Grundlage): Ihre Zutaten und Schritte wandern in ein neues Rezept; im Gericht steht stattdessen eine
+ * verknüpfte Zutat („Sauce aus Lasagne“, so viele Portionen wie das Gericht) – wie „Zutat selbst machen“, nur dass die
+ * Grundlage jetzt eigenständig vorgekocht und verwandelt werden kann. Nichts steht doppelt.
+ */
+export function extractPart(c: RecipeContent, part: string, base: { id: string; title: string }, newId: () => string): { base: RecipeContent; dish: RecipeContent } {
+  const strip = <T extends { part?: string }>(x: T): T => { const { part: _p, ...rest } = x; return rest as T; };
+  const ingredients = c.ingredients.filter((i) => partOf(i) === part).map(strip);
+  const steps = c.steps.filter((s) => stepPart(s, c) === part).map(strip);
+  const link: Ingredient = { id: newId(), name: base.title, amount: c.servings, unit: 'Portion', recipeId: base.id };
+  // im Gericht: Grundlage-Zutat vorne, die übrigen Teile bleiben; Schritte des Teils fallen weg
+  const rest = c.ingredients.filter((i) => partOf(i) !== part);
+  const restSteps = c.steps.filter((s) => stepPart(s, c) !== part);
+  return {
+    base: { ...c, title: base.title, description: '', ingredients, steps: steps.length ? steps : [{ id: newId(), text: '' }], choices: undefined },
+    dish: { ...c, ingredients: [link, ...rest], steps: restSteps },
+  };
+}

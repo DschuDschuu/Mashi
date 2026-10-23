@@ -3,7 +3,7 @@ import PouchDB from 'pouchdb-core';
 import memory from 'pouchdb-adapter-memory';
 import { describe, expect, it } from 'vitest';
 import { PouchRecipeRepository, type RecipeDb } from './pouchRepository';
-import { addPantryItem, cookBase, createRecipe, currentPantry, currentPlan, eatMeal, eatOutToday, initStore, setHousehold, setPrepInfo, setWeek, whenSaved } from './store';
+import { addPantryItem, cookBase, createRecipe, currentPantry, currentPlan, extractPartToBase, eatMeal, eatOutToday, initStore, setHousehold, setPrepInfo, setWeek, whenSaved } from './store';
 import { buildShoppingList } from '../domain/mealplan';
 import { suggestWeek } from '../domain/week';
 import { foodTable } from '../services';
@@ -20,6 +20,40 @@ async function freshStore(name: string) {
 // erfundene Rezepte – das Repo ist öffentlich
 const content = (title: string, ingredients: RecipeContent['ingredients']): RecipeContent => ({
   title, description: '', servings: 1, prepMinutes: 0, cookMinutes: 0, difficulty: 1, ingredients, steps: [{ id: 's', text: 'Kochen.' }], categories: [], tags: [], devices: [],
+});
+
+describe('Store: Teil als Grundlage herauslösen', () => {
+  it('Sauce wird eigene Grundlage, das Gericht nimmt sie als Zutat; Rückgängig stellt alles wieder her', async () => {
+    const repo = await freshStore('extract');
+    const id = createRecipe({
+      ...content('Testlasagne', [
+        { id: 'a', name: 'Passata', amount: 500, unit: 'g', part: 'Sauce' },
+        { id: 'b', name: 'Lasagneplatten', amount: 250, unit: 'g' },
+      ]),
+      servings: 4,
+      steps: [{ id: 's1', text: 'Passata köcheln.', part: 'Sauce' }, { id: 's2', text: 'Schichten und backen.' }],
+    }, { source: 'selbst', status: 'kochbuch' });
+    const r = extractPartToBase(id, 'Sauce')!;
+    expect(r.title).toBe('Sauce für Testlasagne');
+    await whenSaved();
+    const all = await repo.list();
+    const base = all.find((x) => x.id === r.baseId)!;
+    const dish = all.find((x) => x.id === id)!;
+    expect(base.versions[0].content.ingredients.map((i) => i.name)).toEqual(['Passata']);
+    expect(dish.versions).toHaveLength(2);
+    expect(dish.versions[1].content.ingredients.map((i) => `${i.name}${i.recipeId ? ' →' : ''}`)).toEqual(['Sauce für Testlasagne →', 'Lasagneplatten']);
+    r.undo();
+    await whenSaved();
+    const after = await repo.list();
+    expect(after.some((x) => x.id === r.baseId)).toBe(false);
+    expect(after.find((x) => x.id === id)!.currentVersionId).toBe(dish.versions[0].id);
+  });
+  it('„Frisch“ (ohne Teil) und unbekannte Teile lassen sich nicht herauslösen', async () => {
+    await freshStore('extract-no');
+    const id = createRecipe(content('Testsuppe', [{ id: 'a', name: 'Kürbis', amount: 1, unit: 'Stück' }]), { source: 'selbst', status: 'kochbuch' });
+    expect(extractPartToBase(id, '-')).toBeNull();
+    expect(extractPartToBase(id, 'Sauce')).toBeNull();
+  });
 });
 
 describe('Store: Vorkoch-Woche (Julia: Bolo am Sonntag, unter der Woche Nudeln und Wraps)', () => {

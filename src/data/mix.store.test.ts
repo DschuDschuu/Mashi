@@ -3,63 +3,34 @@ import PouchDB from 'pouchdb-core';
 import memory from 'pouchdb-adapter-memory';
 import { describe, expect, it } from 'vitest';
 import { PouchRecipeRepository, type RecipeDb } from './pouchRepository';
-import { addCombo, createRecipe, createSide, initStore, setMix, toggleGoesTogether, whenSaved } from './store';
+import { initStore, whenSaved } from './store';
 import { sideContent } from '../domain/mix';
+import type { Recipe } from '../domain/types';
 
 PouchDB.plugin(memory);
 
-/** wartet, bis wirklich gespeichert ist – eine feste Wartezeit reichte unter Last nicht */
-const settle = whenSaved;
-
-async function freshStore(name: string) {
-  const repo = new PouchRecipeRepository(new PouchDB(`${name}-${Date.now()}`, { adapter: 'memory' }) as unknown as RecipeDb);
-  await initStore(repo);
-  return repo;
-}
-
 // erfundene Bausteine – das Repo ist öffentlich
-describe('Store: Mix & Match', () => {
-  it('gleiche Soße zweimal kombiniert → Portionen addiert; „Rückgängig“ stellt den Stand davor her', async () => {
-    const repo = await freshStore('mix-plan');
-    const sauce = createRecipe({ ...sideContent('Testsoße'), servings: 2 }, { source: 'selbst', status: 'kochbuch', mix: 'sosse' });
-    const pasta = createSide('Testnudeln');
-    const gnocchi = createSide('Testgnocchi', 120);
-    addCombo([sauce, pasta], 2);
-    const second = addCombo([sauce, gnocchi], 2);
-    expect(second.more).toEqual([sauce]);
-    expect(second.added).toEqual([gnocchi]);
-    await settle();
-    const servingsOf = async () => Object.fromEntries((await repo.loadPlan()).items.map((i) => [i.recipeId, i.servings]));
-    expect(await servingsOf()).toMatchObject({ [sauce]: 4, [pasta]: 2, [gnocchi]: 2 });
+const recipe = (id: string, title: string, extra: Partial<Recipe> = {}): Recipe => ({
+  id, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z', status: 'kochbuch', source: 'selbst',
+  favorite: false, notes: '', currentVersionId: 'v', feedback: [],
+  versions: [{ id: 'v', number: 1, createdAt: '2026-01-01T00:00:00.000Z', author: 'nutzer', content: sideContent(title) }],
+  ...extra,
+});
 
-    second.undo();
-    await settle();
-    expect(await servingsOf()).toEqual({ [sauce]: 2, [pasta]: 2 });
-  });
-
-  it('Beilage wird als Baustein angelegt; verschieben und zurück', async () => {
-    const repo = await freshStore('mix-move');
-    const id = createSide('Testreis');
-    await settle();
-    expect((await repo.list()).find((r) => r.id === id)?.mix).toBe('beilage');
-
-    const undo = setMix(id, undefined);
-    await settle();
-    expect((await repo.list()).find((r) => r.id === id)?.mix).toBeUndefined();
-    undo();
-    await settle();
-    expect((await repo.list()).find((r) => r.id === id)?.mix).toBe('beilage');
-  });
-
-  it('„passt gut zu“ an und wieder aus', async () => {
-    const repo = await freshStore('mix-fits');
-    const sauce = createRecipe(sideContent('Testsoße'), { source: 'selbst', status: 'kochbuch', mix: 'sosse' });
-    const side = createSide('Testnudeln');
-    toggleGoesTogether(sauce, side);
-    await settle();
-    expect((await repo.list()).find((r) => r.id === sauce)?.goesWith).toEqual([side]);
-    toggleGoesTogether(side, sauce);
-    await settle();
-    expect((await repo.list()).find((r) => r.id === sauce)?.goesWith).toBeUndefined();
+describe('Store: alte Mix-&-Match-Bausteine beim Start aufräumen', () => {
+  it('Sauce ins Kochbuch, Beilage ins Archiv – gespeichert', async () => {
+    const repo = new PouchRecipeRepository(new PouchDB(`mix-retire-${Date.now()}`, { adapter: 'memory' }) as unknown as RecipeDb);
+    await repo.save(recipe('s1', 'Testsauce', { mix: 'sosse', goesWith: ['b1'] }));
+    await repo.save(recipe('b1', 'Testnudeln', { mix: 'beilage' }));
+    await repo.save(recipe('r1', 'Testauflauf'));
+    await initStore(repo);
+    await whenSaved();
+    const byId = new Map((await repo.list()).map((r) => [r.id, r]));
+    expect(byId.get('s1')).not.toHaveProperty('mix');
+    expect(byId.get('s1')).not.toHaveProperty('goesWith');
+    expect(byId.get('s1')?.archivedAt).toBeUndefined();
+    expect(byId.get('b1')).not.toHaveProperty('mix');
+    expect(byId.get('b1')?.archivedAt).toBeTruthy();
+    expect(byId.get('r1')?.updatedAt).toBe('2026-01-01T00:00:00.000Z'); // normale Rezepte bleiben unberührt
   });
 });

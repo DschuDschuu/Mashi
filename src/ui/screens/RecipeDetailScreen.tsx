@@ -5,7 +5,6 @@ import { useRecipeStock } from '../useRecipeStock';
 import { StockLine } from '../components/StockLine';
 import type { Stock } from '../../domain/pantry';
 import { categoryInfo, deviceInfo, DIFFICULTY_LABEL, SOURCE_INFO, STATUS_INFO } from '../../domain/catalog';
-import { MIX_ROLES, mixRole } from '../../domain/mix';
 import { cookingContent, homemadeOptions } from '../../domain/homemade';
 import { activeChoice, choicesOf } from '../../domain/choices';
 import { currentContent, currentVersion, originalVersion } from '../../domain/recipe';
@@ -15,7 +14,7 @@ import { doneParts, partLabel, partOf, partsOf, REST, stepPart } from '../../dom
 import type { Recipe, RecipeContent } from '../../domain/types';
 import { describeChange, diffContent } from '../../domain/versions';
 import {
-  addToPlan, adoptToCookbook, archiveRecipe, deleteRecipe, restoreRecipe, markCooked, regenerateImage, setChoice, setHomemade, setMix, setPlanVariants, setStatus, toggleFavorite, togglePlanCooked, uncookRecipe, updateNotes, usePantry, usePlan, useRecipe, useRecipes,
+  addToPlan, adoptToCookbook, archiveRecipe, deleteRecipe, extractPartToBase, restoreRecipe, markCooked, regenerateImage, setChoice, setHomemade, setPlanVariants, setStatus, toggleFavorite, togglePlanCooked, uncookRecipe, updateNotes, usePantry, usePlan, useRecipe, useRecipes,
 } from '../../data/store';
 import { cookedToast } from '../cookedToast';
 import { shareMessage, shareRecipes } from '../shareRecipes';
@@ -117,8 +116,8 @@ function Detail({ recipe }: { recipe: Recipe }) {
     ? { avg: recipe.feedback.reduce((s, f) => s + f.rating, 0) / recipe.feedback.length, count: recipe.feedback.length }
     : null;
 
-  // Bausteine kommen aus Mix & Match – direkt geöffnet führt „Zurück“ dorthin
-  const home = recipe.mix ? '/mix' : recipe.fromBase ? `/rezept/${recipe.fromBase}` : '/kochbuch';
+  // Verwandlungen hängen an ihrer Grundlage – direkt geöffnet führt „Zurück“ dorthin
+  const home = recipe.fromBase ? `/rezept/${recipe.fromBase}` : '/kochbuch';
 
   const onRegenerate = async () => {
     setMenu(false);
@@ -149,14 +148,14 @@ function Detail({ recipe }: { recipe: Recipe }) {
           <button role="menuitem" onClick={() => { setMenu(false); void shareRecipes([recipe]).then((r) => { const m = shareMessage(r); if (m) toast(m); }); }}>
             <Icon name="share" size={18} /> Teilen
           </button>
-          {/* Saucen und Beilagen (Julia): nur in Mix & Match statt im Kochbuch – jederzeit zurück */}
-          {recipe.mix ? (
-            <button role="menuitem" onClick={() => { setMenu(false); toast('Zurück im Kochbuch', { label: 'Rückgängig', run: setMix(recipe.id, undefined) }); }}>
-              <Icon name="book" size={18} /> Zurück ins Kochbuch
-            </button>
-          ) : MIX_ROLES.map((role) => (
-            <button key={role.id} role="menuitem" onClick={() => { setMenu(false); toast(`Als ${role.label} in Mix & Match`, { label: 'Rückgängig', run: setMix(recipe.id, role.id) }); }}>
-              <Icon name="shuffle" size={18} /> Als {role.label} in Mix & Match
+          {/* Teil als Grundlage herauslösen (Julia: die Sauce der Lasagne vorkochen und verwandeln) */}
+          {partsOf(currentContent(recipe)).filter((p) => p !== REST).map((p) => (
+            <button key={p} role="menuitem" onClick={() => {
+              setMenu(false);
+              const r = extractPartToBase(recipe.id, p);
+              if (r) toast(`„${r.title}“ ist jetzt eine Grundlage`, { label: 'Rückgängig', run: r.undo });
+            }}>
+              <Icon name="pot" size={18} /> „{p}“ als Grundlage herauslösen
             </button>
           ))}
           <button role="menuitem" onClick={() => { archiveRecipe(recipe.id); toast('Archiviert – unter Einstellungen → Archiv wiederherstellbar', { label: 'Rückgängig', run: () => restoreRecipe(recipe.id) }); goBack(home); }}>
@@ -172,7 +171,6 @@ const header = (
       <div className="row-gap">
         <StatusBadge status={recipe.status} withIcon />
         {recipe.source === 'ki' && recipe.status === 'kochbuch' && <span className="muted small">Ursprünglich mit KI erstellt</span>}
-        {recipe.mix && <span className="muted small"><Icon name="shuffle" size={14} /> {mixRole(recipe.mix).label} in Mix & Match</span>}
         <FromBaseLink recipe={recipe} recipes={recipes} />
       </div>
       <h1 className="detail__title">{c.title}</h1>

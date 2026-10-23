@@ -12,7 +12,6 @@ import { ConnectScreen } from './ui/screens/ConnectScreen';
 import { CookbookScreen } from './ui/screens/CookbookScreen';
 import { CookModeScreen } from './ui/screens/CookModeScreen';
 import { ImportScreen } from './ui/screens/ImportScreen';
-import { MixScreen } from './ui/screens/MixScreen';
 import { MoreScreen } from './ui/screens/MoreScreens';
 import { WeekSetupScreen } from './ui/screens/WeekSetupScreen';
 import { PlanScreen } from './ui/screens/PlanScreen';
@@ -50,7 +49,6 @@ function resolve(route: Route): { screen: ReactElement; tab?: string; section?: 
   switch (a) {
     case undefined: return { screen: <StartScreen />, tab: '/' };
     case 'kochbuch': return { screen: <CookbookScreen key={route.query.toString()} route={route} />, tab: '/kochbuch' };
-    case 'mix': return { screen: <MixScreen />, section: '/kochbuch' };
     // „Zum Testen“ lebt im Kochbuch (KI-Ideen + Rezepte zum Testen) – alte Links landen dort
     case 'testen': return { screen: <Redirect to="/kochbuch?segment=testen" /> };
     case 'plan': return b === 'woche' ? { screen: <WeekSetupScreen />, section: '/plan' } : { screen: <PlanScreen />, tab: '/plan' };
@@ -73,7 +71,7 @@ function resolve(route: Route): { screen: ReactElement; tab?: string; section?: 
     case 'neu':
       if (b === 'ki') return { screen: <AiCreateScreen initialPrompt={route.query.get('text') ?? ''} /> };
       if (b === 'import') return { screen: <ImportScreen /> };
-      return { screen: <RecipeFormScreen key={`neu${route.query.get('mix') ?? ''}${route.query.get('aus') ?? ''}`} mix={route.query.get('mix') ?? undefined} fromBase={route.query.get('aus') ?? undefined} /> };
+      return { screen: <RecipeFormScreen key={`neu${route.query.get('aus') ?? ''}`} fromBase={route.query.get('aus') ?? undefined} /> };
     case 'rezept':
       if (c === 'kochen') return { screen: <CookModeScreen key={`${b}${route.query.get('vorkochen') ?? ''}${route.query.get('meal') ?? ''}`} id={b} servings={Number(route.query.get('p')) || undefined} variants={parseVariants(route.query.get('s'))} prep={route.query.get('vorkochen') === '1'} mealId={route.query.get('meal') ?? undefined} /> };
       if (c === 'test') return { screen: <TestFeedbackScreen key={b} id={b} />, section: '/kochbuch' };

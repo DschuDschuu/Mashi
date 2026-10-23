@@ -1,7 +1,6 @@
 import { useRef, useState } from 'react';
 import { ask } from '../confirm';
 import { createBackup, parseBackup, type ParsedBackup } from '../../domain/backup';
-import { isMixPart } from '../../domain/mix';
 import type { MyProduct } from '../../domain/nutrition/myProducts';
 import { currentContent } from '../../domain/recipe';
 import { isInCookbook } from '../../domain/status';
@@ -265,7 +264,7 @@ function BackupPanel({ recipes }: { recipes: Recipe[] }) {
       {error && <p className="error" role="alert">{error}</p>}
       {sharing
         // nur dein Kochbuch: keine KI-Ideen, die du nicht zum Testen gespeichert hast (Julia) – die Sicherung hat weiter alles
-        ? <SharePicker recipes={recipes.filter((r) => !r.archivedAt && !isMixPart(r) && isInCookbook(r.status))} onClose={() => setSharing(false)} />
+        ? <SharePicker recipes={recipes.filter((r) => !r.archivedAt && isInCookbook(r.status))} onClose={() => setSharing(false)} />
         : <button className="btn btn--soft" onClick={() => setSharing(true)}><Icon name="share" size={18} /> Rezepte teilen …</button>}
 
       {preview && (

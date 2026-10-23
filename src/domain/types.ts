@@ -27,7 +27,7 @@ export type CategoryId = string;
 export type Unit =
   | 'g' | 'kg' | 'ml' | 'l'
   | 'EL' | 'TL' | 'Prise'
-  | 'Stück' | 'Zehe' | 'Dose' | 'Glas' | 'Bund' | 'Handvoll' | 'cm' | 'Messlöffel';
+  | 'Stück' | 'Zehe' | 'Dose' | 'Glas' | 'Bund' | 'Handvoll' | 'cm' | 'Messlöffel' | 'Portion';
 
 export type Difficulty = 1 | 2 | 3;
 
@@ -154,11 +154,11 @@ export interface Recipe {
   versions: RecipeVersion[];
   feedback: TestFeedback[];
   /**
-   * Gesetzt = Baustein für Mix & Match (Julia: Saucen und Beilagen frei kombinieren) – steht dann nur dort,
-   * nicht im Kochbuch. Offener String wie bei den Kategorien (siehe MIX_ROLES in mix.ts), später z. B. „gemuese“.
+   * Veraltet: Baustein für das frühere Mix & Match („sosse“, „beilage“). Steht nur noch in alten Daten und
+   * Sicherungen – beim Start räumt retireMix (mix.ts) es weg. Nicht mehr setzen.
    */
   mix?: string;
-  /** „Passt gut zu“ – IDs anderer Mix-Bausteine; gilt in beide Richtungen (siehe goesTogether) */
+  /** Veraltet: „passt gut zu“ aus Mix & Match – wird mit `mix` weggeräumt */
   goesWith?: string[];
   /**
    * Zutaten (IDs), die gerade selbst gemacht statt gekauft werden – Julias Wahl, gilt für Plan, Einkauf und Kochmodus.

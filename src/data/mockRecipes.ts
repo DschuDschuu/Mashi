@@ -19,9 +19,6 @@ interface Spec {
   /** weitere Versionen: nur geänderte Mengen (per Zutatenposition) */
   changes?: { author: VersionAuthor; label: string; amounts: Record<number, number>; daysAgo: number }[];
   feedback?: { rating: 1 | 2 | 3 | 4 | 5; note: string; onVersion: number; daysAgo: number }[];
-  /** Baustein für Mix & Match (siehe domain/mix.ts) und „passt gut zu“ (IDs) */
-  mix?: string;
-  goesWith?: string[];
   /** Zutat selbst machen: Zutatenposition → Grundrezept (siehe domain/homemade.ts) */
   makeWith?: Record<number, string>;
   /** Varianten (content.choices): Position → Variante, für Zutaten und Schritte (siehe domain/choices.ts) */
@@ -76,8 +73,6 @@ function build(spec: Spec, now: number): Recipe {
     currentVersionId: versions[versions.length - 1].id,
     versions,
     feedback,
-    ...(spec.mix ? { mix: spec.mix } : {}),
-    ...(spec.goesWith ? { goesWith: spec.goesWith } : {}),
   };
 }
 
@@ -269,10 +264,9 @@ const SPECS: Spec[] = [
     },
   },
 
-  // ── Mix & Match: Saucen und Beilagen zum Kombinieren (stehen nicht im Kochbuch) ──
+  // ── Saucen: taugen als Grundlage für die Vorkoch-Woche (früher Mix-&-Match-Bausteine, daher die IDs) ──
   {
     id: 'mix-tomatensosse', status: 'kochbuch', source: 'selbst', favorite: true, motif: 'pot', hue: 8, daysAgo: 50,
-    mix: 'sosse', goesWith: ['mix-pasta', 'mix-gnocchi'],
     content: {
       title: 'Tomatensauce',
       description: 'Einfache Tomatensauce für Vorrat – lässt sich gut einfrieren.',
@@ -288,7 +282,6 @@ const SPECS: Spec[] = [
   },
   {
     id: 'mix-pesto-sahne', status: 'kochbuch', source: 'selbst', motif: 'jar', hue: 110, daysAgo: 30,
-    mix: 'sosse', goesWith: ['mix-gnocchi'],
     content: {
       title: 'Pesto-Sahne-Sauce',
       description: 'In zehn Minuten fertig.',
@@ -303,7 +296,6 @@ const SPECS: Spec[] = [
   },
   {
     id: 'mix-kokos-curry', status: 'zum_testen', source: 'ki', motif: 'bowl', hue: 40, daysAgo: 6,
-    mix: 'sosse', goesWith: ['mix-reis'],
     content: {
       title: 'Kokos-Curry-Sauce',
       description: 'Milde Currysauce mit Kokosmilch.',
@@ -314,33 +306,6 @@ const SPECS: Spec[] = [
         ['Zwiebel würfeln und im Öl anschwitzen, Currypulver kurz mitrösten.', 4],
         ['Kokosmilch und Sojasauce dazu und sämig köcheln.', 10],
       ],
-    },
-  },
-  {
-    id: 'mix-pasta', status: 'kochbuch', source: 'selbst', motif: 'plate', hue: 45, daysAgo: 50, mix: 'beilage',
-    content: {
-      title: 'Pasta', description: '', servings: 1, prepMinutes: 0, cookMinutes: 10, difficulty: 1,
-      categories: ['beilage'], tags: [], devices: ['herd'],
-      ingredients: [[100, 'g', 'Pasta']], steps: [['Nach Packungsangabe garen.']],
-    },
-  },
-  {
-    id: 'mix-reis', status: 'kochbuch', source: 'selbst', motif: 'bowl', hue: 60, daysAgo: 50, mix: 'beilage',
-    content: {
-      title: 'Reis', description: '', servings: 1, prepMinutes: 0, cookMinutes: 15, difficulty: 1,
-      categories: ['beilage'], tags: [], devices: ['herd'],
-      ingredients: [[100, 'g', 'Reis']], steps: [['Nach Packungsangabe garen.']],
-    },
-  },
-  {
-    id: 'mix-gnocchi', status: 'kochbuch', source: 'selbst', motif: 'plate', hue: 30, daysAgo: 30, mix: 'beilage',
-    // gekauft oder selbst gemacht – auf der Rezeptseite wählbar
-    makeWith: { 0: 'gnocchi-selbst' },
-    content: {
-      title: 'Gnocchi', description: '', servings: 1, prepMinutes: 0, cookMinutes: 5, difficulty: 1,
-      categories: ['beilage'], tags: [], devices: ['herd'],
-      // gilt für gekaufte und selbst gemachte gleich
-      ingredients: [[150, 'g', 'Gnocchi']], steps: [['Gnocchi in Salzwasser garen, bis sie oben schwimmen.', 3, [0]]],
     },
   },
   {

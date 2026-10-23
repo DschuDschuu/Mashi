@@ -1,6 +1,5 @@
 import type { FoodEntry, FoodKind, FoodTable } from './nutrition/types';
 import { matchIngredient, spiceName, zeroOf } from './nutrition/noNutrition';
-import { isMixPart } from './mix';
 import { doneParts, remainingContent } from './parts';
 import { toGrams } from './nutrition/units';
 import { normalizeName } from './nutrition/localFoods';
@@ -319,7 +318,7 @@ export function suggestRecipes(plan: MealPlan, all: Recipe[], table: FoodTable, 
   }
 
   return all
-    .filter((r) => !planned.has(r.id) && !r.archivedAt && !isMixPart(r) && r.status !== 'ki_entwurf')
+    .filter((r) => !planned.has(r.id) && !r.archivedAt && r.status !== 'ki_entwurf')
     .map((r) => {
       const byKey = new Map<string, { name: string; grams: number; weight: number }>();
       const usedUp = new Map<string, string>();

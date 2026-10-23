@@ -16,13 +16,13 @@ import {
 import { attachPacks, changeAmount, mergeSamePacks, openItem } from '../domain/packs';
 import { addPrepared, eatPrepared } from '../domain/prepared';
 import { currentContent, currentVersion, newId, sameContent, withNewVersion } from '../domain/recipe';
-import { planCombo, sideContent, toggleGoesWith, type ComboResult } from '../domain/mix';
+import { retireMix } from '../domain/mix';
 import { cookingContent } from '../domain/homemade';
 import { recordSavings, type BonSavings } from '../domain/savings';
 import { addBon, bonFromImport, dropDayPrices, editBonLine, includeBonLine, sameBonOf, withdrawBonStock, dropUnsavedDay, type BonLine, type BonLinePatch } from '../domain/bons';
 import type { PriceEntry } from '../domain/cost';
 import { assignPrices, moveSort } from '../domain/sortRefs';
-import { doneParts, forParts, partLabel, partsOf, remainingContent } from '../domain/parts';
+import { doneParts, extractPart, forParts, partLabel, partsOf, REST, remainingContent } from '../domain/parts';
 import { withCategory, type FoodCategory } from '../domain/categories';
 import { relinkOldImport, renameFood, syncProductNames } from '../domain/renameFood';
 import { specialDays, type ShelfDays } from '../domain/shelfLife';
@@ -173,7 +173,17 @@ export async function initStore(r: RecipeRepository) {
   normalizePacks();
   normalizeStages();
   normalizeNames();
+  retireMixParts();
   repo.onExternalChange?.(scheduleReload);
+}
+
+/** Mix & Match ist raus – alte Bausteine einmal umstellen (Saucen ins Kochbuch, Beilagen ins Archiv; mix.ts) */
+function retireMixParts() {
+  const t = now();
+  for (const r of recipes) {
+    const next = retireMix(r, t);
+    if (next) commit(next);
+  }
 }
 
 /** Änderungen von anderen Geräten: kurz sammeln (ein Abgleich bringt oft viele auf einmal), dann neu laden. */
@@ -533,18 +543,16 @@ interface CreateOptions {
   status: RecipeStatus;
   image?: RecipeImage;
   notes?: string;
-  /** gleich als Mix-&-Match-Baustein anlegen (Sauce, Beilage) */
-  mix?: string;
   /** Verwandlung dieser Grundlage (week.ts) */
   fromBase?: string;
 }
 
 /** Legt ein neues Rezept mit Version 1 an. Ohne Bild wird eines erzeugt (einmalig). */
-export function createRecipe(content: RecipeContent, opts: CreateOptions): string {
+export function createRecipe(content: RecipeContent, opts: CreateOptions, id = newId('r')): string {
   const t = now();
   const versionId = newId('v');
   const recipe: Recipe = {
-    id: newId('r'),
+    id,
     createdAt: t,
     updatedAt: t,
     status: opts.status,
@@ -560,12 +568,33 @@ export function createRecipe(content: RecipeContent, opts: CreateOptions): strin
       content,
     }],
     feedback: [],
-    ...(opts.mix ? { mix: opts.mix } : {}),
     ...(opts.fromBase ? { fromBase: opts.fromBase } : {}),
   };
   commit(recipe);
   if (!opts.image) void regenerateImage(recipe.id);
   return recipe.id;
+}
+
+/**
+ * Teil als Grundlage herauslösen (Julia): neues Rezept aus dem Teil, das Gericht bekommt eine neue Version mit der
+ * verknüpften Grundlage als Zutat. Gibt die ID der Grundlage und „Rückgängig“ zurück.
+ */
+export function extractPartToBase(id: string, part: string): { baseId: string; title: string; undo: () => void } | null {
+  const before = get(id);
+  const c = currentContent(before);
+  if (part === REST || !partsOf(c).includes(part)) return null;
+  const title = `${part} für ${c.title}`;
+  const baseId = newId('r');
+  const { base, dish } = extractPart(c, part, { id: baseId, title }, () => newId('i'));
+  const created = createRecipe(base, { source: 'selbst', status: before.status === 'ki_entwurf' ? 'zum_testen' : before.status, ...(before.image ? { image: before.image } : {}) }, baseId);
+  commit(withNewVersion(get(id), dish, 'nutzer', `${part} als Grundlage herausgelöst`));
+  return {
+    baseId: created, title,
+    undo: () => {
+      commit({ ...get(id), versions: before.versions, currentVersionId: before.currentVersionId });
+      deleteRecipe(created);
+    },
+  };
 }
 
 /** Bearbeiten = neue Version. Nur wenn sich wirklich etwas geändert hat. */
@@ -630,19 +659,6 @@ export function restoreRecipe(id: string) {
   commit({ ...rest, updatedAt: now() });
 }
 
-// ── Mix & Match ────────────────────────────────────────────────────
-
-/** In Mix & Match verschieben (Sauce, Beilage) oder zurück ins Kochbuch (undefined) – gibt „Rückgängig“ zurück. */
-export function setMix(id: string, mix: string | undefined): () => void {
-  const before = get(id).mix;
-  const apply = (m: string | undefined) => {
-    const { mix: _, ...rest } = get(id);
-    commit(m ? { ...rest, mix: m } : rest);
-  };
-  apply(mix);
-  return () => apply(before);
-}
-
 /** Zutat selbst machen oder kaufen (Julia: Gnocchi) – gibt „Rückgängig“ zurück; siehe homemade.ts */
 export function setHomemade(id: string, ingredientId: string, on: boolean): () => void {
   const before = get(id).homemade;
@@ -683,41 +699,6 @@ export function setChoice(id: string, choice: string): () => void {
   };
   apply(choice);
   return () => apply(before);
-}
-
-/** „Passt gut zu“ zwischen zwei Bausteinen an/aus */
-export function toggleGoesTogether(aId: string, bId: string) {
-  const a = get(aId);
-  const b = get(bId);
-  const next = toggleGoesWith(a, b);
-  const withList = (r: Recipe, list: string[]) => {
-    const { goesWith: _, ...rest } = r;
-    return list.length ? { ...rest, goesWith: list } : rest;
-  };
-  if (JSON.stringify(a.goesWith ?? []) !== JSON.stringify(next.a)) commit(withList(a, next.a));
-  if (JSON.stringify(b.goesWith ?? []) !== JSON.stringify(next.b)) commit(withList(b, next.b));
-}
-
-/** Beilage schnell anlegen (Julia: Pasta, Reis, Gnocchi – „so 100 g pro Person“) */
-export function createSide(name: string, amount?: number): string {
-  return createRecipe(sideContent(name, amount), { source: 'selbst', status: 'kochbuch', mix: 'beilage' });
-}
-
-/**
- * Kombination in den Wochenplan – steht ein Baustein schon drin, kommen die Portionen dazu (Julia).
- * Gibt zurück, was passiert ist, und „Rückgängig“ (stellt genau diese Einträge wieder her).
- */
-export function addCombo(recipeIds: readonly string[], servings: number): ComboResult & { undo: () => void } {
-  const before = new Map(plan.items.filter((i) => recipeIds.includes(i.recipeId)).map((i) => [i.recipeId, i]));
-  const result = planCombo(plan, recipeIds, servings);
-  if (result.added.length || result.more.length) commitPlan(result.plan);
-  const undo = () => {
-    const items = plan.items
-      .filter((i) => !result.added.includes(i.recipeId))
-      .map((i) => (result.more.includes(i.recipeId) && before.has(i.recipeId) ? before.get(i.recipeId)! : i));
-    commitPlan({ ...plan, items });
-  };
-  return { ...result, undo };
 }
 
 /** Endgültig löschen – gibt „Rückgängig“ zurück (legt das Rezept samt Plan-Eintrag wieder an). */

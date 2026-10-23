@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { doneParts, FINISH, forParts, partsOf, remainingContent, REST, stepPart } from './parts';
+import { doneParts, extractPart, FINISH, forParts, partsOf, remainingContent, REST, stepPart } from './parts';
 import type { RecipeContent } from './types';
 import { describeChange, diffContent } from './versions';
 
@@ -63,5 +63,19 @@ describe('Rezept-Teile (Julia: Sauce gestern, Nudeln und Fleisch heute)', () => 
   it('neue Version: geänderter Teil und Hinweis stehen in „Was hat sich geändert?“', () => {
     const after = { ...c, ingredients: c.ingredients.map((i) => (i.id === 'i3' ? { ...i, part: 'Nudeln' } : i.id === 'i2' ? { ...i, note: 'fein gehackt' } : i)) };
     expect(diffContent(c, after).map(describeChange)).toEqual(['1 Stück Zwiebel, gewürfelt → 1 Stück Zwiebel, fein gehackt', 'Spaghetti: Teil Nudeln']);
+  });
+
+  it('Teil als Grundlage herauslösen: Zutaten und Schritte wandern, im Gericht steht die verknüpfte Grundlage', () => {
+    let n = 0;
+    const { base, dish } = extractPart(c, 'Sauce', { id: 'g1', title: 'Sauce für Pasta' }, () => `n${++n}`);
+    expect(base.title).toBe('Sauce für Pasta');
+    expect(ids(base.ingredients)).toEqual(['i1', 'i2']);
+    expect(base.ingredients.every((i) => !i.part)).toBe(true);
+    expect(base.ingredients[1].note).toBe('gewürfelt'); // Hinweise bleiben
+    expect(ids(base.steps)).toEqual(['s1', 's5']);
+    expect(dish.ingredients[0]).toEqual({ id: 'n1', name: 'Sauce für Pasta', amount: 2, unit: 'Portion', recipeId: 'g1' });
+    expect(ids(dish.ingredients.slice(1))).toEqual(['i3', 'i4']);
+    expect(ids(dish.steps)).toEqual(['s2', 's3', 's4']); // „Alles zusammen“ (zum Schluss) bleibt im Gericht
+    expect(partsOf(dish)).toEqual([]); // keine Teile mehr
   });
 });

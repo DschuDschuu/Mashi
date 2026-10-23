@@ -3,7 +3,6 @@ import { CATEGORIES } from '../../domain/catalog';
 import { cloneContent, currentContent, newId, sameContent } from '../../domain/recipe';
 import type { Difficulty, RecipeContent, RecipeImage, ImageCrop } from '../../domain/types';
 import type { TextImport } from '../../domain/importText';
-import { mixRole } from '../../domain/mix';
 import { createRecipe, regenerateImage, saveContent, setImage as storeImage, useRecipe } from '../../data/store';
 import { goBack, navigate } from '../../router';
 import { ChipSelect, DevicePicker, FileButton, Stepper } from '../components/Controls';
@@ -23,7 +22,7 @@ import { toast } from '../toast';
 function transformDraft(baseTitle: string, baseId: string): RecipeContent {
   return {
     ...EMPTY, servings: 1, prepMinutes: 10, cookMinutes: 0,
-    ingredients: [{ id: newId('i'), name: baseTitle, amount: 1, unit: 'Stück', note: 'Portion', recipeId: baseId }, { id: newId('i'), name: '' }],
+    ingredients: [{ id: newId('i'), name: baseTitle, amount: 1, unit: 'Portion', recipeId: baseId }, { id: newId('i'), name: '' }],
   };
 }
 
@@ -37,9 +36,8 @@ const EMPTY: RecipeContent = {
  * Formular für „Eigenes Rezept“, „Bearbeiten“ (dann entsteht eine neue Version)
  * und zum Prüfen eines Text-Imports (draft: vorausgefüllt, mit Hinweisen).
  */
-export function RecipeFormScreen({ editId, draft, onBack, mix, fromBase }: {
+export function RecipeFormScreen({ editId, draft, onBack, fromBase }: {
   editId?: string; draft?: TextImport; /** Import: zurück zum eingefügten Text */ onBack?: () => void;
-  /** aus Mix & Match: gleich als Baustein anlegen (z. B. „sosse“) */ mix?: string;
   /** „Verwandlung anlegen“ (Julia: aus der Bolo Wraps machen) – die Grundlage steht schon als Zutat drin */ fromBase?: string;
 }) {
   const existing = useRecipe(editId);
@@ -99,15 +97,15 @@ export function RecipeFormScreen({ editId, draft, onBack, mix, fromBase }: {
       toast(changed ? `Gespeichert als Version ${existing.versions.length + 1}` : photoChanged ? 'Foto gespeichert' : 'Keine Änderungen');
       goBack(`/rezept/${existing.id}`);
     } else {
-      const id = createRecipe(content, { source: draft ? 'import' : 'selbst', status: tested === 'ja' ? 'kochbuch' : 'zum_testen', image, notes, mix, ...(base ? { fromBase: base.id } : {}) });
-      toast(mix ? `${mixRole(mix).label} gespeichert – steht in Mix & Match` : base ? `Gespeichert – steht unter ${currentContent(base).title}` : 'Rezept gespeichert');
+      const id = createRecipe(content, { source: draft ? 'import' : 'selbst', status: tested === 'ja' ? 'kochbuch' : 'zum_testen', image, notes, ...(base ? { fromBase: base.id } : {}) });
+      toast(base ? `Gespeichert – steht unter ${currentContent(base).title}` : 'Rezept gespeichert');
       navigate(`/rezept/${id}`, { replace: true });
     }
   };
 
   return (
     <main className="screen screen--cta">
-      <TopBar title={existing ? 'Rezept bearbeiten' : draft ? 'Import prüfen' : mix ? `Neue ${mixRole(mix).label}` : base ? `Aus ${currentContent(base).title}` : 'Eigenes Rezept'} onBack={onBack}
+      <TopBar title={existing ? 'Rezept bearbeiten' : draft ? 'Import prüfen' : base ? `Aus ${currentContent(base).title}` : 'Eigenes Rezept'} onBack={onBack}
         confirmBack={dirty ? (draft && onBack ? 'Zurück zum Text? Deine Änderungen am Rezept gehen verloren.' : 'Verwerfen? Deine Änderungen gehen verloren.') : undefined} />
       <form className="stack" onSubmit={submit} noValidate>
         {draft && (
