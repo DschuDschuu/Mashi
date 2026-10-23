@@ -16,6 +16,8 @@ mashi/
 │  │  ├─ versions.ts          Unterschiede zwischen Versionen („300 g → 350 g“)
 │  │  ├─ filter.ts            Suche und Filter
 │  │  ├─ mealplan.ts          Wochenplan, Einkaufsliste; Zutaten/Namen einordnen (resolveIngredient, keyOfName)
+│  │  ├─ week.ts              Vorkoch-Woche: Verteilung, Alter/Einfrieren, Mittage, Portionen, Tauschen, MHD-Funde
+│  │  ├─ weekBases.ts         Grundlage-Zutat einer Verwandlung nicht einkaufen (für Einkauf und Vorrat)
 │  │  ├─ pantry.ts            Speisekammer: Vorrat, Bon-Import, beim Kochen abziehen, Verplantes
 │  │  ├─ packs.ts             Packungen: anbrechen, „ganze Packung?“, Größe nachtragen, zusammenlegen
 │  │  ├─ prepared.ts          Vorgekochte Portionen (auch einzelne Teile: „Sauce für …“, PantryItem.part)
@@ -91,7 +93,10 @@ aus den Zutaten berechnet (gecacht je Version).
  #/                       Start
  #/kochbuch?device=…      Kochbuch (Filter als URL → Schnellfilter sind Links)
  #/testen                 KI-Ideen · Zum Testen · Bewährt (über Start erreichbar)
- #/plan                   Wochenplan (laufend, ohne Wochenwechsel), Vorschläge, Vorgekocht · „1 gegessen“
+ #/plan                   Deine Woche (Vorkoch-Woche) – darunter von Hand Eingeplantes, Vorschläge, Vorgekocht · „1 gegessen“
+ #/plan/woche             Woche planen: Grundlagen wählen, „Was machst du daraus?“, Kochtage
+ #/neu?aus=<id>           Verwandlung einer Grundlage anlegen
+ #/rezept/<id>/kochen?vorkochen=1 · ?meal=<id>   Kochtag (auf Vorrat) · Abendessen aus der Woche
  #/einkauf                Einkaufsliste (zieht den Vorrat ab, eigene Einträge) – Wagen oben rechts in der Speisekammer
  #/speisekammer/inventur  Inventur (wann du willst): Speisekammer & Keller, Tiefkühler, Immer im Haus/Gewürze abhaken
  #/speisekammer           Vorräte, Bald verbrauchen, Verwalten (Haltbarkeit, gelernte Bon-Artikel)

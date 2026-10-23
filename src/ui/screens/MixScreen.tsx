@@ -17,7 +17,7 @@ import { toast } from '../toast';
 import { useNutrition } from '../useNutrition';
 
 /**
- * Mix & Match (Julia): je eine Soße und eine Beilage antippen, sehen, was die Kombination pro Portion hat und
+ * Mix & Match (Julia): je eine Sauce und eine Beilage antippen, sehen, was die Kombination pro Portion hat und
  * ob alles da ist – und ab in den Wochenplan. Die Bausteine stehen nur hier, nicht im Kochbuch.
  */
 export function MixScreen() {
@@ -30,7 +30,7 @@ export function MixScreen() {
   return (
     <main className="screen">
       <TopBar title="Mix & Match" backTo="/kochbuch" />
-      <p className="muted small mix__intro">Soße und Beilage frei kombinieren. Was hier steht, taucht im Kochbuch nicht auf.</p>
+      <p className="muted small mix__intro">Sauce und Beilage frei kombinieren. Was hier steht, taucht im Kochbuch nicht auf.</p>
       {MIX_ROLES.map((role, n) => (
         <RoleSection key={role.id} role={role} recipes={recipes} picked={chosen[n]}
           // was zum Gewählten der anderen Seite passt, bekommt einen Stern

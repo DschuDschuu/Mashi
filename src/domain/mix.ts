@@ -4,7 +4,7 @@ import type { MealPlan } from './mealplan';
 import type { Recipe, RecipeContent, Unit } from './types';
 
 /**
- * Mix & Match (Julia): Soßen und Beilagen liegen als eigene Bausteine bereit und lassen sich frei kombinieren.
+ * Mix & Match (Julia): Saucen und Beilagen liegen als eigene Bausteine bereit und lassen sich frei kombinieren.
  * Bausteine sind ganz normale Rezepte mit gesetztem `mix` – so rechnen Einkaufsliste, Vorrat, Nährwerte und
  * Preise ohne Sonderweg mit. Sie stehen nur in Mix & Match, nicht im Kochbuch.
  */
@@ -16,7 +16,7 @@ export interface MixRole {
 
 /** Reihenfolge = Reihenfolge im Mix-&-Match-Bildschirm. Ein weiterer Teil (Gemüse, Topping …) = ein Eintrag hier. */
 export const MIX_ROLES: MixRole[] = [
-  { id: 'sosse', label: 'Soße', plural: 'Soßen' },
+  { id: 'sosse', label: 'Sauce', plural: 'Saucen' },
   { id: 'beilage', label: 'Beilage', plural: 'Beilagen' },
 ];
 
@@ -82,7 +82,7 @@ export interface ComboResult {
   plan: MealPlan;
   /** neu im Plan */
   added: string[];
-  /** stand schon im Plan – Portionen dazugezählt (Julia: Soße einmal kochen, zweimal essen) */
+  /** stand schon im Plan – Portionen dazugezählt (Julia: Sauce einmal kochen, zweimal essen) */
   more: string[];
   /** stand schon gekocht im Plan – bleibt, wie es ist (erst „Gekochtes aufräumen“) */
   cooked: string[];

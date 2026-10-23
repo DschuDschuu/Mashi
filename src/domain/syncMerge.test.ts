@@ -61,6 +61,40 @@ describe('Wochenplan: merge3', () => {
     const tablet: MealPlan = { ...b2, checked: ['food:reis', 'food:ei'] };
     expect(merge3Plan(b2, handy, tablet).checked).toEqual(['food:ei']);
   });
+
+  // Vorkoch-Woche (week.ts): 0 = Montag … 6 = Sonntag
+  const week: MealPlan = {
+    ...base,
+    week: {
+      cookDays: [6, 2],
+      bases: [{ recipeId: 'bolo', day: 6 }, { recipeId: 'chili', day: 2 }],
+      meals: [{ id: 'm1', day: 6, recipeId: 'spag', baseId: 'bolo' }, { id: 'm2', day: 0, recipeId: 'wraps', baseId: 'bolo' }, { id: 'm3', day: 2, recipeId: 'chilireis', baseId: 'chili' }],
+    },
+  };
+
+  it('Woche: Handy tauscht zwei Abende, Tablet ändert Portionen – beides bleibt', () => {
+    const handy: MealPlan = { ...week, week: { ...week.week!, meals: week.week!.meals.map((m) => (m.id === 'm2' ? { ...m, day: 1 } : m)) } };
+    const tablet: MealPlan = { ...week, week: { ...week.week!, bases: [{ recipeId: 'bolo', day: 6, extra: 2 }, week.week!.bases[1]] }, household: { portions: 1, lunchDays: [0, 1, 2, 3, 4] } };
+    const m = merge3Plan(week, handy, tablet);
+    expect(m.week!.meals.find((x) => x.id === 'm2')!.day).toBe(1);
+    expect(m.week!.bases[0].extra).toBe(2);
+    expect(m.household).toEqual({ portions: 1, lunchDays: [0, 1, 2, 3, 4] });
+  });
+
+  it('Woche: beide legen ein Gericht auf denselben freien Abend – eines rückt weiter statt zu verschwinden', () => {
+    const move = (id: string, day: number): MealPlan => ({ ...week, week: { ...week.week!, meals: week.week!.meals.map((m) => (m.id === id ? { ...m, day } : m)) } });
+    const m = merge3Plan(week, move('m2', 4), move('m3', 4));
+    const days = m.week!.meals.map((x) => x.day);
+    expect(new Set(days).size).toBe(days.length); // kein Abend doppelt
+    expect(days).toContain(4);
+    expect(days).toContain(5); // das zweite auf Samstag
+  });
+
+  it('Woche nur auf einer Seite angelegt, Mittag abgewählt – kommt an', () => {
+    const tablet: MealPlan = { ...week, week: { ...week.week!, noLunch: [3] } };
+    expect(merge3Plan(base, week, base).week).toEqual(week.week);
+    expect(merge3Plan(week, week, tablet).week!.noLunch).toEqual([3]);
+  });
 });
 
 describe('Meine Produkte: merge3', () => {

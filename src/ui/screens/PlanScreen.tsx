@@ -36,6 +36,7 @@ import { choicesFor } from '../useNutrition';
 import { cookedToast } from '../cookedToast';
 import { useUseUp } from '../useUseUp';
 import { toast } from '../toast';
+import { WeekPlan } from '../components/WeekPlan';
 
 /** Was sich planen lässt: alles außer Archiv und reinen KI-Ideen (die sind noch kein Rezept); Mix-Bausteine über Mix & Match. */
 const plannable = (r: Recipe) => !r.archivedAt && !isMixPart(r) && r.status !== 'ki_entwurf';
@@ -51,7 +52,9 @@ export function PlanScreen() {
   const [picking, setPicking] = useState(false);
 
   const table = useFoodTable();
+  // die Einträge der Vorkoch-Woche stehen oben in „Deine Woche“ – hier nur, was von Hand eingeplant ist
   const items = plan.items
+    .filter((i) => !i.fromWeek)
     .map((i) => ({ ...i, recipe: recipes.find((r) => r.id === i.recipeId) }))
     .filter((i): i is typeof i & { recipe: Recipe } => !!i.recipe)
     .map((i) => ({ ...i, cooked: plan.cooked.includes(i.recipeId) }))
@@ -82,9 +85,18 @@ export function PlanScreen() {
     });
   };
 
+  // Julia: „Woche ersetzt die Liste“ – oben die Vorkoch-Woche (oder der Einstieg), darunter von Hand Eingeplantes
+  const weekPart = plan.week ? <WeekPlan week={plan.week} /> : (
+    <section className="week-start">
+      <h2 className="h3">Diese Woche vorkochen</h2>
+      <p className="small muted">Eine oder zwei Grundlagen am Kochtag – daraus unter der Woche verschiedene Abendessen. Mashi plant, wann was dran ist.</p>
+      <button type="button" className="btn btn--primary" onClick={() => navigate('/plan/woche')}><Icon name="calendar" size={18} /> Woche planen</button>
+    </section>
+  );
   const planList = (
     <>
-      <Section icon="calendar" title={items.length ? `${items.length} ${items.length === 1 ? 'Gericht' : 'Gerichte'} · ${portionCount(portions)}` : 'Noch nichts geplant'}>
+      {weekPart}
+      {(!plan.week || items.length > 0) && <Section icon="calendar" title={plan.week ? `Außerdem im Plan · ${items.length} ${items.length === 1 ? 'Gericht' : 'Gerichte'}` : items.length ? `${items.length} ${items.length === 1 ? 'Gericht' : 'Gerichte'} · ${portionCount(portions)}` : 'Noch nichts geplant'}>
         {items.length === 0 ? (
           <Empty icon="calendar">Wähle ein Gericht – Mashi schlägt dir dann Rezepte mit ähnlichen Zutaten vor. So kaufst du weniger ein und es bleibt nichts übrig.</Empty>
         ) : (
@@ -155,7 +167,7 @@ export function PlanScreen() {
             Gekochtes aufräumen
           </button>
         )}
-      </Section>
+      </Section>}
     </>
   );
 

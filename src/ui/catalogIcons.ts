@@ -37,7 +37,7 @@ const MIX_WORD_ICONS: [RegExp, IconName][] = [
   [/curry|eintopf|chili|gulasch|ragout/, 'pot'],
 ];
 
-/** Was nichts erkennt, bekommt das Icon seiner Rolle – Soße: Kelle, Beilage: Besteck */
+/** Was nichts erkennt, bekommt das Icon seiner Rolle – Sauce: Kelle, Beilage: Besteck */
 const MIX_ROLE_ICONS: Record<string, IconName> = { sosse: 'ladle', beilage: 'cutlery' };
 
 export function mixIcon(title: string, role: string): IconName {

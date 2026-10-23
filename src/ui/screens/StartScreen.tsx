@@ -17,6 +17,8 @@ import { recipeNutrition } from '../useNutrition';
 import { daysLabel, daysLeft, expiryLabel, useByOf } from '../../domain/shelfLife';
 import { useUseUp } from '../useUseUp';
 import { useShoppingCount } from '../useShoppingCount';
+import { WeekToday } from '../components/WeekToday';
+import { weekdayOf } from '../../domain/week';
 
 /**
  * Startseite: nur das, was heute ansteht. Geplantes als große Karten zum Wischen –
@@ -28,7 +30,11 @@ export function StartScreen() {
 
   const { expiring: all, usingUp, planned: reserved, plannedUseUp } = useUseUp();
   // Was bald weg muss, zuerst kochen – sonst bleibt die Reihenfolge wie im Plan (sort ist stabil)
+  // heute Abend steht schon etwas aus der Woche an → keine Frage „Was möchtest du heute kochen?“ darunter
+  const weekTonight = !!plan.week?.meals.some((m) => m.day === weekdayOf(new Date()) && !m.done);
+  // Gerichte der Vorkoch-Woche zeigt „Heute aus der Woche“ – hier nur, was von Hand eingeplant ist
   const planned = plan.items
+    .filter((i) => !i.fromWeek)
     .filter((i) => !plan.cooked.includes(i.recipeId)) // schon Gekochtes ist erledigt
     .map((i) => ({ recipe: recipes.find((r) => r.id === i.recipeId), servings: i.servings }))
     .filter((i): i is { recipe: Recipe; servings: number } => !!i.recipe)
@@ -60,6 +66,7 @@ export function StartScreen() {
         </button>
       )}
       <PreparedRow />
+      {plan.week && <WeekToday week={plan.week} />}
       {planned.length > 0 ? (
         <section className="today" aria-labelledby="today-title">
           {/* derselbe Aufbau wie ohne Plan („Was möchtest du heute kochen?“ + „Rezept des Tages“): mittige Überschrift,
@@ -68,7 +75,7 @@ export function StartScreen() {
           <p className="today__title"><Icon name="calendar" size={18} /> Aus deinem Wochenplan</p>
           <Swiper items={planned} />
         </section>
-      ) : daily ? (
+      ) : weekTonight ? null : daily ? (
         <section className="today" aria-labelledby="today-title">
           {/* Die Frage passt nur, wenn noch nichts geplant ist – beim Plan steht die Antwort ja schon da */}
           <p className="home-q">Was möchtest du heute kochen?</p>

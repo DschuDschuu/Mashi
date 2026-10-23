@@ -1279,6 +1279,113 @@ p { margin: 0; }
 .homemade { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin: 10px 0 6px; }
 .homemade__name { font-weight: 600; min-width: 0; }
 .homemade__opts { display: flex; gap: 6px; }
+/* Vorkochen am Rezept (Julia): hält X Tage, einfrierbar, zum Mitnehmen – darunter „Daraus machen“ */
+.prep { display: grid; gap: 14px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
+.prep__row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+.prep__keeps { display: inline-flex; align-items: center; gap: 8px; }
+.prep__made { display: grid; gap: 8px; justify-items: start; }
+.prep__list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; width: 100%; }
+.prep__item { display: flex; align-items: center; gap: 12px; width: 100%; padding: 6px; border-radius: var(--r-sm); background: var(--surface); border: 1px solid var(--line); text-align: left; color: var(--ink-3); }
+.prep__item .rimg--sm { width: 48px; height: 48px; }
+.prep__text { flex: 1; min-width: 0; display: grid; color: var(--ink); overflow-wrap: break-word; }
+.from-base { font-weight: 700; }
+
+/* ── Vorkoch-Woche (Julia: Grundlagen am Kochtag, daraus die Abendessen) ── */
+.tag { display: inline-flex; align-items: center; gap: 4px; width: fit-content; max-width: 100%; padding: 1px 8px; border-radius: 999px; font-size: 0.74rem; font-weight: 700; color: var(--ink-2); background: var(--surface-2); }
+.tag--eat { background: var(--mint); }
+.tag--frost { background: var(--sky); }
+.tag--mhd { background: var(--butter); }
+.tag--done { background: var(--primary-soft); color: var(--primary-text); }
+.tag--warn { background: var(--peach); color: var(--danger-ink); }
+
+/* Wochentage zum Antippen (Kochtage, Mittagstage) – passen auf 375 px nebeneinander */
+.daypick { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.daypick__day { display: grid; justify-items: center; gap: 1px; padding: 6px 0; border-radius: var(--r-sm); background: var(--surface); border: 1px solid var(--line); font-size: 0.8rem; font-weight: 800; color: var(--ink-2); }
+.daypick__day small { font-size: 0.64rem; font-weight: 700; color: var(--ink-3); }
+.daypick__day.is-on { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
+.daypick__day.is-on small { color: var(--on-primary); opacity: 0.85; }
+.daypick--small .daypick__day { padding: 8px 0; }
+
+/* Woche planen: Bildkarten zum Antippen */
+.week-setup__title { font-size: 1.4rem; margin: 4px 0 2px; }
+.week-setup__grid, .week-setup__base { margin-top: 14px; }
+.week-setup__base { display: grid; gap: 10px; justify-items: start; }
+.week-setup__base > .grid { width: 100%; }
+.week-setup__head { display: flex; align-items: center; gap: 12px; }
+.week-setup__headtext { display: grid; min-width: 0; }
+.week-setup__days { display: grid; gap: 8px; margin-top: 22px; }
+.pick-card { text-align: left; border-width: 2px; }
+.pick-card.is-on { border-color: var(--primary); }
+.pick-card__check { position: absolute; top: 8px; right: 8px; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: var(--surface); color: var(--ink-3); border: 1.5px solid var(--line); font-size: 0.78rem; }
+.pick-card.is-on .pick-card__check { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
+
+/* Deine Woche im Plan */
+.week, .week-start { display: grid; gap: 14px; margin-bottom: 22px; }
+.week-start { padding: 16px; border-radius: var(--r); background: var(--surface); border: 1px dashed var(--line); justify-items: start; }
+.week__shop { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: var(--r); background: var(--surface); border: 1px solid var(--line); text-align: left; color: var(--ink-2); }
+.week__shop span { flex: 1; min-width: 0; display: grid; color: var(--ink); }
+.week__shop small { color: var(--ink-3); }
+.cookday { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--shadow); overflow: hidden; }
+.cookday__head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 12px 14px 4px; }
+.cookday__head h3 { margin: 0; font-size: 1.05rem; }
+.cookday__head span { display: inline-flex; align-items: center; gap: 4px; }
+.cookday__free { padding: 0 14px 12px; }
+.cookday__base { padding: 4px 8px; }
+.cookday__item { display: flex; gap: 12px; align-items: flex-start; padding: 4px 6px; }
+.cookday__text { flex: 1; min-width: 0; display: grid; gap: 4px; overflow-wrap: break-word; }
+.cookday__name { text-align: left; font-weight: 800; color: var(--ink); }
+.cookday__early { display: grid; grid-template-columns: auto 1fr; gap: 6px 8px; margin: 6px; padding: 10px 12px; border-radius: var(--r-sm); background: var(--sky); color: var(--ink-2); font-size: 0.86rem; }
+.cookday__early .btn { grid-column: 2; justify-self: start; }
+.cookday__foot { border-top: 1px dashed var(--line); padding: 10px 14px 12px; margin-top: 4px; }
+.portions { display: inline-flex; align-items: center; gap: 8px; width: fit-content; padding: 2px; border-radius: 999px; background: var(--peach); color: var(--ink); font-size: 0.84rem; }
+.portions button { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: var(--surface); color: var(--ink-2); }
+.portions button:disabled { opacity: 0.4; }
+.week__days { display: grid; gap: 8px; }
+.week__days .h3 { margin: 0; }
+.week__swapbar { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: var(--r-sm); background: var(--primary-soft); color: var(--primary-text); font-size: 0.88rem; position: sticky; top: calc(var(--topbar-h) + 4px); z-index: 3; }
+.week__swapbar span { flex: 1; min-width: 0; }
+.week__list { display: grid; gap: 14px; }
+.week__day { display: grid; gap: 4px; }
+.lunch { display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 10px; border-radius: var(--r-sm); background: var(--surface-2); }
+.lunch--off { background: transparent; border: 1px dashed var(--line); }
+.lunch__label { width: 64px; flex: none; font-size: 0.7rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-3); }
+.lunch__text { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: center; overflow-wrap: break-word; }
+.lunch__x { width: 28px; height: 28px; flex: none; border-radius: 50%; display: grid; place-items: center; color: var(--ink-3); }
+.meal { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px; border-radius: var(--r); background: var(--surface); border: 1px solid var(--line); text-align: left; color: var(--ink); }
+.meal:disabled { cursor: default; }
+.meal--free { background: transparent; border-style: dashed; }
+.meal.is-picked { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
+.meal.is-target { border: 1.5px dashed var(--primary); }
+.meal.is-blocked { opacity: 0.4; }
+.meal.is-done { opacity: 0.65; }
+.meal .rimg--sm { width: 52px; height: 52px; }
+.meal__day { width: 26px; flex: none; text-align: center; font-weight: 800; font-size: 0.8rem; color: var(--ink-3); }
+.meal__text { flex: 1; min-width: 0; display: grid; gap: 3px; overflow-wrap: break-word; }
+.meal__text strong { font-size: 0.93rem; line-height: 1.25; }
+.meal__hint { flex: none; font-size: 0.74rem; font-weight: 800; color: var(--primary-text); }
+.meal__hint--no { color: var(--ink-3); font-weight: 700; }
+.meal__grip { flex: none; color: var(--ink-3); opacity: 0.6; display: grid; }
+.finds { display: grid; gap: 8px; padding: 12px 14px; border-radius: var(--r); background: var(--surface); border: 1px dashed var(--line); }
+.finds .h3 { margin: 0; }
+.find { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: var(--r-sm); background: var(--butter); color: var(--ink); }
+.find__text { min-width: 0; display: grid; gap: 4px; overflow-wrap: break-word; }
+.find__actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
+.week__end { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+
+/* Startseite unter der Woche */
+.week-today { display: grid; gap: 12px; margin-bottom: 18px; }
+.week-today__cook { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: var(--r-sm); background: var(--primary-soft); color: var(--primary-text); text-align: left; }
+.week-today__cook span { flex: 1; min-width: 0; display: grid; }
+.week-today__lunch { display: flex; align-items: center; gap: 12px; padding: 8px; border-radius: var(--r); background: var(--surface); border: 1px solid var(--line); }
+.week-today__text { flex: 1; min-width: 0; display: grid; overflow-wrap: break-word; }
+.week-today__text small { color: var(--ink-3); font-size: 0.78rem; }
+.week-today__dinner { display: grid; gap: 10px; }
+.week-today__dinner .today__title { margin: 0; }
+.week-today__badge { position: absolute; left: 10px; top: 10px; }
+.week-today__actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.week-today__hint { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 0; padding: 10px 12px; border-radius: var(--r-sm); background: var(--sky); color: var(--ink-2); font-size: 0.86rem; }
+.week-today__hint span { flex: 1; min-width: 12em; }
+.week-today__done { display: flex; align-items: center; gap: 6px; margin: 0; color: var(--primary-text); font-weight: 700; }
 /* Varianten im Formular: Zuordnung je Zutat (eigene Zeile über die ganze Breite) bzw. je Schritt */
 .editor__choice { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; margin: -2px 0 4px; min-width: 0; }
 .editor__choice select { flex: 1 1 140px; min-width: 0; max-width: 100%; padding: 6px 8px; font-size: 0.85rem; }

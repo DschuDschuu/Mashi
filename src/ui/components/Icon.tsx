@@ -35,7 +35,7 @@ const PATHS = {
   info: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z M12 11v5 M12 8h.01',
   bookmark: 'M6 3h12v18l-6-4-6 4z',
   grid: 'M4 4h6v6H4z M14 4h6v6h-6z M4 14h6v6H4z M14 14h6v6h-6z',
-  // Mix & Match – Soßen und Beilagen kreuz und quer kombinieren
+  // Mix & Match – Saucen und Beilagen kreuz und quer kombinieren
   shuffle: 'M16 3h5v5 M4 20 21 3 M21 16v5h-5 M15 15l6 6 M4 4l5 5',
   image: 'M5 4h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z M4 16l5-5 4 4 3-3 4 4 M15.5 8.5h.01',
   file: 'M6 3h8l4 4v14H6z M14 3v4h4 M9 13h6 M9 17h6',
@@ -53,6 +53,8 @@ const PATHS = {
 
   // Kategorien
   cup: 'M4 9h12v4a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5z M16 10.5h1.5a2.5 2.5 0 0 1 0 5H15 M8 3c-.6 1 .6 2 0 3 M12 3c-.6 1 .6 2 0 3 M3 21h14',
+  // Brotdose – „zum Mitnehmen“, Mittagessen (Julia)
+  bag: 'M4 10h16v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z M4 10l2-4h12l2 4 M9 6V4.5A1.5 1.5 0 0 1 10.5 3h3A1.5 1.5 0 0 1 15 4.5V6 M4 14h16',
   cloche: 'M3 18h18 M5 18a7 7 0 0 1 14 0 M12 11V9 M10.5 9h3',
   cutlery: 'M7 3v6a2 2 0 0 0 4 0V3 M9 3v18 M17 21V3c-2 1.5-3 4-3 8v2h3',
   pot: 'M5 10h14v6a4 4 0 0 1-4 4H9a4 4 0 0 1-4-4z M3 10h18 M5 13H3 M19 13h2 M9.5 3.5c-.6 1 .6 2 0 3 M14.5 3.5c-.6 1 .6 2 0 3',
@@ -74,7 +76,7 @@ const PATHS = {
   gnocchi: 'M3 15.5a3.5 2.5 0 1 0 7 0 3.5 2.5 0 1 0-7 0z M14 15.5a3.5 2.5 0 1 0 7 0 3.5 2.5 0 1 0-7 0z M8.5 8.5a3.5 2.5 0 1 0 7 0 3.5 2.5 0 1 0-7 0z M5.5 14.3v2.4 M7.5 14.3v2.4 M16.5 14.3v2.4 M18.5 14.3v2.4 M11 7.3v2.4 M13 7.3v2.4',
   potato: 'M5.5 9.5C7 5 14 3.5 17.5 6.5c3.5 3 2.5 9.5-2 12-4.5 2.5-11 1-11.5-3.5-.3-2 .5-3.5 1.5-5.5z M10 10h.01 M14.5 12.5h.01 M10.5 15h.01',
   tomato: 'M5 13.5a7 7 0 1 0 14 0 7 7 0 1 0-14 0z M12 6.5V3.5 M12 6.5c-1.2-1.6-2.7-2.1-4-1.6 M12 6.5c1.2-1.6 2.7-2.1 4-1.6',
-  // Kelle – Soße allgemein
+  // Kelle – Sauce allgemein
   ladle: 'M3 12h12a6 6 0 0 1-12 0z M15 12V5.5a2.5 2.5 0 0 1 5 0V7',
 } as const;
 

@@ -36,7 +36,7 @@ export function filterRecipes(
 
   return recipes.filter((r) => {
     // Mix-&-Match-Bausteine stehen nur dort (Julia)
-    if (r.archivedAt || isMixPart(r)) return false;
+    if (r.archivedAt || isMixPart(r) || r.fromBase) return false; // Verwandlungen stehen unter ihrer Grundlage
     if (f.statuses?.length ? !f.statuses.includes(r.status) : !isInCookbook(r.status)) return false;
     if (f.favoritesOnly && !r.favorite) return false;
 

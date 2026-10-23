@@ -14,6 +14,7 @@ import { Empty, Section, Switch } from '../components/Controls';
 import { TopBar } from '../components/TopBar';
 import { MacroGoalSettings } from '../components/MacroGoalSettings';
 import { TasteSettings } from '../components/TasteSettings';
+import { HouseholdSettings } from '../components/HouseholdSettings';
 import { Icon } from '../components/Icon';
 import { RecipeImage } from '../components/RecipeImage';
 import { THEMES, updateSettings, useSettings } from '../settings';
@@ -86,6 +87,7 @@ export function MoreScreen() {
         </div>
         <MacroGoalSettings />
         <TasteSettings />
+        <HouseholdSettings />
         <button type="button" className="panel link-row" onClick={() => setTour(true)}>
           <Icon name="info" size={20} />
           <span className="link-row__text">

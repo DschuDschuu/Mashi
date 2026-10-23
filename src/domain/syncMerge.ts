@@ -1,4 +1,5 @@
-import { DEFAULT_BASICS, type MealPlan } from './mealplan';
+import { DEFAULT_BASICS, DEFAULT_HOUSEHOLD, type Household, type MealPlan, type Week } from './mealplan';
+import { resolveClashes } from './week';
 import { DEFAULT_NO_NUTRITION } from './nutrition/noNutrition';
 import type { MyProduct } from './nutrition/myProducts';
 import type { Pantry, PantryItem } from './pantry';
@@ -140,8 +141,34 @@ export function merge3Plan(base: MealPlan, ours: MealPlan, theirs: MealPlan): Me
     ...(base.hidden || ours.hidden || theirs.hidden ? { hidden: merge3Set(base.hidden, ours.hidden, theirs.hidden) } : {}),
     // eigene Einträge: am Handy „Spülmittel“, am Laptop „Backpapier“ → beide
     ...(base.extra || ours.extra || theirs.extra ? { extra: merge3Keyed(base.extra ?? [], ours.extra ?? [], theirs.extra ?? [], (x) => normalizeName(x.name)) } : {}),
+    ...(base.week || ours.week || theirs.week ? { week: merge3Week(base.week, ours.week, theirs.week) } : {}),
+    ...(base.household || ours.household || theirs.household ? { household: merge3Household(base.household, ours.household, theirs.household) } : {}),
     updatedAt: later(ours.updatedAt, theirs.updatedAt)!,
   };
+}
+
+/**
+ * Vorkoch-Woche: Abendessen je Eintrag (am Handy getauscht, am Tablet einen Abend dazu → beides), Grundlagen je
+ * Rezept, Kochtage als Ganzes. Landen dabei zwei Gerichte auf einem Abend, rückt eines weiter (resolveClashes).
+ */
+function merge3Week(base: Week | undefined, ours: Week | undefined, theirs: Week | undefined): Week | undefined {
+  if (same(base, ours)) return theirs;
+  if (same(base, theirs)) return ours;
+  if (!ours || !theirs) return ours ?? theirs; // eine Seite hat die Woche gelöscht, die andere geändert → behalten
+  const days = (xs: number[] | undefined) => xs?.map(String);
+  const noLunch = merge3Set(days(base?.noLunch), days(ours.noLunch), days(theirs.noLunch)).map(Number);
+  return resolveClashes({
+    cookDays: merge3Value(base?.cookDays ?? [], ours.cookDays, theirs.cookDays),
+    bases: merge3Keyed(base?.bases ?? [], ours.bases, theirs.bases, (b) => b.recipeId),
+    meals: merge3Keyed(base?.meals ?? [], ours.meals, theirs.meals, (m) => m.id),
+    ...(noLunch.length ? { noLunch } : {}),
+  });
+}
+
+/** Haushalt: Portionen und Mittagstage einzeln – wer etwas geändert hat, gewinnt dort */
+function merge3Household(base: Household | undefined, ours: Household | undefined, theirs: Household | undefined): Household {
+  const [b, o, t] = [base, ours, theirs].map((h) => h ?? DEFAULT_HOUSEHOLD);
+  return { portions: merge3Value(b.portions, o.portions, t.portions), lunchDays: merge3Value(b.lunchDays, o.lunchDays, t.lunchDays) };
 }
 
 export function merge3Products(base: MyProduct[], ours: MyProduct[], theirs: MyProduct[]): MyProduct[] {

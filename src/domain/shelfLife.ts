@@ -27,7 +27,7 @@ export interface ShelfDays {
   thawed?: number;
   /** Angebrochenes (Milch, Joghurt, Dose) hält noch … Tage ab Öffnen (Standard 3) */
   opened?: number;
-  /** Angebrochenes aus dem Glas (Pesto, Soßen) … Tage (Standard 14) */
+  /** Angebrochenes aus dem Glas (Pesto, Saucen) … Tage (Standard 14) */
   openedJar?: number;
   /** Vorgekochtes im Kühlschrank … Tage ab Kochen (Standard 3) */
   prepared?: number;
@@ -179,7 +179,7 @@ export function useByOf(item: PantryItem, table: FoodTable, custom: ShelfDays = 
 }
 
 /**
- * Wie lange hält es OFFEN (ab Öffnen)? Eigene Liste zuerst (Tube, Konserven, Soßen), dann:
+ * Wie lange hält es OFFEN (ab Öffnen)? Eigene Liste zuerst (Tube, Konserven, Saucen), dann:
  * Frisches (hat ohnehin eine Haltbarkeit) → „Angebrochen hält“ bzw. Glas-Wert; sonst lange
  * Haltbares (Nudeln, Reis, Linsen) → auch offen keine Erinnerung. Lieber still als falsch.
  */
@@ -196,7 +196,7 @@ const OPENED_BY_FOOD: Record<string, number | null> = {
   pesto: 7, 'pesto-rosso': 7,
   // Konserven: offen wie Frisches
   'passierte-tomaten': 3, 'gehackte-tomaten': 3, kokosmilch: 3, mais: 3, erbsen: 3,
-  // hält auch offen lange – keine Erinnerung (Tube, Würzpasten, Soßen)
+  // hält auch offen lange – keine Erinnerung (Tube, Würzpasten, Saucen)
   tomatenmark: null, senf: null, mayo: null, ketchup: null, tahini: null, gochujang: null, miso: null, sojasauce: null, honig: null, worcestershire: null,
 };
 

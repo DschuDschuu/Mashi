@@ -64,8 +64,8 @@ export function CookbookScreen({ route }: { route: Route }) {
         <h1>Mein Kochbuch</h1>
         <span className="page-head__right">
           <span className="muted small">{recipeCount(result.length)}</span>
-          {/* Soßen und Beilagen stehen nicht im Kochbuch, sondern hier (Julia: „oben rechts als Icon“) */}
-          <button className="iconbtn iconbtn--box" onClick={() => navigate('/mix')} aria-label="Mix & Match – Soßen und Beilagen kombinieren">
+          {/* Saucen und Beilagen stehen nicht im Kochbuch, sondern hier (Julia: „oben rechts als Icon“) */}
+          <button className="iconbtn iconbtn--box" onClick={() => navigate('/mix')} aria-label="Mix & Match – Saucen und Beilagen kombinieren">
             <Icon name="shuffle" size={22} />
           </button>
         </span>

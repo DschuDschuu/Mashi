@@ -6,6 +6,7 @@ import { toGrams } from './nutrition/units';
 import { normalizeName } from './nutrition/localFoods';
 import { MY_PRODUCTS_PROVIDER } from './nutrition/myProducts';
 import { cookingContent } from './homemade';
+import { weekBaseIds, withoutBases } from './weekBases';
 import { currentContent } from './recipe';
 import { formatAmount, formatUnitAmount } from './scaling';
 import type { Ingredient, Recipe, Unit } from './types';
@@ -20,6 +21,8 @@ export interface PlanItem {
   variants?: Record<string, string>;
   /** Mengen nur für dieses Mal je Zutat-ID (für diese Portionen) – z. B. alle 4 Paprika, die morgen ablaufen (Julia) */
   amounts?: Record<string, number>;
+  /** aus der Vorkoch-Woche abgeleitet (week.ts: weekItems) – wird bei jeder Änderung der Woche neu berechnet */
+  fromWeek?: boolean;
 }
 
 export interface MealPlan {
@@ -34,8 +37,62 @@ export interface MealPlan {
   extra?: ExtraItem[];
   /** abgehakt und von der Liste genommen („Abgehaktes entfernen“, Julia) – Einträge vom Wochenplan (ShoppingItem.key) */
   hidden?: string[];
+  /** Vorkoch-Woche (Julia: Grundlagen am Kochtag, daraus die Abendessen) – siehe week.ts; ersetzt nach und nach items */
+  week?: Week;
+  /** Haushalt – abgeglichen, damit Handy und Tablet gleich planen (die Geräte-Einstellungen gleichen bewusst nicht ab) */
+  household?: Household;
   updatedAt: string;
 }
+
+/** Wochentag: 0 = Montag … 6 = Sonntag (nicht wie Date.getDay, dort ist 0 der Sonntag) */
+export type Weekday = number;
+
+/** Eine Grundlage der Woche: was am Kochtag gekocht wird – Bolognese, oder auch eine Suppe, die man direkt isst */
+export interface WeekBase {
+  recipeId: string;
+  /** Kochtag */
+  day: Weekday;
+  /** Portionen über die geplanten Mahlzeiten hinaus – als Vorrat ins Gefrierfach (Julia: Portionen anpassen) */
+  extra?: number;
+  /** am Kochtag gekocht – steht jetzt als Vorgekocht in der Speisekammer */
+  cooked?: boolean;
+  /** MHD-Fund aus dem Einkauf, der hier hineinkommt (Julia: Zucchini in die Bolo) – Name, nur zur Anzeige */
+  adds?: string[];
+}
+
+/** Ein Abendessen der Woche. Mittagessen werden daraus abgeleitet (Rest vom Vorabend, sonst eine Box) – siehe week.ts. */
+export interface WeekMeal {
+  id: string;
+  day: Weekday;
+  /** das Gericht – eine Verwandlung (Bolo-Wraps) oder die Grundlage selbst (Kürbissuppe) */
+  recipeId: string;
+  /** aus welcher Grundlage (WeekBase.recipeId) – gespeichert, damit Tauschen nicht jedes Mal suchen muss */
+  baseId: string;
+  /** gegessen (mit dem Rest für den nächsten Mittag) */
+  done?: boolean;
+}
+
+export interface Week {
+  /** gewählte Kochtage – nur für diese Woche (Julia: „falls man mal an nem Tag nicht da ist“) */
+  cookDays: Weekday[];
+  bases: WeekBase[];
+  meals: WeekMeal[];
+  /** diese Woche kein Mittagessen (Kantine, auswärts) */
+  noLunch?: Weekday[];
+  /** Mittagsboxen schon gegessen (Reste vom Vorabend gehen mit dem Abendessen) */
+  doneLunch?: Weekday[];
+}
+
+export interface Household {
+  /** Portionen pro Mahlzeit (Julia: generell 1) */
+  portions: number;
+  /** Mittagessen mitplanen an diesen Tagen – leer = aus (Julia: wählbar, Standard Mo–Fr) */
+  lunchDays: Weekday[];
+}
+
+export const DEFAULT_HOUSEHOLD: Household = { portions: 1, lunchDays: [] };
+/** beim Einschalten von „Mittagessen mitplanen“ vorbelegt */
+export const WORKDAYS: readonly Weekday[] = [0, 1, 2, 3, 4];
 
 export interface ExtraItem {
   name: string;
@@ -89,7 +146,7 @@ export function basicsKeys(pantry: Pick<Pantry, 'basics' | 'noNutrition'> | unde
 /**
  * Wie wichtig eine gemeinsame Zutat für Meal Prep ist. Hähnchen, Pasta, Milchprodukte,
  * Eier und Brot bestimmen den Einkauf – Gemüse und Obst sind eher austauschbar.
- * Alles ohne feste Art (Soßen, Pasten, Hülsenfrüchte …) zählt normal.
+ * Alles ohne feste Art (Saucen, Pasten, Hülsenfrüchte …) zählt normal.
  */
 export const KIND_WEIGHT: Record<FoodKind, number> = {
   protein: 3, staple: 3, dairy: 3, egg: 3, bread: 3, vegetable: 0.3, fruit: 0.3,
@@ -182,8 +239,9 @@ export const keyOfName = (name: string, table: FoodTable) => resolveName(name, t
  * done: schon fertige Teile (Sauce von gestern) – deren Zutaten braucht es nicht mehr (siehe parts.ts)
  * all: für selbst Gemachtes (Gnocchi nach Grundrezept, siehe homemade.ts)
  */
-function resolveRecipe(r: Recipe, all: readonly Recipe[], servings: number, table: FoodTable, done: readonly string[] = []): Resolved[] {
-  const c = remainingContent(cookingContent(r, all), done);
+function resolveRecipe(r: Recipe, all: readonly Recipe[], servings: number, table: FoodTable, done: readonly string[] = [], bases: readonly string[] = []): Resolved[] {
+  // Gerichte der Vorkoch-Woche: ihre Grundlage („1 Bolognese“) kommt aus dem Vorgekochten, nicht vom Einkauf
+  const c = withoutBases(remainingContent(cookingContent(r, all), done), bases.filter((b) => b !== r.id));
   const factor = servings / c.servings;
   return c.ingredients.map((i) => resolveIngredient(i, factor, table)).filter((x): x is Resolved => x !== null);
 }
@@ -322,7 +380,7 @@ export function buildShoppingList(plan: MealPlan, all: Recipe[], table: FoodTabl
     if (!r) continue;
     const title = currentContent(r).title;
     // Julia: ist die Sauce schon fertig (Vorgekocht), stehen ihre Zutaten nicht mehr auf der Liste
-    for (const x of resolveRecipe(r, all, item.servings, table, doneParts(pantry?.items ?? [], r.id))) {
+    for (const x of resolveRecipe(r, all, item.servings, table, doneParts(pantry?.items ?? [], r.id), weekBaseIds(plan.week))) {
       const g = groups.get(x.key) ?? { name: x.name, pantry: x.pantry, kind: x.kind, parts: [], from: new Set<string>() };
       g.parts.push(x);
       g.from.add(title);

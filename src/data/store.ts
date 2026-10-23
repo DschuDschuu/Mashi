@@ -4,7 +4,8 @@ import { normalizeName } from '../domain/nutrition/localFoods';
 import { reverseKeyed, reverseList, reverseRecord } from '../domain/undo';
 import { EXTRA_PREFIX, RESTOCK_PREFIX, shoppingList, type RestockRule } from '../domain/restock';
 import { exclusiveStages, stageOf, withStage, type FoodStage } from '../domain/stage';
-import { emptyPlan, keyOfName, normalizePlan, toggleCooked, type MealPlan } from '../domain/mealplan';
+import { DEFAULT_HOUSEHOLD, emptyPlan, keyOfName, normalizePlan, toggleCooked, type Household, type MealPlan, type Week, type Weekday } from '../domain/mealplan';
+import { mealPortions, shiftFrom, weekItems, weekView, withoutBases } from '../domain/week';
 import { mergeRecipes } from '../domain/merge';
 import { pantryFromBackup, unionProducts } from '../domain/syncMerge';
 import { fillOrAdd, nameOf, productsFor, withMyProducts, type MyProduct } from '../domain/nutrition/myProducts';
@@ -294,6 +295,11 @@ export function useMacroGoal(): MacroGoal {
   return useSyncExternalStore(subscribe, currentMacroGoal);
 }
 
+/** Plan jetzt, ohne Hook – für Tests und Aktionen außerhalb von React */
+export function currentPlan(): MealPlan {
+  return plan;
+}
+
 export function currentPantry(): Pantry {
   return pantry;
 }
@@ -527,8 +533,10 @@ interface CreateOptions {
   status: RecipeStatus;
   image?: RecipeImage;
   notes?: string;
-  /** gleich als Mix-&-Match-Baustein anlegen (Soße, Beilage) */
+  /** gleich als Mix-&-Match-Baustein anlegen (Sauce, Beilage) */
   mix?: string;
+  /** Verwandlung dieser Grundlage (week.ts) */
+  fromBase?: string;
 }
 
 /** Legt ein neues Rezept mit Version 1 an. Ohne Bild wird eines erzeugt (einmalig). */
@@ -553,6 +561,7 @@ export function createRecipe(content: RecipeContent, opts: CreateOptions): strin
     }],
     feedback: [],
     ...(opts.mix ? { mix: opts.mix } : {}),
+    ...(opts.fromBase ? { fromBase: opts.fromBase } : {}),
   };
   commit(recipe);
   if (!opts.image) void regenerateImage(recipe.id);
@@ -623,7 +632,7 @@ export function restoreRecipe(id: string) {
 
 // ── Mix & Match ────────────────────────────────────────────────────
 
-/** In Mix & Match verschieben (Soße, Beilage) oder zurück ins Kochbuch (undefined) – gibt „Rückgängig“ zurück. */
+/** In Mix & Match verschieben (Sauce, Beilage) oder zurück ins Kochbuch (undefined) – gibt „Rückgängig“ zurück. */
 export function setMix(id: string, mix: string | undefined): () => void {
   const before = get(id).mix;
   const apply = (m: string | undefined) => {
@@ -644,6 +653,25 @@ export function setHomemade(id: string, ingredientId: string, on: boolean): () =
   const others = (before ?? []).filter((x) => x !== ingredientId);
   apply(on ? [...others, ingredientId] : others);
   return () => apply(before);
+}
+
+/**
+ * Vorkochen am Rezept (Julia): hält X Tage, einfrierbar, zum Mitnehmen – nicht versioniert wie der Favorit.
+ * undefined löscht den Wert. Gibt „Rückgängig“ zurück.
+ */
+export function setPrepInfo(id: string, patch: Partial<Pick<Recipe, 'keepsDays' | 'freezable' | 'togo'>>): () => void {
+  const before = get(id);
+  const apply = (p: Partial<Pick<Recipe, 'keepsDays' | 'freezable' | 'togo'>>) => {
+    const next: Record<string, unknown> = { ...get(id) };
+    for (const [k, v] of Object.entries(p)) {
+      if (v === undefined || v === false) delete next[k];
+      else next[k] = v;
+    }
+    commit(next as unknown as Recipe);
+    refreshWeek(); // Haltbarkeit/Mitnehmen ändern Mittage und Portionen
+  };
+  apply(patch);
+  return () => apply({ keepsDays: before.keepsDays, freezable: before.freezable, togo: before.togo });
 }
 
 /** Variante wählen (Julia: mit Hähnchen oder Tofu) – gibt „Rückgängig“ zurück; siehe choices.ts */
@@ -815,6 +843,158 @@ function commitPlan(next: Omit<MealPlan, 'updatedAt'>) {
       }
     })
     .finally(() => { planPending--; catchUpReload(); });
+}
+
+// ── Vorkoch-Woche (siehe domain/week.ts) ───────────────────────────
+
+export const householdOf = (p: MealPlan = plan): Household => p.household ?? DEFAULT_HOUSEHOLD;
+const keepsFallback = () => specialDays('prepared', pantry.shelfDays);
+
+/**
+ * Plan mit neuer Woche: die Einträge der Woche (Grundlagen, Gerichte mit Portionen) werden neu abgeleitet – so
+ * rechnen Einkaufsliste, Vorrat und Startseite mit. Von Hand eingeplante Gerichte bleiben daneben stehen.
+ */
+function withWeek(p: MealPlan, week: Week | undefined, household: Household | undefined = p.household): Omit<MealPlan, 'updatedAt'> {
+  const derived = week ? weekItems(week, recipes, household ?? DEFAULT_HOUSEHOLD, keepsFallback()) : [];
+  const ids = new Set(derived.map((d) => d.recipeId));
+  const { week: _w, household: _h, ...rest } = p;
+  return {
+    ...rest,
+    ...(week ? { week } : {}),
+    ...(household ? { household } : {}),
+    items: [...p.items.filter((i) => !i.fromWeek && !ids.has(i.recipeId)), ...derived],
+    cooked: p.cooked.filter((id) => !ids.has(id)),
+  };
+}
+
+/** Rezepte geändert (Haltbarkeit, Mitnehmen, Portionen) – abgeleitete Einträge neu rechnen */
+function refreshWeek() {
+  if (!plan.week) return;
+  const next = withWeek(plan, plan.week);
+  if (JSON.stringify(next.items) !== JSON.stringify(plan.items)) commitPlan(next);
+}
+
+/** Woche setzen (undefined = keine Woche) – gibt „Rückgängig“ zurück */
+export function setWeek(week: Week | undefined): () => void {
+  const before = plan;
+  commitPlan(withWeek(plan, week));
+  return () => commitPlan({ ...plan, items: before.items, cooked: before.cooked, ...(before.week ? { week: before.week } : { week: undefined }) });
+}
+
+/** Haushalt: Portionen pro Mahlzeit, Mittagstage – abgeglichen. Gibt „Rückgängig“ zurück. */
+export function setHousehold(h: Household): () => void {
+  const before = plan.household;
+  commitPlan(withWeek(plan, plan.week, h));
+  return () => commitPlan(withWeek(plan, plan.week, before ?? DEFAULT_HOUSEHOLD));
+}
+
+/** Portionen aus dem Vorgekochten einer Grundlage essen – erst Frisches, dann Aufgetautes, dann Gefrorenes */
+function eatBase(items: PantryItem[], baseId: string, portions: number): PantryItem[] {
+  let left = portions;
+  const order = items
+    .filter((x) => x.recipeId === baseId && !x.part && (x.amount ?? 0) > 0)
+    .sort((a, b) => Number(!!a.frozenAt) - Number(!!b.frozenAt));
+  for (const x of order) {
+    if (left <= 0) break;
+    const n = Math.min(left, x.amount ?? 0);
+    items = eatPrepared(items, x.id, n);
+    left -= n;
+  }
+  return items;
+}
+
+/** Zutaten abziehen ohne Gericht-Logik (Teile, Kochprotokoll) – für die Woche */
+function deductContent(p: Pantry, c: RecipeContent, servings: number): { pantry: Pantry; used: string[]; toCheck: string[] } {
+  if (!p.items.length || !c.ingredients.length) return { pantry: p, used: [], toCheck: [] };
+  const d = deductRecipe(p, c, servings, currentFoodTable(), {}, {});
+  return { pantry: d.pantry, used: d.used, toCheck: d.toCheck };
+}
+
+export interface WeekResult { used: string[]; toCheck: string[]; undo: () => void }
+
+/** Rückgängig für Woche + Vorrat + „zuletzt gekocht“ zusammen */
+function weekUndo(before: { pantry: Pantry; plan: MealPlan; recipe?: Recipe }, after: Pantry): () => void {
+  const taken = takenBetween(before.pantry, after);
+  const created = after.items.filter((x) => !before.pantry.items.some((b) => b.id === x.id)).map((x) => x.id);
+  return () => {
+    const back = returnTaken({ ...pantry, items: pantry.items.filter((x) => !created.includes(x.id)) }, taken);
+    commitPantry(back);
+    commitPlan(withWeek(plan, before.plan.week));
+    if (before.recipe) commit(unstampCooked(get(before.recipe.id), before.recipe));
+  };
+}
+
+/**
+ * Kochtag (Julia: „Vorkochen starten“): die Grundlage mit allen Portionen kochen – Zutaten raus, Portionen als
+ * Vorgekocht in die Speisekammer; was zu alt würde (und der Extra-Vorrat) gleich als gefroren.
+ */
+export function cookBase(baseId: string): (WeekResult & { fresh: number; frozen: number }) | null {
+  const week = plan.week;
+  if (!week) return null;
+  const r = recipes.find((x) => x.id === baseId);
+  const view = weekView(week, recipes, householdOf(), keepsFallback());
+  const b = view.bases.find((x) => x.base.recipeId === baseId);
+  if (!r || !b || b.base.cooked) return null;
+  const before = { pantry, plan, recipe: r };
+  commit(stampCooked(r));
+  const d = deductContent(pantry, cookingContent(r, recipes), b.portions);
+  const frozen = Math.min(b.frozen, b.portions);
+  const fresh = b.portions - frozen;
+  const title = currentContent(r).title;
+  let items = d.pantry.items;
+  if (fresh > 0) items = addPrepared(items, { id: r.id, title }, fresh, now(), () => newId('v')).items;
+  if (frozen > 0) {
+    const add = addPrepared(items, { id: r.id, title }, frozen, now(), () => newId('v'));
+    items = add.items.map((x) => (x.id === add.item?.id ? { ...x, frozenAt: now() } : x));
+  }
+  const after = { ...d.pantry, items };
+  commitPantry(after);
+  commitPlan(withWeek(plan, { ...week, bases: week.bases.map((x) => (x.recipeId === baseId ? { ...x, cooked: true } : x)) }));
+  return { used: d.used, toCheck: d.toCheck, fresh, frozen, undo: weekUndo(before, after) };
+}
+
+/**
+ * Abendessen gegessen (samt Rest für den nächsten Mittag): frische Zutaten raus, Portionen der Grundlage aus dem
+ * Vorgekochten. Ist das Gericht die Grundlage selbst (Suppe), nur aufwärmen.
+ */
+export function eatMeal(mealId: string): WeekResult | null {
+  const week = plan.week;
+  const meal = week?.meals.find((m) => m.id === mealId);
+  if (!week || !meal || meal.done) return null;
+  const hh = householdOf();
+  const n = mealPortions(weekView(week, recipes, hh, keepsFallback()), meal.day, hh);
+  const r = recipes.find((x) => x.id === meal.recipeId);
+  const before = { pantry, plan, recipe: r };
+  if (r) commit(stampCooked(r));
+  const d = r && r.id !== meal.baseId ? deductContent(pantry, withoutBases(cookingContent(r, recipes), [meal.baseId]), n) : { pantry, used: [], toCheck: [] };
+  const after = { ...d.pantry, items: eatBase(d.pantry.items, meal.baseId, n) };
+  commitPantry(after);
+  commitPlan(withWeek(plan, { ...week, meals: week.meals.map((m) => (m.id === mealId ? { ...m, done: true } : m)) }));
+  return { used: d.used, toCheck: d.toCheck, undo: weekUndo(before, after) };
+}
+
+/** Mittagsbox gegessen (Reste vom Vorabend gehen schon mit dem Abendessen) */
+export function eatLunchBox(day: Weekday): WeekResult | null {
+  const week = plan.week;
+  if (!week) return null;
+  const hh = householdOf();
+  const lunch = weekView(week, recipes, hh, keepsFallback()).days.find((d) => d.day === day)?.lunch;
+  if (!lunch || lunch.kind !== 'box') return null;
+  const before = { pantry, plan };
+  const d = lunch.recipe.id !== lunch.baseId ? deductContent(pantry, withoutBases(cookingContent(lunch.recipe, recipes), [lunch.baseId]), hh.portions) : { pantry, used: [], toCheck: [] };
+  const after = { ...d.pantry, items: eatBase(d.pantry.items, lunch.baseId, hh.portions) };
+  commitPantry(after);
+  commitPlan(withWeek(plan, { ...week, doneLunch: [...new Set([...(week.doneLunch ?? []), day])] }));
+  return { used: d.used, toCheck: d.toCheck, undo: weekUndo(before, after) };
+}
+
+/** Heute auswärts (Julia): das Abendessen rückt nach – gibt Zieltag und „Rückgängig“ zurück, null = kein freier Abend */
+export function eatOutToday(day: Weekday): { to: Weekday; undo: () => void } | null {
+  const week = plan.week;
+  const moved = week && shiftFrom(week, day);
+  if (!week || !moved) return null;
+  commitPlan(withWeek(plan, moved.week));
+  return { to: moved.to, undo: () => commitPlan(withWeek(plan, week)) };
 }
 
 /** Gibt false zurück, wenn das Rezept schon im Plan steht. */

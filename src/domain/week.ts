@@ -1,0 +1,381 @@
+import { DEFAULT_HOUSEHOLD, keyOfName, type Household, type Week, type WeekBase, type WeekMeal, type Weekday } from './mealplan';
+import type { FoodTable } from './nutrition/types';
+import type { PantryItem } from './pantry';
+import { currentContent } from './recipe';
+import { SPECIAL_DAYS } from './shelfLife';
+import { weekBaseIds, withoutBases } from './weekBases';
+
+export { weekBaseIds, withoutBases };
+import type { Recipe } from './types';
+
+/**
+ * Vorkoch-Woche (Julia: „nicht 5 unterschiedliche Gerichte kochen – eine Bolo machen und daraus einmal Nudeln,
+ * einmal Wraps“): An wählbaren Kochtagen werden Grundlagen gekocht, an den Abenden danach daraus verschiedene
+ * Gerichte gemacht. Mittagessen leitet Mashi ab: meist der Rest vom Vorabend, sonst eine Box aus einer Grundlage.
+ *
+ * Gespeichert wird nur das Ergebnis (welcher Abend welches Gericht) – Alter, Einfrieren, Mittage und Portionen
+ * rechnet weekView jedes Mal neu. So bleibt alles stimmig, wenn Julia tauscht, verschiebt oder Kochtage ändert.
+ *
+ * Grundlage = jedes Rezept, das an einem Kochtag gekocht wird (auch eine Suppe, die man direkt isst).
+ * Verwandlung = ein Rezept mit einer Zutat, die auf die Grundlage zeigt (Ingredient.recipeId, wie „Zutat selbst machen“).
+ */
+
+export const DAY_SHORT = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'] as const;
+export const DAY_LONG = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'] as const;
+
+/** Wochentag eines Datums (0 = Montag) */
+export const weekdayOf = (d: Date): Weekday => (d.getDay() + 6) % 7;
+
+/** Die Woche beginnt am Wochenend-Kochtag: Sa vor So vor Mo … (Julia: mal Samstag statt Sonntag kochen) */
+export const sortCookDays = (days: readonly Weekday[]): Weekday[] => [...new Set(days)].sort((a, b) => ((a + 2) % 7) - ((b + 2) % 7));
+
+/** Die sieben Tage ab dem ersten Kochtag – in dieser Reihenfolge wird gegessen */
+export function weekOrder(week: Pick<Week, 'cookDays'>): Weekday[] {
+  const start = sortCookDays(week.cookDays)[0] ?? 0;
+  return Array.from({ length: 7 }, (_, i) => (start + i) % 7);
+}
+
+/** Wie lange es gekocht hält – eigener Wert am Rezept, sonst der für Vorgekochtes (Standard 3 Tage) */
+export const keepsOf = (r: Recipe | undefined, fallback: number = SPECIAL_DAYS.prepared): number => r?.keepsDays ?? fallback;
+
+/** Aus welcher Grundlage stammt ein Gericht? Die Grundlage selbst – oder eine Zutat, die auf sie zeigt. */
+export function baseIdOf(recipe: Recipe, baseIds: readonly string[]): string | undefined {
+  if (baseIds.includes(recipe.id)) return recipe.id;
+  return currentContent(recipe).ingredients.find((i) => i.recipeId && baseIds.includes(i.recipeId))?.recipeId;
+}
+
+/** Verwandlungen einer Grundlage: alle Rezepte mit einer Zutat, die auf sie zeigt (archivierte nicht) */
+export function transformsOf(baseId: string, recipes: readonly Recipe[]): Recipe[] {
+  return recipes.filter((r) => r.id !== baseId && !r.archivedAt && currentContent(r).ingredients.some((i) => i.recipeId === baseId));
+}
+
+/** Julias Auswahl: eine Grundlage und was sie daraus macht – dasselbe Gericht zweimal = zwei Abende */
+export interface WeekChoice {
+  baseId: string;
+  meals: string[];
+}
+
+/**
+ * Mashis Vorschlag: die erste Grundlage am ersten Kochtag, die zweite am zweiten … (mehr Grundlagen als Kochtage:
+ * die übrigen am letzten). Ihre Gerichte belegen die Abende ab dem Kochtag, freie Abende werden übersprungen.
+ */
+export function suggestWeek(cookDays: readonly Weekday[], choices: readonly WeekChoice[], newId: () => string): Week {
+  const cook = sortCookDays(cookDays);
+  const order = weekOrder({ cookDays: cook });
+  const taken = new Set<Weekday>();
+  const bases: WeekBase[] = [];
+  const meals: WeekMeal[] = [];
+  choices.forEach((c, i) => {
+    const day = cook[Math.min(i, cook.length - 1)] ?? 0;
+    bases.push({ recipeId: c.baseId, day });
+    let k = order.indexOf(day);
+    for (const recipeId of c.meals) {
+      while (k < 7 && taken.has(order[k])) k++;
+      if (k >= 7) break;
+      meals.push({ id: newId(), day: order[k], recipeId, baseId: c.baseId });
+      taken.add(order[k]);
+      k++;
+    }
+  });
+  return { cookDays: cook, bases, meals };
+}
+
+export interface MealView {
+  meal: WeekMeal;
+  recipe?: Recipe;
+  cookDay: Weekday;
+  /** Tage seit dem Kochtag (0 = frisch gekocht) */
+  age: number;
+  /** zu alt für den Kühlschrank, lässt sich aber einfrieren → „am Vortag auftauen“ */
+  frost: boolean;
+  /** zu alt und nicht einfrierbar → Julia sollte tauschen oder später kochen */
+  tooOld: boolean;
+}
+
+export type LunchView =
+  | { day: Weekday; kind: 'rest'; recipe: Recipe; baseId: string; age: number; frost: boolean; tooOld: boolean }
+  | { day: Weekday; kind: 'box'; recipe: Recipe; baseId: string; age: number; frost: boolean; tooOld: boolean; reason: 'nicht-mitnehmbar' | 'abend-frei' }
+  | { day: Weekday; kind: 'none'; reason: 'nichts-gekocht' | 'nichts-mitnehmbar' };
+
+export interface BaseView {
+  base: WeekBase;
+  recipe?: Recipe;
+  evenings: number;
+  lunches: number;
+  /** zu kochende Portionen: (Abende + Mittage) × Portionen pro Mahlzeit + Extra */
+  portions: number;
+  /** davon einfrieren: zu alte Mahlzeiten + Extra-Vorrat */
+  frozen: number;
+}
+
+export interface DayView {
+  day: Weekday;
+  cook: boolean;
+  meal?: MealView;
+  lunch?: LunchView;
+  /** diese Woche bewusst kein Mittag */
+  noLunch: boolean;
+}
+
+export interface WeekView {
+  order: Weekday[];
+  days: DayView[];
+  bases: BaseView[];
+}
+
+/** Alter und Haltbarkeit einer Mahlzeit am Tag `day` aus einer Grundlage, die am Tag `cookDay` gekocht wurde */
+function freshness(order: Weekday[], day: Weekday, cookDay: Weekday, base: Recipe | undefined, keepsFallback?: number) {
+  const age = order.indexOf(day) - order.indexOf(cookDay);
+  const old = age >= keepsOf(base, keepsFallback);
+  return { age, frost: old && !!base?.freezable, tooOld: old && !base?.freezable };
+}
+
+export function weekView(week: Week, recipes: readonly Recipe[], household: Household = DEFAULT_HOUSEHOLD, keepsFallback?: number): WeekView {
+  const byId = new Map(recipes.map((r) => [r.id, r]));
+  const order = weekOrder(week);
+  const ord = (d: Weekday) => order.indexOf(d);
+  const baseDay = new Map(week.bases.map((b) => [b.recipeId, b.day]));
+  const noLunch = new Set(week.noLunch ?? []);
+  const lunchDays = new Set(household.lunchDays);
+
+  const meals = new Map<Weekday, MealView>();
+  for (const meal of week.meals) {
+    const cookDay = baseDay.get(meal.baseId) ?? meal.day;
+    meals.set(meal.day, { meal, recipe: byId.get(meal.recipeId), cookDay, ...freshness(order, meal.day, cookDay, byId.get(meal.baseId), keepsFallback) });
+  }
+
+  // Mittagessen (Julia: Mashi mischt): Rest vom Vorabend, wenn er sich mitnehmen lässt – sonst eine Box aus der
+  // zuletzt gekochten Grundlage (eine mitnehmbare Verwandlung, oder sie selbst)
+  const lunchOf = (day: Weekday): LunchView => {
+    const prev = ord(day) > 0 ? meals.get(order[ord(day) - 1]) : undefined;
+    if (prev?.recipe?.togo) {
+      return { day, kind: 'rest', recipe: prev.recipe, baseId: prev.meal.baseId, ...freshness(order, day, prev.cookDay, byId.get(prev.meal.baseId), keepsFallback) };
+    }
+    const reason = prev ? 'nicht-mitnehmbar' as const : 'abend-frei' as const;
+    const cooked = week.bases.filter((b) => ord(b.day) < ord(day)).sort((a, b) => ord(b.day) - ord(a.day));
+    if (!cooked.length) return { day, kind: 'none', reason: 'nichts-gekocht' };
+    for (const b of cooked) {
+      const base = byId.get(b.recipeId);
+      const box = transformsOf(b.recipeId, recipes).find((r) => r.togo) ?? (base?.togo ? base : undefined);
+      if (box) return { day, kind: 'box', recipe: box, baseId: b.recipeId, reason, ...freshness(order, day, b.day, base, keepsFallback) };
+    }
+    return { day, kind: 'none', reason: 'nichts-mitnehmbar' };
+  };
+
+  const cookDays = new Set(week.cookDays);
+  const days: DayView[] = order.map((day) => {
+    const wantsLunch = lunchDays.has(day) && !noLunch.has(day);
+    return { day, cook: cookDays.has(day), meal: meals.get(day), noLunch: lunchDays.has(day) && noLunch.has(day), ...(wantsLunch ? { lunch: lunchOf(day) } : {}) };
+  });
+
+  const bases: BaseView[] = week.bases.map((base) => {
+    const own = days.flatMap((d) => (d.meal?.meal.baseId === base.recipeId ? [d.meal] : []));
+    const lunches = days.flatMap((d) => (d.lunch && d.lunch.kind !== 'none' && d.lunch.baseId === base.recipeId ? [d.lunch] : []));
+    const extra = base.extra ?? 0;
+    const frozenMeals = own.filter((m) => m.frost).length + lunches.filter((l) => l.frost).length;
+    return {
+      base, recipe: byId.get(base.recipeId), evenings: own.length, lunches: lunches.length,
+      portions: (own.length + lunches.length) * household.portions + extra,
+      frozen: frozenMeals * household.portions + extra,
+    };
+  });
+  return { order, days, bases };
+}
+
+/** Darf getauscht werden? Kein Gericht darf vor den Kochtag seiner Grundlage rutschen. */
+export function canSwap(week: Week, a: Weekday, b: Weekday): boolean {
+  if (a === b) return false;
+  const order = weekOrder(week);
+  const ord = (d: Weekday) => order.indexOf(d);
+  const cookDay = (m: WeekMeal) => week.bases.find((x) => x.recipeId === m.baseId)?.day ?? m.day;
+  const at = (d: Weekday) => week.meals.find((m) => m.day === d);
+  const x = at(a), y = at(b);
+  if (!x && !y) return false;
+  return !(x && ord(b) < ord(cookDay(x))) && !(y && ord(a) < ord(cookDay(y)));
+}
+
+/** Zwei Abende tauschen (auch mit einem freien) – unverändert, wenn es nicht geht */
+export function swapDays(week: Week, a: Weekday, b: Weekday): Week {
+  if (!canSwap(week, a, b)) return week;
+  return { ...week, meals: week.meals.map((m) => (m.day === a ? { ...m, day: b } : m.day === b ? { ...m, day: a } : m)) };
+}
+
+/**
+ * Heute auswärts (Julia: „spontan Donnerstag essen gehen, das Essen auf Freitag schieben“): das Gericht rückt einen
+ * Tag weiter, belegte Abende danach rücken mit – bis zum nächsten freien Abend. Kein freier Abend mehr: null.
+ */
+export function shiftFrom(week: Week, day: Weekday): { week: Week; to: Weekday } | null {
+  const order = weekOrder(week);
+  const at = new Map(week.meals.map((m) => [m.day, m]));
+  if (!at.has(day)) return null;
+  const chain: Weekday[] = [];
+  for (let i = order.indexOf(day); i < 7; i++) {
+    chain.push(order[i]);
+    if (!at.has(order[i])) break;
+  }
+  const last = chain[chain.length - 1];
+  if (at.has(last)) return null;
+  const next = new Map(chain.slice(0, -1).map((d, i) => [d, chain[i + 1]]));
+  return { week: { ...week, meals: week.meals.map((m) => (next.has(m.day) ? { ...m, day: next.get(m.day)! } : m)) }, to: chain[1] };
+}
+
+/**
+ * „Lässt sich auch am Sonntag vorbereiten“ (Julia): Eine Grundlage, die später gekocht wird, könnte schon am ersten
+ * Kochtag mit – wenn ihre Gerichte dann noch halten oder sich einfrieren lassen. undefined = geht nicht / ist schon dort.
+ */
+export function earlierCookDay(week: Week, baseId: string, recipes: readonly Recipe[], keepsFallback?: number): { day: Weekday; needsFreeze: boolean } | undefined {
+  const first = sortCookDays(week.cookDays)[0];
+  const base = week.bases.find((b) => b.recipeId === baseId);
+  if (first === undefined || !base || base.day === first) return undefined;
+  const order = weekOrder(week);
+  const recipe = recipes.find((r) => r.id === baseId);
+  const ages = week.meals.filter((m) => m.baseId === baseId).map((m) => order.indexOf(m.day) - order.indexOf(first));
+  const needsFreeze = ages.some((a) => a >= keepsOf(recipe, keepsFallback));
+  if (needsFreeze && !recipe?.freezable) return undefined;
+  return { day: first, needsFreeze };
+}
+
+/** Grundlage auf einen anderen Kochtag legen – nicht nach einem ihrer Gerichte (dann bliebe es ungekocht) */
+export function moveBase(week: Week, baseId: string, day: Weekday): Week {
+  const order = weekOrder(week);
+  const tooLate = week.meals.some((m) => m.baseId === baseId && order.indexOf(m.day) < order.indexOf(day));
+  if (tooLate || !week.cookDays.includes(day)) return week;
+  return { ...week, bases: week.bases.map((b) => (b.recipeId === baseId ? { ...b, day } : b)) };
+}
+
+/** Extra-Portionen (Vorrat) – nie unter 0 */
+export function setExtra(week: Week, baseId: string, extra: number): Week {
+  return { ...week, bases: week.bases.map((b) => (b.recipeId === baseId ? { ...b, extra: Math.max(0, Math.round(extra)) || undefined } : b)) };
+}
+
+/** Mittag an einem Tag diese Woche raus- oder wieder reinnehmen */
+export function toggleLunch(week: Week, day: Weekday): Week {
+  const off = new Set(week.noLunch ?? []);
+  if (off.has(day)) off.delete(day);
+  else off.add(day);
+  return { ...week, noLunch: [...off].sort((a, b) => a - b) };
+}
+
+/**
+ * Nach dem Abgleich (zwei Geräte haben verschiedene Gerichte auf denselben Abend gelegt): pro Abend bleibt eines,
+ * die anderen rücken auf den nächsten freien Abend danach – lieber verschoben als still verloren.
+ */
+export function resolveClashes(week: Week): Week {
+  const order = weekOrder(week);
+  const taken = new Set<Weekday>();
+  const moved = new Map<string, Weekday>();
+  for (const m of week.meals) {
+    if (!taken.has(m.day)) { taken.add(m.day); continue; }
+    const free = order.slice(order.indexOf(m.day) + 1).find((d) => !taken.has(d));
+    if (free === undefined) continue; // Woche voll – dann eben zwei an einem Abend
+    taken.add(free);
+    moved.set(m.id, free);
+  }
+  return moved.size ? { ...week, meals: week.meals.map((m) => (moved.has(m.id) ? { ...m, day: moved.get(m.id)! } : m)) } : week;
+}
+
+/** Ein Abendessen mitsamt Rest für den nächsten Mittag: so viele Portionen werden an dem Abend gemacht */
+export function mealPortions(view: WeekView, day: Weekday, household: Household): number {
+  const i = view.order.indexOf(day);
+  const next = view.days[i + 1]?.lunch;
+  const meal = view.days[i]?.meal;
+  const rest = !!meal && next?.kind === 'rest' && next.recipe.id === meal.meal.recipeId;
+  return household.portions * (rest ? 2 : 1);
+}
+
+/**
+ * Die Woche als Plan-Einträge (Julia: „Woche ersetzt die Liste“) – so rechnen Einkaufsliste, Vorrat und Startseite
+ * ohne Umbau mit: jede ungekochte Grundlage mit ihren Portionen, jedes Gericht mit den Portionen seiner offenen
+ * Abende (samt Rest für den Mittag) und Mittagsboxen. Ist das Gericht die Grundlage selbst (Suppe), steckt es in ihr.
+ */
+export function weekItems(week: Week, recipes: readonly Recipe[], household: Household = DEFAULT_HOUSEHOLD, keepsFallback?: number): { recipeId: string; servings: number; fromWeek: true }[] {
+  const view = weekView(week, recipes, household, keepsFallback);
+  const servings = new Map<string, number>();
+  const add = (id: string, n: number) => servings.set(id, (servings.get(id) ?? 0) + n);
+  for (const b of view.bases) if (!b.base.cooked && b.portions > 0) add(b.base.recipeId, b.portions);
+  const doneLunch = new Set(week.doneLunch ?? []);
+  for (const d of view.days) {
+    if (d.meal && !d.meal.meal.done && d.meal.meal.recipeId !== d.meal.meal.baseId) add(d.meal.meal.recipeId, mealPortions(view, d.day, household));
+    if (d.lunch?.kind === 'box' && !doneLunch.has(d.day) && d.lunch.recipe.id !== d.lunch.baseId) add(d.lunch.recipe.id, household.portions);
+  }
+  return [...servings].map(([recipeId, n]) => ({ recipeId, servings: n, fromWeek: true as const }));
+}
+
+/** Was Julia gewählt hat, aus einer Woche zurückgelesen (Grundlagen in Reihenfolge, ihre Gerichte nach Abend) */
+export function choicesOf(week: Week): WeekChoice[] {
+  const order = weekOrder(week);
+  return week.bases.map((b) => ({
+    baseId: b.recipeId,
+    meals: week.meals.filter((m) => m.baseId === b.recipeId).sort((x, y) => order.indexOf(x.day) - order.indexOf(y.day)).map((m) => m.recipeId),
+  }));
+}
+
+/** Schon etwas gekocht oder gegessen? Dann lassen sich die Kochtage nicht mehr neu verteilen. */
+export const weekStarted = (week: Week): boolean => week.bases.some((b) => b.cooked) || week.meals.some((m) => m.done);
+
+/**
+ * Andere Kochtage (Julia: „falls man mal an nem Tag nicht da ist“): Mashi verteilt neu – Extra-Portionen,
+ * MHD-Notizen und abgewählte Mittage bleiben.
+ */
+export function withCookDays(week: Week, days: readonly Weekday[], newId: () => string): Week {
+  const next = suggestWeek(days, choicesOf(week), newId);
+  return {
+    ...next,
+    bases: next.bases.map((nb) => {
+      const old = week.bases.find((b) => b.recipeId === nb.recipeId);
+      return { ...nb, ...(old?.extra ? { extra: old.extra } : {}), ...(old?.adds?.length ? { adds: old.adds } : {}) };
+    }),
+    ...(week.noLunch?.length ? { noLunch: week.noLunch } : {}),
+  };
+}
+
+/**
+ * Grundlage nachträglich in die Woche (Julia: MHD-Hähnchen gefunden → Pulled Chicken): am ersten Kochtag, ihr
+ * Gericht auf den nächsten freien Abend danach. Schon dabei: unverändert.
+ */
+export function addBase(week: Week, baseId: string, newId: () => string, mealRecipeId = baseId): Week {
+  if (week.bases.some((b) => b.recipeId === baseId)) return week;
+  const first = sortCookDays(week.cookDays)[0] ?? 0;
+  const order = weekOrder(week);
+  const taken = new Set(week.meals.map((m) => m.day));
+  const free = order.slice(order.indexOf(first)).find((d) => !taken.has(d));
+  return {
+    ...week,
+    bases: [...week.bases, { recipeId: baseId, day: first }],
+    meals: free === undefined ? week.meals : [...week.meals, { id: newId(), day: free, recipeId: mealRecipeId, baseId }],
+  };
+}
+
+/** MHD-Fund in eine Grundlage geben (nur Hinweis am Kochtag – die Menge zieht das Kochen nicht extra ab) */
+export function addToBase(week: Week, baseId: string, name: string): Week {
+  return { ...week, bases: week.bases.map((b) => (b.recipeId === baseId ? { ...b, adds: [...new Set([...(b.adds ?? []), name])] } : b)) };
+}
+
+export type MhdFind =
+  /** steckt schon in einem Gericht der Woche */
+  | { item: PantryItem; kind: 'covered'; recipe: Recipe }
+  /** passt zu einem Rezept, das noch nicht in der Woche ist */
+  | { item: PantryItem; kind: 'match'; recipe: Recipe }
+  /** kein Rezept kennt es – in eine Grundlage geben oder einfrieren */
+  | { item: PantryItem; kind: 'free' };
+
+/**
+ * Beim Einkauf reduziert mitgenommen (MHD vom Bon oder von Hand, Julia: „falls ich zwar nen Plan habe, aber was
+ * MHD finde“): frisch gekauft (letzte 3 Tage), nicht gefroren. Mashi schlägt nur vor – geändert wird erst auf Antippen.
+ */
+export function mhdFinds(items: readonly PantryItem[], week: Week, recipes: readonly Recipe[], table: FoodTable, now: Date): MhdFind[] {
+  const since = now.getTime() - 3 * 86_400_000;
+  const noted = new Set(week.bases.flatMap((b) => b.adds ?? []));
+  const inWeek = new Set([...week.bases.map((b) => b.recipeId), ...week.meals.map((m) => m.recipeId)]);
+  const has = (r: Recipe, key: string) => currentContent(r).ingredients.some((i) => keyOfName(i.name, table) === key);
+  return items
+    .filter((it) => it.reduced && !it.recipeId && !it.frozenAt && (it.amount ?? 1) > 0 && new Date(it.boughtAt ?? it.addedAt).getTime() >= since && !noted.has(it.name))
+    .map((item): MhdFind => {
+      const key = keyOfName(item.name, table);
+      if (!key) return { item, kind: 'free' };
+      const covered = recipes.find((r) => inWeek.has(r.id) && has(r, key));
+      if (covered) return { item, kind: 'covered', recipe: covered };
+      const match = recipes.find((r) => !r.archivedAt && !r.fromBase && r.status !== 'ki_entwurf' && has(r, key));
+      return match ? { item, kind: 'match', recipe: match } : { item, kind: 'free' };
+    });
+}

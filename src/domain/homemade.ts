@@ -38,7 +38,7 @@ const subId = (ingredientId: string, id: string) => `${ingredientId}>${id}`;
 /**
  * Das Rezept mit den gewählten Zutaten selbst gemacht. Das Grundrezept kommt auf die Portionen des Gerichts
  * (Gnocchi für 2 = Grundrezept für 2 – wie bei Mix & Match je Portion), seine Schritte stehen vorne.
- * Ein Schritt, der die gekaufte Zutat brauchte („Gnocchi in die Soße“), bringt jetzt Teile zusammen → „Zum Schluss“.
+ * Ein Schritt, der die gekaufte Zutat brauchte („Gnocchi in die Sauce“), bringt jetzt Teile zusammen → „Zum Schluss“.
  * Nur eine Ebene: Was das Grundrezept selbst wieder selbst machen könnte, bleibt gekauft.
  * @param self ID des Rezepts – zeigt eine Zutat auf das Rezept selbst, bleibt sie gekauft
  */

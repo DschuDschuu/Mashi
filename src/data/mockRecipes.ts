@@ -269,13 +269,13 @@ const SPECS: Spec[] = [
     },
   },
 
-  // ── Mix & Match: Soßen und Beilagen zum Kombinieren (stehen nicht im Kochbuch) ──
+  // ── Mix & Match: Saucen und Beilagen zum Kombinieren (stehen nicht im Kochbuch) ──
   {
     id: 'mix-tomatensosse', status: 'kochbuch', source: 'selbst', favorite: true, motif: 'pot', hue: 8, daysAgo: 50,
     mix: 'sosse', goesWith: ['mix-pasta', 'mix-gnocchi'],
     content: {
-      title: 'Tomatensoße',
-      description: 'Einfache Tomatensoße für Vorrat – lässt sich gut einfrieren.',
+      title: 'Tomatensauce',
+      description: 'Einfache Tomatensauce für Vorrat – lässt sich gut einfrieren.',
       servings: 4, prepMinutes: 5, cookMinutes: 20, difficulty: 1,
       categories: [], tags: ['Vegetarisch', 'Meal Prep'], devices: ['herd'],
       ingredients: [[700, 'g', 'Passata'], [1, 'Stück', 'Zwiebel'], [2, 'Zehe', 'Knoblauch'], [1, 'EL', 'Olivenöl'], [1, 'Handvoll', 'Basilikum', true]],
@@ -290,7 +290,7 @@ const SPECS: Spec[] = [
     id: 'mix-pesto-sahne', status: 'kochbuch', source: 'selbst', motif: 'jar', hue: 110, daysAgo: 30,
     mix: 'sosse', goesWith: ['mix-gnocchi'],
     content: {
-      title: 'Pesto-Sahne-Soße',
+      title: 'Pesto-Sahne-Sauce',
       description: 'In zehn Minuten fertig.',
       servings: 2, prepMinutes: 2, cookMinutes: 8, difficulty: 1,
       categories: [], tags: ['Vegetarisch', 'Schnell'], devices: ['herd'],
@@ -305,8 +305,8 @@ const SPECS: Spec[] = [
     id: 'mix-kokos-curry', status: 'zum_testen', source: 'ki', motif: 'bowl', hue: 40, daysAgo: 6,
     mix: 'sosse', goesWith: ['mix-reis'],
     content: {
-      title: 'Kokos-Curry-Soße',
-      description: 'Milde Currysoße mit Kokosmilch.',
+      title: 'Kokos-Curry-Sauce',
+      description: 'Milde Currysauce mit Kokosmilch.',
       servings: 3, prepMinutes: 5, cookMinutes: 15, difficulty: 1,
       categories: [], tags: ['Vegan'], devices: ['herd'],
       ingredients: [[1, 'Dose', 'Kokosmilch'], [1, 'Stück', 'Zwiebel'], [2, 'TL', 'Currypulver'], [1, 'EL', 'Sojasauce'], [1, 'EL', 'Rapsöl']],
@@ -361,7 +361,7 @@ const SPECS: Spec[] = [
     id: 'reis-bowl', status: 'kochbuch', source: 'selbst', motif: 'bowl', hue: 25, daysAgo: 12,
     choiceOf: { ingredients: { 1: 'Hähnchen', 2: 'Linsen' }, steps: { 1: 'Hähnchen', 2: 'Linsen' } },
     content: {
-      title: 'Bunte Reis-Bowl', description: 'Knackiges Gemüse, würzige Soße – mit Hähnchen oder mit Linsen.', servings: 2, prepMinutes: 15, cookMinutes: 15, difficulty: 1,
+      title: 'Bunte Reis-Bowl', description: 'Knackiges Gemüse, würzige Sauce – mit Hähnchen oder mit Linsen.', servings: 2, prepMinutes: 15, cookMinutes: 15, difficulty: 1,
       categories: ['salat-bowl'], tags: ['Schnell'], devices: ['herd'], choices: ['Hähnchen', 'Linsen'],
       ingredients: [
         [150, 'g', 'Reis'], [300, 'g', 'Hähnchenbrust'], [120, 'g', 'Rote Linsen'],
@@ -372,7 +372,7 @@ const SPECS: Spec[] = [
         ['Hähnchen in Streifen schneiden und rundum goldbraun braten.', 8],
         ['Linsen in Wasser bissfest garen und abgießen.', 10],
         ['Sojasauce mit Sesamöl verrühren, Paprika und Karotte in Streifen schneiden.'],
-        ['Alles auf dem Reis anrichten und mit der Soße beträufeln.'],
+        ['Alles auf dem Reis anrichten und mit der Sauce beträufeln.'],
       ],
     },
   },

@@ -130,7 +130,7 @@ const ROWS: Row[] = [
 /** Anbieter-Kennung der eingebauten Tabelle */
 export const PROVIDER = 'mashi-lokal';
 
-/** Art je Lebensmittel. Nicht aufgeführt = keine feste Art (Soßen, Pasten, Hülsenfrüchte, Nüsse …). */
+/** Art je Lebensmittel. Nicht aufgeführt = keine feste Art (Saucen, Pasten, Hülsenfrüchte, Nüsse …). */
 const KINDS: Record<FoodKind, string[]> = {
   protein: ['haehnchenhack', 'haehnchenbrust', 'rinderhack', 'bacon', 'rindersteak', 'fruehstuecksfleisch', 'doenerfleisch'],
   staple: ['reis', 'reis-gekocht', 'pasta', 'lasagneplatten', 'schupfnudeln', 'gnocchi', 'haferflocken', 'tteokbokki', 'spaetzle'],

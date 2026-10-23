@@ -38,6 +38,7 @@ import { useNutrition, useVariants } from '../useNutrition';
 import { useSwipe } from '../useSwipe';
 import { useSlide } from '../useSlide';
 import { RenamePanel } from '../components/RenamePanel';
+import { FromBaseLink, PrepPanel } from '../components/PrepPanel';
 import { amountsText, useMorePrompt } from '../components/UseMoreSheet';
 import { useVariantPrompt } from '../components/VariantSheet';
 
@@ -117,7 +118,7 @@ function Detail({ recipe }: { recipe: Recipe }) {
     : null;
 
   // Bausteine kommen aus Mix & Match – direkt geöffnet führt „Zurück“ dorthin
-  const home = recipe.mix ? '/mix' : '/kochbuch';
+  const home = recipe.mix ? '/mix' : recipe.fromBase ? `/rezept/${recipe.fromBase}` : '/kochbuch';
 
   const onRegenerate = async () => {
     setMenu(false);
@@ -148,7 +149,7 @@ function Detail({ recipe }: { recipe: Recipe }) {
           <button role="menuitem" onClick={() => { setMenu(false); void shareRecipes([recipe]).then((r) => { const m = shareMessage(r); if (m) toast(m); }); }}>
             <Icon name="share" size={18} /> Teilen
           </button>
-          {/* Soßen und Beilagen (Julia): nur in Mix & Match statt im Kochbuch – jederzeit zurück */}
+          {/* Saucen und Beilagen (Julia): nur in Mix & Match statt im Kochbuch – jederzeit zurück */}
           {recipe.mix ? (
             <button role="menuitem" onClick={() => { setMenu(false); toast('Zurück im Kochbuch', { label: 'Rückgängig', run: setMix(recipe.id, undefined) }); }}>
               <Icon name="book" size={18} /> Zurück ins Kochbuch
@@ -172,6 +173,7 @@ const header = (
         <StatusBadge status={recipe.status} withIcon />
         {recipe.source === 'ki' && recipe.status === 'kochbuch' && <span className="muted small">Ursprünglich mit KI erstellt</span>}
         {recipe.mix && <span className="muted small"><Icon name="shuffle" size={14} /> {mixRole(recipe.mix).label} in Mix & Match</span>}
+        <FromBaseLink recipe={recipe} recipes={recipes} />
       </div>
       <h1 className="detail__title">{c.title}</h1>
       {(c.tags ?? []).length > 0 && <p className="detail__tags">{c.tags.join(' · ')}</p>}
@@ -221,6 +223,7 @@ const header = (
         </div>
       )}
       <StatusAction recipe={recipe} />
+      {!recipe.archivedAt && recipe.status !== 'ki_entwurf' && <PrepPanel recipe={recipe} recipes={recipes} />}
     </>
   );
 

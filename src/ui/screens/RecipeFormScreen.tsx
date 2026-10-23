@@ -16,6 +16,17 @@ import { AutoTextarea } from '../components/AutoTextarea';
 import { ImageCropper } from '../components/ImageCropper';
 import { toast } from '../toast';
 
+/**
+ * Verwandlung: 1 Portion der Grundlage als Zutat (verlinkt – kommt aus dem Vorgekochten, nicht vom Einkauf),
+ * darunter, was frisch dazukommt. Für 1 Portion, weil Julia so plant (Portionen pro Mahlzeit, week.ts).
+ */
+function transformDraft(baseTitle: string, baseId: string): RecipeContent {
+  return {
+    ...EMPTY, servings: 1, prepMinutes: 10, cookMinutes: 0,
+    ingredients: [{ id: newId('i'), name: baseTitle, amount: 1, unit: 'Stück', note: 'Portion', recipeId: baseId }, { id: newId('i'), name: '' }],
+  };
+}
+
 const EMPTY: RecipeContent = {
   title: '', description: '', servings: 2, prepMinutes: 10, cookMinutes: 20, difficulty: 1,
   ingredients: [{ id: newId('i'), name: '' }], steps: [{ id: newId('s'), text: '' }],
@@ -26,13 +37,17 @@ const EMPTY: RecipeContent = {
  * Formular für „Eigenes Rezept“, „Bearbeiten“ (dann entsteht eine neue Version)
  * und zum Prüfen eines Text-Imports (draft: vorausgefüllt, mit Hinweisen).
  */
-export function RecipeFormScreen({ editId, draft, onBack, mix }: {
+export function RecipeFormScreen({ editId, draft, onBack, mix, fromBase }: {
   editId?: string; draft?: TextImport; /** Import: zurück zum eingefügten Text */ onBack?: () => void;
   /** aus Mix & Match: gleich als Baustein anlegen (z. B. „sosse“) */ mix?: string;
+  /** „Verwandlung anlegen“ (Julia: aus der Bolo Wraps machen) – die Grundlage steht schon als Zutat drin */ fromBase?: string;
 }) {
   const existing = useRecipe(editId);
+  const base = useRecipe(fromBase);
   const [c, setC] = useState<RecipeContent>(() =>
-    existing ? cloneContent(currentContent(existing)) : cloneContent(draft?.content ?? EMPTY));
+    existing ? cloneContent(currentContent(existing))
+      : base ? cloneContent(transformDraft(currentContent(base).title, base.id))
+      : cloneContent(draft?.content ?? EMPTY));
   const [tagText, setTagText] = useState((c.tags ?? []).join(', '));
   const [notes, setNotes] = useState(draft?.notes ?? '');
   // Importiertes ist fremd – erst testen. Eigenes, das man kennt, darf direkt ins Kochbuch.
@@ -84,15 +99,15 @@ export function RecipeFormScreen({ editId, draft, onBack, mix }: {
       toast(changed ? `Gespeichert als Version ${existing.versions.length + 1}` : photoChanged ? 'Foto gespeichert' : 'Keine Änderungen');
       goBack(`/rezept/${existing.id}`);
     } else {
-      const id = createRecipe(content, { source: draft ? 'import' : 'selbst', status: tested === 'ja' ? 'kochbuch' : 'zum_testen', image, notes, mix });
-      toast(mix ? `${mixRole(mix).label} gespeichert – steht in Mix & Match` : 'Rezept gespeichert');
+      const id = createRecipe(content, { source: draft ? 'import' : 'selbst', status: tested === 'ja' ? 'kochbuch' : 'zum_testen', image, notes, mix, ...(base ? { fromBase: base.id } : {}) });
+      toast(mix ? `${mixRole(mix).label} gespeichert – steht in Mix & Match` : base ? `Gespeichert – steht unter ${currentContent(base).title}` : 'Rezept gespeichert');
       navigate(`/rezept/${id}`, { replace: true });
     }
   };
 
   return (
     <main className="screen screen--cta">
-      <TopBar title={existing ? 'Rezept bearbeiten' : draft ? 'Import prüfen' : mix ? `Neue ${mixRole(mix).label}` : 'Eigenes Rezept'} onBack={onBack}
+      <TopBar title={existing ? 'Rezept bearbeiten' : draft ? 'Import prüfen' : mix ? `Neue ${mixRole(mix).label}` : base ? `Aus ${currentContent(base).title}` : 'Eigenes Rezept'} onBack={onBack}
         confirmBack={dirty ? (draft && onBack ? 'Zurück zum Text? Deine Änderungen am Rezept gehen verloren.' : 'Verwerfen? Deine Änderungen gehen verloren.') : undefined} />
       <form className="stack" onSubmit={submit} noValidate>
         {draft && (

@@ -8,7 +8,8 @@ import { cookingContent } from '../../domain/homemade';
 import { asCooked, formatAmount, formatQuantity, formatUnitAmount, scaleIngredients } from '../../domain/scaling';
 import { orderByUse } from '../../domain/stepIngredients';
 import type { Ingredient } from '../../domain/types';
-import { cookParts, markCooked, setPlanAmounts, useFoodTable, usePantry, usePlan, useRecipe, useRecipes } from '../../data/store';
+import { cookBase, cookParts, currentPlan, eatMeal, householdOf, markCooked, setPlanAmounts, useFoodTable, usePantry, usePlan, useRecipe, useRecipes } from '../../data/store';
+import { weekView } from '../../domain/week';
 import { doneParts, forParts, partLabel, partsOf, REST } from '../../domain/parts';
 import { goBack, navigate } from '../../router';
 import { Icon } from '../components/Icon';
@@ -24,7 +25,13 @@ import { amountsText, stockText, untilLabel, UseMoreSheet } from '../components/
 import { newId } from '../../domain/recipe';
 import { byUrgency, isDone, isRunning, newlyDone, pauseTimer, remainingOf, removeTimer, resumeTimer, startTimer, type CookTimer } from '../../domain/timers';
 
-export function CookModeScreen({ id, servings, variants }: { id: string; servings?: number; variants?: Record<string, string> }) {
+export function CookModeScreen({ id, servings, variants, prep, mealId }: {
+  id: string; servings?: number; variants?: Record<string, string>;
+  /** Kochtag der Vorkoch-Woche: die Grundlage auf Vorrat kochen (week.ts) */
+  prep?: boolean;
+  /** ein Abendessen der Woche: die Grundlage kommt aus dem Vorgekochten */
+  mealId?: string;
+}) {
   const recipe = useRecipe(id);
   const [step, setStep] = useState(0);
   const [showIngredients, setShowIngredients] = useState(false);
@@ -166,6 +173,28 @@ export function CookModeScreen({ id, servings, variants }: { id: string; serving
   const drop = (tid: string) => setTimers((l) => removeTimer(l, tid));
 
   const finish = () => {
+    // Kochtag (Julia: „Vorkochen starten“): Portionen in die Speisekammer, dann die nächste Grundlage des Tages
+    if (prep) {
+      const result = cookBase(recipe.id);
+      if (result) {
+        toast(`${c.title}: ${result.fresh + result.frozen} ${result.fresh + result.frozen === 1 ? 'Portion' : 'Portionen'} in der Speisekammer${result.frozen ? `, davon ${result.frozen} eingefroren` : ''}`, { label: 'Rückgängig', run: result.undo });
+        const p = currentPlan();
+        const day = p.week?.bases.find((b) => b.recipeId === recipe.id)?.day;
+        const next = p.week ? weekView(p.week, recipes, householdOf(p)).bases.find((b) => b.base.day === day && !b.base.cooked) : undefined;
+        if (next) navigate(`/rezept/${next.base.recipeId}/kochen?p=${next.portions}&vorkochen=1`, { replace: true });
+        else navigate('/plan', { replace: true });
+        return;
+      }
+    }
+    // Abendessen der Woche: frische Zutaten raus, die Grundlage aus dem Vorgekochten
+    if (mealId) {
+      const result = eatMeal(mealId);
+      if (result) {
+        toast(result.used.length ? `Aus der Speisekammer: ${result.used.join(', ')}` : 'Guten Appetit!', { label: 'Rückgängig', run: result.undo });
+        navigate('/', { replace: true });
+        return;
+      }
+    }
     const pick = pickFor(choicesFor(c), own);
     if (parts.length) {
       // nur Teile: die stehen jetzt als Vorgekocht in der Speisekammer – das Gericht ist noch nicht gekocht

@@ -154,7 +154,7 @@ export interface Recipe {
   versions: RecipeVersion[];
   feedback: TestFeedback[];
   /**
-   * Gesetzt = Baustein für Mix & Match (Julia: Soßen und Beilagen frei kombinieren) – steht dann nur dort,
+   * Gesetzt = Baustein für Mix & Match (Julia: Saucen und Beilagen frei kombinieren) – steht dann nur dort,
    * nicht im Kochbuch. Offener String wie bei den Kategorien (siehe MIX_ROLES in mix.ts), später z. B. „gemuese“.
    */
   mix?: string;
@@ -167,4 +167,19 @@ export interface Recipe {
   homemade?: string[];
   /** gewählte Variante (RecipeContent.choices) – fehlt oder gibt es nicht mehr: die erste; wie homemade nicht versioniert */
   choice?: string;
+  /**
+   * Vorkochen (Julia: am Wochenende eine Grundlage kochen, unter der Woche daraus verschiedene Abendessen):
+   * wie lange es gekocht im Kühlschrank hält (Tage) – fehlt: shelfDays.prepared (Standard 3). Siehe week.ts.
+   * Wie Favorit und homemade nicht versioniert – das ist eine Eigenschaft des Gerichts, keine neue Fassung.
+   */
+  keepsDays?: number;
+  /** lässt sich gekocht einfrieren – späte Abende plant Mashi dann als „einfrieren, am Vortag auftauen“ */
+  freezable?: boolean;
+  /** eignet sich zum Mitnehmen (Mittagessen) – Julia: Burger oder Suppe im Büro eher nicht */
+  togo?: boolean;
+  /**
+   * Verwandlung einer Grundlage (Bolo-Wraps aus der Bolognese) – steht nur unter ihrer Grundlage, nicht im
+   * Kochbuch-Raster (Julia: sonst steht alles doppelt). Die Zutat mit recipeId zeigt auf dieselbe Grundlage.
+   */
+  fromBase?: string;
 }
