@@ -18,7 +18,7 @@ import { attachPacks, changeAmount, mergeSamePacks, openItem } from '../domain/p
 import { addPrepared, eatPrepared } from '../domain/prepared';
 import { currentContent, currentVersion, newId, sameContent, withNewVersion } from '../domain/recipe';
 import { retireMix, sideContent } from '../domain/mix';
-import { sideGrams, sideOf } from '../domain/sides';
+import { sideGrams, sidesOf } from '../domain/sides';
 import { cookingContent } from '../domain/homemade';
 import { recordSavings, type BonSavings } from '../domain/savings';
 import { addBon, bonFromImport, dropDayPrices, editBonLine, includeBonLine, sameBonOf, withdrawBonStock, dropUnsavedDay, type BonLine, type BonLinePatch } from '../domain/bons';
@@ -994,9 +994,11 @@ export function eatMeal(mealId: string): WeekResult | null {
   if (r) commit(stampCooked(r));
   const dish = r && r.id !== meal.baseId ? deductContent(pantry, cookingContent(r, recipes, [meal.baseId]), n) : { pantry, used: [], toCheck: [] };
   // frisch dazu (Julia: „Bolognese mit Spätzle“) – die Beilage geht wie eine Zutat aus der Speisekammer
-  const side = sideOf(meal.side);
-  const s = side ? deductContent(dish.pantry, sideContent(side.name, sideGrams(side.id, hh)), n) : undefined;
-  const d = s ? { pantry: s.pantry, used: [...dish.used, ...s.used], toCheck: [...dish.toCheck, ...s.toCheck] } : dish;
+  // alle Bausteine (Pasta, Hähnchen, Parmesan …) nacheinander
+  const d = sidesOf(meal.side).reduce((acc, side) => {
+    const s = deductContent(acc.pantry, sideContent(side.name, sideGrams(side.id, hh), side.unit), n);
+    return { pantry: s.pantry, used: [...acc.used, ...s.used], toCheck: [...acc.toCheck, ...s.toCheck] };
+  }, dish);
   const after = { ...d.pantry, items: eatBase(d.pantry.items, meal.baseId, n) };
   commitPantry(after);
   commitPlan(withWeek(plan, { ...week, meals: week.meals.map((m) => (m.id === mealId ? { ...m, done: true } : m)) }));

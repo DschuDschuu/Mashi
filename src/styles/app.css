@@ -1359,7 +1359,6 @@ p { margin: 0; }
 .week__swaptools { flex-basis: 100%; display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; padding-left: 24px; }
 .what__base { display: grid; gap: 6px; margin-bottom: 14px; }
 .what__head { margin: 0; overflow-wrap: break-word; }
-.chip--ghost { background: transparent; border-style: dashed; }
 /* laufende Woche: heute hervorheben, Vergangenes zurücknehmen */
 .week__day.is-past { opacity: 0.5; }
 .week__day.is-today .meal { border-color: var(--primary); }
@@ -1863,3 +1862,26 @@ details.cost-line[open] > summary::after { transform: rotate(-90deg); }
 
 /* ── Kochbuch-Kopf: Anzahl rechts ── */
 .page-head__right { display: flex; align-items: center; gap: 10px; align-self: center; }
+
+/* Woche planen in einem Schritt (Julia): Grundlage antippen klappt auf */
+.week-setup__list { display: grid; gap: 10px; margin-top: 8px; }
+.week-setup__item { border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); overflow: hidden; }
+.week-setup__item.is-on { border-color: var(--primary); }
+.week-setup__row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 8px 10px; text-align: left; color: var(--ink); }
+.week-setup__row .week-setup__headtext { flex: 1; }
+.week-setup__check { width: 26px; height: 26px; flex: none; border-radius: 50%; display: grid; place-items: center; border: 1px solid var(--line); color: var(--primary-text); }
+.is-on > .week-setup__row .week-setup__check { background: var(--primary-soft); border-color: var(--primary); }
+.week-setup__panel { padding: 4px 12px 12px; border-top: 1px dashed var(--line); }
+.week-setup__dishes { margin-top: 10px; }
+.week-setup__dishes summary { cursor: pointer; font-weight: 700; font-size: 0.9rem; padding: 6px 0; }
+.week-setup__dishlist { list-style: none; margin: 4px 0 8px; padding: 0; display: grid; gap: 6px; }
+.week-setup__dish { display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 10px; border-radius: var(--r-sm); background: var(--surface-2); text-align: left; color: var(--ink); overflow-wrap: break-word; }
+.week-setup__dish .week-setup__headtext { flex: 1; }
+.week-setup__dish.is-on { background: var(--primary-soft); color: var(--primary-text); }
+/* Baukasten: je Reihe ein Baustein */
+.combo { display: grid; gap: 8px; }
+.combo__row { display: grid; gap: 4px; }
+.combo__label { font-weight: 700; }
+.combo__add { justify-self: start; max-width: 100%; text-align: left; white-space: normal; }
+.household__kind { margin: 10px 0 2px; }
+.week-setup__tabs { margin-top: 14px; }

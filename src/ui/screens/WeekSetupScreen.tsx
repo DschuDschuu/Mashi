@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import { currentContent, newId, totalMinutes } from '../../domain/recipe';
-import { DAY_SHORT, byEffort, choicesOf, keepsOf, mealKey, sortCookDays, suggestWeek, transformsOf, weekStarted } from '../../domain/week';
-import { SIDES } from '../../domain/sides';
+import { DAY_SHORT, byEffort, choicesOf, extrasOf, keepsOf, mealKey, splitMealKey, sortCookDays, suggestWeek, transformsOf, weekStarted } from '../../domain/week';
+import { comboText } from '../../domain/sides';
+import { ComboBuilder } from '../components/ComboBuilder';
 import type { Weekday } from '../../domain/mealplan';
 import type { Recipe } from '../../domain/types';
 import { setWeek, usePantry, usePlan, useRecipes } from '../../data/store';
@@ -10,6 +11,7 @@ import { navigate } from '../../router';
 import { ask } from '../confirm';
 import { formatMinutesShort } from '../format';
 import { toast } from '../toast';
+import { Stepper } from '../components/Controls';
 import { Icon } from '../components/Icon';
 import { RecipeImage } from '../components/RecipeImage';
 import { TopBar } from '../components/TopBar';
@@ -33,7 +35,6 @@ export function WeekSetupScreen() {
     : plan.items.filter((i) => !i.fromWeek).map((i) => i.recipeId).filter((id) => recipes.some((r) => r.id === id && baseCandidate(r))).slice(0, 3));
   const [picks, setPicks] = useState<Record<string, string[]>>(() => old ? Object.fromEntries(choicesOf(old).map((c) => [c.baseId, c.meals])) : {});
   const [cook, setCook] = useState<Weekday[]>(() => old?.cookDays ?? [6, 2]);
-  const [step, setStep] = useState<'basis' | 'daraus'>('basis');
 
   const candidates = useMemo(() => recipes.filter(baseCandidate)
     .map((r) => ({ r, made: transformsOf(r.id, recipes), title: currentContent(r).title }))
@@ -61,133 +62,58 @@ export function WeekSetupScreen() {
     navigate('/plan', { replace: true });
   };
 
-  if (step === 'basis') {
-    return (
-      <main className="screen screen--cta">
-        <TopBar title="Woche planen" backTo="/plan" />
-        <h1 className="week-setup__title">Was kochst du vor?</h1>
-        <p className="muted">Eine Grundlage wird unter der Woche zu verschiedenen Abendessen – ein Gericht isst du einfach an mehreren Abenden.</p>
-        {/* Julia: Grundrezepte und richtige Rezepte getrennt */}
-        {([['Grundlagen', candidates.filter((c) => c.made.length)], ['Gerichte', candidates.filter((c) => !c.made.length)]] as const).map(([label, list]) => list.length > 0 && (
-          <section key={label} className="week-setup__group">
-            <h2 className="h3">{label}</h2>
-            <div className="grid week-setup__grid">
-              {list.map(({ r, made, title }) => {
-                const on = bases.includes(r.id);
-                return (
-                  <button key={r.id} type="button" className={`card pick-card${on ? ' is-on' : ''}`} aria-pressed={on} onClick={() => toggleBase(r.id)}>
-                    <div className="card__media">
-                      <RecipeImage image={r.image} size="md" />
-                      <span className="pick-card__check" aria-hidden="true"><Icon name="check" size={16} /></span>
-                    </div>
-                    <div className="card__body">
-                      <h3 className="card__title">{title}</h3>
-                      <p className="card__meta">
-                        {made.length ? `${made.length} ${made.length === 1 ? 'Gericht' : 'Gerichte'} daraus · ` : ''}hält {keepsOf(r, fallback)} Tage
-                      </p>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </section>
-        ))}
-        <div className="bottom-cta">
-          <button type="button" className="btn btn--primary btn--block btn--lg" disabled={!bases.length} onClick={() => setStep('daraus')}>
-            Was machst du daraus? <Icon name="chevron" size={18} />
-          </button>
-        </div>
-      </main>
-    );
-  }
+  const groups = [['Grundlagen', candidates.filter((c) => c.made.length)], ['Rezepte', candidates.filter((c) => !c.made.length)]] as const;
+  // mit Grundlagen starten – gibt es keine, gleich bei den Rezepten
+  const [tab, setTab] = useState<'Grundlagen' | 'Rezepte'>(() => (groups[0][1].length ? 'Grundlagen' : 'Rezepte'));
+  // Julia: kein Zwischenschritt – Grundlage antippen klappt auf, was du daraus machst; Kochtage unten auf derselben Seite
+  const count = (baseId: string, key: string) => (picks[baseId] ?? []).filter((x) => x === key).length;
+  const setEvenings = (id: string, n: number) => setPicks((p) => ({ ...p, [id]: Array.from({ length: Math.max(0, n) }, () => id) }));
+  const tapHead = (id: string, isBase: boolean) => {
+    const on = bases.includes(id);
+    toggleBase(id);
+    // ein Gericht gleich mit einem Abend vorbelegen – sonst müsste man nach dem Antippen noch einmal tippen
+    if (!on && !isBase && !count(id, id)) setEvenings(id, 1);
+  };
 
   return (
     <main className="screen screen--cta">
-      <TopBar title="Woche planen" onBack={() => setStep('basis')} />
-      <h1 className="week-setup__title">Was machst du daraus?</h1>
-      <p className="muted">Jedes Antippen ist ein Abend. Zweimal antippen = zweimal in der Woche.</p>
-      {chosen.map(({ id, meals }) => {
-        const base = recipes.find((r) => r.id === id)!;
-        const title = currentContent(base).title;
-        // Verwandlungen – wenig Aufwand am Abend zuerst (Julia)
-        const transforms = byEffort(transformsOf(id, recipes));
-        // Antippen = ein Abend, zweimal = zwei, beim dritten Mal wieder weg; „ohne Beilage“ = die Grundlage pur (Suppe, Chili)
-        const chip = (key: string, label: string, aria: string, plain = false) => {
-          const n = meals.filter((x) => x === key).length;
-          return (
-            <button key={key} type="button" className={`chip${plain ? ' week-setup__plain' : ''}${n ? ' is-on' : ''}`} aria-pressed={n > 0} onClick={() => tapMeal(id, key)}
-              aria-label={`${aria}${n ? `, ${n}× gewählt` : ''}`}>
-              {n > 1 ? `${n}× ` : ''}{label}
-            </button>
-          );
-        };
-        // ein ganzes Gericht (keine Grundlage): nur, an wie vielen Abenden – keine Beilagen, keine Verwandlungen (Julia)
-        if (!transforms.length) {
-          const n = meals.filter((x) => x === id).length;
-          const c = currentContent(base);
-          return (
-            <section key={id} className="week-setup__base">
-              <div className="week-setup__headtext">
-                <h2 className="h3">{title}</h2>
-                <span className="small muted">{n ? `${n} ${n === 1 ? 'Abend' : 'Abende'}` : 'Tipp an, an wie vielen Abenden'}</span>
-              </div>
-              <div className="grid">
-                <button type="button" className={`card pick-card${n ? ' is-on' : ''}`} aria-pressed={n > 0} onClick={() => tapMeal(id, id)}
-                  aria-label={`${c.title}${n ? `, ${n}× gewählt` : ''}`}>
-                  <div className="card__media">
-                    <RecipeImage image={base.image} size="md" />
-                    <span className="pick-card__check" aria-hidden="true">{n > 1 ? <b>{n}×</b> : <Icon name="check" size={16} />}</span>
-                  </div>
-                  <div className="card__body">
-                    <h3 className="card__title">{c.title}</h3>
-                    <p className="card__meta">{base.togo ? 'zum Mitnehmen' : 'aufwärmen'}</p>
-                  </div>
-                </button>
-              </div>
-            </section>
-          );
-        }
-        return (
-          <section key={id} className="week-setup__base">
-            <div className="week-setup__head">
-              <RecipeImage image={base.image} size="sm" />
-              <div className="week-setup__headtext">
-                <h2 className="h3">Aus {title}</h2>
-                <span className="small muted">{meals.length ? `${meals.length} ${meals.length === 1 ? 'Abend' : 'Abende'}` : 'Tipp an, was du daraus machst'}</span>
-              </div>
-            </div>
-            {/* Mit Beilage zuerst (Julia: am einfachsten) – „Bolognese mit Spätzle“ ohne eigenes Rezept, gleich sichtbar */}
-            <h3 className="small muted week-setup__label">Mit Beilage</h3>
-            <div className="chips week-setup__sides" role="group" aria-label={`${title} mit Beilage`}>
-              {SIDES.map((s) => chip(mealKey(id, s.id), s.name, `${title} mit ${s.name}`))}
-              {chip(id, 'ohne Beilage', `${title} ohne Beilage`, true)}
-            </div>
-            <h3 className="small muted week-setup__label">Daraus machen</h3>
-            <div className="grid">
-              {transforms.map((r) => {
-                const n = meals.filter((x) => x === r.id).length;
-                const c = currentContent(r);
-                return (
-                  <button key={r.id} type="button" className={`card pick-card${n ? ' is-on' : ''}`} aria-pressed={n > 0} onClick={() => tapMeal(id, r.id)}
-                    aria-label={`${c.title}${n ? `, ${n}× gewählt` : ''}`}>
-                    <div className="card__media">
-                      <RecipeImage image={r.image} size="md" />
-                      <span className="pick-card__check" aria-hidden="true">{n > 1 ? <b>{n}×</b> : <Icon name="check" size={16} />}</span>
-                    </div>
-                    <div className="card__body">
-                      <h3 className="card__title">{c.title}</h3>
-                      <p className="card__meta">{formatMinutesShort(totalMinutes(c))}{r.togo ? ' · zum Mitnehmen' : ''}</p>
-                    </div>
+      <TopBar title="Woche planen" backTo="/plan" />
+      <h1 className="week-setup__title">Was kochst du vor?</h1>
+      <p className="muted">Grundlage antippen und wählen, was du daraus machst – jedes Antippen ist ein Abend, zweimal = zweimal in der Woche.</p>
+      {/* Julia: Grundrezepte und Rezepte als Tabs – schön getrennt; die Zahl zeigt, was dort gewählt ist */}
+      <div className="segments week-setup__tabs" role="tablist">
+        {groups.map(([label, list]) => {
+          const n = list.filter((c) => bases.includes(c.r.id)).length;
+          return <button key={label} type="button" role="tab" aria-selected={tab === label} className={`segment${tab === label ? ' is-on' : ''}`} onClick={() => setTab(label)}>{label}{n ? ` · ${n}` : ''}</button>;
+        })}
+      </div>
+      {groups.filter(([label]) => label === tab).map(([label, list]) => (
+        <section key={label} className="week-setup__group" role="tabpanel" aria-label={label}>
+          {!list.length && <p className="small muted">{label === 'Grundlagen' ? 'Noch keine Grundlage – ein Rezept wird zur Grundlage, sobald ein Gericht daraus entsteht.' : 'Keine Rezepte.'}</p>}
+          <div className="week-setup__list">
+            {list.map(({ r, made, title }) => {
+              const on = bases.includes(r.id);
+              const n = (picks[r.id] ?? []).length;
+              const meta = on && n ? `${n} ${n === 1 ? 'Abend' : 'Abende'}` : `${made.length ? `${made.length} ${made.length === 1 ? 'Gericht' : 'Gerichte'} daraus · ` : ''}hält ${keepsOf(r, fallback)} Tage`;
+              return (
+                <div key={r.id} className={`week-setup__item${on ? ' is-on' : ''}`}>
+                  <button type="button" className="week-setup__row" aria-expanded={on} onClick={() => tapHead(r.id, made.length > 0)}>
+                    <RecipeImage image={r.image} size="sm" />
+                    <span className="week-setup__headtext"><strong>{title}</strong><span className="small muted">{meta}</span></span>
+                    <span className="week-setup__check" aria-hidden="true">{on && <Icon name="check" size={16} />}</span>
                   </button>
-                );
-              })}
-            </div>
-            <button type="button" className="link small" onClick={() => navigate(`/neu?aus=${id}`)}>
-              <Icon name="plus" size={14} /> Verwandlung anlegen
-            </button>
-          </section>
-        );
-      })}
+                  {on && (made.length ? <BasePanel id={r.id} title={title} made={made} keys={picks[r.id] ?? []} count={(k) => count(r.id, k)} tap={(k) => tapMeal(r.id, k)} /> : (
+                    <div className="week-setup__panel row-between">
+                      <span className="small">An wie vielen Abenden?</span>
+                      <Stepper small min={0} value={count(r.id, r.id)} onChange={(v) => setEvenings(r.id, v)} label={`Abende ${title}`} />
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      ))}
 
       <section className="week-setup__days">
         <h2 className="h3">Wann kochst du?</h2>
@@ -207,5 +133,58 @@ export function WeekSetupScreen() {
         </button>
       </div>
     </main>
+  );
+}
+
+/**
+ * Aufgeklappte Grundlage: Beilagen oben (Julia: am einfachsten), darunter das Akkordeon „Gerichte daraus“ – jedes mit dem,
+ * was dazukommt („+ Cocktailtomaten, Hähnchen, Pasta“), damit klar ist, warum es keine Beilage mehr braucht.
+ */
+function BasePanel({ id, title, made, keys, count, tap }: { id: string; title: string; made: Recipe[]; keys: string[]; count: (key: string) => number; tap: (key: string) => void }) {
+  const chip = (key: string, label: string, aria: string, plain = false) => {
+    const n = count(key);
+    return (
+      <button key={key} type="button" className={`chip${plain ? ' week-setup__plain' : ''}${n ? ' is-on' : ''}`} aria-pressed={n > 0} onClick={() => tap(key)}
+        aria-label={`${aria}${n ? `, ${n}× gewählt` : ''}`}>
+        {n > 1 ? `${n}× ` : ''}{label}
+      </button>
+    );
+  };
+  // Verwandlungen – wenig Aufwand am Abend zuerst (Julia)
+  const dishes = byEffort(made);
+  const combos = [...new Set(keys.filter((k) => splitMealKey(k).recipeId === id))];
+  const picked = dishes.reduce((n, r) => n + count(r.id), 0);
+  return (
+    <div className="week-setup__panel">
+      {/* zusammengestellte Abende (Julia: Baukasten) – antippen = noch ein Abend, beim dritten Mal wieder weg */}
+      {combos.length > 0 && (
+        <div className="chips week-setup__sides" role="group" aria-label={`${title} – zusammengestellt`}>
+          {combos.map((k) => { const side = splitMealKey(k).side; return chip(k, side ? comboText(side) : 'pur', `${title} ${side ? `mit ${comboText(side)}` : 'pur'}`); })}
+        </div>
+      )}
+      <ComboBuilder onAdd={(side) => tap(mealKey(id, side))} />
+      <details className="week-setup__dishes" open={picked > 0}>
+        <summary>Gerichte daraus ({dishes.length}){picked ? ` · ${picked} gewählt` : ''}</summary>
+        <ul className="week-setup__dishlist">
+          {dishes.map((r) => {
+            const n = count(r.id);
+            const c = currentContent(r);
+            const extras = extrasOf(r, id);
+            return (
+              <li key={r.id}>
+                <button type="button" className={`week-setup__dish${n ? ' is-on' : ''}`} aria-pressed={n > 0} onClick={() => tap(r.id)} aria-label={`${c.title}${n ? `, ${n}× gewählt` : ''}`}>
+                  <span className="week-setup__headtext">
+                    <strong>{n > 1 ? `${n}× ` : ''}{c.title}</strong>
+                    <span className="small muted">{extras.length ? `+ ${extras.join(', ')}` : 'nichts dazu'} · {formatMinutesShort(totalMinutes(c))}</span>
+                  </span>
+                  {n > 0 && <Icon name="check" size={16} />}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+        <button type="button" className="link small" onClick={() => navigate(`/neu?aus=${id}`)}><Icon name="plus" size={14} /> Gericht daraus anlegen</button>
+      </details>
+    </div>
   );
 }

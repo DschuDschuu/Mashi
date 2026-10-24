@@ -4,7 +4,7 @@ import type { PantryItem } from './pantry';
 import { currentContent } from './recipe';
 import { SPECIAL_DAYS } from './shelfLife';
 import { weekBaseIds, withoutBases } from './weekBases';
-import { sideIngredient, sideOf } from './sides';
+import { comboText, sideIngredient, sidesOf } from './sides';
 
 export { weekBaseIds, withoutBases };
 import type { Ingredient, Recipe } from './types';
@@ -51,6 +51,16 @@ export function transformsOf(baseId: string, recipes: readonly Recipe[]): Recipe
 }
 
 /**
+ * Was zu einer Grundlage dazukommt (Julia: „man sieht nicht, dass Cocktailtomaten, Hähnchen und Pasta dazukommen“) –
+ * aus den Zutaten des Gerichts ohne die Grundlage gerechnet, damit nichts extra gepflegt werden muss.
+ */
+export function extrasOf(dish: Recipe, baseId: string): string[] {
+  // Würze und Wasser hat man da – sonst wird die Zeile lang und das Wesentliche (Hähnchen, Pasta) geht unter
+  const basic = /^(salz|pfeffer|salz (&|und) pfeffer|wasser)$|öl$|gewürz/i;
+  return [...new Set(currentContent(dish).ingredients.filter((i) => i.recipeId !== baseId && !basic.test(i.name.trim())).map((i) => i.name))];
+}
+
+/**
  * Wie viele Gerichte aus jeder Grundlage entstehen (gleiche Regel wie transformsOf) – fürs Kochbuch: Segment
  * „Grundlagen“ und „3 Gerichte daraus“ auf der Karte. Einmal für alle, statt je Karte alle Rezepte zu durchsuchen.
  */
@@ -83,8 +93,8 @@ export function splitMealKey(key: string): { recipeId: string; side?: string } {
 /** „Bolognese mit Spätzle“ – der Titel eines Abendessens, mit seiner Beilage */
 export function mealTitle(meal: Pick<WeekMeal, 'side'>, recipe: Recipe | undefined): string {
   const title = recipe ? currentContent(recipe).title : 'Gelöschtes Rezept';
-  const side = sideOf(meal.side);
-  return side ? `${title} mit ${side.name}` : title;
+  const side = comboText(meal.side);
+  return side ? `${title} mit ${side}` : title;
 }
 
 /**
@@ -490,7 +500,9 @@ export function weekSideNeeds(week: Week | undefined, recipes: readonly Recipe[]
   const portions = new Map<string, number>();
   for (const d of view.days) {
     const m = d.meal?.meal;
-    if (m?.side && !m.done && sideOf(m.side)) portions.set(m.side, (portions.get(m.side) ?? 0) + mealPortions(view, d.day, household));
+    if (!m?.side || m.done) continue;
+    // je Baustein zusammengezählt (Pasta an zwei Abenden mit verschiedenem Protein = eine Pasta-Zeile)
+    for (const s of sidesOf(m.side)) portions.set(s.id, (portions.get(s.id) ?? 0) + mealPortions(view, d.day, household));
   }
   return [...portions].flatMap(([id, n]) => sideIngredient(id, n, household) ?? []);
 }

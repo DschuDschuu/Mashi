@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { sideContent } from './mix';
+import { comboOf } from './sides';
 import type { Week } from './mealplan';
 import type { Ingredient, Recipe } from './types';
 import { buildShoppingList, emptyPlan } from './mealplan';
 import { localFoodTable } from './nutrition/localFoods';
-import { putPrepared, addBase, addToBase, byEffort, canLessPortions, choicesOf, fillEvenings, mealKey, putMeal, servingsOf, setMealPortions, stepPortions, mealTitle, mhdFinds, removeMeal, scheduleMeal, splitMealKey, weekSideNeeds, weekStarted, withCookDays } from './week';
+import { putPrepared, extrasOf, addBase, addToBase, byEffort, canLessPortions, choicesOf, fillEvenings, mealKey, putMeal, servingsOf, setMealPortions, stepPortions, mealTitle, mhdFinds, removeMeal, scheduleMeal, splitMealKey, weekSideNeeds, weekStarted, withCookDays } from './week';
 import type { PantryItem } from './pantry';
 import { baseIdOf, canSwap, mealPortions, weekItems, withoutBases, earlierCookDay, moveBase, setExtra, shiftFrom, sortCookDays, suggestWeek, swapDays, toggleLunch, transformsOf, weekdayOf, weekOrder, weekView } from './week';
 
@@ -291,6 +292,25 @@ describe('Gericht auf einen Tag legen (Julia: „ein Plan“ – aus dem Kochbuc
     expect(scheduleMeal(w, chili, MI, 1, hh, newId)).toBe(w);
     expect(scheduleMeal(w, chili, FR, 1, hh, newId).cookDays).toEqual([MI, FR]);
   });
+});
+
+it('Baukasten: feste Reihenfolge, lesbarer Titel, Einkauf je Baustein zusammengezählt', () => {
+  expect(comboOf(['parmesan', 'haehnchen', 'pasta'])).toBe('pasta,haehnchen,parmesan');
+  expect(comboOf([])).toBeUndefined();
+  expect(mealTitle({ side: 'pasta,haehnchen,parmesan' }, bolo)).toBe('Testbolognese mit Pasta, Hähnchenbrust & Parmesan');
+  expect(mealTitle({ side: 'pasta' }, bolo)).toBe('Testbolognese mit Pasta'); // alte Abende gelten weiter
+  const hh = { portions: 2, lunchDays: [] };
+  const w: Week = { cookDays: [SO], bases: [{ recipeId: 'bolo', day: SO }], meals: [
+    { id: 'a', day: SO, recipeId: 'bolo', baseId: 'bolo', side: 'pasta,haehnchen,ei' },
+    { id: 'b', day: MO, recipeId: 'bolo', baseId: 'bolo', side: 'pasta' },
+  ] };
+  const needs = weekSideNeeds(w, all, hh);
+  expect(needs.map((i) => [i.name, i.amount, i.unit])).toEqual([['Pasta', 400, 'g'], ['Hähnchenbrust', 250, 'g'], ['Ei', 2, 'Stück']]);
+});
+
+it('extrasOf: was zur Grundlage dazukommt, ohne die Grundlage selbst', () => {
+  const pasta = recipe('kp', 'Testkürbispasta', [uses('bolo', 'Testbolognese'), { id: 'x', name: 'Cocktailtomaten', amount: 100, unit: 'g' }, { id: 'y', name: 'Pasta', amount: 80, unit: 'g' }, { id: 'z', name: 'Olivenöl', amount: 1, unit: 'EL' }, { id: 's', name: 'Salz & Pfeffer', amount: 1, unit: 'Prise' }]);
+  expect(extrasOf(pasta, 'bolo')).toEqual(['Cocktailtomaten', 'Pasta']);
 });
 
 describe('Wochenanfang und Vorrat', () => {

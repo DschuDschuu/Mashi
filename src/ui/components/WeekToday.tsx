@@ -1,6 +1,6 @@
 import { currentContent } from '../../domain/recipe';
 import { DAY_LONG, mealPortions, mealTitle, weekdayOf, weekView } from '../../domain/week';
-import { sideGrams, sideOf } from '../../domain/sides';
+import { sideGrams, sidesOf } from '../../domain/sides';
 import { formatAmount } from '../../domain/scaling';
 import type { Week } from '../../domain/mealplan';
 import type { Recipe } from '../../domain/types';
@@ -30,7 +30,7 @@ export function WeekToday({ week }: { week: Week }) {
   const tomorrow = view.days[i + 1];
   const cookToday = view.bases.filter((b) => b.base.day === today && !b.base.cooked);
   const meal = d?.meal;
-  const side = sideOf(meal?.meal.side);
+  const sides = sidesOf(meal?.meal.side);
   const lunch = d?.lunch;
   // nächster Kochtag mit noch Ungekochtem – auch über das Wochenende hinweg (die Woche hat keine Daten, nur Tage)
   const uncooked = view.bases.filter((b) => !b.base.cooked).map((b) => b.base.day);
@@ -83,7 +83,7 @@ export function WeekToday({ week }: { week: Week }) {
               <h3 className="bigcard__title">{mealTitle(meal.meal, meal.recipe)}</h3>
               <p className="small muted">
                 {meal.meal.recipeId !== meal.meal.baseId ? `${title(recipes.find((r) => r.id === meal.meal.baseId))} aus dem ${meal.frost ? 'Gefrierfach' : 'Kühlschrank'} + frisch dazu`
-                  : side ? `Aufwärmen · ${formatAmount(sideGrams(side.id, hh) * mealPortions(view, today, hh))} g ${side.name} dazu`
+                  : sides.length ? `Aufwärmen · ${sides.map((x) => `${formatAmount(sideGrams(x.id, hh) * mealPortions(view, today, hh))} ${x.unit === 'Stück' ? '×' : 'g'} ${x.name}`).join(', ')} dazu`
                     : 'Nur aufwärmen'}
               </p>
               <div className="week-today__actions">

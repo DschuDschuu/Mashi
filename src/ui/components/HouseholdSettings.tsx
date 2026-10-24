@@ -1,6 +1,6 @@
 import { DAY_SHORT } from '../../domain/week';
 import { WORKDAYS } from '../../domain/mealplan';
-import { SIDES, sideGrams } from '../../domain/sides';
+import { SIDE_KINDS, SIDES, sideGrams } from '../../domain/sides';
 import { householdOf, setHousehold, usePlan } from '../../data/store';
 import { toast } from '../toast';
 import { Stepper, Switch } from './Controls';
@@ -42,19 +42,24 @@ export function HouseholdSettings() {
       </div>
       {/* Beilagen der Woche (Julia: feste Mengen, einmal hier anpassen statt bei jedem Abend) */}
       <details className="household__sides">
-        <summary><strong>Beilagen pro Portion</strong> <small className="muted">für „mit Beilage“ in der Woche</small></summary>
-        {SIDES.map((s) => (
+        <summary><strong>Bausteine pro Portion</strong> <small className="muted">für den Baukasten in der Woche</small></summary>
+        {SIDE_KINDS.map(({ kind, label }) => [<h4 key={kind} className="small muted household__kind">{label}</h4>, ...SIDES.filter((x) => x.kind === kind).map((s) => {
+          // kleine Mengen (Parmesan, Sesam) in 5er-Schritten, Ei in Stück
+          const piece = s.unit === 'Stück';
+          const step = piece ? 1 : s.grams < 50 ? 5 : 25;
+          return (
           <div key={s.id} className="row-between">
-            <span>{s.name} <small className="muted">in g</small></span>
-            <Stepper small value={sideGrams(s.id, hh)} min={25} max={600} step={25} label={`${s.name} pro Portion in Gramm`}
+            <span>{s.name} <small className="muted">{piece ? 'Stück' : 'in g'}</small></span>
+            <Stepper small value={sideGrams(s.id, hh)} min={step} max={piece ? 6 : 600} step={step} label={`${s.name} pro Portion${piece ? '' : ' in Gramm'}`}
               onChange={(g) => {
                 // Standardwert = keine eigene Angabe – so gelten spätere bessere Standardwerte auch hier
                 const { [s.id]: _old, ...rest } = hh.sides ?? {};
                 const sides = g === s.grams ? rest : { ...rest, [s.id]: g };
-                set({ sides: Object.keys(sides).length ? sides : undefined }, `${s.name}: ${g} g pro Portion`);
+                set({ sides: Object.keys(sides).length ? sides : undefined }, `${s.name}: ${g}${piece ? ' Stück' : ' g'} pro Portion`);
               }} />
           </div>
-        ))}
+          );
+        })])}
       </details>
     </div>
   );

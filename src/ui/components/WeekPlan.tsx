@@ -7,7 +7,7 @@ import {
 } from '../../domain/week';
 import type { Week, Weekday } from '../../domain/mealplan';
 import type { Recipe } from '../../domain/types';
-import { SIDES } from '../../domain/sides';
+import { ComboBuilder } from './ComboBuilder';
 import { preparedPortions } from '../../domain/baseStock';
 import { specialDays } from '../../domain/shelfLife';
 import { freezePantryItem, householdOf, setWeek, useFoodTable, usePantry, usePlan, useRecipes } from '../../data/store';
@@ -174,15 +174,10 @@ function WhatSheet({ day, replace, view, recipes, fallback, stock, onStock, onPu
   onStock: (recipeId: string) => void; onPut: (recipeId: string, baseId: string, side?: string) => void; onCookbook?: () => void; onClose: () => void;
 }) {
   const ref = useSheet(onClose);
-  const [allSides, setAllSides] = useState(false);
   const at = view.order.indexOf(day);
   // Vorgekochtes zuerst (damit nichts verdirbt) – was schon als Grundlage in der Woche steht, kommt unten mit
   const weekBases = new Set(view.bases.map((b) => b.base.recipeId));
   const prepared = [...stock].flatMap(([id, n]) => { const r = recipes.find((x) => x.id === id); return r && !weekBases.has(id) ? [{ r, n }] : []; });
-  // Beilagen: die diese Woche schon gewählten zuerst, dann drei – der Rest hinter „mehr …“
-  const used = view.days.flatMap((d) => (d.meal?.meal.side ? [d.meal.meal.side] : []));
-  const sides = [...SIDES].sort((a, b) => used.filter((s) => s === b.id).length - used.filter((s) => s === a.id).length);
-  const shown = allSides ? sides : sides.slice(0, 3);
   const options = view.bases.flatMap((b) => {
     const age = at - view.order.indexOf(b.base.day);
     const old = age >= keepsOf(b.recipe, fallback);
@@ -219,15 +214,10 @@ function WhatSheet({ day, replace, view, recipes, fallback, stock, onStock, onPu
               <span className="small muted"> · vom {DAY_LONG[b.base.day]}{b.base.extra ? ` · ${portionText(b.base.extra)} übrig` : ''}{frost ? ' · aus dem Gefrierfach' : ''}</span>
             </p>
             <div className="chips" role="group" aria-label={`Aus ${title(b.recipe)}`}>
-              {dishes.length > 0
-                ? [
-                  ...shown.map((s) => chip(b.base.recipeId, b.base.recipeId, `mit ${s.name}`, s.id)),
-                  ...(allSides || sides.length <= 3 ? [] : [<button key="mehr" type="button" className="chip chip--ghost" onClick={() => setAllSides(true)}>mehr …</button>]),
-                  chip(b.base.recipeId, b.base.recipeId, 'ohne Beilage'),
-                  ...dishes.map((r) => chip(r.id, b.base.recipeId, title(r))),
-                ]
-                : chip(b.base.recipeId, b.base.recipeId, title(b.recipe))}
+              {dishes.length > 0 ? dishes.map((r) => chip(r.id, b.base.recipeId, title(r))) : chip(b.base.recipeId, b.base.recipeId, title(b.recipe))}
             </div>
+            {/* Grundlage mit Bausteinen (Julia: Baukasten statt nur „+ Beilage“) */}
+            {dishes.length > 0 && <ComboBuilder label="Zusammenstellen" onAdd={(side) => onPut(b.base.recipeId, b.base.recipeId, side)} />}
           </section>
         ))}
         {onCookbook && (
