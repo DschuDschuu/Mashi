@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { sideContent } from './mix';
-import { comboOf } from './sides';
+import { comboOf, comboSteps, customSideId, prepOf, sideOf, sidesOfKind } from './sides';
 import type { Week } from './mealplan';
 import type { Ingredient, Recipe } from './types';
 import { buildShoppingList, emptyPlan } from './mealplan';
 import { localFoodTable } from './nutrition/localFoods';
-import { putPrepared, extrasOf, addBase, addToBase, byEffort, canLessPortions, choicesOf, fillEvenings, mealKey, putMeal, servingsOf, setMealPortions, stepPortions, mealTitle, mhdFinds, removeMeal, scheduleMeal, splitMealKey, weekSideNeeds, weekStarted, withCookDays } from './week';
+import { carbCarry, putPrepared, extrasOf, addBase, addToBase, byEffort, canLessPortions, choicesOf, fillEvenings, mealKey, putMeal, servingsOf, setMealPortions, stepPortions, mealTitle, mhdFinds, removeMeal, scheduleMeal, splitMealKey, weekSideNeeds, weekStarted, withCookDays } from './week';
 import type { PantryItem } from './pantry';
 import { baseIdOf, canSwap, mealPortions, weekItems, withoutBases, earlierCookDay, moveBase, setExtra, shiftFrom, sortCookDays, suggestWeek, swapDays, toggleLunch, transformsOf, weekdayOf, weekOrder, weekView } from './week';
 
@@ -308,8 +308,45 @@ it('Baukasten: feste Reihenfolge, lesbarer Titel, Einkauf je Baustein zusammenge
   expect(needs.map((i) => [i.name, i.amount, i.unit])).toEqual([['Pasta', 400, 'g'], ['Hähnchenbrust', 250, 'g'], ['Ei', 2, 'Stück']]);
 });
 
+it('eigene Bausteine: Gruppe und Name stecken in der id, Trennzeichen fliegen raus', () => {
+  const id = customSideId('veg', ' Cocktail,tomaten+ ')!;
+  expect(id).toBe('eigen:veg:Cocktail tomaten');
+  expect(sideOf(id)).toMatchObject({ name: 'Cocktail tomaten', kind: 'veg', grams: 100 });
+  expect(comboOf(['parmesan', id, 'pasta'])).toBe(`pasta,${id},parmesan`);
+  expect(sidesOfKind('veg', [id]).map((s) => s.name)).toContain('Cocktail tomaten');
+  expect(customSideId('veg', ' , ')).toBeUndefined();
+});
+
+it('Zubereitung: nur hier > eigener Standard > Mashis Standard; Schritte das Längste zuerst, Topping zum Schluss', () => {
+  const tomaten = customSideId('veg', 'Tomaten')!;
+  const hh = { portions: 1, lunchDays: [], sidePrep: { [tomaten]: { text: 'halbieren, mitbraten', minutes: 3 } } };
+  const kuerbis = { blockPrep: { [tomaten]: { text: 'im Ofen rösten', minutes: 15 } } };
+  expect(prepOf(tomaten, hh, kuerbis)?.text).toBe('im Ofen rösten');
+  expect(prepOf(tomaten, hh)?.text).toBe('halbieren, mitbraten');
+  expect(prepOf('pasta', hh)).toEqual({ text: 'in Salzwasser kochen', minutes: 10 });
+  expect(prepOf(customSideId('veg', 'Mais')!, hh)).toBeUndefined();
+  const steps = comboSteps(`pasta,${tomaten},parmesan`, 'Testkürbissauce', hh, kuerbis);
+  expect(steps.map((s) => [s.name, s.minutes, s.source])).toEqual([
+    ['Tomaten', 15, 'grundlage'], ['Pasta', 10, 'standard'], ['Testkürbissauce', 5, 'standard'], ['Parmesan', 0, 'standard'],
+  ]);
+});
+
+it('carbCarry: zweimal Pasta höchstens 2 Tage auseinander → einmal kochen; paarweise; Reis und Abstand 3 Tage nicht', () => {
+  const hh = { portions: 2, lunchDays: [] };
+  const meal = (id: string, day: number, side: string) => ({ id, day: day as Week['cookDays'][number], recipeId: 'chili', baseId: 'chili', side });
+  const w: Week = { cookDays: [SO], bases: [{ recipeId: 'chili', day: SO, extra: 0 }], meals: [
+    meal('a', SO, 'pasta,parmesan'), meal('b', DI, 'pasta'), meal('c', MI, 'pasta'), meal('d', DO, 'reis'), meal('e', SA, 'pasta'),
+  ] };
+  const c = carbCarry(weekView(w, all, hh), hh);
+  expect(c.get(SO)).toEqual({ side: 'pasta', with: DI, portions: 2 }); // So → Di: 2 Tage
+  expect(c.get(DI)).toEqual({ side: 'pasta', from: SO });
+  expect(c.has(MI)).toBe(false); // Di ist schon vergeben, Sa ist 3 Tage weg
+  expect(c.has(DO)).toBe(false);
+  expect(c.has(SA)).toBe(false);
+});
+
 it('extrasOf: was zur Grundlage dazukommt, ohne die Grundlage selbst', () => {
-  const pasta = recipe('kp', 'Testkürbispasta', [uses('bolo', 'Testbolognese'), { id: 'x', name: 'Cocktailtomaten', amount: 100, unit: 'g' }, { id: 'y', name: 'Pasta', amount: 80, unit: 'g' }, { id: 'z', name: 'Olivenöl', amount: 1, unit: 'EL' }, { id: 's', name: 'Salz & Pfeffer', amount: 1, unit: 'Prise' }]);
+  const pasta = recipe('kp', 'Testkürbispasta', [uses('bolo', 'Testbolognese'), { id: 'x', name: 'Cocktailtomaten', amount: 100, unit: 'g' }, { id: 'y', name: 'Pasta', amount: 80, unit: 'g' }, { id: 'z', name: 'Olivenöl', amount: 1, unit: 'EL' }, { id: 's', name: 'Salz & Pfeffer', amount: 1, unit: 'Prise' }, { id: 'k', name: 'Knoblauchzehe', amount: 1, unit: 'Stück' }]);
   expect(extrasOf(pasta, 'bolo')).toEqual(['Cocktailtomaten', 'Pasta']);
 });
 

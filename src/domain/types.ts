@@ -165,6 +165,11 @@ export interface Recipe {
    * Bewusst nicht versioniert (wie der Favorit): umschalten ist keine neue Fassung des Rezepts.
    */
   homemade?: string[];
+  /**
+   * Zubereitung von Baukasten-Bausteinen nur bei dieser Grundlage (Julia: „Tomaten bei Kürbissauce anders als bei Bolo“),
+   * je Baustein-id. Nicht versioniert – wie homemade.
+   */
+  blockPrep?: Record<string, { text: string; minutes: number }>;
   /** gewählte Variante (RecipeContent.choices) – fehlt oder gibt es nicht mehr: die erste; wie homemade nicht versioniert */
   choice?: string;
   /**

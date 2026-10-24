@@ -96,6 +96,10 @@ export interface Household {
   lunchDays: Weekday[];
   /** eigene Beilagen-Mengen (Gramm pro Portion, je Beilage) – fehlt: die Werte aus sides.ts */
   sides?: Record<string, number>;
+  /** eigene Bausteine im Baukasten (Julia: „Tomaten bei Beilage“) – ids der Form „eigen:veg:Tomaten“, siehe sides.ts */
+  customSides?: string[];
+  /** eigene Standard-Zubereitung je Baustein (überschreibt Mashis Standard; je Grundlage geht's am Rezept: blockPrep) */
+  sidePrep?: Record<string, { text: string; minutes: number }>;
 }
 
 export const DEFAULT_HOUSEHOLD: Household = { portions: 1, lunchDays: [] };

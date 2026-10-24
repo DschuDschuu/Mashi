@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { currentContent, newId } from '../../domain/recipe';
 import {
-  DAY_LONG, DAY_SHORT, addBase, addToBase, byEffort, canLessPortions, canSwap, earlierCookDay, keepsOf, mealTitle, mhdFinds, moveBase, putMeal, putPrepared, removeMeal,
+  DAY_LONG, DAY_SHORT, addBase, mealKey, setExtra, addToBase, byEffort, canLessPortions, canSwap, earlierCookDay, keepsOf, mealTitle, mhdFinds, moveBase, putMeal, putPrepared, removeMeal,
   servingsOf, setMealPortions, sortCookDays, stepPortions, swapDays, toggleLunch, transformsOf, weekdayOf, weekStarted, weekView, withCookDays,
   type BaseView, type DayView, type MealView, type MhdFind, type WeekView,
 } from '../../domain/week';
@@ -40,7 +40,7 @@ export function WeekPlan({ week, onPickDish }: { week: Week; onPickDish?: (day: 
   const cookDays = sortCookDays(week.cookDays);
   const started = weekStarted(week);
   const [swapFrom, setSwapFrom] = useState<Weekday | null>(null);
-  const [what, setWhat] = useState<{ day: Weekday; replace?: MealView } | null>(null);
+  const [what, setWhat] = useState<{ day: Weekday; replace?: MealView; from?: string } | null>(null);
 
   /** jede Änderung der Woche mit „Rückgängig“ */
   const change = (next: Week, text: string) => {
@@ -52,9 +52,16 @@ export function WeekPlan({ week, onPickDish }: { week: Week; onPickDish?: (day: 
   const stepBase = (b: BaseView, up: boolean) => {
     const next = stepPortions(week, b.base.recipeId, up, recipes, hh, () => newId('w'), fallback);
     const added = next.meals.find((m) => !week.meals.some((x) => x.id === m.id));
+    // reicht es für einen neuen Abend, fragen statt raten (Julia: „was soll die 3. Portion sein?“) – erst als Vorrat
+    // merken, „Was gibt's?“ isst dann davon; wird das Sheet geschlossen, bleibt die Portion Vorrat
+    if (added) {
+      change(setExtra(week, b.base.recipeId, (b.base.extra ?? 0) + 1), `${title(b.recipe)}: ${portionText(b.portions + 1)} – was gibt's am ${DAY_LONG[added.day]}?`);
+      setWhat({ day: added.day, from: b.base.recipeId });
+      return;
+    }
     const gone = week.meals.find((m) => !next.meals.some((x) => x.id === m.id));
     const n = weekView(next, recipes, hh, fallback).bases.find((x) => x.base.recipeId === b.base.recipeId)?.portions ?? 0;
-    const day = added ? ` – ${DAY_LONG[added.day]}: ${title(recipes.find((r) => r.id === added.recipeId))}` : gone ? ` – ${DAY_LONG[gone.day]} wieder frei` : '';
+    const day = gone ? ` – ${DAY_LONG[gone.day]} wieder frei` : '';
     change(next, `${title(b.recipe)}: ${portionText(n)}${day}`);
   };
 
@@ -156,7 +163,7 @@ export function WeekPlan({ week, onPickDish }: { week: Week; onPickDish?: (day: 
       </div>
 
       {what && (
-        <WhatSheet day={what.day} replace={what.replace} view={view} recipes={recipes} fallback={fallback} onClose={() => setWhat(null)}
+        <WhatSheet day={what.day} replace={what.replace} from={what.from} view={view} recipes={recipes} fallback={fallback} onClose={() => setWhat(null)}
           stock={preparedPortions(pantry.items)} onStock={(recipeId) => putStock(what.day, recipeId)}
           onPut={(recipeId, baseId, side) => put(what.day, recipeId, baseId, side)}
           onCookbook={onPickDish && (() => { setWhat(null); onPickDish(what.day, what.replace?.meal.id); })} />
@@ -169,8 +176,8 @@ export function WeekPlan({ week, onPickDish }: { week: Week; onPickDish?: (day: 
  * „Was gibt's?“ (Julia: freien Abend antippen) – aus den Grundlagen, die bis dahin gekocht sind und noch halten:
  * die Grundlage mit Beilage (Beilagen oben), ohne, oder eine Verwandlung (wenig Aufwand zuerst). Oder aus dem Kochbuch.
  */
-function WhatSheet({ day, replace, view, recipes, fallback, stock, onStock, onPut, onCookbook, onClose }: {
-  day: Weekday; replace?: MealView; view: WeekView; recipes: Recipe[]; fallback: number; stock: Map<string, number>;
+function WhatSheet({ day, replace, from, view, recipes, fallback, stock, onStock, onPut, onCookbook, onClose }: {
+  day: Weekday; replace?: MealView; from?: string; view: WeekView; recipes: Recipe[]; fallback: number; stock: Map<string, number>;
   onStock: (recipeId: string) => void; onPut: (recipeId: string, baseId: string, side?: string) => void; onCookbook?: () => void; onClose: () => void;
 }) {
   const ref = useSheet(onClose);
@@ -188,12 +195,23 @@ function WhatSheet({ day, replace, view, recipes, fallback, stock, onStock, onPu
   const chip = (recipeId: string, baseId: string, text: string, side?: string) => (
     <button key={`${recipeId}+${side ?? ''}`} type="button" className={`chip${current(recipeId, side) ? ' is-on' : ''}`} onClick={() => onPut(recipeId, baseId, side)}>{text}</button>
   );
-  const heading = replace ? `${DAY_LONG[day]}: statt ${mealText(replace)}` : `Was gibt's am ${DAY_LONG[day]}?`;
+  const fromBase = from ? view.bases.find((b) => b.base.recipeId === from) : undefined;
+  const heading = replace ? `${DAY_LONG[day]}: statt ${mealText(replace)}` : fromBase ? `${DAY_LONG[day]}: was wird aus der neuen Portion ${title(fromBase.recipe)}?` : `Was gibt's am ${DAY_LONG[day]}?`;
+  // nach „+“ am Kochtag: was diese Woche schon aus der Grundlage zusammengestellt ist, zuerst (Julia: nicht das gespeicherte Rezept raten)
+  const again = from ? [...new Map(view.days.flatMap((d) => (d.meal && d.meal.meal.baseId === from ? [[mealKey(d.meal.meal.recipeId, d.meal.meal.side), d.meal]] as const : []))).values()] : [];
   return (
     <div className="sheet-backdrop" onClick={onClose}>
       <div className="sheet" role="dialog" aria-modal="true" aria-label={heading} onClick={(e) => e.stopPropagation()} ref={ref}>
         <div className="sheet__grip" />
         <h2 className="sheet__title">{heading}</h2>
+        {again.length > 0 && (
+          <section className="what__base">
+            <h3 className="small muted">Wie schon diese Woche</h3>
+            <div className="chips" role="group" aria-label="Wie schon diese Woche">
+              {again.map((m) => <button key={m.meal.id} type="button" className="chip" onClick={() => onPut(m.meal.recipeId, from!, m.meal.side)}>{mealText(m)}</button>)}
+            </div>
+          </section>
+        )}
         {prepared.length > 0 && (
           <section className="what__base">
             <h3 className="small muted">Aus dem Vorrat</h3>
@@ -207,7 +225,7 @@ function WhatSheet({ day, replace, view, recipes, fallback, stock, onStock, onPu
         {options.length > 0
           ? <h3 className="small muted">Aus der Woche</h3>
           : <p className="small muted">Bis {DAY_LONG[day]} ist noch nichts vorgekocht, das dann noch hält.</p>}
-        {options.map(({ b, frost, dishes }) => (
+        {[...options].sort((x, y) => Number(y.b.base.recipeId === from) - Number(x.b.base.recipeId === from)).map(({ b, frost, dishes }) => (
           <section key={b.base.recipeId} className="what__base">
             <p className="what__head">
               <b>{title(b.recipe)}</b>

@@ -15,6 +15,14 @@ export interface Side {
   /** Menge pro Portion – roh bzw. so, wie es im Laden liegt (frische Spätzle aus dem Kühlregal); in `unit` */
   grams: number;
   unit?: 'g' | 'Stück';
+  /** wie man ihn am Abend zubereitet (Julia: „woher weiß ich, wie ich das zubereite?“) – eigene Bausteine haben keinen */
+  prep?: SidePrep;
+}
+
+/** Zubereitung eines Bausteins: kurzer Satz + Minuten (0 = nur drüber/dazu, kommt zum Schluss) */
+export interface SidePrep {
+  text: string;
+  minutes: number;
 }
 
 export const SIDE_KINDS: readonly { kind: SideKind; label: string }[] = [
@@ -25,30 +33,51 @@ export const SIDE_KINDS: readonly { kind: SideKind; label: string }[] = [
 ];
 
 export const SIDES: readonly Side[] = [
-  { id: 'pasta', name: 'Pasta', kind: 'carb', grams: 100 },
-  { id: 'reis', name: 'Reis', kind: 'carb', grams: 75 },
-  { id: 'schupfnudeln', name: 'Schupfnudeln', kind: 'carb', grams: 250 },
-  { id: 'spaetzle', name: 'Spätzle', kind: 'carb', grams: 250 },
-  { id: 'gnocchi', name: 'Gnocchi', kind: 'carb', grams: 250 },
-  { id: 'kartoffeln', name: 'Kartoffeln', kind: 'carb', grams: 300 },
-  { id: 'haehnchen', name: 'Hähnchenbrust', kind: 'protein', grams: 125 },
-  { id: 'hack', name: 'Hackfleisch', kind: 'protein', grams: 125 },
-  { id: 'tofu', name: 'Tofu', kind: 'protein', grams: 100 },
-  { id: 'linsen', name: 'Linsen', kind: 'protein', grams: 60 },
-  { id: 'brokkoli', name: 'Brokkoli', kind: 'veg', grams: 150 },
-  { id: 'salat', name: 'Salat', kind: 'veg', grams: 50 },
-  { id: 'paprika', name: 'Paprika', kind: 'veg', grams: 100 },
-  { id: 'zucchini', name: 'Zucchini', kind: 'veg', grams: 150 },
-  { id: 'spinat', name: 'Spinat', kind: 'veg', grams: 100 },
-  { id: 'parmesan', name: 'Parmesan', kind: 'topping', grams: 15 },
-  { id: 'feta', name: 'Feta', kind: 'topping', grams: 40 },
-  { id: 'kraeuter', name: 'Frische Kräuter', kind: 'topping', grams: 5 },
-  { id: 'sesam', name: 'Sesam', kind: 'topping', grams: 5 },
-  { id: 'roestzwiebeln', name: 'Röstzwiebeln', kind: 'topping', grams: 10 },
-  { id: 'ei', name: 'Ei', kind: 'topping', grams: 1, unit: 'Stück' },
+  { id: 'pasta', name: 'Pasta', kind: 'carb', grams: 100, prep: { text: 'in Salzwasser kochen', minutes: 10 } },
+  { id: 'reis', name: 'Reis', kind: 'carb', grams: 75, prep: { text: 'mit doppelter Menge Wasser köcheln', minutes: 15 } },
+  { id: 'schupfnudeln', name: 'Schupfnudeln', kind: 'carb', grams: 250, prep: { text: 'in der Pfanne goldbraun braten', minutes: 8 } },
+  { id: 'spaetzle', name: 'Spätzle', kind: 'carb', grams: 250, prep: { text: 'in der Pfanne erhitzen', minutes: 5 } },
+  { id: 'gnocchi', name: 'Gnocchi', kind: 'carb', grams: 250, prep: { text: 'in Salzwasser garen, bis sie oben schwimmen', minutes: 4 } },
+  { id: 'kartoffeln', name: 'Kartoffeln', kind: 'carb', grams: 300, prep: { text: 'in Salzwasser kochen', minutes: 20 } },
+  { id: 'haehnchen', name: 'Hähnchenbrust', kind: 'protein', grams: 125, prep: { text: 'in Streifen schneiden und braten', minutes: 8 } },
+  { id: 'hack', name: 'Hackfleisch', kind: 'protein', grams: 125, prep: { text: 'krümelig anbraten', minutes: 8 } },
+  { id: 'tofu', name: 'Tofu', kind: 'protein', grams: 100, prep: { text: 'würfeln und knusprig braten', minutes: 10 } },
+  { id: 'linsen', name: 'Linsen', kind: 'protein', grams: 60, prep: { text: 'in Wasser weich kochen', minutes: 20 } },
+  { id: 'brokkoli', name: 'Brokkoli', kind: 'veg', grams: 150, prep: { text: 'in Röschen dämpfen', minutes: 5 } },
+  { id: 'salat', name: 'Salat', kind: 'veg', grams: 50, prep: { text: 'waschen und anmachen', minutes: 5 } },
+  { id: 'paprika', name: 'Paprika', kind: 'veg', grams: 100, prep: { text: 'in Streifen schneiden, kurz anbraten', minutes: 5 } },
+  { id: 'zucchini', name: 'Zucchini', kind: 'veg', grams: 150, prep: { text: 'in Scheiben anbraten', minutes: 6 } },
+  { id: 'spinat', name: 'Spinat', kind: 'veg', grams: 100, prep: { text: 'kurz zusammenfallen lassen', minutes: 2 } },
+  { id: 'parmesan', name: 'Parmesan', kind: 'topping', grams: 15, prep: { text: 'frisch drüberreiben', minutes: 0 } },
+  { id: 'feta', name: 'Feta', kind: 'topping', grams: 40, prep: { text: 'drüberbröseln', minutes: 0 } },
+  { id: 'kraeuter', name: 'Frische Kräuter', kind: 'topping', grams: 5, prep: { text: 'hacken und drüberstreuen', minutes: 0 } },
+  { id: 'sesam', name: 'Sesam', kind: 'topping', grams: 5, prep: { text: 'ohne Fett kurz rösten', minutes: 2 } },
+  { id: 'roestzwiebeln', name: 'Röstzwiebeln', kind: 'topping', grams: 10, prep: { text: 'drüberstreuen', minutes: 0 } },
+  { id: 'ei', name: 'Ei', kind: 'topping', grams: 1, unit: 'Stück', prep: { text: 'wachsweich kochen', minutes: 7 } },
 ];
 
-export const sideOf = (id: string | undefined): Side | undefined => SIDES.find((s) => s.id === id);
+/** Standardmenge eigener Bausteine je Gruppe (in den Einstellungen änderbar) */
+const CUSTOM_GRAMS: Record<SideKind, number> = { carb: 100, protein: 125, veg: 100, topping: 15 };
+
+/**
+ * Eigene Bausteine tragen Gruppe und Namen in der id („eigen:veg:Tomaten“) – so braucht Mashi für Titel, Einkauf und
+ * Essen keine zweite Liste, auch auf einem Gerät, das die eigenen Bausteine noch nicht abgeglichen hat.
+ */
+export function customSideId(kind: SideKind, name: string): string | undefined {
+  const clean = name.replace(/[,+:]/g, ' ').replace(/\s+/g, ' ').trim();
+  return clean ? `eigen:${kind}:${clean}` : undefined;
+}
+
+export const sideOf = (id: string | undefined): Side | undefined => {
+  if (!id) return undefined;
+  const m = /^eigen:(carb|protein|veg|topping):(.+)$/.exec(id);
+  if (m) return { id, name: m[2], kind: m[1] as SideKind, grams: CUSTOM_GRAMS[m[1] as SideKind] };
+  return SIDES.find((s) => s.id === id);
+};
+
+/** Alle Bausteine einer Gruppe – die festen und die eigenen */
+export const sidesOfKind = (kind: SideKind, custom: readonly string[] = []): Side[] =>
+  [...SIDES, ...custom.flatMap((id) => sideOf(id) ?? [])].filter((s) => s.kind === kind);
 
 /**
  * Die Bausteine eines Abends. Gespeichert als eine Zeichenkette („pasta,haehnchen,parmesan“) im bisherigen Feld
@@ -67,6 +96,37 @@ export const comboOf = (ids: readonly string[]): string | undefined => {
 export function comboText(side: string | undefined): string {
   const names = sidesOf(side).map((s) => s.name);
   return names.length > 1 ? `${names.slice(0, -1).join(', ')} & ${names.at(-1)}` : names[0] ?? '';
+}
+
+/**
+ * Zubereitung: erst die Abweichung bei dieser Grundlage (Julia: „Tomaten bei Kürbissauce anders als bei Bolo“), dann
+ * der eigene Standard aus den Einstellungen, dann Mashis Standard. undefined = noch keine (eigener Baustein).
+ */
+export function prepOf(id: string, household?: Pick<Household, 'sidePrep'>, base?: { blockPrep?: Record<string, SidePrep> }): SidePrep | undefined {
+  return base?.blockPrep?.[id] ?? household?.sidePrep?.[id] ?? sideOf(id)?.prep;
+}
+
+export interface ComboStep {
+  /** Baustein-id, fehlt bei der Grundlage selbst */
+  id?: string;
+  name: string;
+  text?: string;
+  minutes: number;
+  /** woher der Text kommt – zum Bearbeiten */
+  source: 'grundlage' | 'standard' | 'eigen';
+}
+
+/**
+ * Die Schritte eines Baukasten-Abends: was am längsten dauert, zuerst – so ist am Ende alles gleichzeitig fertig.
+ * Die Grundlage wird nur aufgewärmt (5 Min.); was 0 Minuten braucht (Parmesan drüber), kommt zum Schluss.
+ */
+export function comboSteps(side: string | undefined, baseTitle: string, household?: Pick<Household, 'sidePrep'>, base?: { blockPrep?: Record<string, SidePrep> }): ComboStep[] {
+  const steps: ComboStep[] = sidesOf(side).map((s) => {
+    const prep = prepOf(s.id, household, base);
+    const source = base?.blockPrep?.[s.id] ? 'grundlage' as const : household?.sidePrep?.[s.id] ? 'eigen' as const : 'standard' as const;
+    return { id: s.id, name: s.name, text: prep?.text, minutes: prep?.minutes ?? 0, source };
+  });
+  return [{ name: baseTitle, text: 'aufwärmen', minutes: 5, source: 'standard' as const }, ...steps].sort((a, b) => b.minutes - a.minutes);
 }
 
 /** Menge pro Portion – feste Werte, einmal zentral änderbar (Julia: nicht bei jedem Abend nachfragen) */

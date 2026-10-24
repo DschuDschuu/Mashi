@@ -1,6 +1,7 @@
 import { currentContent } from '../../domain/recipe';
-import { DAY_LONG, mealPortions, mealTitle, weekdayOf, weekView } from '../../domain/week';
+import { DAY_LONG, carbCarry, mealPortions, mealTitle, weekdayOf, weekView } from '../../domain/week';
 import { sideGrams, sidesOf } from '../../domain/sides';
+import { ComboSteps } from './ComboSteps';
 import { formatAmount } from '../../domain/scaling';
 import type { Week } from '../../domain/mealplan';
 import type { Recipe } from '../../domain/types';
@@ -31,6 +32,7 @@ export function WeekToday({ week }: { week: Week }) {
   const cookToday = view.bases.filter((b) => b.base.day === today && !b.base.cooked);
   const meal = d?.meal;
   const sides = sidesOf(meal?.meal.side);
+  const carry = carbCarry(view, hh).get(today);
   const lunch = d?.lunch;
   // nächster Kochtag mit noch Ungekochtem – auch über das Wochenende hinweg (die Woche hat keine Daten, nur Tage)
   const uncooked = view.bases.filter((b) => !b.base.cooked).map((b) => b.base.day);
@@ -83,9 +85,16 @@ export function WeekToday({ week }: { week: Week }) {
               <h3 className="bigcard__title">{mealTitle(meal.meal, meal.recipe)}</h3>
               <p className="small muted">
                 {meal.meal.recipeId !== meal.meal.baseId ? `${title(recipes.find((r) => r.id === meal.meal.baseId))} aus dem ${meal.frost ? 'Gefrierfach' : 'Kühlschrank'} + frisch dazu`
-                  : sides.length ? `Aufwärmen · ${sides.map((x) => `${formatAmount(sideGrams(x.id, hh) * mealPortions(view, today, hh))} ${x.unit === 'Stück' ? '×' : 'g'} ${x.name}`).join(', ')} dazu`
+                  : sides.length ? `Aufwärmen · ${sides.map((x) => {
+                    // zweimal Nudeln: heute gleich mitkochen bzw. von gestern aufwärmen (week.ts: carbCarry)
+                    if (carry?.side === x.id && carry.from !== undefined) return `${x.name} von ${DAY_LONG[carry.from]}`;
+                    const n = mealPortions(view, today, hh) + (carry?.side === x.id ? carry.portions ?? 0 : 0);
+                    return `${formatAmount(sideGrams(x.id, hh) * n)} ${x.unit === 'Stück' ? '×' : 'g'} ${x.name}${carry?.side === x.id && carry.with !== undefined ? ` (mit für ${DAY_LONG[carry.with]})` : ''}`;
+                  }).join(', ')} dazu`
                     : 'Nur aufwärmen'}
               </p>
+              {/* Baukasten-Abend: so geht's (Julia) – das Längste zuerst */}
+              {meal.meal.recipeId === meal.meal.baseId && sides.length > 0 && meal.recipe && <ComboSteps side={meal.meal.side!} base={meal.recipe} household={hh} carry={carry} />}
               <div className="week-today__actions">
                 {meal.meal.recipeId === meal.meal.baseId
                   ? (

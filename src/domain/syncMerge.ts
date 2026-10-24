@@ -176,9 +176,19 @@ function merge3Household(base: Household | undefined, ours: Household | undefine
     const v = merge3Value(b.sides?.[id], o.sides?.[id], t.sides?.[id]);
     return v === undefined ? [] : [[id, v]];
   }));
+  // eigene Bausteine als Menge – am Handy Tomaten dazu, am Tablet Feta → beides
+  const customSides = merge3Set(b.customSides, o.customSides, t.customSides);
+  // Zubereitung je Baustein – wer einen Baustein geändert hat, gewinnt dort
+  const prepIds = [...new Set([b, o, t].flatMap((h) => Object.keys(h.sidePrep ?? {})))];
+  const sidePrep = Object.fromEntries(prepIds.flatMap((id) => {
+    const v = merge3Value(b.sidePrep?.[id], o.sidePrep?.[id], t.sidePrep?.[id]);
+    return v === undefined ? [] : [[id, v]];
+  }));
   return {
     portions: merge3Value(b.portions, o.portions, t.portions), lunchDays: merge3Value(b.lunchDays, o.lunchDays, t.lunchDays),
     ...(ids.length && Object.keys(sides).length ? { sides } : {}),
+    ...(customSides.length ? { customSides } : {}),
+    ...(Object.keys(sidePrep).length ? { sidePrep } : {}),
   };
 }
 

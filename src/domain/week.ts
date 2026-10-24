@@ -56,7 +56,7 @@ export function transformsOf(baseId: string, recipes: readonly Recipe[]): Recipe
  */
 export function extrasOf(dish: Recipe, baseId: string): string[] {
   // Würze und Wasser hat man da – sonst wird die Zeile lang und das Wesentliche (Hähnchen, Pasta) geht unter
-  const basic = /^(salz|pfeffer|salz (&|und) pfeffer|wasser)$|öl$|gewürz/i;
+  const basic = /^(salz|pfeffer|salz (&|und) pfeffer|wasser)$|öl$|gewürz|knoblauch/i;
   return [...new Set(currentContent(dish).ingredients.filter((i) => i.recipeId !== baseId && !basic.test(i.name.trim())).map((i) => i.name))];
 }
 
@@ -505,6 +505,27 @@ export function weekSideNeeds(week: Week | undefined, recipes: readonly Recipe[]
     for (const s of sidesOf(m.side)) portions.set(s.id, (portions.get(s.id) ?? 0) + mealPortions(view, d.day, household));
   }
   return [...portions].flatMap(([id, n]) => sideIngredient(id, n, household) ?? []);
+}
+
+export type CarbCarry = { side: string; with?: Weekday; portions?: number; from?: Weekday };
+
+/**
+ * Zweimal Nudeln kurz hintereinander (Julia: „reicht, es an einem Tag zu kochen und aufzubewahren“): dasselbe
+ * Kohlenhydrat an zwei offenen Abenden höchstens 2 Tage auseinander → am ersten für beide kochen, am zweiten aufwärmen.
+ * Paarweise, damit nichts älter als 2 Tage wird. Die Einkaufsmenge bleibt gleich – es ändert sich nur, wann gekocht wird.
+ */
+export function carbCarry(view: WeekView, household: Household): Map<Weekday, CarbCarry> {
+  const out = new Map<Weekday, CarbCarry>();
+  const carbOf = (d: DayView) => (d.meal && !d.meal.meal.done && d.meal.meal.recipeId === d.meal.meal.baseId ? sidesOf(d.meal.meal.side).find((s) => s.kind === 'carb')?.id : undefined);
+  view.days.forEach((d, i) => {
+    const carb = carbOf(d);
+    if (!carb || out.has(d.day)) return;
+    const next = view.days.slice(i + 1, i + 3).find((x) => !out.has(x.day) && carbOf(x) === carb);
+    if (!next) return;
+    out.set(d.day, { side: carb, with: next.day, portions: mealPortions(view, next.day, household) });
+    out.set(next.day, { side: carb, from: d.day });
+  });
+  return out;
 }
 
 /** Was Julia gewählt hat, aus einer Woche zurückgelesen (Grundlagen in Reihenfolge, ihre Gerichte nach Abend) */

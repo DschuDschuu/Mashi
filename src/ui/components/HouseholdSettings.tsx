@@ -1,6 +1,9 @@
+import { useState } from 'react';
 import { DAY_SHORT } from '../../domain/week';
 import { WORKDAYS } from '../../domain/mealplan';
-import { SIDE_KINDS, SIDES, sideGrams } from '../../domain/sides';
+import { SIDE_KINDS, sideGrams, sidesOfKind } from '../../domain/sides';
+import { PrepSheet } from './ComboSteps';
+import { Icon } from './Icon';
 import { householdOf, setHousehold, usePlan } from '../../data/store';
 import { toast } from '../toast';
 import { Stepper, Switch } from './Controls';
@@ -12,6 +15,7 @@ import { Stepper, Switch } from './Controls';
 export function HouseholdSettings() {
   const hh = householdOf(usePlan());
   const lunch = hh.lunchDays.length > 0;
+  const [prepFor, setPrepFor] = useState<string | null>(null);
   const set = (patch: Partial<typeof hh>, text: string) => toast(text, { label: 'Rückgängig', run: setHousehold({ ...hh, ...patch }) });
   const toggleDay = (d: number) => {
     const days = hh.lunchDays.includes(d) ? hh.lunchDays.filter((x) => x !== d) : [...hh.lunchDays, d].sort((a, b) => a - b);
@@ -43,13 +47,21 @@ export function HouseholdSettings() {
       {/* Beilagen der Woche (Julia: feste Mengen, einmal hier anpassen statt bei jedem Abend) */}
       <details className="household__sides">
         <summary><strong>Bausteine pro Portion</strong> <small className="muted">für den Baukasten in der Woche</small></summary>
-        {SIDE_KINDS.map(({ kind, label }) => [<h4 key={kind} className="small muted household__kind">{label}</h4>, ...SIDES.filter((x) => x.kind === kind).map((s) => {
+        {SIDE_KINDS.map(({ kind, label }) => [<h4 key={kind} className="small muted household__kind">{label}</h4>, ...sidesOfKind(kind, hh.customSides).map((s) => {
           // kleine Mengen (Parmesan, Sesam) in 5er-Schritten, Ei in Stück
           const piece = s.unit === 'Stück';
           const step = piece ? 1 : s.grams < 50 ? 5 : 25;
           return (
           <div key={s.id} className="row-between">
-            <span>{s.name} <small className="muted">{piece ? 'Stück' : 'in g'}</small></span>
+            <span>{s.name} <small className="muted">{piece ? 'Stück' : 'in g'}</small>
+              {/* Zubereitung als Standard (Julia: „woher weiß ich, wie ich das zubereite?“) */}
+              <button type="button" className="iconbtn iconbtn--sm" aria-label={`Zubereitung ${s.name}`} onClick={() => setPrepFor(s.id)}><Icon name="pencil" size={14} /></button>
+              {/* eigene Bausteine (Julia: „Tomaten“) wieder rausnehmen – alte Abende damit behalten ihren Namen (steht in der id) */}
+              {s.id.startsWith('eigen:') && <button type="button" className="link small" onClick={() => {
+                const { [s.id]: _g, ...sides } = hh.sides ?? {};
+                set({ customSides: (hh.customSides ?? []).filter((x) => x !== s.id), sides: Object.keys(sides).length ? sides : undefined }, `${s.name} entfernt`);
+              }}> entfernen</button>}
+            </span>
             <Stepper small value={sideGrams(s.id, hh)} min={step} max={piece ? 6 : 600} step={step} label={`${s.name} pro Portion${piece ? '' : ' in Gramm'}`}
               onChange={(g) => {
                 // Standardwert = keine eigene Angabe – so gelten spätere bessere Standardwerte auch hier
@@ -61,6 +73,7 @@ export function HouseholdSettings() {
           );
         })])}
       </details>
+      {prepFor && <PrepSheet sideId={prepFor} household={hh} onClose={() => setPrepFor(null)} />}
     </div>
   );
 }

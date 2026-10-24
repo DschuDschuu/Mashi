@@ -683,6 +683,27 @@ export function restoreRecipe(id: string) {
 }
 
 /** Zutat selbst machen oder kaufen (Julia: Gnocchi) – gibt „Rückgängig“ zurück; siehe homemade.ts */
+/**
+ * Zubereitung eines Bausteins ändern – mit `baseId` nur bei dieser Grundlage (am Rezept), sonst als eigener Standard
+ * (im Haushalt, abgeglichen). undefined = zurück auf den Standard.
+ */
+export function setSidePrep(sideId: string, prep: { text: string; minutes: number } | undefined, baseId?: string): () => void {
+  if (!baseId) {
+    const hh = householdOf();
+    const { [sideId]: _old, ...rest } = hh.sidePrep ?? {};
+    const sidePrep = prep ? { ...rest, [sideId]: prep } : rest;
+    return setHousehold({ ...hh, sidePrep: Object.keys(sidePrep).length ? sidePrep : undefined });
+  }
+  const before = get(baseId).blockPrep;
+  const apply = (map: Record<string, { text: string; minutes: number }> | undefined) => {
+    const { blockPrep: _, ...r } = get(baseId);
+    commit(map && Object.keys(map).length ? { ...r, blockPrep: map } : r);
+  };
+  const { [sideId]: _old, ...rest } = before ?? {};
+  apply(prep ? { ...rest, [sideId]: prep } : rest);
+  return () => apply(before);
+}
+
 export function setHomemade(id: string, ingredientId: string, on: boolean): () => void {
   const before = get(id).homemade;
   const apply = (list: string[] | undefined) => {
