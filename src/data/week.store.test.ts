@@ -3,7 +3,7 @@ import PouchDB from 'pouchdb-core';
 import memory from 'pouchdb-adapter-memory';
 import { describe, expect, it } from 'vitest';
 import { PouchRecipeRepository, type RecipeDb } from './pouchRepository';
-import { addPantryItem, answerLeftover, cookBase, createRecipe, makeBase, markCooked, currentPantry, currentPlan, eatMeal, eatOutToday, initStore, setHousehold, setPrepInfo, setWeek, togglePlanCooked, whenSaved } from './store';
+import { addPantryItem, addToPlan, answerLeftover, clearPlan, cookBase, createRecipe, makeBase, markCooked, scheduleRecipe, currentPantry, currentPlan, eatMeal, eatOutToday, initStore, setHousehold, setPrepInfo, setWeek, togglePlanCooked, whenSaved } from './store';
 import { buildShoppingList } from '../domain/mealplan';
 import { shoppingList } from '../domain/restock';
 import { mealKey, suggestWeek } from '../domain/week';
@@ -179,6 +179,39 @@ describe('Store: Vorkoch-Woche (Julia: Bolo am Sonntag, unter der Woche Nudeln u
     togglePlanCooked(nudeln);
     const amount = (name: string) => currentPantry().items.find((i) => i.name === name && !i.recipeId)?.amount;
     expect([amount('Hackfleisch'), amount('Spaghetti')]).toEqual([500, 400]);
+  });
+
+  it('ein Plan: „irgendwann“ auf Mittwoch legen; Woche leeren nimmt alles raus; beides rückgängig', async () => {
+    await freshStore('one-plan');
+    const lasagne = createRecipe({ ...content('Testlasagne', [{ id: 'p', name: 'Lasagneplatten', amount: 250, unit: 'g' }]), servings: 4 }, { source: 'selbst', status: 'kochbuch' });
+    const salat = createRecipe(content('Testsalat', [{ id: 's', name: 'Gurke', amount: 1, unit: 'Stück' }]), { source: 'selbst', status: 'kochbuch' });
+    setHousehold({ portions: 1, lunchDays: [] });
+    addToPlan(lasagne, 4);
+    addToPlan(salat, 1);
+    const manual = () => currentPlan().items.filter((i) => !i.fromWeek).map((i) => i.recipeId);
+    expect(manual()).toEqual([lasagne, salat]);
+
+    const undoDay = scheduleRecipe(lasagne, 2, 4)!; // Mittwoch
+    expect(manual()).toEqual([salat]);
+    // 4 Portionen: Mi, Do, Fr gibt's Lasagne (hält 3 Tage), die vierte bleibt Vorrat – statt 3 einzufrieren
+    expect(currentPlan().week!.meals.map((m) => [m.day, m.recipeId])).toEqual([[2, lasagne], [3, lasagne], [4, lasagne]]);
+    expect(currentPlan().week!.bases[0]).toMatchObject({ recipeId: lasagne, day: 2, extra: 1 });
+    expect(scheduleRecipe(salat, 2, 1)).toBeNull(); // Mittwoch ist belegt
+    undoDay();
+    expect(manual()).toEqual([lasagne, salat]);
+    expect(currentPlan().week).toBeUndefined();
+
+    scheduleRecipe(lasagne, 2, 4);
+    const undoClear = clearPlan();
+    expect([currentPlan().items.length, currentPlan().week]).toEqual([0, undefined]);
+    undoClear();
+    expect(manual()).toEqual([salat]);
+    expect(currentPlan().week!.meals).toHaveLength(3);
+
+    // „Was gibt's?“ → aus dem Kochbuch auf einen belegten Abend: Freitag wird Salat, Lasagne bleibt Mi + Do
+    const fr = currentPlan().week!.meals.find((m) => m.day === 4)!;
+    scheduleRecipe(salat, 4, 1, fr.id);
+    expect(currentPlan().week!.meals.map((m) => [m.day, m.recipeId])).toEqual([[2, lasagne], [3, lasagne], [4, salat]]);
   });
 
   it('Heute auswärts: das Abendessen rückt einen Tag weiter, „Rückgängig“ holt es zurück', async () => {

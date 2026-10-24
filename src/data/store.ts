@@ -5,7 +5,7 @@ import { reverseKeyed, reverseList, reverseRecord } from '../domain/undo';
 import { EXTRA_PREFIX, RESTOCK_PREFIX, shoppingList, type RestockRule } from '../domain/restock';
 import { exclusiveStages, stageOf, withStage, type FoodStage } from '../domain/stage';
 import { DEFAULT_HOUSEHOLD, emptyPlan, keyOfName, normalizePlan, toggleCooked, type Household, type MealPlan, type Week, type Weekday } from '../domain/mealplan';
-import { mealPortions, shiftFrom, weekBaseIds, weekItems, weekView } from '../domain/week';
+import { mealPortions, removeMeal, scheduleMeal, shiftFrom, weekBaseIds, weekdayOf, weekItems, weekView } from '../domain/week';
 import { baseSupply, coveredShare, type BaseSupply } from '../domain/baseStock';
 import { mergeRecipes } from '../domain/merge';
 import { pantryFromBackup, unionProducts } from '../domain/syncMerge';
@@ -879,6 +879,28 @@ function refreshWeek() {
 }
 
 /** Woche setzen (undefined = keine Woche) – gibt „Rückgängig“ zurück */
+/**
+ * Ein Gericht auf einen Tag legen (Julia: „ein Plan“) – aus dem Kochbuch oder von „irgendwann diese Woche“ (dann fällt
+ * der Listen-Eintrag weg). Gibt „Rückgängig“ zurück; null, wenn der Abend schon belegt ist.
+ */
+export function scheduleRecipe(recipeId: string, day: Weekday, servings: number, replaceMealId?: string): (() => void) | null {
+  const r = get(recipeId);
+  // „Was gibt's?“ an einem belegten Abend (Julia: anderes Gericht) – erst den alten Abend raus, dann wie neu einplanen
+  const from = replaceMealId && plan.week ? removeMeal(plan.week, replaceMealId) : plan.week;
+  const week = scheduleMeal(from, r, day, servings, householdOf(), () => newId('w'), recipes, keepsFallback(), weekdayOf(new Date()));
+  if (week === plan.week) return null;
+  const before = plan;
+  commitPlan(withWeek({ ...plan, items: plan.items.filter((i) => i.fromWeek || i.recipeId !== recipeId) }, week));
+  return () => commitPlan({ ...plan, items: before.items, cooked: before.cooked, ...(before.week ? { week: before.week } : { week: undefined }) });
+}
+
+/** Woche leeren (Julia): alle Abende, Kochtage und „irgendwann“-Gerichte raus – Vorgekochtes und eigene Einkäufe bleiben */
+export function clearPlan(): () => void {
+  const before = plan;
+  commitPlan(withWeek({ ...plan, items: [], cooked: [] }, undefined));
+  return () => commitPlan({ ...plan, items: before.items, cooked: before.cooked, ...(before.week ? { week: before.week } : { week: undefined }) });
+}
+
 export function setWeek(week: Week | undefined): () => void {
   const before = plan;
   commitPlan(withWeek(plan, week));

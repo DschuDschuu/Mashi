@@ -157,7 +157,9 @@ function merge3Week(base: Week | undefined, ours: Week | undefined, theirs: Week
   if (!ours || !theirs) return ours ?? theirs; // eine Seite hat die Woche gelöscht, die andere geändert → behalten
   const days = (xs: number[] | undefined) => xs?.map(String);
   const noLunch = merge3Set(days(base?.noLunch), days(ours.noLunch), days(theirs.noLunch)).map(Number);
+  const start = merge3Value(base?.start, ours.start, theirs.start);
   return resolveClashes({
+    ...(start !== undefined ? { start } : {}),
     cookDays: merge3Value(base?.cookDays ?? [], ours.cookDays, theirs.cookDays),
     bases: merge3Keyed(base?.bases ?? [], ours.bases, theirs.bases, (b) => b.recipeId),
     meals: merge3Keyed(base?.meals ?? [], ours.meals, theirs.meals, (m) => m.id),

@@ -70,6 +70,8 @@ export interface WeekMeal {
   baseId: string;
   /** frisch dazu (Julia: „Bolognese mit Spätzle“) – nur zur Grundlage selbst, siehe sides.ts */
   side?: string;
+  /** Portionen an diesem Abend, wenn anders als im Haushalt (Julia: Gäste am Freitag) – fehlt = Haushalt */
+  portions?: number;
   /** gegessen (mit dem Rest für den nächsten Mittag) */
   done?: boolean;
 }
@@ -83,6 +85,8 @@ export interface Week {
   noLunch?: Weekday[];
   /** Mittagsboxen schon gegessen (Reste vom Vorabend gehen mit dem Abendessen) */
   doneLunch?: Weekday[];
+  /** erster Tag der Woche, wenn fest (Julia: Samstag dazu soll nicht vor Mittwoch rutschen) – fehlt = erster Kochtag */
+  start?: Weekday;
 }
 
 export interface Household {

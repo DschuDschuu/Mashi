@@ -2,7 +2,8 @@ import { useMemo, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { ask } from '../confirm';
 import { DishNutrition } from '../components/DishNutrition';
 import { recipeCost, sumCosts } from '../../domain/cost';
-import { suggestRecipes, type ShoppingItem, type Suggestion } from '../../domain/mealplan';
+import { suggestRecipes, type ShoppingItem, type Suggestion, type Weekday } from '../../domain/mealplan';
+import { DAY_LONG, DAY_SHORT } from '../../domain/week';
 import { ingredientCompletions, longNotCooked, searchRecipes } from '../../domain/recipeSearch';
 import { currentContent } from '../../domain/recipe';
 import { cookingContent } from '../../domain/homemade';
@@ -18,11 +19,11 @@ import { thawFit, thawNeeds, type ThawNeed } from '../../domain/pantry';
 import { packLabel } from '../../domain/pantryLabel';
 import { specialDays } from '../../domain/shelfLife';
 import {
-  addToPlan, clearCooked, eatPreparedPortions, removeFromPlan, setPlanAmounts, setPlanServings, thawPantryItem, togglePlanCooked, useFoodTable, usePantry, usePlan, useRecipes,
+  addToPlan, clearCooked, clearPlan, eatPreparedPortions, householdOf, removeFromPlan, scheduleRecipe, setPlanAmounts, setPlanServings, thawPantryItem, togglePlanCooked, useFoodTable, usePantry, usePlan, useRecipes,
 } from '../../data/store';
 import { navigate } from '../../router';
 import { CartButton } from '../components/CartButton';
-import { Empty, Section, Stepper } from '../components/Controls';
+import { Section, Stepper } from '../components/Controls';
 import { useMissing } from '../useShoppingCount';
 import { useSheet } from '../useSheet';
 import { UseUpBadge } from '../components/UseUpBadge';
@@ -52,6 +53,8 @@ export function PlanScreen() {
   const plan = usePlan();
   const pantry = usePantry();
   const [picking, setPicking] = useState(false);
+  // „Was gibt's?“ → „Aus dem Kochbuch“ (Julia: freien Abend antippen) – derselbe Picker, aber für einen Abend
+  const [dayPick, setDayPick] = useState<{ day: Weekday; replace?: string } | null>(null);
   // Vorgekochtes deckt Grundlagen (Julia: „Meldung, dass nur 2 da sind“) – gleiche Verteilung wie auf der Einkaufsliste
   const supply = useMemo(() => baseSupply(plan, recipes, pantry.items, weekBaseIds(plan.week)), [plan, recipes, pantry.items]);
 
@@ -91,20 +94,21 @@ export function PlanScreen() {
     });
   };
 
-  // Julia: „Woche ersetzt die Liste“ – oben die Vorkoch-Woche (oder der Einstieg), darunter von Hand Eingeplantes
-  const weekPart = plan.week ? <WeekPlan week={plan.week} /> : (
+  // Julia: „ein Plan“ – oben die Woche mit ihren Tagen (oder der Einstieg), darunter, was noch keinen Tag hat
+  const weekPart = plan.week ? <WeekPlan week={plan.week} onPickDish={(day, replace) => setDayPick({ day, replace })} /> : (
     <section className="week-start">
-      <h2 className="h3">Diese Woche vorkochen</h2>
-      <p className="small muted">Eine oder zwei Grundlagen am Kochtag – daraus unter der Woche verschiedene Abendessen. Mashi plant, wann was dran ist.</p>
+      <h2 className="h3">Diese Woche</h2>
+      <p className="small muted">Noch keine Abende geplant. Plan die Woche mit Grundlagen zum Vorkochen – oder leg ein Gericht auf einen Tag (im Kochbuch: „Zum Wochenplan“).</p>
       <button type="button" className="btn btn--primary" onClick={() => navigate('/plan/woche')}><Icon name="calendar" size={18} /> Woche planen</button>
     </section>
   );
+  const takenDays = new Set(plan.week?.meals.map((m) => m.day) ?? []);
   const planList = (
     <>
       {weekPart}
-      {(!plan.week || items.length > 0) && <Section icon="calendar" title={plan.week ? `Außerdem im Plan · ${items.length} ${items.length === 1 ? 'Gericht' : 'Gerichte'}` : items.length ? `${items.length} ${items.length === 1 ? 'Gericht' : 'Gerichte'} · ${portionCount(portions)}` : 'Noch nichts geplant'}>
+      <Section icon="calendar" title={items.length ? `Irgendwann diese Woche · ${items.length} ${items.length === 1 ? 'Gericht' : 'Gerichte'} · ${portionCount(portions)}` : 'Irgendwann diese Woche'}>
         {items.length === 0 ? (
-          <Empty icon="calendar">Wähle ein Gericht – Mashi schlägt dir dann Rezepte mit ähnlichen Zutaten vor. So kaufst du weniger ein und es bleibt nichts übrig.</Empty>
+          <p className="small muted">Gerichte ohne festen Tag stehen hier – leg sie später auf einen freien Abend.</p>
         ) : (
           <ul className="list plan-list">
             {items.map(({ recipe, servings, cooked, variants, amounts }) => (
@@ -137,6 +141,7 @@ export function PlanScreen() {
                 {/* eigene Zeile über die ganze Karte – neben dem Portionen-Regler wäre sie zu schmal */}
                 {!cooked && <ThawPill needs={thawOf(recipe.id)} recipeId={recipe.id} title={currentContent(recipe).title} servings={servings} />}
                 {!cooked && <PlanAmounts recipe={recipe} servings={servings} amounts={amounts ?? {}} />}
+                {!cooked && <DayPick recipe={recipe} servings={servings} taken={takenDays} />}
                 <div className="plan-list__servings">
                   <span className="small muted" aria-hidden="true">Portionen</span>
                   <Stepper small value={servings} onChange={(v) => setPlanServings(recipe.id, v)} label={`Portionen ${currentContent(recipe).title}`} />
@@ -174,7 +179,7 @@ export function PlanScreen() {
             Gekochtes aufräumen
           </button>
         )}
-      </Section>}
+      </Section>
     </>
   );
 
@@ -193,13 +198,34 @@ export function PlanScreen() {
     <main className="screen screen--tabbed">
       {/* die Einkaufsliste sitzt jetzt oben rechts in der Speisekammer; hier führt „Fehlt noch“ hin */}
       {/* Wagen hier statt in der Speisekammer (Julia): einkaufen gehört zum Plan */}
-      <header className="page-head"><h1>Wochenplan</h1><CartButton /></header>
+      <header className="page-head">
+        <h1>Wochenplan</h1>
+        <span className="page-head__right">
+          {/* Julia: den Wochenplan löschen können – Abende, Kochtage und „irgendwann“; Vorgekochtes bleibt */}
+          {(plan.week || items.length > 0) && (
+            <button type="button" className="link small" onClick={() => void (async () => {
+              if (await ask({ title: 'Woche leeren?', text: 'Alle Abende, Kochtage und Gerichte ohne Tag kommen raus. Vorgekochtes bleibt in der Speisekammer, eigene Einträge auf der Einkaufsliste auch.', confirm: 'Leeren' })) {
+                toast('Woche geleert', { label: 'Rückgängig', run: clearPlan() });
+              }
+            })()}>Woche leeren</button>
+          )}
+          <CartButton />
+        </span>
+      </header>
       <div className="plan-layout">
         <div className="plan-layout__main">{planList}</div>
         <div className="plan-layout__side">{sideList}</div>
       </div>
       {more.sheet}
       {picking && <RecipePicker recipes={recipes.filter(plannable)} planned={plan.items.map((i) => i.recipeId)} suggestions={suggestions} onPick={add} onClose={() => setPicking(false)} />}
+      {dayPick && (
+        <RecipePicker title={`Gericht für ${DAY_LONG[dayPick.day]}`} recipes={recipes.filter(plannable)} planned={[]} suggestions={suggestions} onClose={() => setDayPick(null)}
+          onPick={(r) => {
+            setDayPick(null);
+            const undo = scheduleRecipe(r.id, dayPick.day, householdOf(plan).portions, dayPick.replace);
+            if (undo) toast(`„${currentContent(r).title}“ am ${DAY_LONG[dayPick.day]}`, { label: 'Rückgängig', run: undo });
+          }} />
+      )}
     </main>
   );
 }
@@ -211,7 +237,8 @@ export function PlanScreen() {
  * Beim Tippen: beste Treffer zuerst, Treffer markiert, Enter nimmt den ersten,
  * Pfeiltasten wählen – und Zutaten-Chips für „Was mache ich mit …?“.
  */
-function RecipePicker({ recipes, planned, suggestions, onPick, onClose }: {
+function RecipePicker({ title = 'Gericht auswählen', recipes, planned, suggestions, onPick, onClose }: {
+  title?: string;
   recipes: Recipe[];
   planned: string[];
   suggestions: Suggestion[];
@@ -283,9 +310,9 @@ function RecipePicker({ recipes, planned, suggestions, onPick, onClose }: {
 
   return (
     <div className="sheet-backdrop" onClick={onClose}>
-      <div className="sheet sheet--tall" role="dialog" aria-modal="true" aria-label="Gericht auswählen" onClick={(e) => e.stopPropagation()} ref={sheetRef}>
+      <div className="sheet sheet--tall" role="dialog" aria-modal="true" aria-label={title} onClick={(e) => e.stopPropagation()} ref={sheetRef}>
         <div className="sheet__grip" />
-        <h2 className="sheet__title">Gericht auswählen</h2>
+        <h2 className="sheet__title">{title}</h2>
         {candidates.length > 0 && (
           <label className="search">
             <Icon name="search" size={18} />
@@ -479,6 +506,28 @@ function DonePartsLine({ recipeId }: { recipeId: string }) {
   const done = doneParts(usePantry().items, recipeId);
   if (!done.length) return null;
   return <span className="small plan-done-parts"><Icon name="check" size={13} /> {done.map(partLabel).join(', ')} fertig</span>;
+}
+
+/**
+ * „Auf einen Tag legen“ (Julia: „ein Plan“): die freien Abende als Chips – antippen legt das Gericht dorthin und nimmt
+ * es aus „irgendwann“ (store: scheduleRecipe, mit Rückgängig).
+ */
+function DayPick({ recipe, servings, taken }: { recipe: Recipe; servings: number; taken: ReadonlySet<number> }) {
+  const [open, setOpen] = useState(false);
+  const free = DAY_SHORT.map((d, i) => ({ d, i })).filter(({ i }) => !taken.has(i));
+  if (!free.length) return null;
+  if (!open) return <button type="button" className="link small plan-daypick" onClick={() => setOpen(true)}><Icon name="calendar" size={14} /> Auf einen Tag legen</button>;
+  return (
+    <div className="chips plan-daypick" role="group" aria-label={`${currentContent(recipe).title} auf einen Tag legen`}>
+      {free.map(({ d, i }) => (
+        <button key={d} type="button" className="chip" onClick={() => {
+          const undo = scheduleRecipe(recipe.id, i as Weekday, servings);
+          if (undo) toast(`„${currentContent(recipe).title}“ am ${DAY_LONG[i]}`, { label: 'Rückgängig', run: undo });
+        }}>{d}</button>
+      ))}
+      <button type="button" className="link small" onClick={() => setOpen(false)}>Abbrechen</button>
+    </div>
+  );
 }
 
 /**

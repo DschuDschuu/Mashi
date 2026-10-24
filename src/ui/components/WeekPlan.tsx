@@ -1,16 +1,20 @@
 import { useMemo, useState } from 'react';
 import { currentContent, newId } from '../../domain/recipe';
 import {
-  DAY_LONG, DAY_SHORT, addBase, addToBase, canSwap, earlierCookDay, mealTitle, mhdFinds, moveBase, removeMeal, setExtra, sortCookDays, swapDays, toggleLunch,
-  weekStarted, weekView, withCookDays, type BaseView, type DayView, type MealView, type MhdFind,
+  DAY_LONG, DAY_SHORT, addBase, addToBase, byEffort, canLessPortions, canSwap, earlierCookDay, keepsOf, mealTitle, mhdFinds, moveBase, putMeal, putPrepared, removeMeal,
+  servingsOf, setMealPortions, sortCookDays, stepPortions, swapDays, toggleLunch, transformsOf, weekdayOf, weekStarted, weekView, withCookDays,
+  type BaseView, type DayView, type MealView, type MhdFind, type WeekView,
 } from '../../domain/week';
 import type { Week, Weekday } from '../../domain/mealplan';
 import type { Recipe } from '../../domain/types';
+import { SIDES } from '../../domain/sides';
+import { preparedPortions } from '../../domain/baseStock';
 import { specialDays } from '../../domain/shelfLife';
 import { freezePantryItem, householdOf, setWeek, useFoodTable, usePantry, usePlan, useRecipes } from '../../data/store';
 import { navigate } from '../../router';
-import { ask } from '../confirm';
 import { toast } from '../toast';
+import { useSheet } from '../useSheet';
+import { Stepper } from './Controls';
 import { Icon } from './Icon';
 import { RecipeImage } from './RecipeImage';
 
@@ -22,9 +26,10 @@ const portionText = (n: number) => `${n} ${n === 1 ? 'Portion' : 'Portionen'}`;
 /**
  * Deine Woche (Julia: Grundlagen am Kochtag, daraus die Abendessen): Kochtage, was an jedem Kochtag gekocht wird
  * (Portionen, einfrieren, „lässt sich auch am Sonntag vorbereiten“), MHD-Funde aus dem Einkauf und
- * „Mittags & abends“ – zum Tauschen einen Abend antippen, dann den anderen.
+ * „Mittags & abends“ – zum Tauschen einen Abend antippen, dann den anderen; einen freien Abend antippen: „Was gibt's?“.
+ * `onPickDish` öffnet den Kochbuch-Picker für einen Abend (liegt im PlanScreen).
  */
-export function WeekPlan({ week }: { week: Week }) {
+export function WeekPlan({ week, onPickDish }: { week: Week; onPickDish?: (day: Weekday, replaceMealId?: string) => void }) {
   const recipes = useRecipes();
   const plan = usePlan();
   const pantry = usePantry();
@@ -35,12 +40,35 @@ export function WeekPlan({ week }: { week: Week }) {
   const cookDays = sortCookDays(week.cookDays);
   const started = weekStarted(week);
   const [swapFrom, setSwapFrom] = useState<Weekday | null>(null);
+  const [what, setWhat] = useState<{ day: Weekday; replace?: MealView } | null>(null);
 
   /** jede Änderung der Woche mit „Rückgängig“ */
   const change = (next: Week, text: string) => {
     if (next === week) return;
     toast(text, { label: 'Rückgängig', run: setWeek(next) });
   };
+
+  // „+“ / „−“ am Kochtag (Julia: Portionen landen auf freien Abenden statt im Gefrierfach) – der Toast sagt, welcher Abend
+  const stepBase = (b: BaseView, up: boolean) => {
+    const next = stepPortions(week, b.base.recipeId, up, recipes, hh, () => newId('w'), fallback);
+    const added = next.meals.find((m) => !week.meals.some((x) => x.id === m.id));
+    const gone = week.meals.find((m) => !next.meals.some((x) => x.id === m.id));
+    const n = weekView(next, recipes, hh, fallback).bases.find((x) => x.base.recipeId === b.base.recipeId)?.portions ?? 0;
+    const day = added ? ` – ${DAY_LONG[added.day]}: ${title(recipes.find((r) => r.id === added.recipeId))}` : gone ? ` – ${DAY_LONG[gone.day]} wieder frei` : '';
+    change(next, `${title(b.recipe)}: ${portionText(n)}${day}`);
+  };
+
+  const put = (day: Weekday, recipeId: string, baseId: string, side?: string) => {
+    setWhat(null);
+    change(putMeal(week, day, recipeId, baseId, hh, () => newId('w'), side), `${DAY_LONG[day]}: ${mealTitle({ side }, recipes.find((r) => r.id === recipeId))}`);
+  };
+  const putStock = (day: Weekday, recipeId: string) => {
+    setWhat(null);
+    change(putPrepared(week, day, recipeId, hh, () => newId('w')), `${DAY_LONG[day]}: ${title(recipes.find((r) => r.id === recipeId))} aus dem Vorrat`);
+  };
+  // heute markieren, Vergangenes grau – nur wenn die Woche läuft (ohne Datum wüsste Mashi sonst nicht, welche Woche gemeint ist)
+  const today = weekdayOf(new Date());
+  const past = (d: Weekday) => started && view.order.indexOf(d) < view.order.indexOf(today);
 
   const toggleCookDay = (d: Weekday) => {
     if (started) return toast('Schon gekocht – Kochtage lassen sich in dieser Woche nicht mehr ändern. Tauschen geht weiter.');
@@ -51,7 +79,8 @@ export function WeekPlan({ week }: { week: Week }) {
 
   const tapDay = (d: DayView) => {
     if (swapFrom === null) {
-      if (d.meal && !d.meal.meal.done) setSwapFrom(d.day);
+      if (!d.meal) setWhat({ day: d.day });
+      else if (!d.meal.meal.done) setSwapFrom(d.day);
       return;
     }
     if (swapFrom === d.day) return setSwapFrom(null);
@@ -82,7 +111,7 @@ export function WeekPlan({ week }: { week: Week }) {
       {finds.length > 0 && <MhdFinds finds={finds} week={week} change={change} />}
 
       {cookDays.map((day) => (
-        <CookDay key={day} day={day} bases={view.bases.filter((b) => b.base.day === day)} week={week} recipes={recipes} first={cookDays[0]} fallback={fallback} change={change} />
+        <CookDay key={day} day={day} bases={view.bases.filter((b) => b.base.day === day)} week={week} recipes={recipes} first={cookDays[0]} fallback={fallback} change={change} onStep={stepBase} />
       ))}
 
       <section className="week__days" aria-label={hh.lunchDays.length ? 'Mittags und abends' : 'Abends'}>
@@ -92,19 +121,28 @@ export function WeekPlan({ week }: { week: Week }) {
             <div className="week__swapbar" role="status">
               <Icon name="shuffle" size={16} />
               <span><b>{mealText(view.days.find((d) => d.day === swapFrom)?.meal)}</b> – mit welchem Abend tauschen?</span>
-              {/* oder ganz rausnehmen (Julia) – mit Rückgängig wie jede Änderung der Woche */}
-              <button type="button" className="link small" onClick={() => {
-                const m = view.days.find((d) => d.day === swapFrom)?.meal;
-                setSwapFrom(null);
-                if (m) change(removeMeal(week, m.meal.id), `${mealText(m)} gestrichen`);
-              }}>Abend löschen</button>
               <button type="button" className="link small" onClick={() => setSwapFrom(null)}>Abbrechen</button>
+              {(() => {
+                const m = view.days.find((d) => d.day === swapFrom)?.meal;
+                if (!m) return null;
+                const n = servingsOf(m.meal, hh);
+                return (
+                  <div className="week__swaptools">
+                    {/* Portionen nur für diesen Abend (Julia: Gäste) – der Kochtag rechnet sie mit */}
+                    <Stepper small value={n} label={`Portionen am ${DAY_LONG[m.meal.day]}`}
+                      onChange={(v) => change(setMealPortions(week, m.meal.id, v, hh), `${DAY_SHORT[m.meal.day]}: ${portionText(v)}`)} />
+                    <button type="button" className="link small" onClick={() => { setSwapFrom(null); setWhat({ day: m.meal.day, replace: m }); }}>Anderes Gericht</button>
+                    {/* oder ganz rausnehmen (Julia) – mit Rückgängig wie jede Änderung der Woche; als Icon, damit alles in eine Zeile passt */}
+                    <button type="button" className="iconbtn iconbtn--sm" aria-label="Abend löschen" onClick={() => { setSwapFrom(null); change(removeMeal(week, m.meal.id), `${mealText(m)} gestrichen`); }}><Icon name="trash" size={16} /></button>
+                  </div>
+                );
+              })()}
             </div>
           )
-          : <p className="small muted">Abend antippen, um ihn mit einem anderen zu tauschen{hh.lunchDays.length ? '. × nimmt einen Mittag raus (Kantine, auswärts).' : '.'}</p>}
+          : <p className="small muted">Abend antippen: tauschen, Portionen, anderes Gericht. Freien Abend antippen: was es gibt{hh.lunchDays.length ? '. × nimmt einen Mittag raus (Kantine, auswärts).' : '.'}</p>}
         <div className="week__list">
           {view.days.map((d) => (
-            <div key={d.day} className="week__day">
+            <div key={d.day} className={`week__day${past(d.day) ? ' is-past' : ''}${started && d.day === today ? ' is-today' : ''}`} aria-current={started && d.day === today ? 'date' : undefined}>
               {hh.lunchDays.includes(d.day) && <LunchRow d={d} onToggle={() => change(toggleLunch(week, d.day), d.noLunch ? `${DAY_SHORT[d.day]} mittags wieder geplant` : `${DAY_SHORT[d.day]} kein Mittagessen`)} />}
               <MealRow d={d} swapFrom={swapFrom} week={week} onTap={() => tapDay(d)} />
             </div>
@@ -113,20 +151,97 @@ export function WeekPlan({ week }: { week: Week }) {
       </section>
 
       <div className="week__end">
+        {/* „Woche leeren“ steht oben auf der Plan-Seite (Julia: gut sichtbar) */}
         <button type="button" className="btn btn--soft btn--sm" onClick={() => navigate('/plan/woche')}><Icon name="pencil" size={16} /> Woche ändern</button>
-        <button type="button" className="link link--muted small" onClick={() => void (async () => {
-          if (await ask({ title: 'Woche beenden?', text: 'Die Woche verschwindet aus dem Plan. Vorgekochtes bleibt in der Speisekammer.', confirm: 'Beenden' })) {
-            toast('Woche beendet', { label: 'Rückgängig', run: setWeek(undefined) });
-          }
-        })()}>Woche beenden</button>
+      </div>
+
+      {what && (
+        <WhatSheet day={what.day} replace={what.replace} view={view} recipes={recipes} fallback={fallback} onClose={() => setWhat(null)}
+          stock={preparedPortions(pantry.items)} onStock={(recipeId) => putStock(what.day, recipeId)}
+          onPut={(recipeId, baseId, side) => put(what.day, recipeId, baseId, side)}
+          onCookbook={onPickDish && (() => { setWhat(null); onPickDish(what.day, what.replace?.meal.id); })} />
+      )}
+    </div>
+  );
+}
+
+/**
+ * „Was gibt's?“ (Julia: freien Abend antippen) – aus den Grundlagen, die bis dahin gekocht sind und noch halten:
+ * die Grundlage mit Beilage (Beilagen oben), ohne, oder eine Verwandlung (wenig Aufwand zuerst). Oder aus dem Kochbuch.
+ */
+function WhatSheet({ day, replace, view, recipes, fallback, stock, onStock, onPut, onCookbook, onClose }: {
+  day: Weekday; replace?: MealView; view: WeekView; recipes: Recipe[]; fallback: number; stock: Map<string, number>;
+  onStock: (recipeId: string) => void; onPut: (recipeId: string, baseId: string, side?: string) => void; onCookbook?: () => void; onClose: () => void;
+}) {
+  const ref = useSheet(onClose);
+  const [allSides, setAllSides] = useState(false);
+  const at = view.order.indexOf(day);
+  // Vorgekochtes zuerst (damit nichts verdirbt) – was schon als Grundlage in der Woche steht, kommt unten mit
+  const weekBases = new Set(view.bases.map((b) => b.base.recipeId));
+  const prepared = [...stock].flatMap(([id, n]) => { const r = recipes.find((x) => x.id === id); return r && !weekBases.has(id) ? [{ r, n }] : []; });
+  // Beilagen: die diese Woche schon gewählten zuerst, dann drei – der Rest hinter „mehr …“
+  const used = view.days.flatMap((d) => (d.meal?.meal.side ? [d.meal.meal.side] : []));
+  const sides = [...SIDES].sort((a, b) => used.filter((s) => s === b.id).length - used.filter((s) => s === a.id).length);
+  const shown = allSides ? sides : sides.slice(0, 3);
+  const options = view.bases.flatMap((b) => {
+    const age = at - view.order.indexOf(b.base.day);
+    const old = age >= keepsOf(b.recipe, fallback);
+    if (age < 0 || !b.recipe || (old && !b.recipe.freezable)) return [];
+    return [{ b, frost: old, dishes: byEffort(transformsOf(b.base.recipeId, recipes)) }];
+  });
+  const current = (recipeId: string, side?: string) => replace?.meal.recipeId === recipeId && replace.meal.side === side;
+  const chip = (recipeId: string, baseId: string, text: string, side?: string) => (
+    <button key={`${recipeId}+${side ?? ''}`} type="button" className={`chip${current(recipeId, side) ? ' is-on' : ''}`} onClick={() => onPut(recipeId, baseId, side)}>{text}</button>
+  );
+  const heading = replace ? `${DAY_LONG[day]}: statt ${mealText(replace)}` : `Was gibt's am ${DAY_LONG[day]}?`;
+  return (
+    <div className="sheet-backdrop" onClick={onClose}>
+      <div className="sheet" role="dialog" aria-modal="true" aria-label={heading} onClick={(e) => e.stopPropagation()} ref={ref}>
+        <div className="sheet__grip" />
+        <h2 className="sheet__title">{heading}</h2>
+        {prepared.length > 0 && (
+          <section className="what__base">
+            <h3 className="small muted">Aus dem Vorrat</h3>
+            <div className="chips" role="group" aria-label="Aus dem Vorrat">
+              {prepared.map(({ r, n }) => (
+                <button key={r.id} type="button" className="chip" onClick={() => onStock(r.id)}>{title(r)} · {portionText(n)}</button>
+              ))}
+            </div>
+          </section>
+        )}
+        {options.length > 0
+          ? <h3 className="small muted">Aus der Woche</h3>
+          : <p className="small muted">Bis {DAY_LONG[day]} ist noch nichts vorgekocht, das dann noch hält.</p>}
+        {options.map(({ b, frost, dishes }) => (
+          <section key={b.base.recipeId} className="what__base">
+            <p className="what__head">
+              <b>{title(b.recipe)}</b>
+              <span className="small muted"> · vom {DAY_LONG[b.base.day]}{b.base.extra ? ` · ${portionText(b.base.extra)} übrig` : ''}{frost ? ' · aus dem Gefrierfach' : ''}</span>
+            </p>
+            <div className="chips" role="group" aria-label={`Aus ${title(b.recipe)}`}>
+              {dishes.length > 0
+                ? [
+                  ...shown.map((s) => chip(b.base.recipeId, b.base.recipeId, `mit ${s.name}`, s.id)),
+                  ...(allSides || sides.length <= 3 ? [] : [<button key="mehr" type="button" className="chip chip--ghost" onClick={() => setAllSides(true)}>mehr …</button>]),
+                  chip(b.base.recipeId, b.base.recipeId, 'ohne Beilage'),
+                  ...dishes.map((r) => chip(r.id, b.base.recipeId, title(r))),
+                ]
+                : chip(b.base.recipeId, b.base.recipeId, title(b.recipe))}
+            </div>
+          </section>
+        ))}
+        {onCookbook && (
+          <button type="button" className="btn btn--soft btn--block" onClick={onCookbook}><Icon name="book" size={18} /> Aus dem Kochbuch …</button>
+        )}
       </div>
     </div>
   );
 }
 
 /** Ein Kochtag: was gekocht wird – Portionen anpassen, einfrieren, „auch am Sonntag“, Vorkochen starten */
-function CookDay({ day, bases, week, recipes, first, fallback, change }: {
+function CookDay({ day, bases, week, recipes, first, fallback, change, onStep }: {
   day: Weekday; bases: BaseView[]; week: Week; recipes: Recipe[]; first: Weekday; fallback: number; change: (w: Week, text: string) => void;
+  onStep: (b: BaseView, up: boolean) => void;
 }) {
   if (!bases.length) {
     return (
@@ -145,7 +260,6 @@ function CookDay({ day, bases, week, recipes, first, fallback, change }: {
         {minutes > 0 && <span className="small muted"><Icon name="clock" size={14} /> ca. {minutes >= 60 ? `${Math.floor(minutes / 60)} Std. ` : ''}{minutes % 60 ? `${minutes % 60} Min.` : ''}</span>}
       </div>
       {bases.map((b) => {
-        const min = b.portions - (b.base.extra ?? 0);
         const early = earlierCookDay(week, b.base.recipeId, recipes, fallback);
         return (
           <div key={b.base.recipeId} className="cookday__base">
@@ -157,11 +271,9 @@ function CookDay({ day, bases, week, recipes, first, fallback, change }: {
                   ? <span className="tag tag--done"><Icon name="check" size={12} /> gekocht · in der Speisekammer</span>
                   : (
                     <span className="portions" role="group" aria-label={`Portionen ${title(b.recipe)}`}>
-                      <button type="button" aria-label="eine Portion weniger" disabled={b.portions <= min}
-                        onClick={() => change(setExtra(week, b.base.recipeId, (b.base.extra ?? 0) - 1), `${title(b.recipe)}: ${portionText(b.portions - 1)}`)}><Icon name="minus" size={14} /></button>
+                      <button type="button" aria-label="eine Portion weniger" disabled={!canLessPortions(week, b.base.recipeId)} onClick={() => onStep(b, false)}><Icon name="minus" size={14} /></button>
                       <b>{portionText(b.portions)}</b>
-                      <button type="button" aria-label="eine Portion mehr"
-                        onClick={() => change(setExtra(week, b.base.recipeId, (b.base.extra ?? 0) + 1), `${title(b.recipe)}: ${portionText(b.portions + 1)}`)}><Icon name="plus" size={14} /></button>
+                      <button type="button" aria-label="eine Portion mehr" onClick={() => onStep(b, true)}><Icon name="plus" size={14} /></button>
                     </span>
                   )}
                 <span className="small muted">
@@ -221,10 +333,11 @@ function MealRow({ d, swapFrom, week, onTap }: { d: DayView; swapFrom: Weekday |
   const hint = swapFrom === null || swapFrom === d.day ? null : mode === ' is-target' ? <span className="meal__hint">hierhin</span> : <span className="meal__hint meal__hint--no">vor dem Kochtag</span>;
   if (!m) {
     return (
-      <button type="button" className={`meal meal--free${mode}`} disabled={swapFrom === null || mode === ' is-blocked'} onClick={onTap}>
+      <button type="button" className={`meal meal--free${mode}`} disabled={mode === ' is-blocked'} onClick={onTap}
+        aria-label={swapFrom === null ? `${DAY_LONG[d.day]} frei – antippen: Was gibt's?` : undefined}>
         <span className="meal__day">{DAY_SHORT[d.day]}</span>
-        <span className="meal__text small muted">frei – Reste, auswärts, spontan</span>
-        {hint}
+        <span className="meal__text small muted">frei – Reste, auswärts oder antippen</span>
+        {hint ?? (swapFrom === null && <span className="meal__grip" aria-hidden="true"><Icon name="plus" size={18} /></span>)}
       </button>
     );
   }
@@ -239,7 +352,7 @@ function MealRow({ d, swapFrom, week, onTap }: { d: DayView; swapFrom: Weekday |
       aria-label={`${mealText(m)} am ${DAY_LONG[d.day]}${swapFrom === null && !m.meal.done ? ' – antippen zum Tauschen' : ''}`}>
       <span className="meal__day">{DAY_SHORT[d.day]}</span>
       <RecipeImage image={m.recipe?.image} size="sm" />
-      <span className="meal__text"><strong>{mealText(m)}</strong>{note}</span>
+      <span className="meal__text"><strong>{mealText(m)}</strong>{note}{m.meal.portions && <span className="tag">{portionText(m.meal.portions)}</span>}</span>
       {hint ?? (swapFrom === d.day ? <span className="meal__hint">gewählt</span> : !m.meal.done && <span className="meal__grip" aria-hidden="true"><Icon name="dots" size={18} /></span>)}
     </button>
   );

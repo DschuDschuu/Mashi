@@ -30,9 +30,9 @@ export const weekdayOf = (d: Date): Weekday => (d.getDay() + 6) % 7;
 /** Die Woche beginnt am Wochenend-Kochtag: Sa vor So vor Mo … (Julia: mal Samstag statt Sonntag kochen) */
 export const sortCookDays = (days: readonly Weekday[]): Weekday[] => [...new Set(days)].sort((a, b) => ((a + 2) % 7) - ((b + 2) % 7));
 
-/** Die sieben Tage ab dem ersten Kochtag – in dieser Reihenfolge wird gegessen */
-export function weekOrder(week: Pick<Week, 'cookDays'>): Weekday[] {
-  const start = sortCookDays(week.cookDays)[0] ?? 0;
+/** Die sieben Tage ab dem Wochenanfang (fest gemerkt, sonst der erste Kochtag) – in dieser Reihenfolge wird gegessen */
+export function weekOrder(week: Pick<Week, 'cookDays' | 'start'>): Weekday[] {
+  const start = week.start ?? sortCookDays(week.cookDays)[0] ?? 0;
   return Array.from({ length: 7 }, (_, i) => (start + i) % 7);
 }
 
@@ -216,11 +216,11 @@ export function weekView(week: Week, recipes: readonly Recipe[], household: Hous
     const own = days.flatMap((d) => (d.meal?.meal.baseId === base.recipeId ? [d.meal] : []));
     const lunches = days.flatMap((d) => (d.lunch && d.lunch.kind !== 'none' && d.lunch.baseId === base.recipeId ? [d.lunch] : []));
     const extra = base.extra ?? 0;
-    const frozenMeals = own.filter((m) => m.frost).length + lunches.filter((l) => l.frost).length;
+    const sum = (ms: MealView[]) => ms.reduce((n, m) => n + servingsOf(m.meal, household), 0);
     return {
       base, recipe: byId.get(base.recipeId), evenings: own.length, lunches: lunches.length,
-      portions: (own.length + lunches.length) * household.portions + extra,
-      frozen: frozenMeals * household.portions + extra,
+      portions: sum(own) + lunches.length * household.portions + extra,
+      frozen: sum(own.filter((m) => m.frost)) + lunches.filter((l) => l.frost).length * household.portions + extra,
     };
   });
   return { order, days, bases };
@@ -277,6 +277,128 @@ export function earlierCookDay(week: Week, baseId: string, recipes: readonly Rec
   const needsFreeze = ages.some((a) => a >= keepsOf(recipe, keepsFallback));
   if (needsFreeze && !recipe?.freezable) return undefined;
   return { day: first, needsFreeze };
+}
+
+/**
+ * Ein Gericht auf einen Tag legen (Julia: „ein Plan“ – aus dem Kochbuch oder von „irgendwann diese Woche“): Eine
+ * Verwandlung isst von ihrer Grundlage (fehlt die in der Woche, wird sie an dem Tag gekocht); ein ganzes Gericht wird an
+ * dem Tag frisch gekocht – der Tag wird Kochtag. Ohne Woche entsteht eine. Mehr Portionen als für den Abend füllen die
+ * nächsten freien Abende (fillEvenings), der Rest ist Vorrat. Ist der Abend schon belegt: unverändert.
+ */
+export function scheduleMeal(
+  week: Week | undefined, recipe: Recipe, day: Weekday, servings: number, household: Household, newId: () => string,
+  recipes: readonly Recipe[] = [recipe], keepsFallback?: number, today?: Weekday,
+): Week {
+  // neue Woche beginnt heute (sonst am gewählten Tag); ein neuer Kochtag verschiebt den Anfang nicht mehr
+  const w: Week = week ?? { cookDays: [day], bases: [], meals: [], start: today ?? day };
+  if (w.meals.some((m) => m.day === day)) return w;
+  const link = currentContent(recipe).ingredients.find((i) => i.recipeId && i.unit === 'Portion' && i.recipeId !== recipe.id);
+  const baseId = baseIdOf(recipe, weekBaseIds(w)) ?? link?.recipeId ?? recipe.id;
+  const isNew = !w.bases.some((b) => b.recipeId === baseId);
+  const extra = isNew && baseId === recipe.id ? Math.max(0, Math.round(servings - household.portions)) : 0;
+  return fillEvenings({
+    ...w,
+    start: weekOrder(w)[0],
+    cookDays: isNew && !w.cookDays.includes(day) ? [...w.cookDays, day] : w.cookDays,
+    bases: isNew ? [...w.bases, { recipeId: baseId, day, ...(extra ? { extra } : {}) }] : w.bases,
+    meals: [...w.meals, { id: newId(), day, recipeId: recipe.id, baseId }],
+  }, baseId, recipes, household, newId, keepsFallback);
+}
+
+/** Portionen eines Abends – eigene (Gäste) oder die des Haushalts */
+export const servingsOf = (meal: Pick<WeekMeal, 'portions'>, household: Household): number => meal.portions ?? household.portions;
+
+/** Der nächste freie Abend ab dem Kochtag einer Grundlage, an dem sie noch hält (oder sich einfrieren lässt) */
+export function nextFreeEvening(week: Week, baseId: string, recipes: readonly Recipe[], keepsFallback?: number): Weekday | undefined {
+  const base = week.bases.find((b) => b.recipeId === baseId);
+  if (!base) return undefined;
+  const order = weekOrder(week);
+  const taken = new Set(week.meals.map((m) => m.day));
+  const recipe = recipes.find((r) => r.id === baseId);
+  return order.slice(order.indexOf(base.day)).find((d) => !taken.has(d) && !freshness(order, d, base.day, recipe, keepsFallback).tooOld);
+}
+
+/**
+ * Extra-Portionen auf freie Abende legen (Julia: „Mittwoch hat noch nichts – Portionen erhöhen, dann steht es bei
+ * Mittwoch statt ‚einfrieren‘“): je volle Haushalts-Portion ein Abend. Gegessen wird eine Verwandlung, die diese Woche
+ * noch nicht dran war (wenig Aufwand zuerst), sonst die Grundlage selbst. Erst wenn kein Abend frei ist, bleibt Vorrat.
+ */
+export function fillEvenings(week: Week, baseId: string, recipes: readonly Recipe[], household: Household, newId: () => string, keepsFallback?: number): Week {
+  let w = week;
+  for (;;) {
+    const base = w.bases.find((b) => b.recipeId === baseId);
+    const extra = base?.extra ?? 0;
+    // schon gekocht: der Vorrat liegt dann in der Speisekammer, nicht mehr in der Woche
+    if (!base || base.cooked || extra < household.portions) return w;
+    const day = nextFreeEvening(w, baseId, recipes, keepsFallback);
+    if (day === undefined) return w;
+    const used = new Set(w.meals.map((m) => m.recipeId));
+    const dish = byEffort(transformsOf(baseId, recipes)).find((r) => !used.has(r.id))?.id ?? baseId;
+    w = { ...setExtra(w, baseId, extra - household.portions), meals: [...w.meals, { id: newId(), day, recipeId: dish, baseId }] };
+  }
+}
+
+/** Darf „eine Portion weniger“? Solange Extra-Portionen da sind oder mehr als ein offener Abend daraus isst */
+export function canLessPortions(week: Week, baseId: string): boolean {
+  const base = week.bases.find((b) => b.recipeId === baseId);
+  return !!base && !base.cooked && (!!base.extra || week.meals.filter((m) => m.baseId === baseId && !m.done).length > 1);
+}
+
+/**
+ * „+“ / „−“ am Kochtag: eine Portion mehr füllt – sobald es für einen Abend reicht – den nächsten freien Abend. Eine
+ * weniger nimmt erst Extra-Portionen weg, dann den letzten offenen Abend aus der Grundlage (bis auf eine Portion).
+ */
+export function stepPortions(week: Week, baseId: string, up: boolean, recipes: readonly Recipe[], household: Household, newId: () => string, keepsFallback?: number): Week {
+  const base = week.bases.find((b) => b.recipeId === baseId);
+  if (!base || base.cooked) return week;
+  const extra = base.extra ?? 0;
+  if (up) return fillEvenings(setExtra(week, baseId, extra + 1), baseId, recipes, household, newId, keepsFallback);
+  if (extra > 0) return setExtra(week, baseId, extra - 1);
+  if (!canLessPortions(week, baseId)) return week;
+  const order = weekOrder(week);
+  const last = week.meals.filter((m) => m.baseId === baseId && !m.done).sort((a, b) => order.indexOf(b.day) - order.indexOf(a.day))[0];
+  return setExtra({ ...week, meals: week.meals.filter((m) => m.id !== last.id) }, baseId, servingsOf(last, household) - 1);
+}
+
+/**
+ * „Was gibt's?“ (Julia: freien Abend antippen) – ein Gericht aus einer Grundlage der Woche auf den Abend legen, mit
+ * Beilage, wenn es die Grundlage selbst ist. Ist der Abend belegt, wird getauscht (Portionen bleiben). Ein neuer Abend
+ * isst zuerst von den Extra-Portionen – statt einzufrieren. Kein Abend vor dem Kochtag (sonst wäre noch nichts gekocht).
+ */
+export function putMeal(week: Week, day: Weekday, recipeId: string, baseId: string, household: Household, newId: () => string, side?: string): Week {
+  const base = week.bases.find((b) => b.recipeId === baseId);
+  const old = week.meals.find((m) => m.day === day);
+  const order = weekOrder(week);
+  if (!base || old?.done || order.indexOf(day) < order.indexOf(base.day)) return week;
+  const meal: WeekMeal = { id: old?.id ?? newId(), day, recipeId, baseId, ...(side && recipeId === baseId ? { side } : {}), ...(old?.portions ? { portions: old.portions } : {}) };
+  const meals = old ? week.meals.map((m) => (m.id === old.id ? meal : m)) : [...week.meals, meal];
+  let bases = !old && base.extra && !base.cooked ? setExtra(week, baseId, base.extra - servingsOf(meal, household)).bases : week.bases;
+  // die bisherige Grundlage ohne Abend fällt weg – wie beim Löschen (removeMeal)
+  if (old && old.baseId !== baseId) bases = bases.filter((b) => b.recipeId !== old.baseId || b.cooked || !!b.extra || meals.some((m) => m.baseId === b.recipeId));
+  return { ...week, meals, bases };
+}
+
+/**
+ * Vorgekochtes aus der Speisekammer auf einen Abend (damit nichts verdirbt): als schon gekochte Grundlage – nichts
+ * einzukaufen, beim Essen geht es aus der Speisekammer (store: eatMeal → eatBase). Steht sie schon in der Woche: von dort.
+ */
+export function putPrepared(week: Week, day: Weekday, recipeId: string, household: Household, newId: () => string): Week {
+  if (week.bases.some((b) => b.recipeId === recipeId)) return putMeal(week, day, recipeId, recipeId, household, newId);
+  if (week.meals.some((m) => m.day === day && m.done)) return week;
+  return putMeal({ ...week, bases: [...week.bases, { recipeId, day, cooked: true }] }, day, recipeId, recipeId, household, newId);
+}
+
+/** Portionen eines Abends (Julia: Gäste) – gleich dem Haushalt = Feld weg, damit Haushalt-Änderungen weiter greifen */
+export function setMealPortions(week: Week, mealId: string, portions: number, household: Household): Week {
+  const n = Math.max(1, Math.round(portions));
+  return {
+    ...week,
+    meals: week.meals.map((m) => {
+      if (m.id !== mealId) return m;
+      const { portions: _old, ...rest } = m;
+      return n === household.portions ? rest : { ...rest, portions: n };
+    }),
+  };
 }
 
 /**
@@ -337,7 +459,7 @@ export function mealPortions(view: WeekView, day: Weekday, household: Household)
   const next = view.days[i + 1]?.lunch;
   const meal = view.days[i]?.meal;
   const rest = !!meal && next?.kind === 'rest' && next.recipe.id === meal.meal.recipeId;
-  return household.portions * (rest ? 2 : 1);
+  return (meal ? servingsOf(meal.meal, household) : household.portions) + (rest ? household.portions : 0);
 }
 
 /**

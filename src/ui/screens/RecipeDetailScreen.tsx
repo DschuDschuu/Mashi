@@ -12,9 +12,11 @@ import { asCooked, formatQuantity, scaleIngredients } from '../../domain/scaling
 import { orderByUse } from '../../domain/stepIngredients';
 import { doneParts, partLabel, partOf, partsOf, REST, stepPart } from '../../domain/parts';
 import type { Recipe, RecipeContent } from '../../domain/types';
+import type { Weekday } from '../../domain/mealplan';
+import { DAY_LONG, DAY_SHORT } from '../../domain/week';
 import { describeChange, diffContent } from '../../domain/versions';
 import {
-  addToPlan, adoptToCookbook, archiveRecipe, deleteRecipe, makeBase, restoreRecipe, markCooked, regenerateImage, setChoice, setHomemade, setPlanVariants, setStatus, toggleFavorite, togglePlanCooked, uncookRecipe, updateNotes, usePantry, usePlan, useRecipe, useRecipes,
+  addToPlan, adoptToCookbook, archiveRecipe, deleteRecipe, makeBase, restoreRecipe, scheduleRecipe, markCooked, regenerateImage, setChoice, setHomemade, setPlanVariants, setStatus, toggleFavorite, togglePlanCooked, uncookRecipe, updateNotes, usePantry, usePlan, useRecipe, useRecipes,
 } from '../../data/store';
 import { cookedToast } from '../cookedToast';
 import { shareMessage, shareRecipes } from '../shareRecipes';
@@ -439,6 +441,7 @@ function PlanButton({ recipe, content, servings }: { recipe: Recipe; content: Re
   const inPlan = usePlan().items.find((i) => i.recipeId === recipe.id);
   const prompt = useVariantPrompt();
   const more = useMorePrompt();
+  const [when, setWhen] = useState(false);
   if (inPlan) {
     return (
       <button className="plan-chip is-on" onClick={() => navigate('/plan')}>
@@ -446,18 +449,63 @@ function PlanButton({ recipe, content, servings }: { recipe: Recipe; content: Re
       </button>
     );
   }
+  // „irgendwann“: wie bisher mit Sorte und „mehr davon verwenden“
+  const someday = (n: number) => prompt.ask(content, undefined, (pick) =>
+    more.ask(content, n, (amounts) => {
+      addToPlan(recipe.id, n, pick, amounts);
+      toast(`Eingeplant: ${portionCount(n)} – irgendwann diese Woche`);
+    }));
   return (
     <>
-      <button className="plan-chip" onClick={() => prompt.ask(content, undefined, (pick) =>
-        more.ask(content, servings, (amounts) => {
-          addToPlan(recipe.id, servings, pick, amounts);
-          toast(`Eingeplant: ${portionCount(servings)}`);
-        }))}>
-        <Icon name="calendar" size={16} /> Zum Wochenplan ({portionCount(servings)})
+      <button className="plan-chip" onClick={() => setWhen(true)}>
+        <Icon name="calendar" size={16} /> Zum Wochenplan
       </button>
+      {when && <WhenSheet recipe={recipe} servings={servings} onSomeday={(n) => { setWhen(false); someday(n); }} onClose={() => setWhen(false)} />}
       {prompt.sheet}
       {more.sheet}
     </>
+  );
+}
+
+/**
+ * „Zum Wochenplan“ (Julia: „ein Plan“): an welchem Tag – oder irgendwann diese Woche – und für wie viele Portionen.
+ * Belegte Abende sind ausgegraut; ein Tag legt das Gericht direkt in die Woche (store: scheduleRecipe, mit Rückgängig).
+ */
+function WhenSheet({ recipe, servings, onSomeday, onClose }: { recipe: Recipe; servings: number; onSomeday: (n: number) => void; onClose: () => void }) {
+  const ref = useSheet(onClose);
+  const taken = new Set(usePlan().week?.meals.map((m) => m.day) ?? []);
+  const [day, setDay] = useState<Weekday | 'irgendwann'>('irgendwann');
+  const [n, setN] = useState(servings);
+  const title = currentContent(recipe).title;
+  const done = () => {
+    if (day === 'irgendwann') return onSomeday(n);
+    const undo = scheduleRecipe(recipe.id, day, n);
+    if (undo) toast(`„${title}“ am ${DAY_LONG[day]} · ${portionCount(n)}`, { label: 'Rückgängig', run: undo });
+    onClose();
+  };
+  return (
+    <div className="sheet-backdrop" onClick={onClose}>
+      <div className="sheet" role="dialog" aria-modal="true" aria-label="Zum Wochenplan" onClick={(e) => e.stopPropagation()} ref={ref}>
+        <div className="sheet__grip" />
+        <h2 className="sheet__title">„{title}“ einplanen</h2>
+        <h3 className="small muted">Wann?</h3>
+        <div className="chips" role="group" aria-label="Tag">
+          {DAY_SHORT.map((d, i) => (
+            <button key={d} type="button" className={`chip${day === i ? ' is-on' : ''}`} aria-pressed={day === i} disabled={taken.has(i)} onClick={() => setDay(i as Weekday)}
+              aria-label={`${DAY_LONG[i]}${taken.has(i) ? ' – schon belegt' : ''}`}>{d}</button>
+          ))}
+          <button type="button" className={`chip${day === 'irgendwann' ? ' is-on' : ''}`} aria-pressed={day === 'irgendwann'} onClick={() => setDay('irgendwann')}>Irgendwann</button>
+        </div>
+        <div className="row-between">
+          <span>Portionen</span>
+          <Stepper small value={n} onChange={setN} label="Portionen" />
+        </div>
+        <div className="variants__actions">
+          <button type="button" className="btn btn--ghost" onClick={onClose}>Abbrechen</button>
+          <button type="button" className="btn btn--primary" onClick={done}>Einplanen</button>
+        </div>
+      </div>
+    </div>
   );
 }
 
