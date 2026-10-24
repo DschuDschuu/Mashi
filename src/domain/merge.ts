@@ -15,7 +15,9 @@ export function mergeRecipes(a: Recipe, b: Recipe): Recipe {
   const [newer, older] = a.updatedAt >= b.updatedAt ? [a, b] : [b, a];
 
   const versions = unionById([...older.versions, ...newer.versions])
-    .sort((x, y) => x.createdAt.localeCompare(y.createdAt) || x.id.localeCompare(y.id))
+    // gleiche Millisekunde (z. B. „Grundlage daraus machen“ direkt nach dem Anlegen): erst die Nummer, dann die
+    // zufällige id – sonst konnte Version 2 vor Version 1 rutschen (fiel in der CI auf, Test week.store „Grundlage daraus machen“)
+    .sort((x, y) => x.createdAt.localeCompare(y.createdAt) || x.number - y.number || x.id.localeCompare(y.id))
     // Nummern neu vergeben: Beide Geräte können offline eine „Version 3“ angelegt haben.
     .map((v, i) => ({ ...v, number: i + 1 }));
 

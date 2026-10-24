@@ -1,7 +1,7 @@
 /// <reference types="pouchdb-core" />
 import PouchDB from 'pouchdb-core';
 import memory from 'pouchdb-adapter-memory';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { PouchRecipeRepository, type RecipeDb } from './pouchRepository';
 import { addPantryItem, addToPlan, answerLeftover, clearPlan, cookBase, createRecipe, makeBase, markCooked, scheduleRecipe, currentPantry, currentPlan, eatMeal, eatOutToday, initStore, setHousehold, setPrepInfo, setWeek, togglePlanCooked, whenSaved } from './store';
 import { buildShoppingList } from '../domain/mealplan';
@@ -50,6 +50,10 @@ describe('Store: Teil als Grundlage herauslösen', () => {
     expect(after.find((x) => x.id === id)!.currentVersionId).toBe(dish.versions[0].id);
   });
   it('Grundlage daraus machen: Chili wird eigene Grundlage mit den Vorkoch-Infos, Reis bleibt im Gericht; Rückgängig', async () => {
+    // Uhr eingefroren: alle Versionen entstehen in derselben Millisekunde – so war es auf dem schnellen CI-Rechner, wo
+    // die Reihenfolge der Versionen nach dem Zusammenführen zufällig war (deshalb unten die aktuelle Version prüfen)
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-24T12:00:00Z'));
     const repo = await freshStore('make-base');
     const id = createRecipe({
       ...content('Testchili mit Reis', [
