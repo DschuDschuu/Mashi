@@ -341,6 +341,21 @@ const SPECS: Spec[] = [
       ],
     },
   },
+  {
+    // Gericht aus der Tomatensauce – macht sie in der Demo zur Grundlage (Julia: Woche planen mit Baukasten zeigen)
+    id: 'pasta-pomodoro', status: 'kochbuch', source: 'selbst', motif: 'plate', hue: 12, daysAgo: 20,
+    makeWith: { 0: 'mix-tomatensosse' },
+    content: {
+      title: 'Pasta Pomodoro', description: 'Aus der vorgekochten Tomatensauce – in 15 Minuten auf dem Tisch.', servings: 2, prepMinutes: 5, cookMinutes: 10, difficulty: 1,
+      categories: [], tags: ['Vegetarisch', 'Schnell'], devices: ['herd'],
+      ingredients: [[2, 'Portion', 'Tomatensauce'], [200, 'g', 'Spaghetti'], [8, 'Stück', 'Cocktailtomaten'], [20, 'g', 'Parmesan']],
+      steps: [
+        ['Spaghetti in Salzwasser bissfest kochen.', 10],
+        ['Tomatensauce erhitzen, halbierte Cocktailtomaten kurz mitziehen lassen.'],
+        ['Mit der Pasta mischen und mit Parmesan bestreuen.'],
+      ],
+    },
+  },
 ];
 
 export function createMockRecipes(now = Date.now()): Recipe[] {

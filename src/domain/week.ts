@@ -459,6 +459,26 @@ export function swapCookDays(week: Week, a: Weekday, b: Weekday): Week {
   return resolveClashes({ ...week, bases, meals: [...stay, ...placed] });
 }
 
+/**
+ * Gerichte einer Grundlage im Wechsel (Julia: „4 Portionen mit 2 Varianten im Wechsel geplant – besser hintereinander,
+ * dann ist das Vorkochen der Extras leichter“): dieselben Tage, aber gleiche Abende (Gericht + Bausteine) nebeneinander,
+ * in der Reihenfolge, in der sie zuerst vorkommen. Unverändert, wenn schon gruppiert oder etwas davon gegessen ist.
+ */
+export function groupMeals(week: Week, baseId: string): Week {
+  const order = weekOrder(week);
+  const own = week.meals.filter((m) => m.baseId === baseId).sort((a, b) => order.indexOf(a.day) - order.indexOf(b.day));
+  if (own.length < 3 || own.some((m) => m.done)) return week;
+  const key = (m: WeekMeal) => mealKey(m.recipeId, m.side);
+  const firsts = [...new Set(own.map(key))];
+  const grouped = firsts.flatMap((k) => own.filter((m) => key(m) === k));
+  if (grouped.every((m, i) => m === own[i])) return week;
+  const days = new Map(grouped.map((m, i) => [m.id, own[i].day]));
+  return { ...week, meals: week.meals.map((m) => (days.has(m.id) ? { ...m, day: days.get(m.id)! } : m)) };
+}
+
+/** Grundlagen, deren Gerichte im Wechsel liegen – für den Hinweis im Wochenplan */
+export const mixedBases = (week: Week): string[] => week.bases.map((b) => b.recipeId).filter((id) => groupMeals(week, id) !== week);
+
 /** Extra-Portionen (Vorrat) – nie unter 0 */
 export function setExtra(week: Week, baseId: string, extra: number): Week {
   return { ...week, bases: week.bases.map((b) => (b.recipeId === baseId ? { ...b, extra: Math.max(0, Math.round(extra)) || undefined } : b)) };
@@ -534,7 +554,30 @@ export function weekSideNeeds(week: Week | undefined, recipes: readonly Recipe[]
   return [...portions].flatMap(([id, n]) => sideIngredient(id, n, household) ?? []);
 }
 
-export type CarbCarry = { side: string; with?: Weekday; portions?: number; from?: Weekday };
+export interface YieldCheck {
+  /** was das Rezept laut Portionen ergibt */
+  yields: number;
+  /** was die Woche davon isst (Abende, Mittage, Vorrat) */
+  planned: number;
+  /** gekocht, aber ohne Abend (Rezept ergibt mehr als geplant) – mehr einplanen ist in Ordnung, das Rezept skaliert */
+  left: number;
+}
+
+/**
+ * Rezept-Ertrag gegen Plan (Julia: „ich will nur nicht weniger verplanen als ich koche“ – mehr ist in Ordnung, dann
+ * wird das Rezept hochgerechnet): sichtbar wird, wenn das Rezept mehr ergibt, als die Woche isst.
+ */
+export function yieldChecks(view: WeekView): Map<string, YieldCheck> {
+  const out = new Map<string, YieldCheck>();
+  for (const b of view.bases) {
+    const yields = b.recipe ? currentContent(b.recipe).servings : 0;
+    if (!yields || b.base.cooked) continue;
+    out.set(b.base.recipeId, { yields, planned: b.portions, left: Math.max(0, yields - b.portions) });
+  }
+  return out;
+}
+
+export type CarbCarry ={ side: string; with?: Weekday; portions?: number; from?: Weekday };
 
 /**
  * Zweimal Nudeln kurz hintereinander (Julia: „reicht, es an einem Tag zu kochen und aufzubewahren“): dasselbe

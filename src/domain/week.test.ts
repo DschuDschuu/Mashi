@@ -5,7 +5,7 @@ import type { Week } from './mealplan';
 import type { Ingredient, Recipe } from './types';
 import { buildShoppingList, emptyPlan } from './mealplan';
 import { localFoodTable } from './nutrition/localFoods';
-import { carbCarry, swapCookDays, putPrepared, extrasOf, addBase, addToBase, byEffort, canLessPortions, choicesOf, fillEvenings, mealKey, putMeal, servingsOf, setMealPortions, stepPortions, mealTitle, mhdFinds, removeMeal, scheduleMeal, splitMealKey, weekSideNeeds, weekStarted, withCookDays } from './week';
+import { carbCarry, groupMeals, mixedBases, yieldChecks, swapCookDays, putPrepared, extrasOf, addBase, addToBase, byEffort, canLessPortions, choicesOf, fillEvenings, mealKey, putMeal, servingsOf, setMealPortions, stepPortions, mealTitle, mhdFinds, removeMeal, scheduleMeal, splitMealKey, weekSideNeeds, weekStarted, withCookDays } from './week';
 import type { PantryItem } from './pantry';
 import { baseIdOf, canSwap, mealPortions, weekItems, withoutBases, earlierCookDay, moveBase, setExtra, shiftFrom, sortCookDays, suggestWeek, swapDays, toggleLunch, transformsOf, weekdayOf, weekOrder, weekView } from './week';
 
@@ -352,6 +352,31 @@ it('swapCookDays: Sonntag ↔ Mittwoch – Grundlagen tauschen, Abende rücken a
   expect(plan(t)).toEqual([`${SO}:chilireis`, `${MO}:bowl`, `${MI}:spag`, `${DO}:wraps`, `${FR}:ofen`].sort());
   const gegessen: Week = { ...w, meals: w.meals.map((m, i) => (i === 0 ? { ...m, done: true } : m)) };
   expect(swapCookDays(gegessen, SO, MI)).toBe(gegessen);
+});
+
+it('yieldChecks: was das Rezept ergibt gegen das, was die Woche isst – nur „zu wenig verplant“ zählt', () => {
+  const hh = { portions: 1, lunchDays: [] };
+  const lasagne = recipe('las', 'Testlasagne', [], { keepsDays: 3 }); // sideContent: 1 Portion – unten auf 4 gesetzt
+  lasagne.versions[0].content.servings = 4;
+  const w: Week = { cookDays: [SO], bases: [{ recipeId: 'las', day: SO }], meals: [
+    { id: 'a', day: SO, recipeId: 'las', baseId: 'las', portions: 2 }, { id: 'b', day: MO, recipeId: 'las', baseId: 'las' },
+    { id: 'c', day: DI, recipeId: 'las', baseId: 'las' }, { id: 'd', day: MI, recipeId: 'las', baseId: 'las' },
+  ] };
+  expect(yieldChecks(weekView(w, [lasagne], hh)).get('las')).toEqual({ yields: 4, planned: 5, left: 0 });
+  const zwei: Week = { ...w, meals: w.meals.slice(1, 3) };
+  expect(yieldChecks(weekView(zwei, [lasagne], hh)).get('las')).toEqual({ yields: 4, planned: 2, left: 2 });
+});
+
+it('groupMeals: Gerichte im Wechsel → hintereinander auf denselben Tagen; schon gruppiert oder gegessen: unverändert', () => {
+  const m = (id: string, day: number, recipeId: string, side?: string) => ({ id, day: day as Week['cookDays'][number], recipeId, baseId: 'bolo', ...(side ? { side } : {}) });
+  const w: Week = { cookDays: [SO], bases: [{ recipeId: 'bolo', day: SO }], meals: [m('a', SO, 'bolo', 'pasta'), m('b', MO, 'spag'), m('c', DI, 'bolo', 'pasta'), m('d', MI, 'spag')] };
+  expect(mixedBases(w)).toEqual(['bolo']);
+  const g = groupMeals(w, 'bolo');
+  expect(plan(g)).toEqual([`${SO}:bolo`, `${MO}:bolo`, `${DI}:spag`, `${MI}:spag`].sort());
+  expect(groupMeals(g, 'bolo')).toBe(g);
+  expect(mixedBases(g)).toEqual([]);
+  const gegessen: Week = { ...w, meals: w.meals.map((x, i) => (i === 0 ? { ...x, done: true } : x)) };
+  expect(groupMeals(gegessen, 'bolo')).toBe(gegessen);
 });
 
 it('extrasOf: was zur Grundlage dazukommt, ohne die Grundlage selbst', () => {

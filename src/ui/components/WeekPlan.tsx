@@ -1,16 +1,17 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useMemo, useRef, useState, type MouseEvent, type PointerEvent, type ReactNode } from 'react';
 import { currentContent, newId } from '../../domain/recipe';
 import {
-  DAY_LONG, DAY_SHORT, addBase, mealKey, setExtra, addToBase, byEffort, canLessPortions, canSwap, earlierCookDay, keepsOf, mealTitle, mhdFinds, moveBase, putMeal, swapCookDays, putPrepared, removeMeal,
+  DAY_LONG, DAY_SHORT, addBase, mealKey, setExtra, addToBase, byEffort, canLessPortions, canSwap, earlierCookDay, keepsOf, mealTitle, mhdFinds, fillEvenings, groupMeals, mixedBases, moveBase, putMeal, swapCookDays, yieldChecks, putPrepared, removeMeal,
   servingsOf, setMealPortions, sortCookDays, stepPortions, swapDays, toggleLunch, transformsOf, weekdayOf, weekStarted, weekView,
   type BaseView, type DayView, type MealView, type MhdFind, type WeekView,
 } from '../../domain/week';
-import type { Week, Weekday } from '../../domain/mealplan';
+import type { Household, Week, Weekday } from '../../domain/mealplan';
 import type { Recipe } from '../../domain/types';
 import { ComboBuilder } from './ComboBuilder';
+import { comboText } from '../../domain/sides';
 import { preparedPortions } from '../../domain/baseStock';
 import { specialDays } from '../../domain/shelfLife';
-import { freezePantryItem, householdOf, setWeek, useFoodTable, usePantry, usePlan, useRecipes } from '../../data/store';
+import { freezePantryItem, householdOf, setPrepInfo, setWeek, useFoodTable, usePantry, usePlan, useRecipes } from '../../data/store';
 import { navigate } from '../../router';
 import { toast } from '../toast';
 import { useSheet } from '../useSheet';
@@ -40,6 +41,7 @@ export function WeekPlan({ week, onPickDish }: { week: Week; onPickDish?: (day: 
   const cookDays = sortCookDays(week.cookDays);
   const started = weekStarted(week);
   const [swapFrom, setSwapFrom] = useState<Weekday | null>(null);
+  const [hold, setHold] = useState<Weekday | null>(null);
   const [what, setWhat] = useState<{ day: Weekday; replace?: MealView; from?: string } | null>(null);
 
   /** jede Änderung der Woche mit „Rückgängig“ */
@@ -54,28 +56,41 @@ export function WeekPlan({ week, onPickDish }: { week: Week; onPickDish?: (day: 
     const added = next.meals.find((m) => !week.meals.some((x) => x.id === m.id));
     // reicht es für einen neuen Abend, fragen statt raten (Julia: „was soll die 3. Portion sein?“) – erst als Vorrat
     // merken, „Was gibt's?“ isst dann davon; wird das Sheet geschlossen, bleibt die Portion Vorrat
-    if (added) {
+    // fertiges Rezept (keine Verwandlungen, Julia: Lasagne): es gibt nur eins – direkt auf den Abend, ohne Nachfrage
+    if (added && transformsOf(b.base.recipeId, recipes).length) {
       change(setExtra(week, b.base.recipeId, (b.base.extra ?? 0) + 1), `${title(b.recipe)}: ${portionText(b.portions + 1)} – was gibt's am ${DAY_LONG[added.day]}?`);
       setWhat({ day: added.day, from: b.base.recipeId });
       return;
     }
     const gone = week.meals.find((m) => !next.meals.some((x) => x.id === m.id));
     const n = weekView(next, recipes, hh, fallback).bases.find((x) => x.base.recipeId === b.base.recipeId)?.portions ?? 0;
-    const day = gone ? ` – ${DAY_LONG[gone.day]} wieder frei` : '';
+    const day = added ? ` – auch am ${DAY_LONG[added.day]}` : gone ? ` – ${DAY_LONG[gone.day]} wieder frei` : '';
     change(next, `${title(b.recipe)}: ${portionText(n)}${day}`);
   };
 
   // Kochtag dezent (Julia: „die Kochleiste soll weg, nur sehr dezent im Wochenplan“): Hinweis in der Abendzeile, die
   // Werkzeuge (Portionen, tauschen, Vorkochen) erst beim Antippen
+  // mehr geplant, als das Rezept ergibt (Julia) – diese Abende bekommen einen Hinweis
+  const checks = yieldChecks(view);
+  const leftOn = (day: Weekday) => cookBases(day).reduce((n, b) => n + (checks.get(b.base.recipeId)?.left ?? 0), 0);
   const cookBases = (day: Weekday) => view.bases.filter((b) => b.base.day === day);
   const cookNote = (day: Weekday) => (cookBases(day).length ? `${cookBases(day).map((b) => title(b.recipe)).join(' + ')} vorkochen` : undefined);
   const cookTools = (day: Weekday) => cookBases(day).length > 0 && (
-    <CookStrip day={day} bases={cookBases(day)} week={week} recipes={recipes} cookDays={cookDays} fallback={fallback} change={change} onStep={stepBase} />
+    <CookStrip household={hh} day={day} bases={cookBases(day)} week={week} recipes={recipes} cookDays={cookDays} fallback={fallback} change={change} onStep={stepBase} />
   );
 
   const put = (day: Weekday, recipeId: string, baseId: string, side?: string) => {
     setWhat(null);
-    change(putMeal(week, day, recipeId, baseId, hh, () => newId('w'), side), `${DAY_LONG[day]}: ${mealTitle({ side }, recipes.find((r) => r.id === recipeId))}`);
+    const next = putMeal(week, day, recipeId, baseId, hh, () => newId('w'), side);
+    if (next === week) return;
+    // hält bis dahin nicht frisch (Julia: „geht doch, einfach mit einfrieren“) – Grundlage gleich als einfrierbar markieren,
+    // der Abend heißt dann „am Vortag auftauen“; Rückgängig nimmt beides zurück
+    const freeze = weekView(next, recipes, hh, fallback).days.find((x) => x.day === day)?.meal?.tooOld;
+    const undoFreeze = freeze ? setPrepInfo(baseId, { freezable: true }) : undefined;
+    const undoWeek = setWeek(next);
+    const base = title(recipes.find((r) => r.id === baseId));
+    toast(`${DAY_LONG[day]}: ${mealTitle({ side }, recipes.find((r) => r.id === recipeId))}${freeze ? ` – ${base} einfrieren, am Vortag auftauen` : ''}`,
+      { label: 'Rückgängig', run: () => { undoWeek(); undoFreeze?.(); } });
   };
   const putStock = (day: Weekday, recipeId: string) => {
     setWhat(null);
@@ -112,31 +127,21 @@ export function WeekPlan({ week, onPickDish }: { week: Week; onPickDish?: (day: 
               <Icon name="shuffle" size={16} />
               <span><b>{mealText(view.days.find((d) => d.day === swapFrom)?.meal)}</b> – mit welchem Abend tauschen?</span>
               <button type="button" className="link small" onClick={() => setSwapFrom(null)}>Abbrechen</button>
-              {(() => {
-                const m = view.days.find((d) => d.day === swapFrom)?.meal;
-                if (!m) return null;
-                const n = servingsOf(m.meal, hh);
-                return (
-                  <div className="week__swaptools">
-                    {/* Portionen nur für diesen Abend (Julia: Gäste) – der Kochtag rechnet sie mit */}
-                    <span className="small muted">Portionen</span>
-                    <Stepper small value={n} label={`Portionen am ${DAY_LONG[m.meal.day]}`}
-                      onChange={(v) => change(setMealPortions(week, m.meal.id, v, hh), `${DAY_SHORT[m.meal.day]}: ${portionText(v)}`)} />
-                    <button type="button" className="link small" onClick={() => { setSwapFrom(null); setWhat({ day: m.meal.day, replace: m }); }}>Anderes Gericht</button>
-                    {/* oder ganz rausnehmen (Julia) – mit Rückgängig wie jede Änderung der Woche; als Icon, damit alles in eine Zeile passt */}
-                    <button type="button" className="iconbtn iconbtn--sm" aria-label="Abend löschen" onClick={() => { setSwapFrom(null); change(removeMeal(week, m.meal.id), `${mealText(m)} gestrichen`); }}><Icon name="trash" size={16} /></button>
-                  </div>
-                );
-              })()}
-              {swapFrom !== null && cookTools(swapFrom)}
             </div>
           )
-          : <p className="small muted">Am Kochtag (Topf) wird die Grundlage gekocht, ihre Gerichte kommen auf die folgenden Abende. Abend antippen: tauschen, Portionen, Kochtag. Freien Abend antippen: was es gibt{hh.lunchDays.length ? '. × nimmt einen Mittag raus (Kantine, auswärts).' : '.'}</p>}
+          : <p className="small muted">Antippen tauscht, lange drücken öffnet Portionen und Kochtag (Topf).</p>}
+        {/* Gerichte einer Grundlage im Wechsel (Julia: „besser hintereinander, dann ist das Vorkochen der Extras leichter“) */}
+        {mixedBases(week).map((id) => (
+          <p key={id} className="small week__hint">
+            <Icon name="shuffle" size={14} /> {title(recipes.find((x) => x.id === id))}: Gerichte im Wechsel – hintereinander lassen sich die Extras leichter vorbereiten.
+            <button type="button" className="link small" onClick={() => change(groupMeals(week, id), `${title(recipes.find((x) => x.id === id))}: hintereinander gelegt`)}>Hintereinander legen</button>
+          </p>
+        ))}
         <div className="week__list">
           {view.days.map((d) => (
             <div key={d.day} className={`week__day${past(d.day) ? ' is-past' : ''}${started && d.day === today ? ' is-today' : ''}`} aria-current={started && d.day === today ? 'date' : undefined}>
               {hh.lunchDays.includes(d.day) && <LunchRow d={d} onToggle={() => change(toggleLunch(week, d.day), d.noLunch ? `${DAY_SHORT[d.day]} mittags wieder geplant` : `${DAY_SHORT[d.day]} kein Mittagessen`)} />}
-              <MealRow d={d} swapFrom={swapFrom} week={week} onTap={() => tapDay(d)} cookNote={cookNote(d.day)} />
+              <MealRow left={leftOn(d.day)} d={d} swapFrom={swapFrom} week={week} onTap={() => tapDay(d)} onHold={() => { setSwapFrom(null); setHold(d.day); }} cookNote={cookNote(d.day)} />
             </div>
           ))}
         </div>
@@ -147,12 +152,64 @@ export function WeekPlan({ week, onPickDish }: { week: Week; onPickDish?: (day: 
         <button type="button" className="btn btn--soft btn--sm" onClick={() => navigate('/plan/woche')}><Icon name="pencil" size={16} /> Woche ändern</button>
       </div>
 
+      {hold !== null && (() => {
+        const d = view.days.find((x) => x.day === hold)!;
+        return (
+          <DaySheet d={d} onClose={() => setHold(null)} cook={cookTools(hold)}
+            onPortions={(m, v) => change(setMealPortions(week, m.meal.id, v, hh), `${DAY_SHORT[m.meal.day]}: ${portionText(v)}`)}
+            onOther={(m) => { setHold(null); setWhat({ day: m.meal.day, replace: m }); }}
+            onDelete={(m) => { setHold(null); change(removeMeal(week, m.meal.id), `${mealText(m)} gestrichen`); }}
+            onFreeze={(m) => { setHold(null); toast(`${title(recipes.find((r) => r.id === m.meal.baseId))} lässt sich einfrieren`, { label: 'Rückgängig', run: setPrepInfo(m.meal.baseId, { freezable: true }) }); }} servings={(m) => servingsOf(m.meal, hh)} />
+        );
+      })()}
+
       {what && (
         <WhatSheet cook={what.from ? undefined : cookTools(what.day)} day={what.day} replace={what.replace} from={what.from} view={view} recipes={recipes} fallback={fallback} onClose={() => setWhat(null)}
           stock={preparedPortions(pantry.items)} onStock={(recipeId) => putStock(what.day, recipeId)}
           onPut={(recipeId, baseId, side) => put(what.day, recipeId, baseId, side)}
           onCookbook={onPickDish && (() => { setWhat(null); onPickDish(what.day, what.replace?.meal.id); })} />
       )}
+    </div>
+  );
+}
+
+/**
+ * Lange gedrückt (Julia: „antippen = tauschen, lang draufbleiben = Vorkochtag und Portionen ändern“): alles zu einem
+ * Abend an einem Ort – Portionen, anderes Gericht, löschen und, am Kochtag, was vorgekocht wird.
+ */
+function DaySheet({ d, cook, servings, onPortions, onOther, onDelete, onFreeze, onClose }: {
+  d: DayView; cook: ReactNode; servings: (m: MealView) => number; onPortions: (m: MealView, v: number) => void;
+  onOther: (m: MealView) => void; onDelete: (m: MealView) => void; onFreeze: (m: MealView) => void; onClose: () => void;
+}) {
+  const ref = useSheet(onClose);
+  const m = d.meal && !d.meal.meal.done ? d.meal : undefined;
+  return (
+    <div className="sheet-backdrop" onClick={onClose}>
+      <div className="sheet" role="dialog" aria-modal="true" aria-label={DAY_LONG[d.day]} onClick={(e) => e.stopPropagation()} ref={ref}>
+        <div className="sheet__grip" />
+        <h2 className="sheet__title">{DAY_LONG[d.day]}{m ? `: ${mealText(m)}` : ''}</h2>
+        {/* hält nicht bis hierhin (Julia: „ich kann das doch einfrieren“) – einfrierbar machen, dann „am Vortag auftauen“ */}
+        {m?.tooOld && (
+          <p className="small daysheet__freeze">
+            <Icon name="snow" size={14} /> Hält bis {DAY_LONG[d.day]} nicht frisch.
+            <button type="button" className="link small" onClick={() => onFreeze(m)}>Einfrieren und am Vortag auftauen</button>
+          </p>
+        )}
+        {m && (
+          <div className="daysheet__meal">
+            <div className="row-between">
+              <span>Portionen an diesem Abend</span>
+              <Stepper small value={servings(m)} onChange={(v) => onPortions(m, v)} label={`Portionen am ${DAY_LONG[d.day]}`} />
+            </div>
+            <div className="row-gap">
+              <button type="button" className="btn btn--soft btn--sm" onClick={() => onOther(m)}><Icon name="refresh" size={14} /> Anderes Gericht</button>
+              <button type="button" className="btn btn--ghost btn--sm" onClick={() => onDelete(m)}><Icon name="trash" size={14} /> Vom Abend entfernen</button>
+            </div>
+          </div>
+        )}
+        {cook && <><h3 className="small muted">Kochtag</h3>{cook}</>}
+        {!m && !cook && <p className="small muted">Hier gibt es nichts einzustellen.</p>}
+      </div>
     </div>
   );
 }
@@ -173,7 +230,7 @@ function WhatSheet({ cook, day, replace, from, view, recipes, fallback, stock, o
   const options = view.bases.flatMap((b) => {
     const age = at - view.order.indexOf(b.base.day);
     const old = age >= keepsOf(b.recipe, fallback);
-    if (age < 0 || !b.recipe || (old && !b.recipe.freezable)) return [];
+    if (age < 0 || !b.recipe) return [];
     return [{ b, frost: old, dishes: byEffort(transformsOf(b.base.recipeId, recipes)) }];
   });
   const current = (recipeId: string, side?: string) => replace?.meal.recipeId === recipeId && replace.meal.side === side;
@@ -215,9 +272,12 @@ function WhatSheet({ cook, day, replace, from, view, recipes, fallback, stock, o
           <section key={b.base.recipeId} className="what__base">
             <p className="what__head">
               <b>{title(b.recipe)}</b>
-              <span className="small muted"> · vom {DAY_LONG[b.base.day]}{b.base.extra ? ` · ${portionText(b.base.extra)} übrig` : ''}{frost ? ' · aus dem Gefrierfach' : ''}</span>
+              <span className="small muted"> · vom {DAY_LONG[b.base.day]}{b.base.extra ? ` · ${portionText(b.base.extra)} übrig` : ''}{frost ? (b.recipe?.freezable ? ' · aus dem Gefrierfach' : ' · hält nicht so lange – wird eingefroren') : ''}</span>
             </p>
             <div className="chips" role="group" aria-label={`Aus ${title(b.recipe)}`}>
+              {/* eigene Zusammenstellungen dieser Woche zuerst (Julia: „ich konnte nur das feste Rezept nehmen, nicht mein Baukasten-Gericht“) */}
+              {[...new Set(view.days.flatMap((x) => (x.meal?.meal.baseId === b.base.recipeId && x.meal.meal.recipeId === b.base.recipeId && x.meal.meal.side ? [x.meal.meal.side] : [])))]
+                .map((side) => chip(b.base.recipeId, b.base.recipeId, `mit ${comboText(side)}`, side))}
               {dishes.length > 0 ? dishes.map((r) => chip(r.id, b.base.recipeId, title(r))) : chip(b.base.recipeId, b.base.recipeId, title(b.recipe))}
             </div>
             {/* Grundlage mit Bausteinen (Julia: Baukasten statt nur „+ Beilage“) */}
@@ -237,7 +297,8 @@ function WhatSheet({ cook, day, replace, from, view, recipes, fallback, stock, o
  * was geplant ist“): was an dem Tag vorgekocht wird, mit Portionen, „⇄“ zum Tauschen mit einem anderen Kochtag
  * (Grundlagen samt Abenden, week.ts: swapCookDays) und Vorkochen.
  */
-function CookStrip({ day, bases, week, recipes, cookDays, fallback, change, onStep }: {
+function CookStrip({ household, day, bases, week, recipes, cookDays, fallback, change, onStep }: {
+  household: Household;
   day: Weekday; bases: BaseView[]; week: Week; recipes: Recipe[]; cookDays: Weekday[]; fallback: number; change: (w: Week, text: string) => void;
   onStep: (b: BaseView, up: boolean) => void;
 }) {
@@ -261,6 +322,20 @@ function CookStrip({ day, bases, week, recipes, cookDays, fallback, change, onSt
                 {b.evenings} {b.evenings === 1 ? 'Abend' : 'Abende'}{b.lunches ? ` + ${b.lunches} ${b.lunches === 1 ? 'Mittag' : 'Mittage'}` : ''}{b.base.extra ? ` + ${b.base.extra} Vorrat` : ''}
                 {!b.base.cooked && b.frozen > 0 && <> · <Icon name="snow" size={11} /> {portionText(b.frozen)} einfrieren</>}
               </span>
+              {(() => {
+                // Rezept-Ertrag gegen Plan (Julia: „mir fehlt, wie viele Portionen jedes Gericht laut Rezept ergibt“)
+                const y = b.recipe ? currentContent(b.recipe).servings : 0;
+                if (!y || b.base.cooked) return null;
+                return (
+                  <span className={`small${b.portions < y ? ' cookstrip__over' : ' muted'}`}>
+                    Rezept ergibt {y} · geplant {b.portions}
+                    {/* weniger verplant als gekocht: Rest auf freie Abende (fillEvenings), was keinen Abend findet, bleibt Vorrat */}
+                    {b.portions < y && <> – <button type="button" className="link small" onClick={() => change(
+                      fillEvenings(setExtra(week, b.base.recipeId, (b.base.extra ?? 0) + y - b.portions), b.base.recipeId, recipes, household, () => newId('w'), fallback),
+                      `${title(b.recipe)}: ${y - b.portions} weitere eingeplant`)}>{y - b.portions} weitere einplanen</button></>}
+                  </span>
+                );
+              })()}
               {(b.base.adds ?? []).map((a) => <span key={a} className="tag tag--mhd">+ {a} (MHD)</span>)}
               {!b.base.cooked && early && (
                 <button type="button" className="link small" onClick={() => change(moveBase(week, b.base.recipeId, early.day), `${title(b.recipe)} am ${DAY_LONG[early.day]}`)}>
@@ -318,37 +393,39 @@ function LunchRow({ d, onToggle }: { d: DayView; onToggle: () => void }) {
   );
 }
 
-function MealRow({ d, swapFrom, week, onTap, cookNote }: { d: DayView; swapFrom: Weekday | null; week: Week; onTap: () => void; cookNote?: string }) {
-  const cook = cookNote && <span className="meal__cook">{cookNote}</span>;
+function MealRow({ d, swapFrom, week, onTap, onHold, cookNote, left = 0 }: { d: DayView; swapFrom: Weekday | null; week: Week; onTap: () => void; onHold: () => void; cookNote?: string; left?: number }) {
+  // am Kochtag: gekocht, aber noch ohne Abend (Julia: „nicht weniger verplanen als ich koche“)
+  const leftTag = left > 0 && <span className="tag tag--warn">{portionText(left)} übrig – lange drücken</span>;
+  const press = useLongPress(onHold, onTap);
   const pot = cookNote && <span className="meal__pot" role="img" aria-label={`Kochtag: ${cookNote}`} title={`Kochtag: ${cookNote}`}><Icon name="pot" size={15} /></span>;
   const m = d.meal;
   const mode = swapFrom === null ? '' : swapFrom === d.day ? ' is-picked' : canSwap(week, swapFrom, d.day) ? ' is-target' : ' is-blocked';
   const hint = swapFrom === null || swapFrom === d.day ? null : mode === ' is-target' ? <span className="meal__hint">hierhin</span> : <span className="meal__hint meal__hint--no">vor dem Kochtag</span>;
   if (!m) {
     return (
-      <button type="button" className={`meal meal--free${mode}`} disabled={mode === ' is-blocked'} onClick={onTap}
+      <button type="button" className={`meal meal--free${mode}`} disabled={mode === ' is-blocked'} {...press}
         aria-label={swapFrom === null ? `${DAY_LONG[d.day]} frei – antippen: Was gibt's?` : undefined}>
         {pot}
         <span className="meal__day">{DAY_SHORT[d.day]}</span>
-        <span className="meal__text small muted">frei – Reste, auswärts oder antippen{cook}</span>
+        <span className="meal__text small muted">frei{leftTag}</span>
         {hint ?? (swapFrom === null && <span className="meal__grip" aria-hidden="true"><Icon name="plus" size={18} /></span>)}
       </button>
     );
   }
   const base = m.meal.recipeId === m.meal.baseId;
   const note = m.meal.done ? <span className="tag tag--done"><Icon name="check" size={12} /> gegessen</span>
-    : m.tooOld ? <span className="tag tag--warn">hält nicht so lange – tauschen?</span>
+    : m.tooOld ? <span className="tag tag--warn">hält nicht so lange – lange drücken</span>
     : m.frost ? <span className="tag tag--frost"><Icon name="snow" size={12} /> am Vortag auftauen</span>
     : m.age === 0 ? <span className="tag tag--eat">frisch vom Kochtag</span>
     : <span className="tag tag--eat">{base ? 'aufwärmen' : `vom ${DAY_LONG[m.cookDay]}`}</span>;
   return (
-    <button type="button" className={`meal${mode}${m.meal.done ? ' is-done' : ''}`} disabled={m.meal.done || mode === ' is-blocked'} onClick={onTap}
+    <button type="button" className={`meal${mode}${m.meal.done ? ' is-done' : ''}`} disabled={m.meal.done || mode === ' is-blocked'} {...press}
       aria-label={`${mealText(m)} am ${DAY_LONG[d.day]}${swapFrom === null && !m.meal.done ? ' – antippen zum Tauschen' : ''}`}>
       {pot}
       <span className="meal__day">{DAY_SHORT[d.day]}</span>
       <RecipeImage image={m.recipe?.image} size="sm" />
-      <span className="meal__text"><strong>{mealText(m)}</strong>{note}{m.meal.portions && <span className="tag">{portionText(m.meal.portions)}</span>}{cook}</span>
-      {hint ?? (swapFrom === d.day ? <span className="meal__hint">gewählt</span> : !m.meal.done && <span className="meal__grip" aria-hidden="true"><Icon name="dots" size={18} /></span>)}
+      <span className="meal__text"><strong>{mealText(m)}</strong>{note}{m.meal.portions && <span className="tag">{portionText(m.meal.portions)}</span>}{leftTag}</span>
+      {hint ?? (swapFrom === d.day ? <span className="meal__hint">gewählt</span> : !m.meal.done && <span className="meal__grip" aria-hidden="true"><Icon name="shuffle" size={16} /></span>)}
     </button>
   );
 }
@@ -390,4 +467,31 @@ function MhdFinds({ finds, week, change }: { finds: MhdFind[]; week: Week; chang
       ))}
     </section>
   );
+}
+
+/**
+ * Kurz tippen = onTap, lange drücken (½ s) = onHold – danach kein Klick mehr. Rechtsklick (Desktop) zählt wie lange
+ * drücken. Bewegt sich der Finger (Scrollen), zählt es nicht.
+ */
+function useLongPress(onHold: () => void, onTap: () => void) {
+  const timer = useRef<number | undefined>(undefined);
+  const held = useRef(false);
+  const start = useRef<{ x: number; y: number } | null>(null);
+  const clear = () => { window.clearTimeout(timer.current); timer.current = undefined; };
+  return {
+    onPointerDown: (e: PointerEvent<HTMLButtonElement>) => {
+      held.current = false;
+      start.current = { x: e.clientX, y: e.clientY };
+      clear();
+      timer.current = window.setTimeout(() => { held.current = true; onHold(); }, 500);
+    },
+    onPointerMove: (e: PointerEvent<HTMLButtonElement>) => {
+      if (start.current && Math.hypot(e.clientX - start.current.x, e.clientY - start.current.y) > 10) clear();
+    },
+    onPointerUp: clear,
+    onPointerLeave: clear,
+    onPointerCancel: clear,
+    onContextMenu: (e: MouseEvent<HTMLButtonElement>) => { e.preventDefault(); clear(); held.current = true; onHold(); },
+    onClick: () => { if (held.current) { held.current = false; return; } onTap(); },
+  };
 }

@@ -1905,3 +1905,11 @@ details.cost-line[open] > summary::after { transform: rotate(-90deg); }
 /* Kochtag als Abzeichen halb auf der Kachel – wie „Läuft bald ab“ */
 .meal { position: relative; }
 .meal__pot { position: absolute; top: -9px; right: -7px; width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; background: var(--primary); color: var(--surface); border: 2px solid var(--surface); box-shadow: 0 1px 4px rgb(0 0 0 / 0.1); }
+.week-setup__portions { padding: 6px 0; }
+.week-setup__yield { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 2px 0 4px; color: var(--ink-2); }
+/* Abend lang gedrückt */
+.daysheet__meal { display: grid; gap: 10px; margin-bottom: 14px; }
+.meal { -webkit-touch-callout: none; user-select: none; }
+.cookstrip__over { color: var(--warn-text, #9a5a2f); font-weight: 600; }
+.daysheet__freeze { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 0 0 12px; }
+.week__hint { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 0; padding: 8px 10px; border-radius: var(--r-sm); background: var(--surface-2); }

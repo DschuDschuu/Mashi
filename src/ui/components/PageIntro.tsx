@@ -30,15 +30,14 @@ const TOURS: Record<IntroId, Step[]> = {
   ],
   rezept: [
     { at: () => document.querySelector('main [aria-label="Mehr"]')?.parentElement, title: 'Portionen', text: 'Hier stellst du die Portionen ein – Mengen, Nährwerte und Kosten rechnen mit.' },
-    { at: 'main .plan-chip', title: 'Zum Wochenplan', text: 'Plant das Gericht für einen Abend oder „Irgendwann diese Woche“.' },
+    { at: 'main .plan-chip', title: 'Zum Wochenplan', text: 'Plant das Gericht für einen Abend der Woche.' },
     { at: '[aria-label="Weitere Aktionen"]', title: 'Mehr Aktionen', text: 'Bearbeiten, „Grundlage daraus machen“ oder archivieren. Jede Änderung wird eine neue Version – die alte bleibt.' },
     { at: byText('main button', 'Kochmodus starten'), title: 'Los geht’s', text: 'Startet den Kochmodus: Schritt für Schritt mit Timer.' },
   ],
   plan: [
-    { title: 'Dein Wochenplan', text: 'Gerichte stehen an einem Abend oder unter „Irgendwann diese Woche“. Kochst du mehr Portionen, füllen die übrigen freie Abende.' },
+    { title: 'Dein Wochenplan', text: 'Jedes Gericht steht an seinem Abend, der Topf zeigt den Kochtag. Antippen tauscht zwei Abende, lange drücken öffnet Portionen, anderes Gericht und Kochtag.' },
     { at: byText('main button', 'Woche planen'), title: 'Woche planen', text: 'Grundlagen und Rezepte für die Woche wählen – Mashi verteilt sie auf die Abende.' },
     { at: 'main .meal--free', title: '„Was gibt’s?“', text: 'Einen freien Abend antippen: Mashi schlägt vor, was aus Grundlagen und Vorrat geht.' },
-    { at: byText('main button', 'Gericht hinzufügen'), title: 'Irgendwann diese Woche', text: 'Ein Gericht ohne festen Tag – du legst es später auf einen freien Abend.' },
     { at: '[aria-label="Einkaufsliste"]', title: 'Einkaufsliste', text: 'Was noch fehlt, steht hier. Wie viel pro Abend gegessen wird, stellst du in den Einstellungen unter Haushalt ein.' },
   ],
   woche: [

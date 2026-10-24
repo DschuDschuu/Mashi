@@ -2,7 +2,7 @@ import { useMemo, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { ask } from '../confirm';
 import { DishNutrition } from '../components/DishNutrition';
 import { recipeCost, sumCosts } from '../../domain/cost';
-import { suggestRecipes, type ShoppingItem, type Suggestion, type Weekday } from '../../domain/mealplan';
+import { suggestRecipes, type Suggestion, type Weekday } from '../../domain/mealplan';
 import { DAY_LONG, DAY_SHORT } from '../../domain/week';
 import { ingredientCompletions, longNotCooked, searchRecipes } from '../../domain/recipeSearch';
 import { currentContent } from '../../domain/recipe';
@@ -24,7 +24,6 @@ import {
 import { navigate } from '../../router';
 import { CartButton } from '../components/CartButton';
 import { Section, Stepper } from '../components/Controls';
-import { useMissing } from '../useShoppingCount';
 import { useSheet } from '../useSheet';
 import { UseUpBadge } from '../components/UseUpBadge';
 import { PlannedGroup } from '../components/PlannedGroup';
@@ -70,7 +69,6 @@ export function PlanScreen() {
     .sort((a, b) => Number(a.cooked) - Number(b.cooked));
   const { keys: useUp, plannedUseUp, dishes } = useUseUp();
   const suggestions = useMemo(() => suggestRecipes(plan, recipes.filter(plannable), table, 5, new Set(useUp.keys())), [plan, recipes, table, useUp]);
-  const missing = useMissing();
   const portions = items.reduce((s, i) => s + i.servings, 0);
   const { prices } = usePricing();
   // wie gekocht: „nur dieses Mal“-Mengen und dieselbe Sorte wie bei den Nährwerten (Julia: 3 statt 1 Paprika kostet auch mehr)
@@ -107,7 +105,9 @@ export function PlanScreen() {
   const planList = (
     <>
       {weekPart}
-      <Section icon="calendar" title={items.length ? `Irgendwann diese Woche · ${items.length} ${items.length === 1 ? 'Gericht' : 'Gerichte'} · ${portionCount(portions)}` : 'Irgendwann diese Woche'}>
+      {/* Julia: „Gerichte ohne festen Tag kann raus“ – alte Einträge ohne Tag bleiben sichtbar, sonst liefen sie unsichtbar auf der Einkaufsliste weiter */}
+      {(items.length > 0 || plan.cooked.length > 0) && (
+      <Section icon="calendar" title={`Ohne festen Tag · ${items.length} ${items.length === 1 ? 'Gericht' : 'Gerichte'} · ${portionCount(portions)}`}>
         {items.length === 0 ? (
           <p className="small muted">Gerichte ohne festen Tag stehen hier – leg sie später auf einen freien Abend.</p>
         ) : (
@@ -169,9 +169,6 @@ export function PlanScreen() {
             )}
           </p>
         )}
-        <button className="btn btn--soft btn--block" onClick={() => setPicking(true)}>
-          <Icon name="plus" size={18} /> Gericht hinzufügen
-        </button>
         {/* statt „Neue Woche“: der Plan läuft weiter – nur Gekochtes kommt raus, Vorgekochtes bleibt in der Speisekammer */}
         {plan.cooked.length > 0 && (
           <button className="link link--muted center" onClick={async () => {
@@ -181,6 +178,7 @@ export function PlanScreen() {
           </button>
         )}
       </Section>
+      )}
     </>
   );
 
@@ -190,7 +188,6 @@ export function PlanScreen() {
   const reserved = dishes.filter((d) => d.taken.length);
   const sideList = (
     <>
-      <MissingPanel items={missing} />
       {reserved.length > 0 && <PlannedGroup dishes={reserved} urgent={plannedUseUp} />}
     </>
   );
@@ -396,27 +393,6 @@ function pickerGroups(candidates: Recipe[], suggestions: Suggestion[]): { title:
     .map((recipe) => ({ recipe }));
   groups.push({ title: groups.some((g) => g.items.length) ? 'Alle anderen' : 'Alle Rezepte', icon: 'book', items: rest });
   return groups.filter((g) => g.items.length);
-}
-
-/** „Fehlt noch“: was für die geplanten Gerichte noch eingekauft werden muss – immer offen, führt zur Einkaufsliste. */
-function MissingPanel({ items }: { items: ShoppingItem[] }) {
-  return (
-    <section className="panel missing" aria-labelledby="missing-title">
-      <div className="row-between">
-        <h2 className="missing__title" id="missing-title"><Icon name="cart" size={18} /> Fehlt noch{items.length ? ` (${items.length})` : ''}</h2>
-        {items.length > 0 && <button className="link" onClick={() => navigate('/einkauf')}>Einkaufsliste</button>}
-      </div>
-      {items.length === 0 ? (
-        <p className="muted small">Alles da – für die geplanten Gerichte musst du nichts mehr kaufen.</p>
-      ) : (
-        <ul className="missing__list">
-          {items.map((i) => (
-            <li key={i.key}><span>{i.name}</span><span className="muted">{i.quantity}</span></li>
-          ))}
-        </ul>
-      )}
-    </section>
-  );
 }
 
 /**

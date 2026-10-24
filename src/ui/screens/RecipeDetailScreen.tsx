@@ -13,7 +13,7 @@ import { orderByUse } from '../../domain/stepIngredients';
 import { doneParts, partLabel, partOf, partsOf, REST, stepPart } from '../../domain/parts';
 import type { Recipe, RecipeContent } from '../../domain/types';
 import type { Weekday } from '../../domain/mealplan';
-import { DAY_LONG, DAY_SHORT } from '../../domain/week';
+import { DAY_LONG, DAY_SHORT, weekdayOf } from '../../domain/week';
 import { describeChange, diffContent } from '../../domain/versions';
 import {
   addToPlan, adoptToCookbook, archiveRecipe, deleteRecipe, makeBase, restoreRecipe, scheduleRecipe, markCooked, regenerateImage, setChoice, setHomemade, setPlanVariants, setStatus, toggleFavorite, togglePlanCooked, uncookRecipe, updateNotes, usePantry, usePlan, useRecipe, useRecipes,
@@ -476,7 +476,12 @@ function PlanButton({ recipe, content, servings }: { recipe: Recipe; content: Re
 function WhenSheet({ recipe, servings, onSomeday, onClose }: { recipe: Recipe; servings: number; onSomeday: (n: number) => void; onClose: () => void }) {
   const ref = useSheet(onClose);
   const taken = new Set(usePlan().week?.meals.map((m) => m.day) ?? []);
-  const [day, setDay] = useState<Weekday | 'irgendwann'>('irgendwann');
+  // „Irgendwann“ gibt es nicht mehr (Julia) – vorgewählt ist der nächste freie Abend ab heute; nur wenn alle belegt sind, landet es ohne Tag
+  const [day, setDay] = useState<Weekday | 'irgendwann'>(() => {
+    const today = weekdayOf(new Date());
+    const free = Array.from({ length: 7 }, (_, i) => ((today + i) % 7) as Weekday).find((d) => !taken.has(d));
+    return free ?? 'irgendwann';
+  });
   const [n, setN] = useState(servings);
   const title = currentContent(recipe).title;
   const done = () => {
@@ -496,7 +501,6 @@ function WhenSheet({ recipe, servings, onSomeday, onClose }: { recipe: Recipe; s
             <button key={d} type="button" className={`chip${day === i ? ' is-on' : ''}`} aria-pressed={day === i} disabled={taken.has(i)} onClick={() => setDay(i as Weekday)}
               aria-label={`${DAY_LONG[i]}${taken.has(i) ? ' – schon belegt' : ''}`}>{d}</button>
           ))}
-          <button type="button" className={`chip${day === 'irgendwann' ? ' is-on' : ''}`} aria-pressed={day === 'irgendwann'} onClick={() => setDay('irgendwann')}>Irgendwann</button>
         </div>
         <div className="row-between">
           <span>Portionen</span>
