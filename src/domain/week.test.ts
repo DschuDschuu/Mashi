@@ -5,7 +5,7 @@ import type { Week } from './mealplan';
 import type { Ingredient, Recipe } from './types';
 import { buildShoppingList, emptyPlan } from './mealplan';
 import { localFoodTable } from './nutrition/localFoods';
-import { carbCarry, putPrepared, extrasOf, addBase, addToBase, byEffort, canLessPortions, choicesOf, fillEvenings, mealKey, putMeal, servingsOf, setMealPortions, stepPortions, mealTitle, mhdFinds, removeMeal, scheduleMeal, splitMealKey, weekSideNeeds, weekStarted, withCookDays } from './week';
+import { carbCarry, swapCookDays, putPrepared, extrasOf, addBase, addToBase, byEffort, canLessPortions, choicesOf, fillEvenings, mealKey, putMeal, servingsOf, setMealPortions, stepPortions, mealTitle, mhdFinds, removeMeal, scheduleMeal, splitMealKey, weekSideNeeds, weekStarted, withCookDays } from './week';
 import type { PantryItem } from './pantry';
 import { baseIdOf, canSwap, mealPortions, weekItems, withoutBases, earlierCookDay, moveBase, setExtra, shiftFrom, sortCookDays, suggestWeek, swapDays, toggleLunch, transformsOf, weekdayOf, weekOrder, weekView } from './week';
 
@@ -343,6 +343,15 @@ it('carbCarry: zweimal Pasta höchstens 2 Tage auseinander → einmal kochen; pa
   expect(c.has(MI)).toBe(false); // Di ist schon vergeben, Sa ist 3 Tage weg
   expect(c.has(DO)).toBe(false);
   expect(c.has(SA)).toBe(false);
+});
+
+it('swapCookDays: Sonntag ↔ Mittwoch – Grundlagen tauschen, Abende rücken ab dem neuen Kochtag nach', () => {
+  const w = example(); // Bolo So (So, Mo, Di), Chili Mi (Mi, Do)
+  const t = swapCookDays(w, SO, MI);
+  expect(t.bases.map((b) => [b.recipeId, b.day])).toEqual([['bolo', MI], ['chili', SO]]);
+  expect(plan(t)).toEqual([`${SO}:chilireis`, `${MO}:bowl`, `${MI}:spag`, `${DO}:wraps`, `${FR}:ofen`].sort());
+  const gegessen: Week = { ...w, meals: w.meals.map((m, i) => (i === 0 ? { ...m, done: true } : m)) };
+  expect(swapCookDays(gegessen, SO, MI)).toBe(gegessen);
 });
 
 it('extrasOf: was zur Grundlage dazukommt, ohne die Grundlage selbst', () => {

@@ -432,6 +432,33 @@ export function moveBase(week: Week, baseId: string, day: Weekday): Week {
   return { ...week, bases: week.bases.map((b) => (b.recipeId === baseId ? { ...b, day } : b)) };
 }
 
+/**
+ * Zwei Kochtage tauschen (Julia: „Sonntags- und Mittwochsgerichte schnell tauschen“): die Grundlagen wechseln den Tag,
+ * ihre Abende rücken ab dem neuen Kochtag auf die nächsten freien Abende – die früher gekochte zuerst. Gerichte,
+ * Bausteine und Portionen bleiben. Ist von einer der beiden schon etwas gekocht oder gegessen: unverändert.
+ */
+export function swapCookDays(week: Week, a: Weekday, b: Weekday): Week {
+  const moved = week.bases.filter((x) => x.day === a || x.day === b);
+  const ids = new Set(moved.map((x) => x.recipeId));
+  if (a === b || !moved.length || moved.some((x) => x.cooked) || week.meals.some((m) => m.done && ids.has(m.baseId))) return week;
+  const order = weekOrder(week);
+  const ord = (d: Weekday) => order.indexOf(d);
+  const bases = week.bases.map((x) => (ids.has(x.recipeId) ? { ...x, day: x.day === a ? b : a } : x));
+  const stay = week.meals.filter((m) => !ids.has(m.baseId));
+  const taken = new Set(stay.map((m) => m.day));
+  const placed: WeekMeal[] = [];
+  for (const base of bases.filter((x) => ids.has(x.recipeId)).sort((x, y) => ord(x.day) - ord(y.day))) {
+    let k = ord(base.day);
+    for (const m of week.meals.filter((x) => x.baseId === base.recipeId).sort((x, y) => ord(x.day) - ord(y.day))) {
+      while (k < 7 && taken.has(order[k])) k++;
+      const day = k < 7 ? order[k] : m.day; // Woche voll – dann eben doppelt, resolveClashes rückt weiter
+      taken.add(day);
+      placed.push({ ...m, day });
+    }
+  }
+  return resolveClashes({ ...week, bases, meals: [...stay, ...placed] });
+}
+
 /** Extra-Portionen (Vorrat) – nie unter 0 */
 export function setExtra(week: Week, baseId: string, extra: number): Week {
   return { ...week, bases: week.bases.map((b) => (b.recipeId === baseId ? { ...b, extra: Math.max(0, Math.round(extra)) || undefined } : b)) };
