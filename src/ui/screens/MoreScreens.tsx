@@ -17,7 +17,7 @@ import { HouseholdSettings } from '../components/HouseholdSettings';
 import { Icon } from '../components/Icon';
 import { RecipeImage } from '../components/RecipeImage';
 import { THEMES, updateSettings, useSettings } from '../settings';
-import { Onboarding } from '../components/Onboarding';
+import { resetIntros } from '../components/PageIntro';
 import { recipeCount } from '../format';
 import { toast } from '../toast';
 import { shareMessage, shareRecipes } from '../shareRecipes';
@@ -26,7 +26,6 @@ export function MoreScreen() {
   const all = useRecipes();
   const archived = all.filter((r) => r.archivedAt);
   const settings = useSettings();
-  const [tour, setTour] = useState(false);
   return (
     <main className="screen">
       <TopBar title="Einstellungen" backTo="/" />
@@ -87,15 +86,14 @@ export function MoreScreen() {
         <MacroGoalSettings />
         <TasteSettings />
         <HouseholdSettings />
-        <button type="button" className="panel link-row" onClick={() => setTour(true)}>
-          <Icon name="info" size={20} />
+        <button type="button" className="panel link-row" onClick={() => { resetIntros(); toast('Jede Seite erklärt sich wieder beim nächsten Besuch'); }}>
+          <Icon name="help" size={20} />
           <span className="link-row__text">
-            <strong>Einführung ansehen</strong>
-            <small className="muted">Alle Funktionen in acht kurzen Karten</small>
+            <strong>Alle Einführungen wieder zeigen</strong>
+            <small className="muted">Die kurzen Touren durch jede Seite – auf diesem Gerät</small>
           </span>
-          <Icon name="chevron" size={18} />
+          <Icon name="refresh" size={18} />
         </button>
-        {tour && <Onboarding onClose={() => setTour(false)} />}
       </Section>
 
       <Section title="Sicherung">

@@ -33,6 +33,7 @@ const PATHS = {
   list: 'M8 6h13 M8 12h13 M8 18h13 M3 6h.01 M3 12h.01 M3 18h.01',
   trash: 'M3 6h18 M8 6V4h8v2 M6 6l1 15h10l1-15',
   info: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z M12 11v5 M12 8h.01',
+  help: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z M9.5 9.5a2.5 2.5 0 1 1 3.4 2.3c-.6.3-.9.8-.9 1.4v.3 M12 16.5h.01',
   bookmark: 'M6 3h12v18l-6-4-6 4z',
   grid: 'M4 4h6v6H4z M14 4h6v6h-6z M4 14h6v6H4z M14 14h6v6h-6z',
   // Mix & Match – Saucen und Beilagen kreuz und quer kombinieren

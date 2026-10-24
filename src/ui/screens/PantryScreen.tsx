@@ -15,6 +15,7 @@ import { navigate, useRoute } from '../../router';
 import { foodTable } from '../../services';
 import { Empty, Section, Stepper, Switch } from '../components/Controls';
 import { Icon } from '../components/Icon';
+import { PageIntro } from '../components/PageIntro';
 import { FoodsButton } from '../components/FoodsButton';
 import { PantryTabs, usePantrySwipe } from '../components/PlanTabs';
 import { IngredientNames } from '../components/IngredientNames';
@@ -270,7 +271,11 @@ export function PantryScreen() {
 
   return (
     <main className="screen screen--tabbed" {...swipe}>
-      <header className="page-head"><h1>Speisekammer</h1><FoodsButton /></header>
+      <header className="page-head">
+        <h1>Speisekammer</h1>
+        <FoodsButton />
+      </header>
+      <PageIntro id="speisekammer" />
       <PantryTabs active="pantry" />
       <IngredientNames />
 

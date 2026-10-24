@@ -1,6 +1,4 @@
 import { useEffect, useRef, type ReactElement } from 'react';
-import { Onboarding } from './ui/components/Onboarding';
-import { useSettings } from './ui/settings';
 import type { Mode } from './data/backend';
 import { useLeftoverAsk, useStoreReady } from './data/store';
 import { navigate, useRoute, type Route } from './router';
@@ -92,7 +90,6 @@ export function App({ mode }: { mode: Mode | null }) {
   const message = useToast();
   const leftoverOpen = !!useLeftoverAsk();
   const confirmOpen = !!useConfirm();
-  const settings = useSettings();
   const pathNow = useRef(route.path);
 
   // Wo du warst, je Seite mitschreiben – beim Zurück ins Kochbuch dorthin statt nach oben (Julia).
@@ -124,8 +121,6 @@ export function App({ mode }: { mode: Mode | null }) {
       {/* stürzt eine Seite ab: Meldung statt leerem Bildschirm – je Seite neu (key), damit Zurück wieder geht */}
       <ErrorBoundary key={route.path}>{screen}</ErrorBoundary>
       {!cooking && <BottomNav active={tab ?? section} onlyTablet={!tab} />}
-      {/* Einführung beim ersten Start (je Gerät) – nicht mitten im Kochen */}
-      {!settings.onboarded && !cooking && <Onboarding onClose={() => undefined} />}
       {/* nach „Gekocht“ – überall, auch nach dem Kochmodus */}
       <LeftoverSheet />
       {/* Nachfragen im Mashi-Stil statt Browser-Dialog (ask) */}

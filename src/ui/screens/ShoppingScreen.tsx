@@ -40,7 +40,7 @@ export function ShoppingScreen() {
 
   return (
     <main className="screen screen--tabbed">
-      <TopBar title="Einkaufsliste" backTo="/plan" />
+      <TopBar title="Einkaufsliste" backTo="/plan" intro="einkauf" />
       {/* eigene Einträge: „Spülmittel“, „Backpapier“ – auch ohne Plan */}
       <AddExtra autoFocus={typeNow} />
       {all.length === 0 ? (

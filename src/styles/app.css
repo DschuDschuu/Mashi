@@ -1258,19 +1258,16 @@ p { margin: 0; }
 .theme-pick__dots span { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--surface); margin-left: -5px; }
 .theme-pick__dots span:first-child { margin-left: 0; }
 
-/* Einführung – Karten zum Durchwischen */
-.onboarding-backdrop { z-index: 50; align-items: center; padding: 16px; }
-.onboarding { position: relative; border-radius: 28px; max-width: 420px; min-height: min(520px, 86vh); display: flex; flex-direction: column; padding: 22px 22px calc(18px + var(--safe-b)); gap: 18px; }
-.onboarding__skip { align-self: flex-end; }
-.onboarding__card { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 14px; }
-.onboarding__icon { display: grid; place-items: center; width: 88px; height: 88px; border-radius: 50%; background: var(--primary-soft); color: var(--primary-text); }
-.onboarding__title { font-size: 1.35rem; margin: 0; }
-.onboarding__text { margin: 0; color: var(--ink-2); line-height: 1.5; max-width: 32ch; }
-.onboarding__dots { display: flex; justify-content: center; gap: 8px; }
-.onboarding__dots button { width: 8px; height: 8px; border-radius: 50%; background: var(--line); padding: 0; }
-.onboarding__dots button.is-on { width: 22px; border-radius: 4px; background: var(--primary); }
-.onboarding__actions { display: flex; justify-content: space-between; gap: 10px; }
-.onboarding__actions .btn { min-width: 120px; }
+/* Geführte Tour pro Seite – abgedunkelt, ein Knopf hervorgehoben, daneben die Sprechblase */
+.tour { position: fixed; inset: 0; z-index: 60; }
+.tour__dim { position: absolute; inset: 0; background: rgb(20 32 33 / 0.55); }
+.tour__spot { position: fixed; border-radius: 14px; box-shadow: 0 0 0 200vmax rgb(20 32 33 / 0.55); outline: 2px solid var(--surface); pointer-events: none; transition: top 0.2s, left 0.2s, width 0.2s, height 0.2s; }
+.tour__bubble { position: fixed; left: max(16px, calc(50% - 180px)); width: min(360px, calc(100vw - 32px)); background: var(--surface); color: var(--ink); border-radius: var(--r); padding: 14px 16px 12px; box-shadow: 0 8px 28px rgb(0 0 0 / 0.22); display: flex; flex-direction: column; gap: 8px; }
+.tour__bubble p { margin: 0; color: var(--ink-2); line-height: 1.45; font-size: 0.92rem; overflow-wrap: anywhere; }
+.tour__head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.tour__head strong { min-width: 0; overflow-wrap: anywhere; }
+.tour__actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 2px; }
+@media (prefers-reduced-motion: reduce) { .tour__spot { transition: none; } }
 
 /* „Gilt für“: ausgenommene Schreibweise */
 .afilter.is-off { text-decoration: line-through; opacity: 0.55; background: var(--surface-2); }

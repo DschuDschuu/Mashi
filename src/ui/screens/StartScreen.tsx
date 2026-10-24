@@ -6,6 +6,7 @@ import { addToPlan, useFoodTable, usePantry, usePlan, useRecipes } from '../../d
 import { navigate } from '../../router';
 import { Empty } from '../components/Controls';
 import { Icon } from '../components/Icon';
+import { PageIntro } from '../components/PageIntro';
 import { UseUpBadge } from '../components/UseUpBadge';
 import { StockLine } from '../components/StockLine';
 import type { Stock } from '../../domain/pantry';
@@ -52,6 +53,8 @@ export function StartScreen() {
         <Icon name="sparkles" size={14} className="home-head__spark home-head__spark--b" />
         <SettingsButton className="home-head__settings" />
       </header>
+      {/* statt acht Einführungskarten ein kurzes Willkommen – jede Seite hat ihre eigene Tour */}
+      <PageIntro id="start" />
       {expiring.length > 0 && (
         <button className="useup-banner" onClick={() => navigate('/reste')}>
           <Icon name="clock" size={18} />

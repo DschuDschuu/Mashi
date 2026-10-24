@@ -77,7 +77,7 @@ export function WeekSetupScreen() {
 
   return (
     <main className="screen screen--cta">
-      <TopBar title="Woche planen" backTo="/plan" />
+      <TopBar title="Woche planen" backTo="/plan" intro="woche" />
       <h1 className="week-setup__title">Was kochst du vor?</h1>
       <p className="muted">Grundlage antippen und wählen, was du daraus machst – jedes Antippen ist ein Abend, zweimal = zweimal in der Woche.</p>
       {/* Julia: Grundrezepte und Rezepte als Tabs – schön getrennt; die Zahl zeigt, was dort gewählt ist */}

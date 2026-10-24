@@ -7,6 +7,7 @@ import { useRecipes } from '../../data/store';
 import { type Route } from '../../router';
 import { ChipSelect, Empty } from '../components/Controls';
 import { Icon } from '../components/Icon';
+import { PageIntro } from '../components/PageIntro';
 import { deviceIcon } from '../catalogIcons';
 import { RecipeCard } from '../components/RecipeCard';
 import { recipeCount } from '../format';
@@ -73,6 +74,7 @@ export function CookbookScreen({ route }: { route: Route }) {
           <span className="muted small">{recipeCount(result.length)}</span>
         </span>
       </header>
+      <PageIntro id="kochbuch" />
 
       <div className="search-row">
         <label className="search">

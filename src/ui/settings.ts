@@ -9,8 +9,6 @@ export interface Settings {
   showStepIngredients: boolean;
   /** Farbthema – je Gerät, z. B. am Tablet anders als am Handy */
   theme: Theme;
-  /** Einführung gesehen (oder übersprungen) */
-  onboarded: boolean;
 }
 
 export type Theme = 'salbei' | 'bordeaux' | 'sonne' | 'nacht';
@@ -32,7 +30,7 @@ export function applyTheme(theme: Theme) {
 }
 
 const KEY = 'mashi-settings';
-const DEFAULTS: Settings = { showStepIngredients: true, theme: 'salbei', onboarded: false };
+const DEFAULTS: Settings = { showStepIngredients: true, theme: 'salbei' };
 
 function load(): Settings {
   try {

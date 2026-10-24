@@ -18,7 +18,7 @@ export function ProductsScreen() {
   };
   return (
     <main className="screen">
-      <TopBar title="Meine Lebensmittel" backTo="/speisekammer"
+      <TopBar title="Meine Lebensmittel" backTo="/speisekammer" intro="produkte"
         right={
           <button type="button" className={`iconbtn${adding ? ' is-on' : ''}`} onClick={toggle} aria-expanded={adding}
             aria-label={adding ? 'Hinzufügen schließen' : 'Lebensmittel hinzufügen'}>

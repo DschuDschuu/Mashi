@@ -23,6 +23,7 @@ import { shareMessage, shareRecipes } from '../shareRecipes';
 import { goBack, navigate } from '../../router';
 import { ChipSelect, Empty, Stars, Stepper } from '../components/Controls';
 import { Icon } from '../components/Icon';
+import { PageIntro } from '../components/PageIntro';
 import { deviceIcon } from '../catalogIcons';
 import { NutritionDetails, NutritionTiles } from '../components/Nutrition';
 import { UnknownIngredients } from '../components/NewProduct';
@@ -168,6 +169,7 @@ function Detail({ recipe }: { recipe: Recipe }) {
 
 const header = (
     <>
+      <PageIntro id="rezept" />
       <div className="row-gap">
         <StatusBadge status={recipe.status} withIcon />
         {recipe.source === 'ki' && recipe.status === 'kochbuch' && <span className="muted small">Ursprünglich mit KI erstellt</span>}

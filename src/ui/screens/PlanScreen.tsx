@@ -29,6 +29,7 @@ import { useSheet } from '../useSheet';
 import { UseUpBadge } from '../components/UseUpBadge';
 import { PlannedGroup } from '../components/PlannedGroup';
 import { Icon, type IconName } from '../components/Icon';
+import { PageIntro } from '../components/PageIntro';
 import { RecipeImage } from '../components/RecipeImage';
 import { amountsText, moreLabel, useMorePrompt, usePlannedMore, UseMoreSheet } from '../components/UseMoreSheet';
 import { StatusBadge } from '../components/StatusBadge';
@@ -212,6 +213,7 @@ export function PlanScreen() {
           <CartButton />
         </span>
       </header>
+      <PageIntro id="plan" />
       <div className="plan-layout">
         <div className="plan-layout__main">{planList}</div>
         <div className="plan-layout__side">{sideList}</div>

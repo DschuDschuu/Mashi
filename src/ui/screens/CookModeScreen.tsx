@@ -14,6 +14,7 @@ import { weekView } from '../../domain/week';
 import { doneParts, forParts, partLabel, partsOf, REST } from '../../domain/parts';
 import { goBack, navigate } from '../../router';
 import { Icon } from '../components/Icon';
+import { PageIntro } from '../components/PageIntro';
 import { StepIngredients } from '../components/StepIngredients';
 import { cookedToast } from '../cookedToast';
 import { toast } from '../toast';
@@ -248,6 +249,7 @@ export function CookModeScreen({ id, servings, variants, prep, mealId }: {
           </button>
         )}
       </header>
+      <PageIntro id="kochen" />
       {/* Julia: was schon in der Speisekammer steht, erkennt Mashi selbst – gefragt wird nur nach den offenen Teilen; bleibt eins übrig, wird das gekocht */}
       {askParts && open.length > 1 && <PartsAskSheet parts={open} done={done} onDone={startParts} />}
       {/* Julia: welche Teile heute – fertige (Vorgekocht) stehen mit Haken da */}
