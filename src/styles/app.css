@@ -1260,15 +1260,13 @@ p { margin: 0; }
 
 /* Geführte Tour pro Seite – abgedunkelt, ein Knopf hervorgehoben, daneben die Sprechblase */
 .tour { position: fixed; inset: 0; z-index: 60; }
-.tour__dim { position: absolute; inset: 0; background: rgb(20 32 33 / 0.55); }
-.tour__spot { position: fixed; border-radius: 14px; box-shadow: 0 0 0 200vmax rgb(20 32 33 / 0.55); outline: 2px solid var(--surface); pointer-events: none; transition: top 0.2s, left 0.2s, width 0.2s, height 0.2s; }
+.tour__dim { position: fixed; background: rgb(20 32 33 / 0.55); }
+.tour__spot { position: fixed; border-radius: 12px; outline: 2px solid var(--surface); outline-offset: -2px; pointer-events: none; }
 .tour__bubble { position: fixed; left: max(16px, calc(50% - 180px)); width: min(360px, calc(100vw - 32px)); background: var(--surface); color: var(--ink); border-radius: var(--r); padding: 14px 16px 12px; box-shadow: 0 8px 28px rgb(0 0 0 / 0.22); display: flex; flex-direction: column; gap: 8px; }
 .tour__bubble p { margin: 0; color: var(--ink-2); line-height: 1.45; font-size: 0.92rem; overflow-wrap: anywhere; }
 .tour__head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
 .tour__head strong { min-width: 0; overflow-wrap: anywhere; }
 .tour__actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 2px; }
-@media (prefers-reduced-motion: reduce) { .tour__spot { transition: none; } }
-
 /* „Gilt für“: ausgenommene Schreibweise */
 .afilter.is-off { text-decoration: line-through; opacity: 0.55; background: var(--surface-2); }
 

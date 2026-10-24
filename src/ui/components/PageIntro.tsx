@@ -137,7 +137,9 @@ function Tour({ steps, onDone }: { steps: Step[]; onDone: () => void }) {
     const at = step.at;
     const el = typeof at === 'string' ? document.querySelector(at) : at?.();
     if (!el) { setRect(null); return; }
-    el.scrollIntoView({ block: 'center', behavior: 'instant' });
+    // nur scrollen, wenn der Knopf nicht ganz zu sehen ist; ohne behavior: 'instant' – das kennen ältere Safaris nicht
+    const r = el.getBoundingClientRect();
+    if (r.top < 0 || r.bottom > document.documentElement.clientHeight) el.scrollIntoView({ block: 'center' });
     const measure = () => setRect(el.getBoundingClientRect());
     measure();
     window.addEventListener('resize', measure);
@@ -152,17 +154,30 @@ function Tour({ steps, onDone }: { steps: Step[]; onDone: () => void }) {
     return () => window.removeEventListener('keydown', key);
   }, [i, onDone]);
 
-  // Blase unter dem Knopf, wenn dort Platz ist, sonst darüber; ohne Ziel mittig
+  const forward = () => (last ? onDone() : setI(i + 1));
+  // Blase unter dem Knopf, wenn dort Platz ist, sonst darüber; sonst (oder ohne Ziel) mittig – nie aus dem Bild
   const pad = 6;
-  const below = rect && window.innerHeight - rect.bottom > 220;
-  const place = !rect ? { top: '50%', transform: 'translateY(-50%)' }
-    : below ? { top: rect.bottom + pad + 10 } : { bottom: window.innerHeight - rect.top + pad + 10 };
+  const vh = document.documentElement.clientHeight;
+  const vw = document.documentElement.clientWidth;
+  const place = rect && vh - rect.bottom > 230 ? { top: rect.bottom + pad + 10 }
+    : rect && rect.top > 230 ? { bottom: vh - rect.top + pad + 10 }
+    : { top: '50%', transform: 'translateY(-50%)' };
+  // Abdunkeln mit vier Flächen um den Knopf statt mit einem riesigen Schatten – den zeichnen nicht alle Handys
+  // (Julia: nach der Tour ließ sich am Handy nichts mehr antippen)
+  const s = rect && { t: Math.max(0, rect.top - pad), l: Math.max(0, rect.left - pad), r: Math.min(vw, rect.right + pad), b: Math.min(vh, rect.bottom + pad) };
 
   return (
-    <div className="tour" role="dialog" aria-modal="true" aria-label={step.title}>
-      {rect
-        ? <div className="tour__spot" style={{ top: rect.top - pad, left: rect.left - pad, width: rect.width + 2 * pad, height: rect.height + 2 * pad }} />
-        : <div className="tour__dim" />}
+    // Tippen neben die Blase = Weiter – so bleibt nie etwas gesperrt, auch wenn etwas nicht gezeichnet wird
+    <div className="tour" role="dialog" aria-modal="true" aria-label={step.title} onClick={(e) => { if (!(e.target as Element).closest('.tour__bubble')) forward(); }}>
+      {s ? (
+        <>
+          <div className="tour__dim" style={{ top: 0, left: 0, right: 0, height: s.t }} />
+          <div className="tour__dim" style={{ top: s.b, left: 0, right: 0, bottom: 0 }} />
+          <div className="tour__dim" style={{ top: s.t, left: 0, width: s.l, height: s.b - s.t }} />
+          <div className="tour__dim" style={{ top: s.t, left: s.r, right: 0, height: s.b - s.t }} />
+          <div className="tour__spot" style={{ top: s.t, left: s.l, width: s.r - s.l, height: s.b - s.t }} />
+        </>
+      ) : <div className="tour__dim" style={{ inset: 0 }} />}
       <div className="tour__bubble" style={place} aria-live="polite">
         <div className="tour__head">
           <strong>{step.title}</strong>
@@ -173,7 +188,7 @@ function Tour({ steps, onDone }: { steps: Step[]; onDone: () => void }) {
           {!last ? <button type="button" className="link link--muted small" onClick={onDone}>Überspringen</button> : <span />}
           <span className="row-gap">
             {i > 0 && <button type="button" className="btn btn--ghost btn--sm" onClick={() => setI(i - 1)}>Zurück</button>}
-            <button ref={next} type="button" className="btn btn--primary btn--sm" onClick={() => (last ? onDone() : setI(i + 1))}>
+            <button ref={next} type="button" className="btn btn--primary btn--sm" onClick={forward}>
               {last ? 'Verstanden' : 'Weiter'}
             </button>
           </span>
