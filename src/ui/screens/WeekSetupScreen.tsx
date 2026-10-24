@@ -1,239 +1,148 @@
-import { useMemo, useState, type ReactNode } from 'react';
-import { currentContent, newId, totalMinutes } from '../../domain/recipe';
-import { DAY_SHORT, byEffort, choicesOf, extrasOf, keepsOf, mealKey, splitMealKey, sortCookDays, suggestWeek, transformsOf, weekStarted } from '../../domain/week';
-import { comboText } from '../../domain/sides';
-import { ComboBuilder } from '../components/ComboBuilder';
-import type { Weekday } from '../../domain/mealplan';
+import { useMemo, useState } from 'react';
+import { currentContent } from '../../domain/recipe';
+import { keepsOf, potOf, potWeek, transformCounts, weekStarted, type PotItem } from '../../domain/week';
 import type { Recipe } from '../../domain/types';
-import { householdOf, setPrepInfo, setWeek, usePantry, usePlan, useRecipes } from '../../data/store';
+import { householdOf, setWeek, usePantry, usePlan, useRecipes } from '../../data/store';
 import { specialDays } from '../../domain/shelfLife';
 import { navigate } from '../../router';
 import { ask } from '../confirm';
-import { formatMinutesShort } from '../format';
 import { toast } from '../toast';
-import { Stepper } from '../components/Controls';
 import { Icon } from '../components/Icon';
 import { RecipeImage } from '../components/RecipeImage';
 import { TopBar } from '../components/TopBar';
 
 /** Als Grundlage taugt alles, was im Kochbuch steht – außer Verwandlungen (die hängen an ihrer Grundlage) */
 const baseCandidate = (r: Recipe) => !r.archivedAt && !r.fromBase && r.status !== 'ki_entwurf';
+const EVENINGS = 7;
+const portionText = (n: number) => `${n} ${n === 1 ? 'Portion' : 'Portionen'}`;
 
 /**
- * Woche planen (Julia: „nicht 5 unterschiedliche Gerichte kochen – eine Bolo machen und daraus Nudeln, Wraps …“):
- * 1. eine oder zwei Grundlagen nach Bild wählen, 2. was du daraus machst (jedes Antippen = ein Abend) und die
- * Kochtage. Mashi verteilt danach die Abende (week.ts: suggestWeek).
+ * Woche planen als Topf (Julia: „ich koche X Portionen und verteile sie“): Rezepte in den Topf tippen, Portionen
+ * anpassen, sehen, ob es für die Woche reicht. Verteilt wird danach im Wochenplan aus dem Kühlschrank (week.ts: potWeek).
+ * Der Kochtag wird hier nicht gewählt – Standard ist einer (Sonntag oder der bisherige), ändern geht im Kühlschrank.
  */
 export function WeekSetupScreen() {
   const recipes = useRecipes();
   const plan = usePlan();
   const pantry = usePantry();
   const fallback = specialDays('prepared', pantry.shelfDays);
+  const hh = householdOf(plan);
   const old = plan.week;
   // neu planen: mit der alten Woche vorbelegen – sonst mit dem, was schon im Plan steht (Julia: Woche ersetzt die Liste)
-  const [bases, setBases] = useState<string[]>(() => old ? old.bases.map((b) => b.recipeId)
-    : plan.items.filter((i) => !i.fromWeek).map((i) => i.recipeId).filter((id) => recipes.some((r) => r.id === id && baseCandidate(r))).slice(0, 3));
-  const [picks, setPicks] = useState<Record<string, string[]>>(() => old ? Object.fromEntries(choicesOf(old).map((c) => [c.baseId, c.meals])) : {});
-  // Portionen pro Abend je Grundlage/Rezept (Julia: gleich bei der Auswahl, nicht erst im Plan) – fehlt = Haushalt
-  const hh = householdOf(plan);
-  const [portions, setPortions] = useState<Record<string, number>>(() => Object.fromEntries((old?.meals ?? []).flatMap((m) => (m.portions ? [[m.baseId, m.portions]] : []))));
-  const portionsOf = (id: string) => portions[id] ?? hh.portions;
-  const portionRow = (id: string, title: string) => (
-    <div className="row-between week-setup__portions">
-      <span className="small">Portionen pro Abend</span>
-      <Stepper small min={1} max={12} value={portionsOf(id)} onChange={(v) => setPortions((p) => ({ ...p, [id]: v }))} label={`Portionen pro Abend ${title}`} />
-    </div>
-  );
-  const [cook, setCook] = useState<Weekday[]>(() => old?.cookDays ?? [6, 2]);
+  const [pot, setPot] = useState<PotItem[]>(() => old ? potOf(old, hh)
+    : [...new Set(plan.items.filter((i) => !i.fromWeek).map((i) => i.recipeId))].flatMap((id) => {
+      const r = recipes.find((x) => x.id === id && baseCandidate(x));
+      return r ? [{ recipeId: id, portions: Math.max(1, currentContent(r).servings || hh.portions) }] : [];
+    }).slice(0, 3));
 
+  const counts = useMemo(() => transformCounts(recipes), [recipes]);
   const candidates = useMemo(() => recipes.filter(baseCandidate)
-    .map((r) => ({ r, made: transformsOf(r.id, recipes), title: currentContent(r).title }))
-    // je Bereich (Grundlagen / Gerichte): Favoriten zuerst, dann nach Name
-    .sort((a, b) => Number(b.r.favorite) - Number(a.r.favorite) || a.title.localeCompare(b.title, 'de')), [recipes]);
+    .map((r) => ({ r, made: counts.get(r.id) ?? 0, title: currentContent(r).title }))
+    // je Bereich: Favoriten zuerst, dann nach Name
+    .sort((a, b) => Number(b.r.favorite) - Number(a.r.favorite) || a.title.localeCompare(b.title, 'de')), [recipes, counts]);
+  const groups = [['Grundlagen', candidates.filter((c) => c.made)], ['Rezepte', candidates.filter((c) => !c.made)]] as const;
+  // mit Grundlagen starten – gibt es keine, gleich bei den Rezepten
+  const [tab, setTab] = useState<'Grundlagen' | 'Rezepte'>(() => (groups[0][1].length ? 'Grundlagen' : 'Rezepte'));
 
-  const toggleBase = (id: string) => setBases((list) => (list.includes(id) ? list.filter((x) => x !== id) : [...list, id]));
-  // Antippen = ein Abend mehr; beim dritten Mal wieder weg (zweimal in der Woche geht)
-  const tapMeal = (baseId: string, id: string) => setPicks((p) => {
-    const list = p[baseId] ?? [];
-    const n = list.filter((x) => x === id).length;
-    return { ...p, [baseId]: n >= 2 ? list.filter((x) => x !== id) : [...list, id] };
-  });
-  const toggleDay = (d: Weekday) => setCook((days) => (days.includes(d) ? (days.length > 1 ? days.filter((x) => x !== d) : days) : [...days, d]));
+  const items = pot.filter((x) => recipes.some((r) => r.id === x.recipeId));
+  const total = items.reduce((n, x) => n + x.portions, 0);
+  const inPot = (id: string) => items.some((x) => x.recipeId === id);
+  // Antippen legt das Rezept mit seinen Portionen in den Topf, noch einmal = wieder raus
+  const tapRecipe = (r: Recipe) => setPot((p) => (p.some((x) => x.recipeId === r.id) ? p.filter((x) => x.recipeId !== r.id)
+    : [...p, { recipeId: r.id, portions: Math.max(1, currentContent(r).servings || hh.portions) }]));
+  const step = (id: string, by: number) => setPot((p) => p.map((x) => (x.recipeId === id ? { ...x, portions: Math.max(1, x.portions + by) } : x)));
 
-  const chosen = bases.map((id) => ({ id, meals: (picks[id] ?? []) })).filter((c) => recipes.some((r) => r.id === c.id));
-  const evenings = chosen.reduce((n, c) => n + c.meals.length, 0);
+  // „Reicht für die Woche?“ – ein Abend = die Portionen des Haushalts
+  const covered = Math.floor(total / Math.max(1, hh.portions));
+  const over = covered - EVENINGS;
+  const coverHint = over < 0 ? `Noch ${-over} ${over === -1 ? 'Abend' : 'Abende'} ohne Essen – oder bewusst frei lassen.`
+    : over > 0 ? `${over} ${over === 1 ? 'Abend' : 'Abende'} mehr als die Woche – zum Einfrieren.` : 'Genau ein Essen für jeden Abend.';
 
   const save = async () => {
     if (old && weekStarted(old) && !(await ask({ title: 'Neue Woche?', text: 'In der jetzigen Woche ist schon etwas gekocht. Die neue ersetzt sie – Vorgekochtes bleibt in der Speisekammer.', confirm: 'Neue Woche' }))) return;
-    const week = suggestWeek(cook, chosen.filter((c) => c.meals.length).map((c) => ({ baseId: c.id, meals: c.meals })), () => newId('w'));
-    // Extra-Portionen der alten Woche behalten, wenn dieselbe Grundlage wieder dabei ist
-    const next = old ? { ...week, bases: week.bases.map((b) => ({ ...b, ...(old.bases.find((o) => o.recipeId === b.recipeId && !weekStarted(old))?.extra ? { extra: old.bases.find((o) => o.recipeId === b.recipeId)!.extra } : {}) })) } : week;
-    // gewählte Portionen an die Abende – gleich dem Haushalt = kein eigenes Feld (wie setMealPortions)
-    const planned = { ...next, meals: next.meals.map((m) => (portionsOf(m.baseId) !== hh.portions ? { ...m, portions: portionsOf(m.baseId) } : m)) };
-    toast(`Woche geplant – ${evenings} ${evenings === 1 ? 'Abend' : 'Abende'}`, { label: 'Rückgängig', run: setWeek(planned) });
+    toast(`Im Kühlschrank: ${portionText(total)} – jetzt verteilen`, { label: 'Rückgängig', run: setWeek(potWeek(items, hh, old)) });
     navigate('/plan', { replace: true });
-  };
-
-  const groups = [['Grundlagen', candidates.filter((c) => c.made.length)], ['Rezepte', candidates.filter((c) => !c.made.length)]] as const;
-  // mit Grundlagen starten – gibt es keine, gleich bei den Rezepten
-  const [tab, setTab] = useState<'Grundlagen' | 'Rezepte'>(() => (groups[0][1].length ? 'Grundlagen' : 'Rezepte'));
-  // Julia: kein Zwischenschritt – Grundlage antippen klappt auf, was du daraus machst; Kochtage unten auf derselben Seite
-  const count = (baseId: string, key: string) => (picks[baseId] ?? []).filter((x) => x === key).length;
-  const setEvenings = (id: string, n: number) => setPicks((p) => ({ ...p, [id]: Array.from({ length: Math.max(0, n) }, () => id) }));
-  const yieldOf = (id: string) => { const r = recipes.find((x) => x.id === id); return r ? currentContent(r).servings : 0; };
-  // nicht einfrierbar: nur so viele Abende, wie es hält (Julia: sonst steht gleich „hält nicht so lange“ da) –
-  // einfrierbar geht auch der 4. Tag, dort heißt es dann „am Vortag auftauen“
-  const keepCap = (id: string) => { const r = recipes.find((x) => x.id === id); return r?.freezable ? Infinity : keepsOf(r, fallback); };
-  const eveningsFor = (id: string) => Math.max(1, Math.min(Math.ceil(yieldOf(id) / portionsOf(id)), keepCap(id)));
-  /** „Rezept ergibt 4 Portionen“ – und was davon noch ohne Abend ist; bei Rezepten mit Knopf zum Einplanen */
-  const yieldHint = (id: string, isBase: boolean) => {
-    const total = yieldOf(id);
-    const planned = (picks[id] ?? []).length * portionsOf(id);
-    if (!total) return null;
-    const rest = total - planned;
-    const capped = (picks[id] ?? []).length >= keepCap(id);
-    return (
-      <p className="small week-setup__yield">
-        <Icon name="info" size={14} /> Das Rezept ergibt {total} {total === 1 ? 'Portion' : 'Portionen'}
-        {rest > 0 ? ` – ${rest} noch ohne Abend${isBase ? ' (bleiben als Vorrat)' : capped ? ` (hält nur ${keepCap(id)} Tage)` : ''}` : rest < 0 ? ` – geplant sind ${planned}, also mehr kochen` : ' – alle eingeplant'}
-        {/* hält nicht lange genug (Julia: „ich kann das doch einfrieren – das muss vorgeschlagen werden“) */}
-        {rest > 0 && capped && <button type="button" className="link small" onClick={() => freezeAll(id)}> einfrieren?</button>}
-        {rest !== 0 && !isBase && !(rest > 0 && capped) && <button type="button" className="link small" onClick={() => setEvenings(id, eveningsFor(id))}>{rest > 0 ? ' alle einplanen' : ' Abende anpassen'}</button>}
-      </p>
-    );
-  };
-  // als einfrierbar markieren und alle Portionen einplanen – spätere Abende heißen dann „am Vortag auftauen“
-  const freezeAll = (id: string) => {
-    const undo = setPrepInfo(id, { freezable: true });
-    if (count(id, id)) setEvenings(id, Math.max(1, Math.ceil(yieldOf(id) / portionsOf(id))));
-    const r = recipes.find((x) => x.id === id);
-    toast(`${r ? currentContent(r).title : 'Rezept'} lässt sich einfrieren${count(id, id) ? ' – alle Portionen eingeplant' : ''}`, { label: 'Rückgängig', run: undo });
-  };
-  const tapHead = (id: string, isBase: boolean) => {
-    const on = bases.includes(id);
-    toggleBase(id);
-    // ein Gericht gleich mit einem Abend vorbelegen – sonst müsste man nach dem Antippen noch einmal tippen
-    // ein Rezept ergibt seine Portionen (Julia: „damit das nicht vergessen wird“) – gleich so viele Abende einplanen
-    if (!on && !isBase && !count(id, id)) setEvenings(id, eveningsFor(id));
   };
 
   return (
     <main className="screen screen--cta">
       <TopBar title="Woche planen" backTo="/plan" intro="woche" />
       <h1 className="week-setup__title">Was kochst du vor?</h1>
-      <p className="muted">Grundlage antippen und wählen, was du daraus machst – jedes Antippen ist ein Abend, zweimal = zweimal in der Woche.</p>
-      {/* Julia: Grundrezepte und Rezepte als Tabs – schön getrennt; die Zahl zeigt, was dort gewählt ist */}
+      <p className="muted">Rezepte in den Topf tippen – verteilt wird danach im Wochenplan.</p>
+
+      <section className="pot" aria-label="Diese Woche kochen">
+        <div className="pot__head">
+          <Icon name="pot" size={20} />
+          <h2 className="h3">Diese Woche kochen</h2>
+          <span className="small muted">{total ? portionText(total) : 'noch leer'}</span>
+        </div>
+        {!items.length && <p className="small muted">Tippe unten ein Rezept an – es kommt mit seinen Portionen in den Topf.</p>}
+        {items.map((x, i) => {
+          const r = recipes.find((y) => y.id === x.recipeId)!;
+          const t = currentContent(r).title;
+          return (
+            <div key={x.recipeId} className={`pot__item tone-${i % 6}`}>
+              <span className="tone-dot" aria-hidden="true" />
+              <span className="pot__name">{t}</span>
+              <span className="portions" role="group" aria-label={`Portionen ${t}`}>
+                <button type="button" aria-label="eine Portion weniger" disabled={x.portions <= 1} onClick={() => step(x.recipeId, -1)}><Icon name="minus" size={14} /></button>
+                <b>{x.portions}</b>
+                <button type="button" aria-label="eine Portion mehr" onClick={() => step(x.recipeId, 1)}><Icon name="plus" size={14} /></button>
+              </span>
+              <button type="button" className="pot__x" aria-label={`${t} aus dem Topf nehmen`} onClick={() => tapRecipe(r)}><Icon name="close" size={14} /></button>
+            </div>
+          );
+        })}
+      </section>
+
+      <section className="cover" aria-label="Reicht für die Woche?">
+        <div className="row-between">
+          <strong className="small">Reicht für die Woche?</strong>
+          <span className={`small cover__count${over < 0 ? ' is-short' : ''}`}>{Math.min(covered, 99)} / {EVENINGS} Abende</span>
+        </div>
+        <div className="cover__bar"><span className={over < 0 ? 'is-short' : ''} style={{ width: `${Math.min(100, Math.round((covered / EVENINGS) * 100))}%` }} /></div>
+        <span className="small muted">{coverHint}</span>
+      </section>
+
+      {/* Julia: Grundrezepte und Rezepte als Tabs – die Zahl zeigt, was davon im Topf ist */}
       <div className="segments week-setup__tabs" role="tablist">
         {groups.map(([label, list]) => {
-          const n = list.filter((c) => bases.includes(c.r.id)).length;
+          const n = list.filter((c) => inPot(c.r.id)).length;
           return <button key={label} type="button" role="tab" aria-selected={tab === label} className={`segment${tab === label ? ' is-on' : ''}`} onClick={() => setTab(label)}>{label}{n ? ` · ${n}` : ''}</button>;
         })}
       </div>
       {groups.filter(([label]) => label === tab).map(([label, list]) => (
         <section key={label} className="week-setup__group" role="tabpanel" aria-label={label}>
           {!list.length && <p className="small muted">{label === 'Grundlagen' ? 'Noch keine Grundlage – ein Rezept wird zur Grundlage, sobald ein Gericht daraus entsteht.' : 'Keine Rezepte.'}</p>}
-          <div className="week-setup__list">
+          <div className="pot-tiles">
             {list.map(({ r, made, title }) => {
-              const on = bases.includes(r.id);
-              const n = (picks[r.id] ?? []).length;
-              // Julia: gleich sehen, wie viele Portionen das Rezept ergibt
-              const yields = `ergibt ${currentContent(r).servings} ${currentContent(r).servings === 1 ? 'Portion' : 'Portionen'}`;
-              const meta = on && n ? `${n} ${n === 1 ? 'Abend' : 'Abende'} · ${yields}` : `${made.length ? `${made.length} ${made.length === 1 ? 'Gericht' : 'Gerichte'} daraus · ` : ''}${yields} · hält ${keepsOf(r, fallback)} Tage`;
+              const on = inPot(r.id);
+              const y = currentContent(r).servings;
+              const keeps = keepsOf(r, fallback);
+              // Julia: gleich sehen, was das Rezept ergibt, wie lange es hält und was daraus wird
+              const meta = `${y ? `ergibt ${y} · ` : ''}hält ${keeps} ${keeps === 1 ? 'Tag' : 'Tage'}${made ? ` · ${made} ${made === 1 ? 'Gericht' : 'Gerichte'} daraus` : ''}`;
               return (
-                <div key={r.id} className={`week-setup__item${on ? ' is-on' : ''}`}>
-                  <button type="button" className="week-setup__row" aria-expanded={on} onClick={() => tapHead(r.id, made.length > 0)}>
+                <button key={r.id} type="button" className={`pot-tile${on ? ` is-on tone-${items.findIndex((x) => x.recipeId === r.id) % 6}` : ''}`} aria-pressed={on}
+                  aria-label={`${title}, ${meta}${r.freezable ? ', einfrierbar' : ''}${on ? ', im Topf' : ''}`} onClick={() => tapRecipe(r)}>
+                  <span className="pot-tile__img">
                     <RecipeImage image={r.image} size="sm" />
-                    <span className="week-setup__headtext"><strong>{title}</strong><span className="small muted">{meta}</span></span>
-                    <span className="week-setup__check" aria-hidden="true">{on && <Icon name="check" size={16} />}</span>
-                  </button>
-                  {on && (made.length ? <BasePanel portionRow={<>{portionRow(r.id, title)}{yieldHint(r.id, true)}</>} id={r.id} title={title} made={made} keys={picks[r.id] ?? []} count={(k) => count(r.id, k)} tap={(k) => tapMeal(r.id, k)} /> : (
-                    <div className="week-setup__panel">
-                      {portionRow(r.id, title)}
-                      {yieldHint(r.id, false)}
-                      <div className="row-between week-setup__portions">
-                        <span className="small">An wie vielen Abenden?</span>
-                        <Stepper small min={0} value={count(r.id, r.id)} onChange={(v) => setEvenings(r.id, v)} label={`Abende ${title}`} />
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                    {r.freezable && <span className="pot-tile__snow" title="einfrierbar"><Icon name="snow" size={14} /></span>}
+                  </span>
+                  <strong>{title}</strong>
+                  <span className="small muted">{meta}</span>
+                  <span className="small pot-tile__cta">{on ? <><Icon name="check" size={13} /> im Topf</> : <><Icon name="plus" size={13} /> in den Topf</>}</span>
+                </button>
               );
             })}
           </div>
         </section>
       ))}
 
-      <section className="week-setup__days">
-        <h2 className="h3">Wann kochst du?</h2>
-        <div className="daypick" role="group" aria-label="Kochtage">
-          {DAY_SHORT.map((d, i) => (
-            <button key={d} type="button" className={`daypick__day${cook.includes(i) ? ' is-on' : ''}`} aria-pressed={cook.includes(i)} onClick={() => toggleDay(i)}>
-              {d}<small>{cook.includes(i) ? 'kochen' : '·'}</small>
-            </button>
-          ))}
-        </div>
-        <p className="small muted">Erste Grundlage am ersten Kochtag ({sortCookDays(cook).map((d) => DAY_SHORT[d]).join(', ')}) – Tauschen geht danach in der Woche.</p>
-      </section>
-
       <div className="bottom-cta">
-        <button type="button" className="btn btn--primary btn--block btn--lg" disabled={!evenings} onClick={() => void save()}>
-          {evenings ? `Woche planen · ${evenings} ${evenings === 1 ? 'Abend' : 'Abende'}` : 'Mindestens ein Abend'}
+        <button type="button" className="btn btn--primary btn--block btn--lg" disabled={!total} onClick={() => void save()}>
+          {total ? `In den Kühlschrank · ${portionText(total)}` : 'Erst etwas in den Topf'}
         </button>
       </div>
     </main>
-  );
-}
-
-/**
- * Aufgeklappte Grundlage: Beilagen oben (Julia: am einfachsten), darunter das Akkordeon „Gerichte daraus“ – jedes mit dem,
- * was dazukommt („+ Cocktailtomaten, Hähnchen, Pasta“), damit klar ist, warum es keine Beilage mehr braucht.
- */
-function BasePanel({ portionRow, id, title, made, keys, count, tap }: { portionRow: ReactNode; id: string; title: string; made: Recipe[]; keys: string[]; count: (key: string) => number; tap: (key: string) => void }) {
-  const chip = (key: string, label: string, aria: string, plain = false) => {
-    const n = count(key);
-    return (
-      <button key={key} type="button" className={`chip${plain ? ' week-setup__plain' : ''}${n ? ' is-on' : ''}`} aria-pressed={n > 0} onClick={() => tap(key)}
-        aria-label={`${aria}${n ? `, ${n}× gewählt` : ''}`}>
-        {n > 1 ? `${n}× ` : ''}{label}
-      </button>
-    );
-  };
-  // Verwandlungen – wenig Aufwand am Abend zuerst (Julia)
-  const dishes = byEffort(made);
-  const combos = [...new Set(keys.filter((k) => splitMealKey(k).recipeId === id))];
-  const picked = dishes.reduce((n, r) => n + count(r.id), 0);
-  return (
-    <div className="week-setup__panel">
-      {portionRow}
-      {/* zusammengestellte Abende (Julia: Baukasten) – antippen = noch ein Abend, beim dritten Mal wieder weg */}
-      {combos.length > 0 && (
-        <div className="chips week-setup__sides" role="group" aria-label={`${title} – zusammengestellt`}>
-          {combos.map((k) => { const side = splitMealKey(k).side; return chip(k, side ? comboText(side) : 'pur', `${title} ${side ? `mit ${comboText(side)}` : 'pur'}`); })}
-        </div>
-      )}
-      <ComboBuilder onAdd={(side) => tap(mealKey(id, side))} />
-      <details className="week-setup__dishes" open={picked > 0}>
-        <summary>Gerichte daraus ({dishes.length}){picked ? ` · ${picked} gewählt` : ''}</summary>
-        <ul className="week-setup__dishlist">
-          {dishes.map((r) => {
-            const n = count(r.id);
-            const c = currentContent(r);
-            const extras = extrasOf(r, id);
-            return (
-              <li key={r.id}>
-                <button type="button" className={`week-setup__dish${n ? ' is-on' : ''}`} aria-pressed={n > 0} onClick={() => tap(r.id)} aria-label={`${c.title}${n ? `, ${n}× gewählt` : ''}`}>
-                  <span className="week-setup__headtext">
-                    <strong>{n > 1 ? `${n}× ` : ''}{c.title}</strong>
-                    <span className="small muted">{extras.length ? `+ ${extras.join(', ')}` : 'nichts dazu'} · {formatMinutesShort(totalMinutes(c))}</span>
-                  </span>
-                  {n > 0 && <Icon name="check" size={16} />}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-        <button type="button" className="link small" onClick={() => navigate(`/neu?aus=${id}`)}><Icon name="plus" size={14} /> Gericht daraus anlegen</button>
-      </details>
-    </div>
   );
 }

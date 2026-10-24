@@ -1,9 +1,9 @@
 import { useMemo, useRef, useState, type MouseEvent, type PointerEvent, type ReactNode } from 'react';
 import { currentContent, newId } from '../../domain/recipe';
 import {
-  DAY_LONG, DAY_SHORT, addBase, mealKey, setExtra, addToBase, byEffort, canLessPortions, canSwap, earlierCookDay, keepsOf, mealTitle, mhdFinds, fillEvenings, groupMeals, mixedBases, moveBase, putMeal, swapCookDays, yieldChecks, putPrepared, removeMeal,
+  DAY_LONG, DAY_SHORT, addBase, mealKey, setExtra, addToBase, byEffort, canLessPortions, canSwap, earlierCookDay, keepsOf, mealTitle, mhdFinds, fillEvenings, groupMeals, mixedBases, moveBase, putMeal, swapCookDays, putPrepared, removeMeal, backToFridge, fridgeOf, setCookDay,
   servingsOf, setMealPortions, sortCookDays, stepPortions, swapDays, toggleLunch, transformsOf, weekdayOf, weekStarted, weekView,
-  type BaseView, type DayView, type MealView, type MhdFind, type WeekView,
+  type BaseView, type DayView, type FridgeView, type MealView, type MhdFind, type WeekView,
 } from '../../domain/week';
 import type { Household, Week, Weekday } from '../../domain/mealplan';
 import type { Recipe } from '../../domain/types';
@@ -71,8 +71,6 @@ export function WeekPlan({ week, onPickDish }: { week: Week; onPickDish?: (day: 
   // Kochtag dezent (Julia: „die Kochleiste soll weg, nur sehr dezent im Wochenplan“): Hinweis in der Abendzeile, die
   // Werkzeuge (Portionen, tauschen, Vorkochen) erst beim Antippen
   // mehr geplant, als das Rezept ergibt (Julia) – diese Abende bekommen einen Hinweis
-  const checks = yieldChecks(view);
-  const leftOn = (day: Weekday) => cookBases(day).reduce((n, b) => n + (checks.get(b.base.recipeId)?.left ?? 0), 0);
   const cookBases = (day: Weekday) => view.bases.filter((b) => b.base.day === day);
   const cookNote = (day: Weekday) => (cookBases(day).length ? `${cookBases(day).map((b) => title(b.recipe)).join(' + ')} vorkochen` : undefined);
   const cookTools = (day: Weekday) => cookBases(day).length > 0 && (
@@ -91,6 +89,29 @@ export function WeekPlan({ week, onPickDish }: { week: Week; onPickDish?: (day: 
     const base = title(recipes.find((r) => r.id === baseId));
     toast(`${DAY_LONG[day]}: ${mealTitle({ side }, recipes.find((r) => r.id === recipeId))}${freeze ? ` – ${base} einfrieren, am Vortag auftauen` : ''}`,
       { label: 'Rückgängig', run: () => { undoWeek(); undoFreeze?.(); } });
+    return next;
+  };
+
+  // Kühlschrank (Julia: „ich koche X Portionen und verteile sie“): Kärtchen antippen, dann einen freien Abend ab dem Kochtag
+  const stock = useMemo(() => preparedPortions(pantry.items), [pantry.items]);
+  const fridge = fridgeOf(week, recipes, hh, fallback, stock);
+  const [pick, setPick] = useState<string | null>(null);
+  const [dish, setDish] = useState<Weekday | null>(null);
+  const picked = fridge.find((f) => f.base.recipeId === pick && f.cards > 0);
+  const ord = (d: Weekday) => view.order.indexOf(d);
+  const tone = (baseId: string) => { const i = week.bases.findIndex((b) => b.recipeId === baseId); return i < 0 ? '' : ` tone-${i % 6}`; };
+  // eine Grundlage mit Gerichten oder Bausteinen fragt gleich „Was wird daraus?“ – ein fertiges Rezept nicht
+  const asks = (baseId: string) => transformsOf(baseId, recipes).length > 0 || Object.keys(recipes.find((r) => r.id === baseId)?.blockPrep ?? {}).length > 0;
+  const pickTarget = (d: DayView): 'yes' | 'frost' | 'no' | undefined => {
+    if (!picked || d.meal) return undefined;
+    const age = ord(d.day) - ord(picked.base.day);
+    return age < 0 ? 'no' : age >= keepsOf(picked.recipe, fallback) ? 'frost' : 'yes';
+  };
+  const place = (day: Weekday, id: string) => {
+    const next = put(day, id, id);
+    if (!next) return;
+    if (!fridgeOf(next, recipes, hh, fallback, stock).find((f) => f.base.recipeId === id)?.cards) setPick(null);
+    if (asks(id)) setDish(day);
   };
   const putStock = (day: Weekday, recipeId: string) => {
     setWhat(null);
@@ -101,9 +122,15 @@ export function WeekPlan({ week, onPickDish }: { week: Week; onPickDish?: (day: 
   const past = (d: Weekday) => started && view.order.indexOf(d) < view.order.indexOf(today);
 
   const tapDay = (d: DayView) => {
+    if (picked && swapFrom === null) {
+      const t = pickTarget(d);
+      if (t === 'yes' || t === 'frost') return place(d.day, picked.base.recipeId);
+      setPick(null);
+    }
+    // Antippen öffnet das Abend-Fenster (ändern, tauschen, zurück in den Kühlschrank); ein freier Abend fragt „Was gibt's?“
     if (swapFrom === null) {
       if (!d.meal) setWhat({ day: d.day });
-      else if (!d.meal.meal.done) setSwapFrom(d.day);
+      else if (!d.meal.meal.done) setDish(d.day);
       return;
     }
     if (swapFrom === d.day) return setSwapFrom(null);
@@ -119,6 +146,13 @@ export function WeekPlan({ week, onPickDish }: { week: Week; onPickDish?: (day: 
     <div className="week">
       {finds.length > 0 && <MhdFinds finds={finds} week={week} change={change} />}
 
+      {fridge.length > 0 && (
+        <Fridge items={fridge} order={view.order} pick={picked ? pick : null} household={hh} tone={tone}
+          onPick={(id) => { setSwapFrom(null); setPick((p) => (p === id ? null : id)); }}
+          onCookDay={(f, d) => change(setCookDay(week, f.base.recipeId, d, hh), `${title(f.recipe)}: gekocht am ${DAY_LONG[d]}`)}
+          onFreeze={(f) => toast(`${title(f.recipe)} lässt sich einfrieren`, { label: 'Rückgängig', run: setPrepInfo(f.base.recipeId, { freezable: true }) })} />
+      )}
+
       <section className="week__days" aria-label={hh.lunchDays.length ? 'Mittags und abends' : 'Abends'}>
         <h2 className="h3">{hh.lunchDays.length ? 'Mittags & abends' : 'Abends'}</h2>
         {swapFrom !== null
@@ -129,7 +163,7 @@ export function WeekPlan({ week, onPickDish }: { week: Week; onPickDish?: (day: 
               <button type="button" className="link small" onClick={() => setSwapFrom(null)}>Abbrechen</button>
             </div>
           )
-          : <p className="small muted">Antippen tauscht, lange drücken öffnet Portionen und Kochtag (Topf).</p>}
+          : !picked && <p className="small muted">Abend antippen: ändern, tauschen oder zurück in den Kühlschrank. Lange drücken: Portionen und Kochtag.</p>}
         {/* Gerichte einer Grundlage im Wechsel (Julia: „besser hintereinander, dann ist das Vorkochen der Extras leichter“) */}
         {mixedBases(week).map((id) => (
           <p key={id} className="small week__hint">
@@ -141,7 +175,8 @@ export function WeekPlan({ week, onPickDish }: { week: Week; onPickDish?: (day: 
           {view.days.map((d) => (
             <div key={d.day} className={`week__day${past(d.day) ? ' is-past' : ''}${started && d.day === today ? ' is-today' : ''}`} aria-current={started && d.day === today ? 'date' : undefined}>
               {hh.lunchDays.includes(d.day) && <LunchRow d={d} onToggle={() => change(toggleLunch(week, d.day), d.noLunch ? `${DAY_SHORT[d.day]} mittags wieder geplant` : `${DAY_SHORT[d.day]} kein Mittagessen`)} />}
-              <MealRow left={leftOn(d.day)} d={d} swapFrom={swapFrom} week={week} onTap={() => tapDay(d)} onHold={() => { setSwapFrom(null); setHold(d.day); }} cookNote={cookNote(d.day)} />
+              <MealRow d={d} swapFrom={swapFrom} week={week} onTap={() => tapDay(d)} onHold={() => { setSwapFrom(null); setPick(null); setHold(d.day); }} cookNote={cookNote(d.day)}
+                pickTarget={pickTarget(d)} tone={d.meal ? tone(d.meal.meal.baseId) : ''} potTone={cookBases(d.day)[0] ? tone(cookBases(d.day)[0].base.recipeId) : ''} />
             </div>
           ))}
         </div>
@@ -160,6 +195,19 @@ export function WeekPlan({ week, onPickDish }: { week: Week; onPickDish?: (day: 
             onOther={(m) => { setHold(null); setWhat({ day: m.meal.day, replace: m }); }}
             onDelete={(m) => { setHold(null); change(removeMeal(week, m.meal.id), `${mealText(m)} gestrichen`); }}
             onFreeze={(m) => { setHold(null); toast(`${title(recipes.find((r) => r.id === m.meal.baseId))} lässt sich einfrieren`, { label: 'Rückgängig', run: setPrepInfo(m.meal.baseId, { freezable: true }) }); }} servings={(m) => servingsOf(m.meal, hh)} />
+        );
+      })()}
+
+      {dish !== null && (() => {
+        const m = view.days.find((x) => x.day === dish)?.meal;
+        if (!m || m.meal.done) return null;
+        return (
+          <DishSheet m={m} view={view} recipes={recipes} asks={asks(m.meal.baseId)} servings={servingsOf(m.meal, hh)} onClose={() => setDish(null)}
+            onPut={(recipeId, side) => put(dish, recipeId, m.meal.baseId, side)}
+            onPortions={(v) => change(setMealPortions(week, m.meal.id, v, hh), `${DAY_SHORT[dish]}: ${portionText(v)}`)}
+            onSwap={() => { setDish(null); setPick(null); setSwapFrom(dish); }}
+            onBack={() => { setDish(null); change(backToFridge(week, m.meal.id, hh), `${mealText(m)} – zurück im Kühlschrank`); }}
+            onFreeze={() => toast(`${title(recipes.find((r) => r.id === m.meal.baseId))} lässt sich einfrieren`, { label: 'Rückgängig', run: setPrepInfo(m.meal.baseId, { freezable: true }) })} />
         );
       })()}
 
@@ -370,6 +418,143 @@ function CookStrip({ household, day, bases, week, recipes, cookDays, fallback, c
   );
 }
 
+/**
+ * Der Kühlschrank: je Grundlage die Portionen ohne Abend als Kärtchen in ihrer Farbe. „gekocht am So“ antippen ändert
+ * den Kochtag (die Abende rücken nach). Hält etwas nicht bis zum letzten Abend, schlägt Mashi Einfrieren oder später kochen vor.
+ */
+function Fridge({ items, order, pick, household, tone, onPick, onCookDay, onFreeze }: {
+  items: FridgeView[]; order: Weekday[]; pick: string | null; household: Household; tone: (baseId: string) => string;
+  onPick: (baseId: string) => void; onCookDay: (f: FridgeView, day: Weekday) => void; onFreeze: (f: FridgeView) => void;
+}) {
+  const [daysFor, setDaysFor] = useState<string | null>(null);
+  const left = items.reduce((n, f) => n + f.left, 0);
+  const picked = items.find((f) => f.base.recipeId === pick);
+  // alles verteilt (Julia): nur eine Zeile, damit die Abende nicht nach unten rutschen – antippen öffnet ihn
+  const [open, setOpen] = useState(false);
+  if (!left && !open) {
+    return (
+      <button type="button" className="fridge fridge--closed" aria-expanded={false} onClick={() => setOpen(true)} aria-label="Kühlschrank: alles verteilt – öffnen">
+        <Icon name="fridge" size={20} />
+        <span className="fridge__title">Kühlschrank</span>
+        <span className="small fridge__left">alles verteilt <Icon name="check" size={14} /></span>
+      </button>
+    );
+  }
+  return (
+    <section className="fridge" aria-label="Kühlschrank">
+      <div className="fridge__head">
+        <Icon name="fridge" size={20} />
+        <h2 className="h3">Kühlschrank</h2>
+        {left
+          ? <span className="small fridge__left is-left">{portionText(left)} übrig</span>
+          : <button type="button" className="link small" aria-expanded onClick={() => setOpen(false)}>zuklappen</button>}
+      </div>
+      <p className="small muted">{picked ? `${title(picked.recipe)} gewählt – tippe einen freien Abend ab ${DAY_LONG[picked.base.day]}.` : left ? 'Kärtchen antippen, dann einen freien Abend.' : 'Alles, was gekocht wird, hat einen Abend.'}</p>
+      {items.map((f) => {
+        const id = f.base.recipeId;
+        const name = title(f.recipe);
+        const fresh = `frisch bis ${DAY_SHORT[f.freshUntil]}`;
+        return (
+          <div key={id} className={`fridge__base${tone(id)}`}>
+            <div className="fridge__line">
+              <span className="tone-dot" aria-hidden="true" />
+              <strong>{name}</strong>
+              {f.base.cooked
+                ? <span className="small muted">gekocht · {fresh}</span>
+                : <button type="button" className="link small" aria-expanded={daysFor === id} aria-label={`gekocht am ${DAY_LONG[f.base.day]}, ${fresh} – Kochtag ändern`} onClick={() => setDaysFor(daysFor === id ? null : id)}>gekocht am {DAY_SHORT[f.base.day]} · {fresh}</button>}
+              {f.recipe?.freezable && f.freshUntil !== order[6] && <span className="fridge__snow" title="danach aus dem Gefrierfach"><Icon name="snow" size={13} /></span>}
+            </div>
+            {daysFor === id && (
+              <div className="chips fridge__days" role="group" aria-label={`Kochtag ${name}`}>
+                {order.map((d) => (
+                  <button key={d} type="button" className={`chip chip--sm${d === f.base.day ? ' is-on' : ''}`} aria-pressed={d === f.base.day} aria-label={DAY_LONG[d]}
+                    onClick={() => { setDaysFor(null); onCookDay(f, d); }}>{DAY_SHORT[d]}</button>
+                ))}
+              </div>
+            )}
+            {/* Julia: nur vorschlagen, wenn etwas nicht bis zum letzten Abend hält */}
+            {f.short && (
+              <p className="small fridge__short">
+                <Icon name="info" size={14} /> Hält nur bis {DAY_LONG[f.freshUntil]}.
+                <button type="button" className="link small" onClick={() => onFreeze(f)}>Einfrieren</button>
+                {!f.base.cooked && <button type="button" className="link small" onClick={() => setDaysFor(id)}>Später kochen</button>}
+              </p>
+            )}
+            <div className="fridge__cards">
+              {Array.from({ length: f.cards }, (_, i) => {
+                const on = pick === id && i === 0;
+                const n = Math.min(household.portions, f.left - i * household.portions);
+                return (
+                  <button key={i} type="button" className={`fridge__card${on ? ' is-on' : ''}`} aria-pressed={on} aria-label={`${name}, ${portionText(n)}${on ? ', gewählt' : ''}`} onClick={() => onPick(id)}>
+                    {portionText(n)}
+                  </button>
+                );
+              })}
+              <span className="small muted">{f.left ? `${portionText(f.left)} übrig` : 'alles verteilt'}</span>
+            </div>
+          </div>
+        );
+      })}
+    </section>
+  );
+}
+
+/**
+ * Ein verteilter Abend (Julia: „Was wird daraus?“): bei einer Grundlage die gespeicherten Gerichte, was diese Woche schon
+ * zusammengestellt ist, und der Baukasten. Dazu Portionen, Tauschen und „Zurück in den Kühlschrank“.
+ */
+function DishSheet({ m, view, recipes, asks, servings, onPut, onPortions, onSwap, onBack, onFreeze, onClose }: {
+  m: MealView; view: WeekView; recipes: Recipe[]; asks: boolean; servings: number;
+  onPut: (recipeId: string, side?: string) => void; onPortions: (v: number) => void; onSwap: () => void; onBack: () => void; onFreeze: () => void; onClose: () => void;
+}) {
+  const ref = useSheet(onClose);
+  const baseId = m.meal.baseId;
+  const base = recipes.find((r) => r.id === baseId);
+  const dishes = byEffort(transformsOf(baseId, recipes));
+  const combos = [...new Set(view.days.flatMap((x) => (x.meal?.meal.baseId === baseId && x.meal.meal.recipeId === baseId && x.meal.meal.side ? [x.meal.meal.side] : [])))];
+  const on = (recipeId: string, side?: string) => m.meal.recipeId === recipeId && m.meal.side === side;
+  const chip = (recipeId: string, text: string, side?: string) => (
+    <button key={`${recipeId}+${side ?? ''}`} type="button" className={`chip${on(recipeId, side) ? ' is-on' : ''}`} aria-pressed={on(recipeId, side)} onClick={() => onPut(recipeId, side)}>{text}</button>
+  );
+  const status = m.frost ? 'aus dem Gefrierfach – am Vortag auftauen' : m.age === 0 ? 'frisch gekocht' : `aufwärmen · ${m.age} ${m.age === 1 ? 'Tag' : 'Tage'} alt`;
+  const day = m.meal.day;
+  return (
+    <div className="sheet-backdrop" onClick={onClose}>
+      <div className="sheet" role="dialog" aria-modal="true" aria-label={DAY_LONG[day]} onClick={(e) => e.stopPropagation()} ref={ref}>
+        <div className="sheet__grip" />
+        <h2 className="sheet__title">{DAY_LONG[day]}: {mealText(m)}</h2>
+        <p className="small muted dish__status">{m.frost && <Icon name="snow" size={13} />} {status}</p>
+        {m.tooOld && (
+          <p className="small daysheet__freeze">
+            <Icon name="snow" size={14} /> Hält bis {DAY_LONG[day]} nicht frisch.
+            <button type="button" className="link small" onClick={onFreeze}>Einfrieren und am Vortag auftauen</button>
+          </p>
+        )}
+        {asks && (
+          <section className="what__base">
+            <h3 className="small muted">Was wird daraus?</h3>
+            <div className="chips" role="group" aria-label="Gericht daraus">
+              {chip(baseId, title(base))}
+              {combos.map((side) => chip(baseId, `mit ${comboText(side)}`, side))}
+              {dishes.map((r) => chip(r.id, title(r)))}
+            </div>
+            <ComboBuilder label="Zusammenstellen" onAdd={(side) => onPut(baseId, side)} />
+          </section>
+        )}
+        <div className="row-between dish__portions">
+          <span>Portionen an diesem Abend</span>
+          <Stepper small value={servings} onChange={onPortions} label={`Portionen am ${DAY_LONG[day]}`} />
+        </div>
+        <div className="row-gap dish__actions">
+          <button type="button" className="btn btn--soft btn--sm" onClick={onSwap}><Icon name="shuffle" size={14} /> Tauschen</button>
+          <button type="button" className="btn btn--ghost btn--sm" onClick={onBack}><Icon name="fridge" size={14} /> Zurück in den Kühlschrank</button>
+          <button type="button" className="btn btn--primary btn--sm" onClick={onClose}>Fertig</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function LunchRow({ d, onToggle }: { d: DayView; onToggle: () => void }) {
   if (d.noLunch) {
     return (
@@ -393,21 +578,28 @@ function LunchRow({ d, onToggle }: { d: DayView; onToggle: () => void }) {
   );
 }
 
-function MealRow({ d, swapFrom, week, onTap, onHold, cookNote, left = 0 }: { d: DayView; swapFrom: Weekday | null; week: Week; onTap: () => void; onHold: () => void; cookNote?: string; left?: number }) {
-  // am Kochtag: gekocht, aber noch ohne Abend (Julia: „nicht weniger verplanen als ich koche“)
-  const leftTag = left > 0 && <span className="tag tag--warn">{portionText(left)} übrig – lange drücken</span>;
+/**
+ * Ein Abend: Antippen öffnet das Abend-Fenster, lange drücken die Werkzeuge. Ist ein Kärtchen aus dem Kühlschrank gewählt
+ * (`pickTarget`), zeigen freie Abende, ob es dorthin darf – und ob es bis dahin eingefroren werden muss.
+ */
+function MealRow({ d, swapFrom, week, onTap, onHold, cookNote, pickTarget, tone = '', potTone = '' }: {
+  d: DayView; swapFrom: Weekday | null; week: Week; onTap: () => void; onHold: () => void; cookNote?: string;
+  pickTarget?: 'yes' | 'frost' | 'no'; tone?: string; potTone?: string;
+}) {
   const press = useLongPress(onHold, onTap);
-  const pot = cookNote && <span className="meal__pot" role="img" aria-label={`Kochtag: ${cookNote}`} title={`Kochtag: ${cookNote}`}><Icon name="pot" size={15} /></span>;
+  const pot = cookNote && <span className={`meal__pot${potTone}`} role="img" aria-label={`Kochtag: ${cookNote}`} title={`Kochtag: ${cookNote}`}><Icon name="pot" size={15} /></span>;
   const m = d.meal;
-  const mode = swapFrom === null ? '' : swapFrom === d.day ? ' is-picked' : canSwap(week, swapFrom, d.day) ? ' is-target' : ' is-blocked';
-  const hint = swapFrom === null || swapFrom === d.day ? null : mode === ' is-target' ? <span className="meal__hint">hierhin</span> : <span className="meal__hint meal__hint--no">vor dem Kochtag</span>;
+  const mode = pickTarget ? (pickTarget === 'no' ? ' is-blocked' : ' is-target')
+    : swapFrom === null ? '' : swapFrom === d.day ? ' is-picked' : canSwap(week, swapFrom, d.day) ? ' is-target' : ' is-blocked';
+  const hint = pickTarget ? (pickTarget === 'no' ? <span className="meal__hint meal__hint--no">vor dem Kochtag</span> : <span className="meal__hint">{pickTarget === 'frost' ? 'hierher · einfrieren' : 'hierher'}</span>)
+    : swapFrom === null || swapFrom === d.day ? null : mode === ' is-target' ? <span className="meal__hint">hierhin</span> : <span className="meal__hint meal__hint--no">vor dem Kochtag</span>;
   if (!m) {
     return (
       <button type="button" className={`meal meal--free${mode}`} disabled={mode === ' is-blocked'} {...press}
-        aria-label={swapFrom === null ? `${DAY_LONG[d.day]} frei – antippen: Was gibt's?` : undefined}>
+        aria-label={pickTarget && pickTarget !== 'no' ? `${DAY_LONG[d.day]} frei – hierher legen` : swapFrom === null && !pickTarget ? `${DAY_LONG[d.day]} frei – antippen: Was gibt's?` : undefined}>
         {pot}
         <span className="meal__day">{DAY_SHORT[d.day]}</span>
-        <span className="meal__text small muted">frei{leftTag}</span>
+        <span className="meal__text small muted">frei</span>
         {hint ?? (swapFrom === null && <span className="meal__grip" aria-hidden="true"><Icon name="plus" size={18} /></span>)}
       </button>
     );
@@ -420,12 +612,13 @@ function MealRow({ d, swapFrom, week, onTap, onHold, cookNote, left = 0 }: { d: 
     : <span className="tag tag--eat">{base ? 'aufwärmen' : `vom ${DAY_LONG[m.cookDay]}`}</span>;
   return (
     <button type="button" className={`meal${mode}${m.meal.done ? ' is-done' : ''}`} disabled={m.meal.done || mode === ' is-blocked'} {...press}
-      aria-label={`${mealText(m)} am ${DAY_LONG[d.day]}${swapFrom === null && !m.meal.done ? ' – antippen zum Tauschen' : ''}`}>
+      aria-label={`${mealText(m)} am ${DAY_LONG[d.day]}${swapFrom === null && !m.meal.done ? ' – antippen zum Ändern' : ''}`}>
       {pot}
+      {tone && <span className={`meal__tone${tone}`} aria-hidden="true" />}
       <span className="meal__day">{DAY_SHORT[d.day]}</span>
       <RecipeImage image={m.recipe?.image} size="sm" />
-      <span className="meal__text"><strong>{mealText(m)}</strong>{note}{m.meal.portions && <span className="tag">{portionText(m.meal.portions)}</span>}{leftTag}</span>
-      {hint ?? (swapFrom === d.day ? <span className="meal__hint">gewählt</span> : !m.meal.done && <span className="meal__grip" aria-hidden="true"><Icon name="shuffle" size={16} /></span>)}
+      <span className="meal__text"><strong>{mealText(m)}</strong>{note}{m.meal.portions && <span className="tag">{portionText(m.meal.portions)}</span>}</span>
+      {hint ?? (swapFrom === d.day ? <span className="meal__hint">gewählt</span> : !m.meal.done && <span className="meal__grip" aria-hidden="true"><Icon name="chevron" size={16} /></span>)}
     </button>
   );
 }

@@ -1913,3 +1913,48 @@ details.cost-line[open] > summary::after { transform: rotate(-90deg); }
 .cookstrip__over { color: var(--warn-text, #9a5a2f); font-weight: 600; }
 .daysheet__freeze { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 0 0 12px; }
 .week__hint { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 0; padding: 8px 10px; border-radius: var(--r-sm); background: var(--surface-2); }
+
+/* ── Topf + Kühlschrank (Woche planen, Wochenplan) ── */
+/* Farbe je Grundlage – dieselbe im Topf, im Kühlschrank und am Abend */
+.tone-0 { --tone: #b94a32; } .tone-1 { --tone: #b8741c; } .tone-2 { --tone: #4f7d5a; }
+.tone-3 { --tone: #2f6690; } .tone-4 { --tone: #6c6aa8; } .tone-5 { --tone: #8a7418; }
+.tone-dot { width: 10px; height: 10px; flex: none; border-radius: 50%; background: var(--tone, var(--grey)); }
+.pot, .cover, .fridge { display: grid; gap: 8px; margin-top: 14px; padding: 12px 14px; border-radius: var(--r); background: var(--surface); border: 1px solid var(--line); }
+.pot { border: 2px solid var(--primary); }
+.pot__head, .fridge__head { display: flex; align-items: center; gap: 8px; color: var(--primary-text); }
+.pot__head .h3, .fridge__head .h3 { flex: 1; margin: 0; color: var(--ink); }
+.pot__item { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: var(--r-sm); background: var(--surface-2); min-width: 0; }
+.pot__name { flex: 1; min-width: 0; font-weight: 700; font-size: 0.9rem; overflow-wrap: anywhere; }
+.pot__x { width: 32px; height: 32px; flex: none; display: grid; place-items: center; border-radius: 50%; color: var(--ink-2); }
+.cover__bar { height: 10px; border-radius: 5px; background: var(--surface-2); overflow: hidden; }
+.cover__bar span { display: block; height: 100%; border-radius: 5px; background: var(--primary); }
+.cover__bar span.is-short { background: var(--star); }
+.cover__count { font-weight: 700; color: var(--primary-text); }
+.cover__count.is-short { color: var(--danger-ink); }
+.pot-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 8px; }
+.pot-tile { display: flex; flex-direction: column; gap: 2px; min-width: 0; padding: 8px; border-radius: var(--r); background: var(--surface); border: 1px solid var(--line); text-align: left; color: var(--ink); overflow-wrap: anywhere; }
+.pot-tile.is-on { border: 2px solid var(--tone, var(--primary)); padding: 7px; }
+.pot-tile__img { position: relative; display: block; margin-bottom: 4px; }
+.pot-tile__img .rimg { width: 100%; height: 72px; border-radius: var(--r-sm); }
+.pot-tile__snow { position: absolute; top: 6px; right: 6px; width: 24px; height: 24px; display: grid; place-items: center; border-radius: 50%; background: var(--surface); color: #2f6690; }
+.pot-tile__cta { display: inline-flex; align-items: center; gap: 4px; margin-top: 2px; font-weight: 700; color: var(--primary-text); }
+.fridge { margin-top: 0; margin-bottom: 14px; }
+.fridge__left { font-weight: 700; color: var(--primary-text); }
+.fridge__left.is-left { color: var(--danger-ink); }
+.fridge__base { display: grid; gap: 6px; padding-top: 6px; border-top: 1px dashed var(--line); }
+.fridge__line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; }
+.fridge__line strong { overflow-wrap: anywhere; }
+.fridge__snow { display: inline-flex; color: #2f6690; }
+.fridge__days { gap: 6px; }
+.fridge__short { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 0; padding: 6px 8px; border-radius: var(--r-sm); background: var(--surface-2); }
+.fridge__cards { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.fridge__card { min-width: 84px; min-height: 44px; padding: 6px 10px; border-radius: var(--r-sm); background: var(--surface-2); border: 2px solid var(--line); border-left: 6px solid var(--tone, var(--grey)); text-align: left; font-size: 0.8rem; font-weight: 800; color: var(--ink); }
+.fridge__card.is-on { border-color: var(--tone, var(--primary)); background: var(--primary-soft); box-shadow: var(--shadow-lift); }
+.meal__tone { position: absolute; left: 0; top: 10px; bottom: 10px; width: 4px; border-radius: 0 3px 3px 0; background: var(--tone); }
+.meal__pot[class*='tone-'] { background: var(--tone); }
+.dish__actions { flex-wrap: wrap; margin-top: 12px; }
+.dish__status { display: flex; align-items: center; gap: 4px; margin: 0 0 12px; }
+.dish__portions { margin: 4px 0; }
+.fridge--closed { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 48px; padding: 8px 14px; color: var(--primary-text); text-align: left; }
+.fridge__title { flex: 1; font-weight: 800; color: var(--ink); }
+.fridge--closed .fridge__left { display: inline-flex; align-items: center; gap: 4px; }

@@ -5,7 +5,7 @@ import type { Week } from './mealplan';
 import type { Ingredient, Recipe } from './types';
 import { buildShoppingList, emptyPlan } from './mealplan';
 import { localFoodTable } from './nutrition/localFoods';
-import { carbCarry, groupMeals, mixedBases, yieldChecks, swapCookDays, putPrepared, extrasOf, addBase, addToBase, byEffort, canLessPortions, choicesOf, fillEvenings, mealKey, putMeal, servingsOf, setMealPortions, stepPortions, mealTitle, mhdFinds, removeMeal, scheduleMeal, splitMealKey, weekSideNeeds, weekStarted, withCookDays } from './week';
+import { backToFridge, defaultCookDay, fridgeOf, potOf, potWeek, setCookDay, carbCarry, groupMeals, mixedBases, yieldChecks, swapCookDays, putPrepared, extrasOf, addBase, addToBase, byEffort, canLessPortions, choicesOf, fillEvenings, mealKey, putMeal, servingsOf, setMealPortions, stepPortions, mealTitle, mhdFinds, removeMeal, scheduleMeal, splitMealKey, weekSideNeeds, weekStarted, withCookDays } from './week';
 import type { PantryItem } from './pantry';
 import { baseIdOf, canSwap, mealPortions, weekItems, withoutBases, earlierCookDay, moveBase, setExtra, shiftFrom, sortCookDays, suggestWeek, swapDays, toggleLunch, transformsOf, weekdayOf, weekOrder, weekView } from './week';
 
@@ -463,5 +463,70 @@ describe('Portionen füllen freie Abende (Julia: „steht bei Mittwoch statt ein
     expect(mealPortions(view, SO, hh)).toBe(5);
     expect(servingsOf(gaeste.meals[0], hh)).toBe(5);
     expect(setMealPortions(gaeste, 'a', 2, hh).meals[0]).not.toHaveProperty('portions');
+  });
+});
+
+describe('Topf + Kühlschrank (Julia: „ich koche X Portionen und verteile sie“)', () => {
+  const hh = { portions: 1, lunchDays: [] };
+
+  it('Topf → Woche: alles am Sonntag, jede Portion im Kühlschrank; der bisherige erste Kochtag bleibt Standard', () => {
+    const w = potWeek([{ recipeId: 'bolo', portions: 4 }, { recipeId: 'salat', portions: 2 }], hh);
+    expect(w).toEqual({ cookDays: [SO], bases: [{ recipeId: 'bolo', day: SO, extra: 4 }, { recipeId: 'salat', day: SO, extra: 2 }], meals: [] });
+    expect(defaultCookDay({ cookDays: [MI, SA], bases: [], meals: [] })).toBe(SA);
+    // die Einkaufsliste rechnet die Kühlschrank-Portionen mit
+    expect(weekItems(w, all, hh)).toEqual(expect.arrayContaining([{ recipeId: 'bolo', servings: 4, fromWeek: true }]));
+  });
+
+  it('neu planen: verteilte Abende bleiben, so weit die Portionen reichen – Topf aus der Woche zurückgelesen', () => {
+    const alt: Week = { cookDays: [SO], bases: [{ recipeId: 'bolo', day: SO, extra: 1 }], meals: [{ id: 'a', day: SO, recipeId: 'spag', baseId: 'bolo' }, { id: 'b', day: MO, recipeId: 'wraps', baseId: 'bolo' }], noLunch: [MO] };
+    expect(potOf(alt, hh)).toEqual([{ recipeId: 'bolo', portions: 3 }]);
+    const weniger = potWeek([{ recipeId: 'bolo', portions: 1 }, { recipeId: 'chili', portions: 2 }], hh, alt);
+    expect(weniger.meals.map((m) => m.id)).toEqual(['a']);
+    expect(weniger.bases).toEqual([{ recipeId: 'bolo', day: SO }, { recipeId: 'chili', day: SO, extra: 2 }]);
+    expect(weniger.noLunch).toEqual([MO]);
+    // schon gekocht: neue Woche, nichts übernommen
+    const begonnen: Week = { ...alt, bases: [{ ...alt.bases[0], cooked: true }] };
+    expect(potWeek([{ recipeId: 'bolo', portions: 3 }], hh, begonnen).meals).toEqual([]);
+  });
+
+  it('Kühlschrank: übrig, frisch bis, Kärtchen je Abend; Vorschlag nur, wenn es nicht bis zum letzten Abend hält', () => {
+    const w = potWeek([{ recipeId: 'bolo', portions: 4 }, { recipeId: 'salat', portions: 4 }], hh);
+    const [b, s] = fridgeOf(w, all, hh);
+    expect(b).toMatchObject({ left: 4, cards: 4, freshUntil: DI, short: false }); // hält 3 Tage, einfrierbar
+    expect(s).toMatchObject({ left: 4, freshUntil: MO, short: true }); // hält 2 Tage, nicht einfrierbar: So, Mo reichen nicht für 4
+    expect(fridgeOf(w, all, { portions: 2, lunchDays: [] })[0].cards).toBe(2);
+    // schon gekocht: was in der Speisekammer steht, ohne die offenen Abende
+    const gekocht: Week = { cookDays: [SO], bases: [{ recipeId: 'chili', day: SO, cooked: true }], meals: [{ id: 'c', day: SO, recipeId: 'chili', baseId: 'chili' }] };
+    expect(fridgeOf(gekocht, all, hh, undefined, new Map([['chili', 3]]))[0].left).toBe(2);
+  });
+
+  it('Kärtchen auf einen Abend: nimmt eine Portion aus dem Kühlschrank; zu alt = einfrieren (weekView sagt frost)', () => {
+    const w = potWeek([{ recipeId: 'bolo', portions: 2 }], hh);
+    const mi = putMeal(w, MI, 'bolo', 'bolo', hh, newId);
+    expect(mi.bases[0].extra).toBe(1);
+    expect(weekView(mi, all, hh).days.find((d) => d.day === MI)?.meal).toMatchObject({ age: 3, frost: true });
+  });
+
+  it('zurück in den Kühlschrank: Abend frei, Portion wieder übrig, die Grundlage bleibt', () => {
+    const w: Week = { cookDays: [SO], bases: [{ recipeId: 'bolo', day: SO }], meals: [{ id: 'a', day: MO, recipeId: 'spag', baseId: 'bolo', portions: 2 }] };
+    const back = backToFridge(w, 'a', hh);
+    expect(back).toEqual({ cookDays: [SO], bases: [{ recipeId: 'bolo', day: SO, extra: 2 }], meals: [] });
+    expect(backToFridge({ ...w, meals: [{ ...w.meals[0], done: true }] }, 'a', hh).meals).toHaveLength(1);
+  });
+
+  it('Kochtag ändern: Abende rücken nach, was keinen Abend mehr findet, wandert in den Kühlschrank', () => {
+    const w: Week = {
+      cookDays: [SO], bases: [{ recipeId: 'bolo', day: SO }, { recipeId: 'chili', day: SO, extra: 1 }],
+      meals: [{ id: 'a', day: SO, recipeId: 'spag', baseId: 'bolo' }, { id: 'b', day: MO, recipeId: 'wraps', baseId: 'bolo' }, { id: 'c', day: DI, recipeId: 'chilireis', baseId: 'chili' }],
+    };
+    const mo = setCookDay(w, 'bolo', MO, hh);
+    expect(plan(mo)).toEqual([`${MO}:spag`, `${MI}:wraps`, `${DI}:chilireis`].sort());
+    expect(mo).toMatchObject({ start: SO, cookDays: [SO, MO] });
+    const sa = setCookDay(w, 'bolo', SA, hh);
+    expect(plan(sa).filter((x) => x.endsWith('spag') || x.endsWith('wraps'))).toEqual([`${SA}:spag`]);
+    expect(sa.bases[0]).toMatchObject({ day: SA, extra: 1 });
+    // die Woche dreht sich nicht mit: Sonntag bleibt der erste Tag
+    expect(weekOrder(sa)[0]).toBe(SO);
+    expect(setCookDay({ ...w, bases: [{ ...w.bases[0], cooked: true }, w.bases[1]] }, 'bolo', MO, hh).bases[0].day).toBe(SO);
   });
 });
