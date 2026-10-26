@@ -7,7 +7,7 @@ import {
 } from '../../domain/week';
 import type { Household, Week, Weekday } from '../../domain/mealplan';
 import type { Recipe } from '../../domain/types';
-import { ComboBuilder } from './ComboBuilder';
+import { ComboStepper } from './ComboStepper';
 import { comboText } from '../../domain/sides';
 import { preparedPortions } from '../../domain/baseStock';
 import { specialDays } from '../../domain/shelfLife';
@@ -329,7 +329,7 @@ function WhatSheet({ cook, day, replace, from, view, recipes, fallback, stock, o
               {dishes.length > 0 ? dishes.map((r) => chip(r.id, b.base.recipeId, title(r))) : chip(b.base.recipeId, b.base.recipeId, title(b.recipe))}
             </div>
             {/* Grundlage mit Bausteinen (Julia: Baukasten statt nur „+ Beilage“) */}
-            {dishes.length > 0 && <ComboBuilder label="Zusammenstellen" onAdd={(side) => onPut(b.base.recipeId, b.base.recipeId, side)} />}
+            {dishes.length > 0 && b.recipe && <ComboStepper base={b.recipe} onAdd={(side) => onPut(b.base.recipeId, b.base.recipeId, side)} />}
           </section>
         ))}
         {onCookbook && (
@@ -538,7 +538,7 @@ function DishSheet({ m, view, recipes, asks, servings, onPut, onPortions, onSwap
               {combos.map((side) => chip(baseId, `mit ${comboText(side)}`, side))}
               {dishes.map((r) => chip(r.id, title(r)))}
             </div>
-            <ComboBuilder label="Zusammenstellen" onAdd={(side) => onPut(baseId, side)} />
+            {base && <ComboStepper base={base} onAdd={(side) => onPut(baseId, side)} />}
           </section>
         )}
         <div className="row-between dish__portions">

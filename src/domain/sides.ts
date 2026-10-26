@@ -18,6 +18,8 @@ export interface Side {
   unit?: 'g' | 'Stück';
   /** wie man ihn am Abend zubereitet (Julia: „woher weiß ich, wie ich das zubereite?“) – eigene Bausteine haben keinen */
   prep?: SidePrep;
+  /** nicht mehr angeboten, aber für gespeicherte Abende noch bekannt (Wraps → Tortillas, Julia: „ich kauf immer die gleichen“) */
+  retired?: boolean;
 }
 
 /** Zubereitung eines Bausteins: kurzer Satz + Minuten (0 = nur drüber/dazu, kommt zum Schluss) */
@@ -42,8 +44,8 @@ export const SIDES: readonly Side[] = [
   { id: 'gnocchi', name: 'Gnocchi', kind: 'carb', grams: 250, prep: { text: 'in Salzwasser garen, bis sie oben schwimmen', minutes: 4 } },
   { id: 'kartoffeln', name: 'Kartoffeln', kind: 'carb', grams: 300, prep: { text: 'in Salzwasser kochen', minutes: 20 } },
   { id: 'buns', name: 'Burgerbrötchen', kind: 'carb', grams: 1, unit: 'Stück', prep: { text: 'aufschneiden und kurz anrösten', minutes: 2 } },
-  { id: 'tortillas', name: 'Weizentortillas', kind: 'carb', grams: 2, unit: 'Stück', prep: { text: 'in der Pfanne kurz erwärmen', minutes: 2 } },
-  { id: 'wraps', name: 'Wraps', kind: 'carb', grams: 1, unit: 'Stück', prep: { text: 'in der Pfanne kurz erwärmen', minutes: 2 } },
+  { id: 'tortillas', name: 'Tortillas', kind: 'carb', grams: 2, unit: 'Stück', prep: { text: 'in der Pfanne kurz erwärmen', minutes: 2 } },
+  { id: 'wraps', name: 'Wraps', kind: 'carb', grams: 1, unit: 'Stück', prep: { text: 'in der Pfanne kurz erwärmen', minutes: 2 }, retired: true },
   { id: 'naan', name: 'Naan', kind: 'carb', grams: 1, unit: 'Stück', prep: { text: 'im Ofen aufbacken', minutes: 5 } },
   { id: 'quinoa', name: 'Quinoa', kind: 'carb', grams: 60, prep: { text: 'mit doppelter Menge Wasser köcheln', minutes: 15 } },
   { id: 'suesskartoffel', name: 'Süßkartoffel', kind: 'carb', grams: 250, prep: { text: 'würfeln und im Ofen rösten', minutes: 25 } },
@@ -110,7 +112,7 @@ export const sideOf = (id: string | undefined): Side | undefined => {
 
 /** Alle Bausteine einer Gruppe – die festen und die eigenen */
 export const sidesOfKind = (kind: SideKind, custom: readonly string[] = []): Side[] =>
-  [...SIDES, ...custom.flatMap((id) => sideOf(id) ?? [])].filter((s) => s.kind === kind);
+  [...SIDES, ...custom.flatMap((id) => sideOf(id) ?? [])].filter((s) => s.kind === kind && !s.retired);
 
 /**
  * Die Bausteine eines Abends. Gespeichert als eine Zeichenkette („pasta,haehnchen,parmesan“) im bisherigen Feld

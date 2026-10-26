@@ -18,8 +18,9 @@ mashi/
 │  │  ├─ mealplan.ts          Wochenplan, Einkaufsliste; Zutaten/Namen einordnen (resolveIngredient, keyOfName)
 │  │  ├─ week.ts              Vorkoch-Woche: Verteilung, Alter/Einfrieren, Mittage, Portionen, Tauschen, MHD-Funde
 │  │  ├─ sides.ts             Baukasten-Bausteine (Kohlenhydrat, Protein, Sauce, Beilage, Topping) mit Menge und Zubereitung
-│  │  ├─ craving.ts           „Worauf hast du Lust?“: Richtungen (Taco, Bowl …), was zusammenpasst, Textfeld verstehen,
-│  │  │                       Rezepte/Teile als Bausteine, aus dem Gericht ein Rezept (Probiergericht), „Passt dazu“
+│  │  ├─ craving.ts           „Worauf hast du Lust?“: Richtungen (Tortilla, Bowl …), was zusammenpasst, Textfeld verstehen,
+│  │  │                       Rezepte/Teile als Bausteine (auch für mehrere Stufen), aus dem Gericht ein Rezept
+│  │  │                       (Probiergericht), „Passt dazu“, Grundlage als Start für den Baukasten im Wochenplan
 │  │  ├─ weekBases.ts         Grundlage-Zutat einer Verwandlung nicht einkaufen (für Einkauf und Vorrat)
 │  │  ├─ pantry.ts            Speisekammer: Vorrat, Bon-Import, beim Kochen abziehen, Verplantes
 │  │  ├─ packs.ts             Packungen: anbrechen, „ganze Packung?“, Größe nachtragen, zusammenlegen

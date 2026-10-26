@@ -17,8 +17,12 @@ Recipe  (Hülle – ändert sich selten)
 ├─ keepsDays?, freezable?, togo?  Vorkochen: hält gekocht X Tage (sonst shelfDays.prepared), einfrierbar, zum Mitnehmen (nicht versioniert, siehe domain/week.ts)
 ├─ fromBase?    Verwandlung dieser Grundlage (steht nur unter ihr, nicht im Kochbuch-Raster; ihre Zutat mit recipeId zeigt auf die Grundlage, Einheit `Portion`)
 ├─ blocks?       als Baustein in „Worauf hast du Lust?“: [{ part? (Teil – fehlt: ganzes Rezept), kind (carb|protein|sauce|veg|topping),
-│                directions[] (taco, bowl … – leer: überall) }] (nicht versioniert; benennt eine neue Version einen Teil um,
+│                also? (weitere Stufen, die er abdeckt – Bolognese: kind protein, also [sauce]; gewählt sind die erledigt),
+│                replaces? (fester Baustein, den er ersetzt – meine Guacamole statt der festen; nur in „Worauf hast du Lust?“),
+│                directions[] (taco = Tortilla, bowl … – leer: überall; altes „wrap“ zählt als taco) }] (nicht versioniert; benennt eine neue Version einen Teil um,
 │                zieht die Markierung mit – parts.ts: followBlockParts; siehe domain/craving.ts)
+├─ pairs?       „Passt gut zu“: Baustein-ids (Bolognese → spaetzle, parmesan) – stehen im Stepper vorn, sobald das Rezept
+│                gewählt ist, auch im Baukasten des Wochenplans (nicht versioniert)
 ├─ trial?       Probiergericht aus „Worauf hast du Lust?“: echtes Rezept (Plan, Kochmodus, Einkauf rechnen wie immer), aber nicht im
 │                Kochbuch, Rezept des Tages, Woche planen, Plan-Auswahl, Reste-Vorschlägen; nach dem Kochen fragt die Startseite
 │                „Wie war …?“ (behalten → Markierung weg, ab 4 Sternen „bewaehrt“; „Nicht speichern“ → gelöscht); nie gekocht,

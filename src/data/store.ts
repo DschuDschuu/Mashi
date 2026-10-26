@@ -774,6 +774,20 @@ export function setBlocks(id: string, blocks: RecipeBlock[] | undefined): () => 
   return () => apply(before);
 }
 
+/**
+ * „Passt gut zu“ am Rezept (Julia: „in den Grundrezepten notieren, zu was sie passen“) – Baustein-ids, leer = nichts.
+ * Nicht versioniert wie blocks. Gibt „Rückgängig“ zurück.
+ */
+export function setPairs(id: string, pairs: string[] | undefined): () => void {
+  const before = get(id).pairs;
+  const apply = (list: string[] | undefined) => {
+    const { pairs: _, ...rest } = get(id);
+    commit(list?.length ? { ...rest, pairs: list } : rest);
+  };
+  apply(pairs);
+  return () => apply(before);
+}
+
 /** Variante wählen (Julia: mit Hähnchen oder Tofu) – gibt „Rückgängig“ zurück; siehe choices.ts */
 export function setChoice(id: string, choice: string): () => void {
   const before = get(id).choice;

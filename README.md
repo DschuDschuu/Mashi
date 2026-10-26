@@ -11,12 +11,13 @@ Live: <https://dschudschuu.github.io/Mashi/> · installierbar als App (PWA), fun
 
 ## Was Mashi kann
 
-- **Worauf hast du Lust?** auf der Startseite: Taco, Bowl, Pasta, Wrap, Curry, Ofengemüse, Burger antippen oder
+- **Worauf hast du Lust?** auf der Startseite: Tortilla (Taco/Wrap), Bowl, Pasta, Curry, Ofengemüse, Burger antippen oder
   frei eintippen („Tacos mit Hähnchen“, „was mit Brokkoli“) – Mashi baut das Gericht Stufe für Stufe (Kohlenhydrat,
   Protein, Sauce, Beilage, Topping) und schlägt vor, was dazu passt; eigene Rezepte oder einzelne Teile davon lassen
-  sich als Baustein markieren, Vorgekochtes aus dem Kühlschrank steht vorn. Am Ende: jetzt kochen, in den Wochenplan
+  sich als Baustein markieren – auch für mehrere Stufen (Bolognese = Protein und Sauce) oder statt eines festen Bausteins
+  (deine Guacamole), mit „Passt gut zu“ (Bolognese → Spätzle, Parmesan); Vorgekochtes steht vorn. Am Ende: jetzt kochen, in den Wochenplan
   oder als Rezept speichern – nach dem Kochen fragt die Startseite „Wie war's?“, erst dann kommt es ins Kochbuch.
-  Darunter „Passt dazu aus deinem Kochbuch“
+  Darunter „Passt dazu aus deinem Kochbuch“. Derselbe Stepper ist der Baukasten im Wochenplan (Grundlage schon gewählt)
 - **Kochbuch** mit Versionen: eigene Rezepte, Import aus Text oder Foto (Texterkennung im Browser),
   KI-Ideen erst testen, Bewertung, „Zutaten vereinheitlichen“ (eine Schreibweise je Zutat)
 - **Vorkoch-Woche**: eine oder zwei Grundlagen (Bolognese, Curry …) an wählbaren Kochtagen vorkochen, unter der Woche

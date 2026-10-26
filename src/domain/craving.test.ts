@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   DIRECTIONS, EMPTY_CRAVING, STAGES, chooseDirection, closeStep, cravingSteps, cravingText, cravingTitle, currentStep,
-  cravingContent, directionsFor, guessKind, matchingRecipes, optionsFor, pick, recipeChoiceId, recipeChoices, reopen, staleTrials, understand,
+  baseCraving, coveredBy, cravingCombo, cravingContent, directionOf, directionsFor, guessKind, matchingRecipes, optionsFor, pick, recipeChoiceId, recipeChoices, reopen, staleTrials, understand,
 } from './craving';
 import { followBlockParts } from './parts';
 import { withNewVersion } from './recipe';
@@ -34,11 +34,22 @@ describe('Richtungen', () => {
 });
 
 describe('understand – das Textfeld', () => {
-  it('„Taco“ → Richtung mit Tortillas, weiter beim Protein', () => {
+  it('„Taco“ → Richtung Tortilla, die Tortillas sind gleich gewählt (Julia: „ich kauf immer die gleichen“)', () => {
     const s = understand('Taco')!;
     expect(s.direction).toBe('taco');
+    expect(directionOf(s.direction)?.name).toBe('Tortilla');
     expect(s.picks.carb).toEqual(['tortillas']);
     expect(currentStep(s)).toBe('protein');
+    expect(understand('Wraps')).toMatchObject({ direction: 'taco', picks: { carb: ['tortillas'] } });
+  });
+
+  it('ein Wort, das Richtung und Baustein ist, wählt beides: „Pasta“', () => {
+    expect(understand('Pasta')).toMatchObject({ direction: 'pasta', picks: { carb: ['pasta'] } });
+  });
+
+  it('„Wraps“ werden nicht mehr angeboten, alte Abende kennen sie noch', () => {
+    expect(optionsFor(EMPTY_CRAVING, 'carb').some((c) => c.id === 'wraps')).toBe(false);
+    expect(sideOf('wraps')?.name).toBe('Wraps');
   });
 
   it('„Hähnchen“ → Protein gesetzt, dann wird nach der Richtung gefragt', () => {
@@ -98,15 +109,15 @@ describe('Stufen', () => {
   });
 
   it('Richtung wechseln behält Gewähltes', () => {
-    const s = chooseDirection(pick(EMPTY_CRAVING, 'protein', 'haehnchen'), 'wrap');
-    expect(s.picks).toEqual({ protein: ['haehnchen'], carb: ['wraps'] });
+    const s = chooseDirection(pick(EMPTY_CRAVING, 'protein', 'haehnchen'), 'burger');
+    expect(s.picks).toEqual({ protein: ['haehnchen'], carb: ['buns'] });
     expect(currentStep(s)).toBe('sauce');
   });
 });
 
 describe('Name', () => {
   it('Richtung + Protein', () => {
-    expect(cravingTitle(understand('Taco mit Hähnchen')!)).toBe('Taco mit Hähnchenbrust');
+    expect(cravingTitle(understand('Taco mit Hähnchen')!)).toBe('Tortilla mit Hähnchenbrust');
     expect(cravingTitle(understand('Curry')!)).toBe('Curry');
   });
 });
@@ -147,7 +158,7 @@ describe('Deine Rezepte als Bausteine', () => {
     expect(understand('Teststreifen', own)?.picks.protein).toEqual(['rezept:r1']);
     expect(understand('knusprige Teststreifen', own)?.picks.protein).toEqual(['rezept:r1']);
     expect(understand('Hähnchen', own)?.picks.protein).toEqual(['haehnchen']);
-    expect(cravingTitle(understand('Taco Teststreifen', own)!, own)).toBe('Knusprige Teststreifen als Taco');
+    expect(cravingTitle(understand('Taco Teststreifen', own)!, own)).toBe('Knusprige Teststreifen als Tortilla');
   });
 
   it('Stufe vorschlagen am Namen', () => {
@@ -206,7 +217,7 @@ describe('Aus dem Gericht ein Rezept machen', () => {
     // Testplatte ist für 2 Portionen: 100 g Joghurt → 200 g für 4
     expect(c.ingredients.find((i) => i.name === 'Joghurt')).toMatchObject({ amount: 200, part: 'Testdip' });
     expect(c.ingredients.some((i) => i.name === 'Brot')).toBe(false);
-    expect(c.title).toBe('Knusprige Teststreifen als Taco');
+    expect(c.title).toBe('Knusprige Teststreifen als Tortilla');
   });
 
   it('Vorgekochtes: nur aufwärmen', () => {
@@ -288,5 +299,99 @@ describe('Burger (Julia)', () => {
     expect(optionsFor(p, 'sauce')[0].id).toBe('burgersauce');
     expect(optionsFor(p, 'topping')[0].id).toBe('cheddar');
     expect(cravingTitle(p)).toBe('Burger mit Hack-Patty');
+  });
+});
+
+describe('Ein Baustein für mehrere Stufen (Julia: Bolognese ist Protein und Sauce)', () => {
+  const bolo = recipe('bo', 'Testbolo', [{ kind: 'protein', also: ['sauce'], directions: ['pasta'] }]);
+  const own = recipeChoices([bolo]);
+
+  it('steht schon beim Protein – gewählt ist die Sauce erledigt („steckt in“)', () => {
+    let s = pick(chooseDirection(EMPTY_CRAVING, 'pasta'), 'carb', 'pasta');
+    expect(optionsFor(s, 'protein', own)[0].id).toBe('rezept:bo');
+    s = pick(s, 'protein', 'rezept:bo', own);
+    expect(currentStep(s)).toBe('veg');
+    expect(coveredBy(s, 'sauce', own)?.name).toBe('Testbolo');
+    // auch bei der Sauce steht sie zur Wahl, falls man dort anfängt
+    expect(optionsFor(chooseDirection(EMPTY_CRAVING, 'pasta'), 'sauce', own)[0].id).toBe('rezept:bo');
+  });
+
+  it('wird sie ersetzt (doch Hack), ist die Sauce wieder offen; was dort gewählt ist, bleibt', () => {
+    const s = pick(pick(chooseDirection(EMPTY_CRAVING, 'pasta'), 'protein', 'rezept:bo', own), 'protein', 'hack', own);
+    expect(s.closed).not.toContain('sauce');
+    const withPesto = pick(pick(pick(chooseDirection(EMPTY_CRAVING, 'pasta'), 'sauce', 'pesto', own), 'protein', 'rezept:bo', own), 'protein', 'hack', own);
+    expect(withPesto.picks.sauce).toEqual(['pesto']);
+    expect(withPesto.closed).toContain('sauce');
+  });
+
+  it('Richtung wechseln lässt die abgedeckte Stufe erledigt', () => {
+    const s = chooseDirection(pick(EMPTY_CRAVING, 'protein', 'rezept:bo', own), 'pasta', own);
+    expect(s.closed).toContain('sauce');
+  });
+
+  it('Textfeld: „Testbolo“ wählt sie samt Sauce', () => {
+    const s = understand('Pasta Testbolo', own)!;
+    expect(s.picks.protein).toEqual(['rezept:bo']);
+    expect(s.closed).toContain('sauce');
+  });
+});
+
+describe('Tortilla = Taco + Wrap', () => {
+  it('alte Markierung „wrap“ zählt als Tortilla', () => {
+    const old = recipe('w', 'Testwrapfüllung', [{ kind: 'protein', directions: ['wrap'] }]);
+    const own = recipeChoices([old]);
+    expect(own[0].directions).toEqual(['taco']);
+    expect(optionsFor(chooseDirection(EMPTY_CRAVING, 'taco'), 'protein', own)[0].id).toBe('rezept:w');
+  });
+});
+
+describe('Baukasten im Wochenplan: die Grundlage ist schon gewählt', () => {
+  it('unmarkiert: Bolognese & Co. decken Protein und Sauce ab, eine Sauce nur die Sauce', () => {
+    const { state, own } = baseCraving(recipe('g', 'Testbolognese'));
+    expect(state.picks.protein).toEqual(['rezept:g']);
+    expect(state.closed).toEqual(expect.arrayContaining(['protein', 'sauce']));
+    expect(currentStep(state)).toBe('direction');
+    expect(own).toHaveLength(1);
+    expect(baseCraving(recipe('t', 'Testtomatensauce')).state.closed).toEqual(['sauce']);
+  });
+
+  it('markiert mit einer Richtung: die ist gleich gewählt; gespeichert werden nur die festen Bausteine', () => {
+    const { state, own } = baseCraving(recipe('g', 'Testchili', [{ kind: 'sauce', directions: ['taco'] }]));
+    expect(state.direction).toBe('taco');
+    expect(currentStep(state)).toBe('protein');
+    const done = pick(pick(state, 'protein', 'bohnen', own), 'veg', 'mais', own);
+    expect(cravingCombo(done)).toBe('tortillas,bohnen,mais');
+  });
+
+  it('eigene Bausteine (Julia: „Tomaten“) stehen in jeder Richtung hinten', () => {
+    const s = chooseDirection(EMPTY_CRAVING, 'bowl');
+    const list = optionsFor(s, 'veg', [], { customSides: ['eigen:veg:Testtomaten', 'eigen:topping:Testkerne'] });
+    expect(list.at(-1)?.name).toBe('Testtomaten');
+    expect(list.some((c) => c.name === 'Testkerne')).toBe(false);
+  });
+});
+
+describe('Passt gut zu und ersetzt (Julia: in den Grundrezepten notieren, zu was sie passen)', () => {
+  it('„Passt gut zu“ am Rezept: steht vorn, sobald es gewählt ist – auch im Wochenplan', () => {
+    const bolo = { ...recipe('bo', 'Testbolo', [{ kind: 'protein', also: ['sauce'], directions: [] }]), pairs: ['spaetzle', 'parmesan'] };
+    const own = recipeChoices([bolo]);
+    const s = pick(chooseDirection(EMPTY_CRAVING, 'pasta'), 'protein', 'rezept:bo', own);
+    expect(optionsFor(s, 'carb', own)[0].id).toBe('spaetzle');
+    expect(optionsFor(s, 'topping', own)[0].id).toBe('parmesan');
+    const week = baseCraving({ ...recipe('g', 'Testbolognese'), pairs: ['spaetzle'] });
+    expect(optionsFor(chooseDirection(week.state, 'pasta', week.own), 'carb', week.own)[0].id).toBe('spaetzle');
+  });
+
+  it('dein Rezept ersetzt einen festen Baustein: der feste ist weg, das Textfeld findet deins', () => {
+    const guac = recipe('gu', 'Avocado-Testcreme', [{ kind: 'sauce', directions: [], replaces: 'guacamole' }]);
+    const own = recipeChoices([guac]);
+    const sauces = optionsFor(chooseDirection(EMPTY_CRAVING, 'taco'), 'sauce', own).map((c) => c.id);
+    expect(sauces[0]).toBe('rezept:gu');
+    expect(sauces).not.toContain('guacamole');
+    expect(understand('Taco mit Guacamole', own)?.picks.sauce).toEqual(['rezept:gu']);
+    // passt wie die feste Guacamole zum Hähnchen – ohne sie stünde Hack vorn
+    expect(optionsFor(chooseDirection(EMPTY_CRAVING, 'taco'), 'protein', own)[0].id).toBe('hack');
+    const s = pick(chooseDirection(EMPTY_CRAVING, 'taco'), 'sauce', 'rezept:gu', own);
+    expect(optionsFor(s, 'protein', own)[0].id).toBe('haehnchen');
   });
 });

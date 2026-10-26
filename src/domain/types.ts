@@ -195,6 +195,11 @@ export interface Recipe {
    */
   blocks?: RecipeBlock[];
   /**
+   * Was besonders gut dazu passt (Julia: „in den Grundrezepten notieren, zu was sie passen“): Baustein-ids aus sides.ts,
+   * z. B. Bolognese → Spätzle, Parmesan. Im Stepper – auch im Wochenplan – stehen die vorn. Nicht versioniert wie blocks.
+   */
+  pairs?: string[];
+  /**
    * Probiergericht aus „Worauf hast du Lust?“ (Julia: „ich teste erst, wie es ist, dann speicher ich es“): ein echtes
    * Rezept, damit Kochmodus, Plan und Einkaufsliste wie immer funktionieren – aber noch nicht im Kochbuch. Nach dem
    * Kochen fragt die Startseite „Wie war's?“; speichern nimmt die Markierung weg, „Nicht speichern“ löscht es.
@@ -207,6 +212,10 @@ export interface RecipeBlock {
   /** Name des Teils (Ingredient.part) – fehlt: das ganze Rezept */
   part?: string;
   kind: SideKind;
+  /** weitere Stufen, die er mit abdeckt (Julia: Bolognese ist Protein und Sauce) – gewählt sind die dann erledigt */
+  also?: SideKind[];
+  /** fester Baustein, den er ersetzt (Julia: meine Guacamole statt der festen) – der feste steht dann nicht mehr zur Wahl */
+  replaces?: string;
   /** Richtungen (craving.ts: „taco“, „bowl“ …), in denen er auftaucht – leer: überall */
   directions: string[];
 }
