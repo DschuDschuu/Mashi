@@ -2,11 +2,11 @@ import { useMemo, useState } from 'react';
 import { baseCraving, cravingCombo } from '../../domain/craving';
 import { comboText } from '../../domain/sides';
 import type { Recipe } from '../../domain/types';
-import { CravingSteps } from './CravingSteps';
+import { CravingBuilder, useCravingView, ViewToggle } from './CravingBuilder';
 import { Icon } from './Icon';
 
 /**
- * Baukasten im Wochenplan als Stepper (Julia: „den neuen Baukasten auch im Wochenplan“ – statt der Chips-Reihen): die
+ * Baukasten im Wochenplan als Teller oder Stepper (Julia: „den neuen Baukasten auch im Wochenplan“ – statt der Chips-Reihen): die
  * Grundlage ist schon gewählt und füllt ihre Stufen (Bolognese: Protein und Sauce), den Rest geht man durch. `onAdd`
  * bekommt wie früher die gespeicherte Form der Bausteine („pasta,parmesan“) oder undefined für die Grundlage pur.
  * Eigene Rezepte stehen hier nicht zur Wahl – ein Abend der Woche ist die Grundlage plus feste Bausteine.
@@ -15,6 +15,8 @@ export function ComboStepper({ base, onAdd, label = 'Zusammenstellen' }: { base:
   const start = useMemo(() => baseCraving(base), [base]);
   const [open, setOpen] = useState(false);
   const [state, setState] = useState(start.state);
+  // Teller oder Liste – dieselbe gemerkte Wahl wie auf der Lust-Seite (Julia)
+  const [view, setView] = useCravingView();
   const close = () => { setOpen(false); setState(start.state); };
 
   if (!open) {
@@ -27,7 +29,8 @@ export function ComboStepper({ base, onAdd, label = 'Zusammenstellen' }: { base:
   const combo = cravingCombo(state);
   return (
     <div className="combo-stepper">
-      <CravingSteps state={state} set={setState} own={start.own} />
+      <div className="combo-stepper__top"><ViewToggle view={view} onChange={setView} /></div>
+      <CravingBuilder view={view} state={state} set={setState} own={start.own} small />
       <div className="row-gap">
         <button type="button" className="btn btn--primary btn--sm" onClick={() => { onAdd(combo); close(); }}>
           <Icon name="plus" size={14} /> Als Abend{combo ? ` · mit ${comboText(combo)}` : ' · pur'}

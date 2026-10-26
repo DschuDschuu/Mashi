@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   DIRECTIONS, EMPTY_CRAVING, STAGES, chooseDirection, closeStep, cravingSteps, cravingText, cravingTitle, currentStep,
-  baseCraving, coveredBy, cravingCombo, cravingContent, directionOf, directionsFor, guessKind, matchingRecipes, optionsFor, pick, recipeChoiceId, recipeChoices, reopen, staleTrials, understand,
+  baseCraving, coveredBy, cravingCombo, cravingContent, directionOf, guessKind, matchingRecipes, optionsFor, pick, recipeChoiceId, recipeChoices, reopen, staleTrials, understand,
 } from './craving';
 import { followBlockParts } from './parts';
 import { withNewVersion } from './recipe';
@@ -52,12 +52,19 @@ describe('understand – das Textfeld', () => {
     expect(sideOf('wraps')?.name).toBe('Wraps');
   });
 
-  it('„Hähnchen“ → Protein gesetzt, dann wird nach der Richtung gefragt', () => {
+  it('„Hähnchen“ → Protein gesetzt, ohne Richtung geht es gleich beim Kohlenhydrat los (Julia: „wenn es einfach beginnt“)', () => {
     const s = understand('Hähnchen')!;
     expect(s.picks.protein).toEqual(['haehnchen']);
-    expect(currentStep(s)).toBe('direction');
-    // Hähnchen gibt es nicht bei jeder Richtung – nur die passenden stehen zur Wahl
-    expect(directionsFor(s).map((d) => d.id)).toContain('bowl');
+    expect(s.direction).toBeUndefined();
+    expect(currentStep(s)).toBe('carb');
+    // ohne Richtung stehen alle Kohlenhydrate zur Wahl
+    expect(optionsFor(s, 'carb').length).toBeGreaterThan(8);
+  });
+
+  it('„alle zeigen“: mit Richtung nur Passendes, auf Wunsch alles', () => {
+    const s = chooseDirection(EMPTY_CRAVING, 'curry');
+    expect(optionsFor(s, 'carb').map((c) => c.id)).toEqual(['reis', 'naan']);
+    expect(optionsFor(s, 'carb', [], undefined, true).map((c) => c.id)).toContain('pasta');
   });
 
   it('versteht mehrere Wörter, Mehrzahl und Füllwörter: „Tacos mit Hack und Mais“', () => {
@@ -150,7 +157,6 @@ describe('Deine Rezepte als Bausteine', () => {
     expect(optionsFor(chooseDirection(EMPTY_CRAVING, 'bowl'), 'protein', own)[0].id).toBe('rezept:r1');
     expect(optionsFor(chooseDirection(EMPTY_CRAVING, 'pasta'), 'protein', own).some((c) => c.id === 'rezept:r1')).toBe(false);
     expect(optionsFor(chooseDirection(EMPTY_CRAVING, 'pasta'), 'sauce', own)[0].id).toBe('rezept:r2:Testdip');
-    expect(directionsFor(pick(EMPTY_CRAVING, 'protein', 'rezept:r1'), own).map((d) => d.id)).toEqual(['taco', 'bowl']);
   });
 
   it('Textfeld: dein Rezept, wenn es genauer passt – sonst der feste Baustein', () => {
@@ -350,7 +356,7 @@ describe('Baukasten im Wochenplan: die Grundlage ist schon gewählt', () => {
     const { state, own } = baseCraving(recipe('g', 'Testbolognese'));
     expect(state.picks.protein).toEqual(['rezept:g']);
     expect(state.closed).toEqual(expect.arrayContaining(['protein', 'sauce']));
-    expect(currentStep(state)).toBe('direction');
+    expect(currentStep(state)).toBe('carb');
     expect(own).toHaveLength(1);
     expect(baseCraving(recipe('t', 'Testtomatensauce')).state.closed).toEqual(['sauce']);
   });

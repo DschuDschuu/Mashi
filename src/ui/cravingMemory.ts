@@ -44,3 +44,23 @@ export function clearCraving() {
     // s. o.
   }
 }
+
+/** Teller oder Liste (Julia: „die kreative Ansicht oder beim Stepper bleiben“) – Standard Teller, gemerkt auf dem Gerät */
+export type CravingView = 'plate' | 'list';
+const VIEW_KEY = 'mashi-craving-view';
+
+export function loadView(): CravingView {
+  try {
+    return localStorage.getItem(VIEW_KEY) === 'list' ? 'list' : 'plate';
+  } catch {
+    return 'plate';
+  }
+}
+
+export function saveView(view: CravingView) {
+  try {
+    localStorage.setItem(VIEW_KEY, view);
+  } catch {
+    // s. o.
+  }
+}

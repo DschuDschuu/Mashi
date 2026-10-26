@@ -10,7 +10,8 @@ import { addToPlan, createRecipe, deleteRecipe, householdOf, keepTrial, useFoodT
 import { navigate } from '../../router';
 import { Stepper } from '../components/Controls';
 import { CravingAsk } from '../components/CravingAsk';
-import { CravingSteps, mins } from '../components/CravingSteps';
+import { CravingBuilder, useCravingView, ViewToggle } from '../components/CravingBuilder';
+import { mins } from '../components/CravingSteps';
 import { clearCraving, loadCraving, saveCraving } from '../cravingMemory';
 import { Icon } from '../components/Icon';
 import { TopBar } from '../components/TopBar';
@@ -46,6 +47,7 @@ export function CravingScreen({ q }: { q: string }) {
     const mem = loadCraving();
     return mem && q && mem.q === q ? mem.state : q ? understand(q, own) : undefined;
   });
+  const [view, setView] = useCravingView();
   const set = (next: CravingState) => {
     setState(next);
     saveCraving(q, next);
@@ -64,10 +66,16 @@ export function CravingScreen({ q }: { q: string }) {
   return (
     <main className="screen">
       <TopBar title={dir?.name ?? 'Worauf hast du Lust?'} backTo="/"
-        right={<button type="button" className="link small" onClick={() => { clearCraving(); navigate('/lust', { replace: true }); }}>Neu anfangen</button>} />
-      <CravingSteps state={state} set={set} own={own} />
+        right={(
+          <span className="craving-top">
+            <ViewToggle view={view} onChange={setView} />
+            <button type="button" className="link small" onClick={() => { clearCraving(); navigate('/lust', { replace: true }); }}>Neu</button>
+          </span>
+        )} />
+      <CravingBuilder view={view} state={state} set={set} own={own} />
       {!currentStep(state) && <Finished state={state} own={own} />}
-      <Inspiration state={state} own={own} />
+      {/* im Teller nicht (Julia: dort gehören nur die eigenen Rezepte der Stufe hin – die stehen im Karussell) */}
+      {view === 'list' && <Inspiration state={state} own={own} />}
     </main>
   );
 }

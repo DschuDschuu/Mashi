@@ -95,8 +95,9 @@ aus den Zutaten berechnet (gecacht je Version).
                          └─ Sheet: ✨ Mit KI · ✍️ Eigenes Rezept · 📷 Importieren
 
  #/                       Start – „Worauf hast du Lust?“ (Textfeld + Richtungen), „Wie war …?“ für gekochte Probiergerichte
- #/lust?q=Taco            Stepper: Richtung → Kohlenhydrat → Protein → Sauce → Beilage → Topping, dann kochen,
+ #/lust?q=Taco            Baukasten: Kohlenhydrat → Protein → Sauce → Beilage → Topping (Richtung nur als Filter), dann kochen,
                           einplanen oder als Rezept speichern; angefangener Stand bleibt bis Mitternacht auf dem Gerät (mashi-craving-v1)
+                          Ansicht Teller (CravingPlate) oder Liste (CravingSteps), gemerkt in mashi-craving-view; auch im Wochenplan
  #/kochbuch?device=…      Kochbuch (Filter als URL → Schnellfilter sind Links)
  #/testen                 KI-Ideen · Zum Testen · Bewährt (über Start erreichbar)
  #/plan                   Deine Woche (Vorkoch-Woche) – darunter von Hand Eingeplantes, Vorschläge, Vorgekocht · „1 gegessen“

@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  MULTI, STAGES, chooseDirection, choiceOf, closeStep, coveredBy, currentStep, directionOf, directionsFor, optionsFor, pick,
-  reopen, type Choice, type CravingState,
+  MULTI, STAGES, choiceOf, closeStep, coveredBy, currentStep, directionOf, optionsFor, pick, reopen, type Choice, type CravingState,
 } from '../../domain/craving';
 import { SIDE_KINDS, customSideId, type SideKind } from '../../domain/sides';
 import { currentContent } from '../../domain/recipe';
@@ -9,17 +8,17 @@ import { householdOf, setHousehold, usePantry, usePlan, useProducts, useRecipes 
 import { formatMinutes, portionCount } from '../format';
 import { toast } from '../toast';
 import { Icon } from './Icon';
+import { RecipeImage } from './RecipeImage';
 
-type Step = 'direction' | SideKind;
-const STEPS: readonly Step[] = ['direction', ...STAGES];
 /** „3 Min.“ ohne Umbruch dazwischen – sonst steht „Min.“ allein in der nächsten Zeile */
-export const mins = (m: number) => formatMinutes(m).replace(/ /g, ' ');
-const labelOf = (k: Step) => (k === 'direction' ? 'Richtung' : SIDE_KINDS.find((x) => x.kind === k)?.label ?? k);
+export const mins = (m: number) => formatMinutes(m).replace(/ /g, '\u00a0');
+export const labelOf = (k: SideKind) => SIDE_KINDS.find((x) => x.kind === k)?.label ?? k;
 
 /**
  * Der Stepper (Julia: „wie ein Flussdiagramm, das sich öffnet“): oben das Erledigte mit „Ändern“, dann die Stufe, die
- * dran ist, darunter blass, was noch kommt. Derselbe für „Worauf hast du Lust?“ und den Baukasten im Wochenplan
- * (Julia: „den neuen Baukasten auch im Wochenplan“) – wer ihn einsetzt, hält den Stand und bekommt ihn über `set`.
+ * dran ist, darunter blass, was noch kommt. Er beginnt gleich beim Kohlenhydrat – die Richtung ist kein Schritt (Julia:
+ * „es passt, wenn es einfach beginnt“), sie filtert nur, wenn sie vom Chip oder aus dem Textfeld kommt. Derselbe für
+ * „Worauf hast du Lust?“ und den Baukasten im Wochenplan – wer ihn einsetzt, hält den Stand und bekommt ihn über `set`.
  */
 export function CravingSteps({ state, set, own }: { state: CravingState; set: (s: CravingState) => void; own: readonly Choice[] }) {
   const step = currentStep(state);
@@ -27,29 +26,23 @@ export function CravingSteps({ state, set, own }: { state: CravingState; set: (s
   // die neue Stufe ins Bild holen – auf dem Handy rutscht sie sonst unter den Rand
   useEffect(() => { now.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }, [step]);
 
-  const dir = directionOf(state.direction);
   const names = (k: SideKind) => (state.picks[k] ?? []).map((id) => choiceOf(id, own)?.name ?? id);
   return (
     <ol className="lust-steps">
-      {STEPS.map((k, i) => {
+      {STAGES.map((k, i) => {
         const isNow = k === step;
-        const done = !isNow && (k === 'direction' ? !!state.direction : state.closed.includes(k));
+        const done = !isNow && state.closed.includes(k);
         // „Sauce – steckt in Bolognese“ (Julia: Bolognese ist Protein und Sauce)
-        const inside = k === 'direction' ? undefined : coveredBy(state, k, own);
+        const inside = coveredBy(state, k, own);
         return (
           <li key={k} ref={isNow ? now : undefined} className={`lust-steps__step${isNow ? ' is-now' : done ? ' is-done' : ''}`}>
             <span className="lust-steps__dot" aria-hidden="true">{done ? <Icon name="check" size={14} /> : i + 1}</span>
             <div className="lust-steps__body">
-              <h2 className="lust-steps__label">
-                {labelOf(k)}{isNow && k !== 'direction' && dir ? <span className="lust-steps__hint"> – passt zu {dir.name}</span> : null}
-              </h2>
-              {done && (
-                <Done names={k === 'direction' ? [dir?.name ?? ''] : names(k)} inside={inside?.name}
-                  onChange={() => set(k === 'direction' ? { ...state, direction: undefined } : reopen(state, k))} />
-              )}
-              {isNow && <Now state={state} step={k} own={own} set={set} />}
+              <h2 className="lust-steps__label">{labelOf(k)}</h2>
+              {done && <Done names={names(k)} inside={inside?.name} onChange={() => set(reopen(state, k))} />}
+              {isNow && <StageOptions key={k} state={state} step={k} own={own} set={set} mini />}
               {/* schon Getipptes („was mit Brokkoli“) steht vorgemerkt da, bis die Stufe dran ist */}
-              {!isNow && !done && k !== 'direction' && !!state.picks[k]?.length && (
+              {!isNow && !done && !!state.picks[k]?.length && (
                 <span className="small muted lust-steps__later">{names(k).join(', ')} vorgemerkt</span>
               )}
             </div>
@@ -72,34 +65,36 @@ function Done({ names, inside, onChange }: { names: string[]; inside?: string; o
   );
 }
 
-/** Unterzeile einer Wahl: vorgekocht, aus welchem Rezept, was es mit abdeckt, wie man es macht */
-function ChoiceInfo({ c }: { c: Choice }) {
-  const time = c.prep?.minutes ? ` · ${mins(c.prep.minutes)}` : '';
-  const with_ = c.also?.length ? ` · mit ${c.also.map((k) => labelOf(k)).join(' und ')}` : '';
-  if (c.ready) return <small className="lust-steps__ready"><Icon name="fridge" size={13} /> im Kühlschrank · {portionCount(c.ready)}{with_}</small>;
-  if (c.recipeId) return <small className="lust-steps__own"><Icon name="book" size={13} /> {c.from ? `aus „${c.from}“` : 'dein Rezept'}{with_}{time}</small>;
-  return c.prep ? <small className="muted">{c.prep.text}{time}</small> : null;
+/** Unterzeile einer Rezept-Karte: vorgekocht, aus welchem Rezept, was es mit abdeckt */
+function CardInfo({ c }: { c: Choice }) {
+  const with_ = c.also?.length ? `mit ${c.also.map(labelOf).join(' und ')}` : '';
+  if (c.ready) return <small className="lust-steps__ready"><Icon name="fridge" size={12} /> {portionCount(c.ready)}{with_ ? ` · ${with_}` : ''}</small>;
+  return <small className="muted">{c.from ? `aus „${c.from}“` : with_ || 'dein Rezept'}</small>;
 }
 
 /**
- * Die Stufe, die dran ist: Richtungen, eine Liste zum Antippen (eins) oder Chips (mehrere, dann „Weiter“). „+ eigene“
- * legt einen Baustein dauerhaft an (wie früher im Baukasten, Julia: „Tomaten bei Beilage“).
+ * Die Stufe, die dran ist (Julia: „die Zutaten ohne die Anweisung“ – wie man es macht, steht am Ende unter „So geht's“):
+ * feste Bausteine als Chips, darunter deine Rezepte als Karussell mit Bild. Bei Kohlenhydrat, Protein und Sauce schließt
+ * ein Tipp die Stufe, bei Beilage und Topping sammelt man bis „Weiter“. „+ eigene“ legt einen Baustein dauerhaft an.
+ * Dieselbe Auswahl im Stepper und unter dem Teller (CravingPlate).
  */
-function Now({ state, step, own, set }: { state: CravingState; step: Step; own: readonly Choice[]; set: (s: CravingState) => void }) {
+export function StageOptions({ state, step, own, set, mini = false }: {
+  state: CravingState; step: SideKind; own: readonly Choice[]; set: (s: CravingState) => void;
+  /** kleines Karussell (Julia: im Stepper „unten mit Mini-Karussell“) */ mini?: boolean;
+}) {
   const hh = householdOf(usePlan());
   const known = useKnownNames();
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState('');
-  if (step === 'direction') {
-    return (
-      <div className="chips">
-        {directionsFor(state, own).map((d) => <button key={d.id} type="button" className="chip" onClick={() => set(chooseDirection(state, d.id, own))}>{d.name}</button>)}
-      </div>
-    );
-  }
+  // kam eine Richtung vom Chip („Bowl“), zeigt Mashi nur Passendes – „alle zeigen“ hebt das für diese Stufe auf
+  const [all, setAll] = useState(false);
+  const dir = directionOf(state.direction);
+  const options = optionsFor(state, step, own, hh, all);
+  const fixed = options.filter((c) => !c.recipeId);
+  const mine = options.filter((c) => c.recipeId);
   const chosen = state.picks[step] ?? [];
-  const options = optionsFor(state, step, own, hh);
   const label = labelOf(step);
+  const multi = MULTI.has(step);
   const choose = (id: string) => set(pick(state, step, id, own));
 
   const addOwn = () => {
@@ -112,51 +107,59 @@ function Now({ state, step, own, set }: { state: CravingState; step: Step; own: 
     }
     if (!chosen.includes(id)) choose(id);
   };
-  const own_ = adding
-    ? (
-      <form className="combo__new" onSubmit={(e) => { e.preventDefault(); addOwn(); }}>
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="z. B. Tomaten" aria-label={`Eigener Baustein: ${label}`} autoFocus enterKeyHint="done" maxLength={30}
-          list="craving-known" />
-        {/* Namen, die es bei dir schon gibt – dann passen Einkauf und Nährwerte (Julia: „passend zu den bisherigen Einträgen“) */}
-        <datalist id="craving-known">{known.map((n) => <option key={n} value={n} />)}</datalist>
-        <button type="submit" className="chip chip--sm">OK</button>
-      </form>
-    )
-    : <button type="button" className="chip chip--sm combo__own" onClick={() => setAdding(true)}><Icon name="plus" size={12} /> eigene</button>;
 
-  if (MULTI.has(step)) {
-    return (
-      <>
-        <div className="chips" role="group" aria-label={label}>
-          {options.map((c) => (
-            <button key={c.id} type="button" className={`chip${chosen.includes(c.id) ? ' is-on' : ''}`} aria-pressed={chosen.includes(c.id)} onClick={() => choose(c.id)}>
-              {c.ready ? <Icon name="fridge" size={14} /> : c.recipeId ? <Icon name="book" size={14} /> : null}{c.name}
-            </button>
-          ))}
-          {own_}
-        </div>
-        <button type="button" className={`btn btn--sm ${chosen.length ? 'btn--primary' : 'btn--ghost'} lust-steps__next`} onClick={() => set(closeStep(state, step))}>
-          {chosen.length ? <>Weiter <Icon name="chevron" size={14} /></> : `Ohne ${label} weiter`}
-        </button>
-      </>
-    );
-  }
   return (
     <>
-      <div className="lust-steps__options">
-        {options.map((c) => (
-          <button key={c.id} type="button" className={`lust-steps__option${chosen.includes(c.id) ? ' is-on' : ''}${c.recipeId ? ' is-own' : ''}`} onClick={() => choose(c.id)}>
-            <strong>{c.name}</strong>
-            <ChoiceInfo c={c} />
+      <div className="chips" role="group" aria-label={label}>
+        {fixed.map((c) => (
+          <button key={c.id} type="button" className={`chip${chosen.includes(c.id) ? ' is-on' : ''}`} aria-pressed={chosen.includes(c.id)} onClick={() => choose(c.id)}>
+            {c.name}
           </button>
         ))}
+        {adding
+          ? (
+            <form className="combo__new" onSubmit={(e) => { e.preventDefault(); addOwn(); }}>
+              <input value={name} onChange={(e) => setName(e.target.value)} placeholder="z. B. Tomaten" aria-label={`Eigener Baustein: ${label}`} autoFocus enterKeyHint="done" maxLength={30}
+                list="craving-known" />
+              {/* Namen, die es bei dir schon gibt – dann passen Einkauf und Nährwerte (Julia: „passend zu den bisherigen Einträgen“) */}
+              <datalist id="craving-known">{known.map((n) => <option key={n} value={n} />)}</datalist>
+              <button type="submit" className="chip chip--sm">OK</button>
+            </form>
+          )
+          : <button type="button" className="chip combo__own" onClick={() => setAdding(true)}><Icon name="plus" size={12} /> eigene</button>}
       </div>
-      <div className="lust-steps__more">
-        {/* „Ohne“ nimmt auch eine frühere Wahl weg – nach „Ändern“ heißt das: doch keins */}
-        <button type="button" className="btn btn--ghost btn--sm" onClick={() => set(closeStep({ ...state, picks: { ...state.picks, [step]: undefined } }, step))}>
-          Ohne {label} weiter
+      {dir && (
+        <button type="button" className="link small lust-steps__all" onClick={() => setAll(!all)}>
+          {all ? `nur, was zu ${dir.name} passt` : 'alle zeigen'}
         </button>
-        {own_}
+      )}
+      {/* deine Rezepte mit Bild (Julia: „eigene Rezepte haben ja Bilder“) – Vorgekochtes zuerst */}
+      {mine.length > 0 && (
+        <ul className={`lust-carousel${mini ? ' lust-carousel--mini' : ''}`} aria-label={`Deine Rezepte: ${label}`}>
+          {mine.map((c) => (
+            <li key={c.id}>
+              <button type="button" className={`lust-card${chosen.includes(c.id) ? ' is-on' : ''}`} aria-pressed={chosen.includes(c.id)} onClick={() => choose(c.id)}>
+                <RecipeImage image={c.image} className="lust-card__img" />
+                <strong className="lust-card__name">{c.name}</strong>
+                <CardInfo c={c} />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="lust-steps__more">
+        {multi
+          ? (
+            <button type="button" className={`btn btn--sm ${chosen.length ? 'btn--primary' : 'btn--ghost'}`} onClick={() => set(closeStep(state, step))}>
+              {chosen.length ? <>Weiter <Icon name="chevron" size={14} /></> : `Ohne ${label} weiter`}
+            </button>
+          )
+          : (
+            // „Ohne“ nimmt auch eine frühere Wahl weg – nach „Ändern“ heißt das: doch keins
+            <button type="button" className="btn btn--ghost btn--sm" onClick={() => set(closeStep({ ...state, picks: { ...state.picks, [step]: undefined } }, step))}>
+              Ohne {label} weiter
+            </button>
+          )}
       </div>
     </>
   );

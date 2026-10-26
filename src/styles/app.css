@@ -1971,26 +1971,16 @@ details.cost-line[open] > summary::after { transform: rotate(-90deg); }
 .lust-steps__step.is-done .lust-steps__dot { border-color: var(--primary); background: var(--primary); color: var(--on-primary); }
 .lust-steps__body { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 .lust-steps__label { margin: 0; line-height: 28px; font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-3); }
-.lust-steps__hint { text-transform: none; letter-spacing: 0; font-weight: 600; }
 .lust-steps__step:not(.is-now):not(.is-done) .lust-steps__label { opacity: 0.7; }
 .lust-steps__done { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-top: -8px; }
 .lust-steps__value { font-weight: 800; color: var(--ink); min-width: 0; overflow-wrap: anywhere; }
-.lust-steps__options { display: flex; flex-direction: column; gap: 8px; }
-.lust-steps__option {
-  display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; min-height: 52px; padding: 8px 14px;
-  border-radius: var(--r-sm); border: 1px solid var(--line); background: var(--surface); color: var(--ink);
-}
-.lust-steps__option.is-on { border-color: var(--primary); background: var(--primary-soft); }
-.lust-steps__next { align-self: flex-start; }
 .lust-steps__later { margin-top: -8px; }
 .craving-done { padding: 16px; gap: 8px; }
 .craving-done__title { margin: 0; font-size: 1.2rem; }
 .craving-done p { margin: 0; }
 .craving-done__how { margin: 6px 0 0; font-weight: 700; }
 .craving-done__steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; font-size: 0.92rem; }
-.lust-steps__option.is-own { border-color: var(--primary-soft); }
 .lust-steps__ready { display: inline-flex; align-items: center; gap: 4px; color: var(--primary-press); font-weight: 700; }
-.lust-steps__own { display: inline-flex; align-items: center; gap: 4px; color: var(--primary-text); }
 /* „Auch als Baustein“ am Rezept – unter dem Vorkoch-Bereich, gleiche Trennlinie */
 .blocks__title { display: inline-flex; align-items: center; gap: 8px; margin: 0; }
 .blocks__title svg { color: var(--art); }
@@ -2022,3 +2012,75 @@ details.cost-line[open] > summary::after { transform: rotate(-90deg); }
 .blocks__more { font-weight: 400; }
 .blocks__select { min-height: 36px; max-width: 100%; padding: 0 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); font: inherit; font-size: 0.85rem; color: var(--ink); }
 .blocks__pairs { margin-top: 2px; }
+/* Stepper: „alle zeigen“ unter den Chips; deine Rezepte als Karussell mit Bild (Julia) – wischen, nichts ragt aus der Seite */
+.lust-steps__all { align-self: flex-start; margin-top: -4px; }
+.lust-carousel { list-style: none; margin: 0; padding: 2px 2px 6px; display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; max-width: 100%; }
+.lust-carousel > li { flex: none; scroll-snap-align: start; }
+.lust-card {
+  width: 128px; display: flex; flex-direction: column; gap: 4px; padding: 6px; text-align: left;
+  border-radius: var(--r-sm); border: 1px solid var(--line); background: var(--surface); color: var(--ink);
+}
+.lust-card.is-on { border-color: var(--primary); background: var(--primary-soft); }
+.lust-card__img { border-radius: 8px; }
+.lust-card__name { font-size: 0.85rem; line-height: 1.25; overflow-wrap: anywhere; }
+/* ── Teller (Julia: Idee A „auf dem Tischset“): Felder je Stufe, Schilder darauf, Pinselstrich am Feld, das dran ist ── */
+.craving-top { display: inline-flex; align-items: center; gap: 8px; }
+.view-toggle { display: inline-flex; padding: 3px; border-radius: 999px; background: var(--surface-2); }
+.view-toggle button { width: 40px; height: 32px; display: grid; place-items: center; border-radius: 999px; }
+.view-toggle button.is-on { background: var(--surface); box-shadow: var(--shadow); }
+.view-toggle svg { fill: none; stroke: var(--ink-3); stroke-width: 1.8; stroke-linecap: round; }
+.view-toggle .is-on svg { stroke: var(--art); }
+.craving-plate { display: flex; flex-direction: column; gap: 12px; }
+.plate-mat {
+  position: relative; display: flex; justify-content: center; padding: 16px 40px; border-radius: 28px; background: var(--sand);
+  background-image: repeating-linear-gradient(0deg, rgb(255 255 255 / 0.35) 0 1px, transparent 1px 9px);
+}
+.plate-mat__fork, .plate-mat__knife { position: absolute; top: 50%; transform: translateY(-50%); fill: none; stroke: var(--art); stroke-width: 1.6; stroke-linecap: round; }
+.plate-mat__fork { left: 10px; }
+.plate-mat__knife { right: 10px; }
+.plate { position: relative; width: 100%; max-width: 300px; aspect-ratio: 1; filter: drop-shadow(0 8px 14px rgb(45 71 72 / 0.14)); }
+.plate--small { max-width: 230px; }
+.plate__svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.plate__rim { fill: var(--surface); stroke: var(--line); stroke-width: 2; }
+.plate__f { stroke: var(--surface); stroke-width: 5; }
+.plate__f--carb { fill: var(--butter); }
+.plate__f--protein { fill: var(--peach); }
+.plate__f--sauce { fill: var(--rose); }
+.plate__f--veg { fill: var(--mint); }
+.plate__f--topping { fill: var(--sand); }
+.plate__f.is-empty { fill: var(--surface-2); }
+.plate__sign {
+  position: relative; flex: none; isolation: isolate; width: max-content; max-width: 140%; padding: 7px 8px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; text-align: center; line-height: 1.2;
+  border-radius: 10px; background: var(--surface); border: 1px solid var(--line); color: var(--ink); font-size: 0.82rem; font-weight: 800;
+}
+/* Abstand zum Rand überall gleich (Julia) – Zeilenhöhe bringt oben/unten schon gut 1 px mit; die Tippfläche bleibt groß */
+.plate__sign::after { content: ''; position: absolute; inset: -8px; }
+/* breiter statt dreizeilig (Julia): 140 % des Platzes = 42 % des Tellers; längere Namen wachsen nach außen, nie auf den mittleren Kreis (Julia: lieber über den Tellerrand) */
+/* der Platz ist so hoch wie nichts: oben hängt das Schild darüber, unten darunter; „safe center“ lässt zu breite Schilder
+   nur zur Außenseite überstehen (links dank rtl nach links; row-reverse reicht nicht, safe weicht zur Schreibrichtung aus) – ohne Unterstützung bleibt es einfach mittig */
+.plate__slot { position: absolute; height: 0; display: flex; justify-content: center; justify-content: safe center; pointer-events: none; }
+.plate__slot > .plate__sign { pointer-events: auto; }
+.plate__slot--carb, .plate__slot--protein { align-items: flex-end; }
+.plate__slot--veg, .plate__slot--sauce { align-items: flex-start; }
+.plate__slot--carb, .plate__slot--veg { direction: rtl; }
+.plate__slot > .plate__sign { direction: ltr; }
+.plate__slot--topping { align-items: center; }
+.plate__sign--topping { max-width: 100%; }
+.plate__sign small { font-size: 0.6rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); }
+.plate__sign.is-empty, .plate__sign.is-now { background: transparent; border-color: transparent; }
+.plate__sign.is-empty .plate__name { font-size: 1.3rem; font-weight: 400; color: var(--ink-3); }
+.plate__sign.is-now small { color: var(--ink); }
+/* nur an Bindestrich oder Leerzeichen umbrechen – „Tomate n-…“ und „Toma-ten“ sahen kaputt aus */
+.plate__name { overflow-wrap: break-word; hyphens: manual; }
+.plate--small .plate__sign { font-size: 0.74rem; padding: 5px 6px; }
+.plate__name svg { color: var(--art); vertical-align: -1px; }
+/* der Pinselstrich aus der Navigation hinter dem Feld, das dran ist */
+.plate__brush { position: absolute; left: -10px; top: 0; z-index: -1; width: calc(100% + 20px); height: 100%; fill: var(--nav-brush); }
+.plate-sheet { display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: var(--r-lg); background: var(--surface); box-shadow: var(--shadow); }
+.plate-sheet__title { margin: 0; font-size: 1.05rem; }
+.combo-stepper__top { display: flex; justify-content: flex-end; }
+/* Mini-Karussell im Stepper (Julia) */
+.lust-carousel--mini .lust-card { width: 96px; padding: 4px; }
+.lust-carousel--mini .lust-card__name { font-size: 0.78rem; }
+.lust-carousel--mini .lust-card small { font-size: 0.7rem; }

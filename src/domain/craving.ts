@@ -3,7 +3,7 @@ import type { Pantry } from './pantry';
 import { partOf, partsOf, stepPart } from './parts';
 import { currentContent, totalMinutes } from './recipe';
 import { SIDE_KINDS, SIDES, comboOf, prepOf, sideIngredient, sideOf, sidesOfKind, type SideKind, type SidePrep } from './sides';
-import type { Ingredient, Recipe, RecipeContent, Step } from './types';
+import type { Ingredient, Recipe, RecipeContent, RecipeImage, Step } from './types';
 
 /**
  * „Worauf hast du Lust?“ (Julia: „ich sag Taco, dann schlägt es mir das passende Protein vor, dann die Beilage, dann das
@@ -142,6 +142,8 @@ export interface Choice {
   directions?: readonly string[];
   /** Portionen, die schon gekocht im Kühlschrank stehen (Vorgekochtes, nicht gefroren) */
   ready?: number;
+  /** nur Rezepte: ihr Bild – im Stepper stehen sie als Karussell mit Bild (Julia) */
+  image?: RecipeImage;
   /** nur Teile: aus welchem Rezept („Honig-Senf-Dip“ aus „Knusprige Hähnchenstreifen“) */
   from?: string;
   /** weitere Stufen, die es mit abdeckt (Bolognese: Protein + Sauce) – gewählt sind die dann erledigt */
@@ -174,6 +176,7 @@ export function recipeChoices(recipes: readonly Recipe[], pantry?: Pick<Pantry, 
       const minutes = b.part ? c.steps.filter((st) => stepPart(st, c) === b.part).reduce((n, st) => n + (st.timerMinutes ?? 0), 0) : totalMinutes(c);
       return [{
         id: recipeChoiceId(r.id, b.part), name: b.part ?? c.title, kind: b.kind, recipeId: r.id, directions: [...new Set(b.directions.map(normDirection))],
+        ...(r.image ? { image: r.image } : {}),
         prep: { text: 'nach deinem Rezept', minutes }, ...(ready > 0 ? { ready } : {}), ...(b.part ? { from: c.title } : {}),
         ...(b.also?.length ? { also: b.also } : {}), ...(r.pairs?.length ? { pairs: r.pairs } : {}),
         ...(b.replaces ? { replaces: b.replaces } : {}),
@@ -197,25 +200,21 @@ const fits = (id: string, d: Direction, own: readonly Choice[]) => {
   return STAGES.some((k) => d.options[k].includes(id));
 };
 
-/** Was als Nächstes dran ist: erst die Richtung, dann die Stufen der Reihe nach – undefined = fertig */
-export function currentStep(s: CravingState): 'direction' | SideKind | undefined {
-  if (!s.direction) return 'direction';
+/**
+ * Was als Nächstes dran ist: die Stufen der Reihe nach – undefined = fertig. Die Richtung ist kein eigener Schritt
+ * (Julia: „es passt, wenn es einfach beginnt“): sie kommt vom Chip oder aus dem Textfeld und filtert nur im Hintergrund.
+ */
+export function currentStep(s: CravingState): SideKind | undefined {
   return STAGES.find((k) => !s.closed.includes(k));
-}
-
-/** Richtungen zur Auswahl: die, in die alles Gewählte passt („Hähnchen“ → Taco, Bowl, Pasta …) – passt keine, alle */
-export function directionsFor(s: CravingState, own: readonly Choice[] = []): Direction[] {
-  const picks = allPicks(s);
-  const fit = DIRECTIONS.filter((d) => picks.every((id) => fits(id, d, own)));
-  return fit.length ? fit : [...DIRECTIONS];
 }
 
 /**
  * Was in einer Stufe zur Wahl steht: zuerst Vorgekochtes aus dem Kühlschrank, dann deine Rezepte, dann die festen
  * Bausteine der Richtung – bei denen rückt nach vorn, was gut zum schon Gewählten passt.
  */
-export function optionsFor(s: CravingState, kind: SideKind, own: readonly Choice[] = [], household?: Pick<Household, 'sidePrep' | 'customSides'>): Choice[] {
-  const dir = directionOf(s.direction);
+export function optionsFor(s: CravingState, kind: SideKind, own: readonly Choice[] = [], household?: Pick<Household, 'sidePrep' | 'customSides'>, all = false): Choice[] {
+  // „alle zeigen“: die Richtung filtert dann nicht – sortiert wird trotzdem nach dem, was passt
+  const dir = all ? undefined : directionOf(s.direction);
   // auch in jeder weiteren Stufe, die es abdeckt – so steht die Bolognese schon beim Protein
   const mine = own.filter((o) => coversOf(o).includes(kind) && (!dir || fits(o.id, dir, own)));
   // eigene Bausteine (Julia: „Tomaten bei Beilage“) passen überall – sie stehen hinten
@@ -498,7 +497,7 @@ export function baseChoice(r: Recipe): Choice {
   return {
     id: recipeChoiceId(r.id), name: c.title, kind, recipeId: r.id,
     directions: b ? [...new Set(b.directions.map(normDirection))] : [], ...(also.length ? { also } : {}),
-    ...(r.pairs?.length ? { pairs: r.pairs } : {}),
+    ...(r.pairs?.length ? { pairs: r.pairs } : {}), ...(r.image ? { image: r.image } : {}),
   };
 }
 

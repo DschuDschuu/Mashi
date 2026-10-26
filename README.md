@@ -17,7 +17,8 @@ Live: <https://dschudschuu.github.io/Mashi/> · installierbar als App (PWA), fun
   sich als Baustein markieren – auch für mehrere Stufen (Bolognese = Protein und Sauce) oder statt eines festen Bausteins
   (deine Guacamole), mit „Passt gut zu“ (Bolognese → Spätzle, Parmesan); Vorgekochtes steht vorn. Am Ende: jetzt kochen, in den Wochenplan
   oder als Rezept speichern – nach dem Kochen fragt die Startseite „Wie war's?“, erst dann kommt es ins Kochbuch.
-  Darunter „Passt dazu aus deinem Kochbuch“. Derselbe Stepper ist der Baukasten im Wochenplan (Grundlage schon gewählt)
+  In der Liste darunter „Passt dazu aus deinem Kochbuch“. Ansicht umschaltbar: Teller (jede Stufe ein Feld, antippen öffnet sie) oder Liste
+  (Stepper mit kleinem Karussell). Derselbe Baukasten steckt im Wochenplan (Grundlage schon gewählt)
 - **Kochbuch** mit Versionen: eigene Rezepte, Import aus Text oder Foto (Texterkennung im Browser),
   KI-Ideen erst testen, Bewertung, „Zutaten vereinheitlichen“ (eine Schreibweise je Zutat)
 - **Vorkoch-Woche**: eine oder zwei Grundlagen (Bolognese, Curry …) an wählbaren Kochtagen vorkochen, unter der Woche
