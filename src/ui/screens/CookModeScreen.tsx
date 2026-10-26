@@ -216,7 +216,9 @@ export function CookModeScreen({ id, servings, variants, prep, mealId }: {
       }
       cookedToast(result);
     } else cookedToast(markCooked(recipe.id, servings ?? c.servings, amounts, pick));
-    if (recipe.status === 'zum_testen' || recipe.status === 'bewaehrt') navigate(`/rezept/${recipe.id}/test`, { replace: true });
+    // Probiergericht: erst essen, dann bewerten (Julia: „ich brauch Zeit zwischen Kochen und Essen“) – die Startseite fragt
+    if (recipe.trial) navigate('/', { replace: true });
+    else if (recipe.status === 'zum_testen' || recipe.status === 'bewaehrt') navigate(`/rezept/${recipe.id}/test`, { replace: true });
     else goBack(`/rezept/${recipe.id}`);
   };
 

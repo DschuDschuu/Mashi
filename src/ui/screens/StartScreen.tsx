@@ -6,6 +6,7 @@ import { addToPlan, useFoodTable, usePantry, usePlan, useRecipes } from '../../d
 import { navigate } from '../../router';
 import { Empty } from '../components/Controls';
 import { CravingAsk } from '../components/CravingAsk';
+import { TrialAsk } from '../components/TrialAsk';
 import { Icon } from '../components/Icon';
 import { PageIntro } from '../components/PageIntro';
 import { UseUpBadge } from '../components/UseUpBadge';
@@ -56,6 +57,7 @@ export function StartScreen() {
       </header>
       {/* statt acht Einführungskarten ein kurzes Willkommen – jede Seite hat ihre eigene Tour */}
       <PageIntro id="start" />
+      <TrialAsk />
       {expiring.length > 0 && (
         <button className="useup-banner" onClick={() => navigate('/reste')}>
           <Icon name="clock" size={18} />

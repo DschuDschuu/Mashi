@@ -194,6 +194,12 @@ export interface Recipe {
    * benennt eine neue Version einen Teil um, zieht die Markierung mit (parts.ts: followBlockParts).
    */
   blocks?: RecipeBlock[];
+  /**
+   * Probiergericht aus „Worauf hast du Lust?“ (Julia: „ich teste erst, wie es ist, dann speicher ich es“): ein echtes
+   * Rezept, damit Kochmodus, Plan und Einkaufsliste wie immer funktionieren – aber noch nicht im Kochbuch. Nach dem
+   * Kochen fragt die Startseite „Wie war's?“; speichern nimmt die Markierung weg, „Nicht speichern“ löscht es.
+   */
+  trial?: boolean;
 }
 
 /** Ein Rezept (ohne part) oder ein Teil davon als Baustein */

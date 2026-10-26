@@ -1,9 +1,9 @@
 import type { Household } from './mealplan';
 import type { Pantry } from './pantry';
-import { partsOf, stepPart } from './parts';
+import { partOf, partsOf, stepPart } from './parts';
 import { currentContent, totalMinutes } from './recipe';
-import { SIDE_KINDS, SIDES, prepOf, sideOf, type SideKind, type SidePrep } from './sides';
-import type { Recipe } from './types';
+import { SIDE_KINDS, SIDES, prepOf, sideIngredient, sideOf, type SideKind, type SidePrep } from './sides';
+import type { Ingredient, Recipe, RecipeContent, Step } from './types';
 
 /**
  * „Worauf hast du Lust?“ (Julia: „ich sag Taco, dann schlägt es mir das passende Protein vor, dann die Beilage, dann das
@@ -140,17 +140,19 @@ export const recipeChoiceId = (recipeId: string, part?: string) => (part ? `reze
 
 /**
  * Deine Rezepte als Wahl (Julia: „wenn ich ein Rezept als Beilage tagge, soll es im Baum auftauchen“) – nur, was als
- * Baustein markiert ist. Steht davon etwas vorgekocht im Kühlschrank, zählt Mashi die Portionen mit.
+ * Baustein markiert ist. Steht davon etwas vorgekocht im Kühlschrank, zählt Mashi die Portionen mit – ohne die, die
+ * im Wochenplan schon für einen Abend verplant sind (`reserved`, je Grundlage).
  */
-export function recipeChoices(recipes: readonly Recipe[], pantry?: Pick<Pantry, 'items'>): Choice[] {
+export function recipeChoices(recipes: readonly Recipe[], pantry?: Pick<Pantry, 'items'>, reserved?: ReadonlyMap<string, number>): Choice[] {
   return recipes.filter((r) => !r.archivedAt && r.status !== 'ki_entwurf' && r.blocks?.length).flatMap((r) => {
     const c = currentContent(r);
     const parts = partsOf(c);
     return r.blocks!.flatMap((b): Choice[] => {
       if (b.part && !parts.includes(b.part)) return []; // Teil gibt es (noch) nicht – nichts anbieten
-      const ready = (pantry?.items ?? [])
+      const fresh = (pantry?.items ?? [])
         .filter((it) => it.recipeId === r.id && (it.part ?? undefined) === b.part && !it.frozenAt)
         .reduce((n, it) => n + (it.amount ?? 0), 0);
+      const ready = b.part ? fresh : Math.max(0, fresh - (reserved?.get(r.id) ?? 0));
       // ein Teil: nur seine Schritte mit Uhr zählen – das ganze Rezept dauert länger als die Sauce darin
       const minutes = b.part ? c.steps.filter((st) => stepPart(st, c) === b.part).reduce((n, st) => n + (st.timerMinutes ?? 0), 0) : totalMinutes(c);
       return [{
@@ -320,4 +322,97 @@ export function guessKind(name: string): SideKind {
   if (/topping|crunch|kerne|nuesse|crumble|krokant|streusel/.test(n)) return 'topping';
   if (/salat|gemuese|kohl|slaw|pickles|eingelegt/.test(n)) return 'veg';
   return 'protein';
+}
+
+/**
+ * Aus dem Zusammengeklickten ein Rezept machen (Julia: „im Wochenplan oder spontan zum Kochen, kann dann als Rezept
+ * gespeichert werden“) – damit Kochmodus, Einkaufsliste und Vorrat ohne Sonderweg damit rechnen:
+ * - feste Bausteine werden Zutaten (Menge pro Portion aus den Einstellungen) mit ihrer Zubereitung als Schritt,
+ * - ein ganzes Rezept wird eine verknüpfte Zutat in Portionen (wie eine Grundlage – Vorgekochtes deckt sie),
+ * - ein Teil bringt seine Zutaten und Schritte mit (umgerechnet auf die Portionen).
+ * Schritte: das Längste zuerst, damit alles gleichzeitig fertig ist.
+ */
+export function cravingContent(s: CravingState, opts: {
+  own?: readonly Choice[]; recipes?: readonly Recipe[]; household?: Pick<Household, 'sides' | 'sidePrep'>;
+  servings: number; title: string; newId: () => string;
+}): RecipeContent {
+  const { own = [], recipes = [], household, servings, newId } = opts;
+  const ingredients: Ingredient[] = [];
+  const steps: { minutes: number; list: Step[] }[] = [];
+  for (const c of cravingChoices(s, own, household)) {
+    const recipe = c.recipeId ? recipes.find((r) => r.id === c.recipeId) : undefined;
+    if (recipe && c.from) {
+      // ein Teil („Testdip“): Zutaten und Schritte übernehmen, auf die Portionen umgerechnet
+      const rc = currentContent(recipe);
+      const part = c.name;
+      const f = servings / (rc.servings || 1);
+      for (const i of rc.ingredients.filter((x) => partOf(x) === part)) ingredients.push({ ...i, id: newId(), part, ...(i.amount != null ? { amount: Math.round(i.amount * f * 10) / 10 } : {}) });
+      const partSteps = rc.steps.filter((st) => stepPart(st, rc) === part).map((st) => ({ id: newId(), text: st.text, part, ...(st.timerMinutes ? { timerMinutes: st.timerMinutes } : {}) }));
+      steps.push({ minutes: c.prep?.minutes ?? 0, list: partSteps });
+    } else if (recipe) {
+      ingredients.push({ id: newId(), name: c.name, amount: servings, unit: 'Portion', recipeId: recipe.id });
+      const minutes = c.ready ? 5 : c.prep?.minutes ?? 0;
+      steps.push({ minutes, list: [{ id: newId(), text: c.ready ? `${c.name} aus dem Kühlschrank aufwärmen` : `${c.name} nach deinem Rezept zubereiten`, ...(minutes ? { timerMinutes: minutes } : {}) }] });
+    } else {
+      const ing = sideIngredient(c.id, servings, household);
+      if (ing) ingredients.push({ ...ing, id: newId() });
+      const minutes = c.prep?.minutes ?? 0;
+      steps.push({ minutes, list: [{ id: newId(), text: c.prep?.text ? `${c.name}: ${c.prep.text}` : c.name, ...(minutes ? { timerMinutes: minutes } : {}) }] });
+    }
+  }
+  const ordered = [...steps].sort((a, b) => b.minutes - a.minutes);
+  return {
+    title: opts.title.trim() || cravingTitle(s, own), description: cravingText(s, own), servings,
+    prepMinutes: 0, cookMinutes: Math.max(0, ...steps.map((x) => x.minutes)), difficulty: 1,
+    ingredients, steps: ordered.flatMap((x) => x.list).length ? ordered.flatMap((x) => x.list) : [{ id: newId(), text: '' }],
+    categories: [], tags: directionOf(s.direction) ? [directionOf(s.direction)!.name] : [], devices: [],
+  };
+}
+
+/**
+ * Probiergerichte, die liegen geblieben sind: nie gekocht, nicht (mehr) im Plan und älter als eine Woche – die räumt
+ * Mashi beim Start weg, damit sich keine unsichtbaren Rezepte sammeln.
+ */
+export function staleTrials(recipes: readonly Recipe[], plannedIds: ReadonlySet<string>, now: Date): string[] {
+  const week = 7 * 24 * 60 * 60 * 1000;
+  return recipes
+    .filter((r) => r.trial && !r.lastCookedAt && !plannedIds.has(r.id) && now.getTime() - new Date(r.createdAt).getTime() > week)
+    .map((r) => r.id);
+}
+
+/**
+ * „Passt dazu aus deinem Kochbuch“ (Julia: „die Möglichkeit, sich von Rezepten inspirieren zu lassen“): fertige
+ * Rezepte, die zur bisherigen Auswahl passen. Jeder gewählte Baustein, der als Zutat drin ist oder im Titel steht,
+ * zählt einen Punkt (gleiches Lebensmittel über keyOfName, sonst am Namen: „Hähnchenbrust“ trifft „Hähnchenbrustfilet“),
+ * die Richtung im Titel oder in den Stichworten („Bowl“, „Curry“) einen. Bei bis zu zwei Angaben reicht ein Punkt
+ * („Pasta mit Pesto“ → die Avocado-Pasta), ab drei braucht es zwei; mehr Punkte, Favoriten und gut Bewertetes zuerst.
+ */
+export function matchingRecipes(s: CravingState, opts: {
+  recipes: readonly Recipe[]; own?: readonly Choice[]; keyOf?: (name: string) => string | undefined; limit?: number;
+}): Recipe[] {
+  const { recipes, own = [], keyOf = () => undefined, limit = 4 } = opts;
+  const dir = directionOf(s.direction);
+  const picks = cravingChoices(s, own);
+  const signals = picks.length + (dir ? 1 : 0);
+  if (!signals) return [];
+  const used = new Set(picks.flatMap((c) => c.recipeId ?? []));
+  const rated = (r: Recipe) => [...r.feedback].sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]?.rating ?? 0;
+  return recipes
+    .filter((r) => !r.archivedAt && !r.trial && !r.fromBase && r.status !== 'ki_entwurf' && !used.has(r.id))
+    .map((r) => {
+      const c = currentContent(r);
+      const ingredients = c.ingredients.map((i) => ({ key: keyOf(i.name), words: wordsOf(i.name), recipeId: i.recipeId }));
+      const has = (pick: Choice) => ingredients.some((i) => (pick.recipeId && i.recipeId === pick.recipeId)
+        || (!pick.recipeId && ((!!i.key && i.key === keyOf(pick.name)) || wordsOf(pick.name).some((w) => i.words.some((iw) => iw.startsWith(w))))));
+      const text = [c.title, ...c.tags].join(' ');
+      // auch in zusammengesetzten Wörtern („Hähnchencurry“, „Buddhabowl“) – ab 4 Buchstaben, sonst steckt „Dal“ überall drin
+      const dirWords = [dir?.name ?? '', ...(dir?.words ?? [])].flatMap(wordsOf);
+      const dirHit = !!dir && wordsOf(text).some((t) => dirWords.some((w) => hit(t, w) > 0 || (w.length >= 4 && t.includes(w))));
+      const inTitle = (pick: Choice) => !pick.recipeId && wordsOf(pick.name).some((w) => wordsOf(c.title).some((t) => t.includes(w)));
+      return { r, score: picks.filter((pk) => has(pk) || inTitle(pk)).length + (dirHit ? 1 : 0) };
+    })
+    .filter((x) => x.score >= (signals >= 3 ? 2 : 1))
+    .sort((a, b) => b.score - a.score || Number(b.r.favorite) - Number(a.r.favorite) || rated(b.r) - rated(a.r))
+    .slice(0, limit)
+    .map((x) => x.r);
 }

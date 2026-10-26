@@ -2001,3 +2001,21 @@ details.cost-line[open] > summary::after { transform: rotate(-90deg); }
 .blocks__row { display: flex; flex-direction: column; gap: 6px; }
 .blocks__card { display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: var(--r-sm); background: var(--surface-2); }
 .blocks__card .chip:not(.is-on) { background: var(--surface); }
+/* Ende des Steppers: Name, Portionen, Kochen/Plan/Speichern */
+.craving-done__name input { font-size: 1.1rem; font-weight: 800; }
+.craving-done__servings { margin-top: 6px; }
+.craving-done__actions { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+.craving-done__row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.craving-done__row .btn { padding: 0 8px; white-space: normal; line-height: 1.2; }
+.craving-done__note { margin: 2px 0 0; }
+/* „Wie war's?“ für ein gekochtes Probiergericht – oben auf der Startseite */
+.trial-ask { display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; border-radius: var(--r); background: var(--butter); }
+.trial-ask__title { margin: 0; font-size: 1rem; }
+.trial-ask__stars { display: flex; gap: 2px; margin-left: -10px; color: var(--star); }
+.trial-ask__actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.trial-note { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 8px 10px; padding: 12px 14px; border-radius: var(--r-sm); background: var(--butter); }
+.trial-note > svg { color: var(--art); }
+.trial-note .btn { grid-column: 2; justify-self: start; }
+/* „Passt dazu aus deinem Kochbuch“ unter dem Stepper */
+.craving-ideas { display: flex; flex-direction: column; gap: 8px; }
+.craving-ideas__title { margin: 0; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.78rem; }

@@ -41,7 +41,8 @@ export function filterRecipes(
   const bases = f.basesOnly || hideBases ? transformCounts(recipes) : undefined;
 
   return recipes.filter((r) => {
-    if (r.archivedAt || r.fromBase) return false; // Verwandlungen stehen unter ihrer Grundlage
+    // Verwandlungen stehen unter ihrer Grundlage; Probiergerichte kommen erst nach „Wie war's?“ ins Kochbuch
+    if (r.archivedAt || r.fromBase || r.trial) return false;
     if (f.statuses?.length ? !f.statuses.includes(r.status) : !isInCookbook(r.status)) return false;
     if (f.favoritesOnly && !r.favorite) return false;
     if (f.basesOnly && !bases!.has(r.id)) return false;

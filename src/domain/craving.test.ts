@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   DIRECTIONS, EMPTY_CRAVING, STAGES, chooseDirection, closeStep, cravingSteps, cravingText, cravingTitle, currentStep,
-  directionsFor, guessKind, optionsFor, pick, recipeChoiceId, recipeChoices, reopen, understand,
+  cravingContent, directionsFor, guessKind, matchingRecipes, optionsFor, pick, recipeChoiceId, recipeChoices, reopen, staleTrials, understand,
 } from './craving';
 import { followBlockParts } from './parts';
 import { withNewVersion } from './recipe';
@@ -175,5 +175,105 @@ describe('Markierung folgt dem umbenannten Teil', () => {
     const r = { ...recipe('r9', 'T', [{ part: 'Dip', kind: 'sauce', directions: [] }]), versions: [{ id: 'v', number: 1, createdAt: '', author: 'nutzer' as const, content: before }] };
     const next = withNewVersion(r, content('T', [ing('a', 'Joghurt', 'Soße'), ing('b', 'Knoblauch', 'Soße'), ing('c', 'Brot')]), 'nutzer');
     expect(next.blocks).toEqual([{ part: 'Soße', kind: 'sauce', directions: [] }]);
+  });
+});
+
+describe('Aus dem Gericht ein Rezept machen', () => {
+  let n = 0;
+  const newId = () => `x${++n}`;
+
+  it('feste Bausteine werden Zutaten (Menge × Portionen) mit Schritten, das Längste zuerst', () => {
+    const s = closeStep(closeStep(pick(pick(chooseDirection(EMPTY_CRAVING, 'bowl'), 'carb', 'reis'), 'protein', 'tofu'), 'sauce'), 'veg');
+    const c = cravingContent(closeStep(s, 'topping'), { servings: 2, title: ' Meine Bowl ', newId });
+    expect(c.title).toBe('Meine Bowl');
+    expect(c.servings).toBe(2);
+    expect(c.ingredients.map(({ name, amount, unit }) => ({ name, amount, unit }))).toEqual([
+      { name: 'Reis', amount: 150, unit: 'g' }, { name: 'Tofu', amount: 200, unit: 'g' },
+    ]);
+    // Reis (15 Min.) vor Tofu (10 Min.)
+    expect(c.steps.map((st) => st.timerMinutes)).toEqual([15, 10]);
+    expect(c.steps[0].text).toContain('Reis');
+    expect(c.tags).toEqual(['Bowl']);
+    expect(c.cookMinutes).toBe(15);
+  });
+
+  it('ganzes Rezept → verknüpfte Zutat in Portionen; Teil → seine Zutaten (umgerechnet) und Schritte', () => {
+    const own = recipeChoices([streifen, dips]);
+    let s = pick(chooseDirection(EMPTY_CRAVING, 'taco'), 'protein', 'rezept:r1');
+    s = pick(s, 'sauce', 'rezept:r2:Testdip');
+    const c = cravingContent(s, { own, recipes: [streifen, dips], servings: 4, title: '', newId });
+    expect(c.ingredients.find((i) => i.recipeId === 'r1')).toMatchObject({ name: 'Knusprige Teststreifen', amount: 4, unit: 'Portion' });
+    // Testplatte ist für 2 Portionen: 100 g Joghurt → 200 g für 4
+    expect(c.ingredients.find((i) => i.name === 'Joghurt')).toMatchObject({ amount: 200, part: 'Testdip' });
+    expect(c.ingredients.some((i) => i.name === 'Brot')).toBe(false);
+    expect(c.title).toBe('Taco mit Knusprige Teststreifen');
+  });
+
+  it('Vorgekochtes: nur aufwärmen', () => {
+    const own = recipeChoices([streifen], { items: [{ id: 'p', name: 'x', amount: 4, unit: 'Stück', addedAt: '', recipeId: 'r1' }] });
+    const c = cravingContent(pick(chooseDirection(EMPTY_CRAVING, 'taco'), 'protein', 'rezept:r1'), { own, recipes: [streifen], servings: 2, title: 'T', newId });
+    expect(c.steps.some((st) => st.text === 'Knusprige Teststreifen aus dem Kühlschrank aufwärmen')).toBe(true);
+  });
+});
+
+describe('Probiergerichte aufräumen', () => {
+  const now = new Date('2026-10-26T12:00:00Z');
+  const t = (id: string, extra: Partial<Recipe>) => ({ ...recipe(id, 'T'), trial: true, createdAt: '2026-10-01T00:00:00Z', ...extra });
+  it('nur alt, nie gekocht und nicht eingeplant', () => {
+    const list = [t('alt', {}), t('frisch', { createdAt: '2026-10-25T00:00:00Z' }), t('gekocht', { lastCookedAt: '2026-10-02' }), t('plan', {}), recipe('normal', 'N')];
+    expect(staleTrials(list, new Set(['plan']), now)).toEqual(['alt']);
+  });
+});
+
+describe('Passt dazu aus deinem Kochbuch', () => {
+  const r = (id: string, title: string, names: string[], extra: Partial<Recipe> = {}) => ({ ...recipe(id, title, undefined, names.map((n, i) => ing(`${id}${i}`, n))), ...extra });
+  const bowl = r('b', 'Testbowl mit Tofu', ['Reis', 'Tofu', 'Gurke']);
+  const curry = r('c', 'Testcurry', ['Reis', 'Kichererbsen']);
+  const tofuPfanne = r('t', 'Tofupfanne', ['Tofu', 'Paprika']);
+  const archived = { ...r('a', 'Alte Bowl', ['Reis', 'Tofu']), archivedAt: '2026-01-01' };
+  const trial = { ...r('p', 'Probier-Bowl', ['Reis', 'Tofu']), trial: true };
+
+  it('zählt gewählte Bausteine als Zutaten und die Richtung im Titel – mindestens zwei Treffer', () => {
+    const s = pick(pick(chooseDirection(EMPTY_CRAVING, 'bowl'), 'carb', 'reis'), 'protein', 'tofu');
+    // Curry (nur Reis) und Tofupfanne (nur Tofu) haben je einen Treffer – zu wenig bei drei Wahlen
+    expect(matchingRecipes(s, { recipes: [curry, tofuPfanne, bowl, archived, trial] }).map((x) => x.id)).toEqual(['b']);
+  });
+
+  it('am Namen: „Hähnchenbrust“ trifft „Hähnchenbrustfilet“; mit einer Wahl reicht ein Treffer', () => {
+    const h = r('h', 'Irgendwas', ['Hähnchenbrustfilet']);
+    expect(matchingRecipes(pick(EMPTY_CRAVING, 'protein', 'haehnchen'), { recipes: [h, curry] }).map((x) => x.id)).toEqual(['h']);
+  });
+
+  it('gleiches Lebensmittel über keyOf („Basmatireis“ = Reis)', () => {
+    const basmati = r('m', 'Irgendwas', ['Basmatireis', 'Tofu']);
+    const keyOf = (n: string) => (/reis$/i.test(n) ? 'food:reis' : undefined);
+    // drei Angaben → zwei Treffer nötig: ohne keyOf trifft nur Tofu
+    const s = pick(pick(chooseDirection(EMPTY_CRAVING, 'bowl'), 'carb', 'reis'), 'protein', 'tofu');
+    expect(matchingRecipes(s, { recipes: [basmati], keyOf }).map((x) => x.id)).toEqual(['m']);
+    expect(matchingRecipes(s, { recipes: [basmati] }).map((x) => x.id)).toEqual([]);
+  });
+
+  it('nichts gewählt → nichts; Favoriten zuerst', () => {
+    expect(matchingRecipes(EMPTY_CRAVING, { recipes: [bowl] })).toEqual([]);
+    const fav = { ...r('f', 'Lieblingscurry', ['Reis']), favorite: true };
+    expect(matchingRecipes(chooseDirection(EMPTY_CRAVING, 'curry'), { recipes: [curry, fav] }).map((x) => x.id)).toEqual(['f', 'c']);
+  });
+});
+
+describe('Vorgekochtes aus dem Wochenplan', () => {
+  it('verplante Portionen zählen nicht als „im Kühlschrank“', () => {
+    const pantry = { items: [{ id: 'p', name: 'x', amount: 3, unit: 'Stück' as const, addedAt: '', recipeId: 'r1' }] };
+    expect(recipeChoices([streifen], pantry, new Map([['r1', 2]]))[0].ready).toBe(1);
+    expect(recipeChoices([streifen], pantry, new Map([['r1', 5]]))[0].ready).toBeUndefined();
+  });
+});
+
+describe('Passt dazu – bei zwei Angaben reicht ein Treffer', () => {
+  it('„Pasta mit Pesto“: Pasta im Titel oder Pesto im Titel genügt', () => {
+    const avo = { ...recipe('v', 'Cremige Testpasta', undefined, [ing('v1', 'Avocado')]) };
+    const sauce = { ...recipe('w', 'Pesto-Testsauce', undefined, [ing('w1', 'Basilikum')]) };
+    const other = { ...recipe('o', 'Testsuppe', undefined, [ing('o1', 'Karotte')]) };
+    const s = understand('Pasta mit Pesto')!;
+    expect(matchingRecipes(s, { recipes: [avo, sauce, other] }).map((x) => x.id).sort()).toEqual(['v', 'w']);
   });
 });

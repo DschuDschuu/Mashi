@@ -14,7 +14,7 @@ function hash(text: string): number {
  * @param prefer Rezepte, die Verderbliches aufbrauchen – gibt es welche, wird unter ihnen gewählt
  */
 export function recipeOfTheDay(recipes: Recipe[], now = new Date(), prefer: ReadonlySet<string> = new Set()): Recipe | undefined {
-  const all = recipes.filter((r) => !r.archivedAt && !r.fromBase && (r.status === 'kochbuch' || r.status === 'bewaehrt'));
+  const all = recipes.filter((r) => !r.archivedAt && !r.fromBase && !r.trial && (r.status === 'kochbuch' || r.status === 'bewaehrt'));
   const preferred = all.filter((r) => prefer.has(r.id));
   const pool = (preferred.length ? preferred : all)
     .sort((a, b) => a.id.localeCompare(b.id)); // feste Reihenfolge, egal wie die Liste gerade sortiert ist

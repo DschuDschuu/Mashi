@@ -535,7 +535,7 @@ export function recipesFromPantry(pantry: Pantry, recipes: Recipe[], table: Food
   const inStock = new Set(pantry.items.map((it) => itemAsIngredient(it, table)?.key).filter(Boolean));
   if (!inStock.size) return [];
   return recipes
-    .filter((r) => !r.archivedAt && r.status !== 'ki_entwurf')
+    .filter((r) => !r.archivedAt && !r.trial && r.status !== 'ki_entwurf')
     .map((recipe) => {
       const c = cookingContent(recipe, recipes);
       const parts = c.ingredients.map((i) => resolveIngredient(i, 1, table)).filter((x): x is Resolved => !!x && !x.pantry);

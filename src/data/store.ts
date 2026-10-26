@@ -18,6 +18,7 @@ import { attachPacks, changeAmount, mergeSamePacks, openItem } from '../domain/p
 import { addPrepared, eatPrepared } from '../domain/prepared';
 import { currentContent, currentVersion, newId, sameContent, withNewVersion } from '../domain/recipe';
 import { retireMix, sideContent } from '../domain/mix';
+import { staleTrials } from '../domain/craving';
 import { sideGrams, sidesOf } from '../domain/sides';
 import { cookingContent } from '../domain/homemade';
 import { recordSavings, type BonSavings } from '../domain/savings';
@@ -176,7 +177,29 @@ export async function initStore(r: RecipeRepository) {
   normalizeStages();
   normalizeNames();
   retireMixParts();
+  dropStaleTrials();
   repo.onExternalChange?.(scheduleReload);
+}
+
+/** Probiergerichte, die nie gekocht wurden und nirgends mehr eingeplant sind, nach einer Woche wegräumen (craving.ts) */
+function dropStaleTrials() {
+  const planned = new Set([...plan.items.map((i) => i.recipeId), ...(plan.week?.meals ?? []).map((m) => m.recipeId)]);
+  for (const id of staleTrials(recipes, planned, new Date())) deleteRecipe(id);
+}
+
+/**
+ * Probiergericht behalten (Julia: „ich teste erst, wie es ist, dann speicher ich es“): kommt ins Kochbuch – mit
+ * Bewertung ab 4 Sternen als „Bewährt“, sonst „Zum Testen“. Gibt „Rückgängig“ zurück – das macht es wieder zum
+ * Probiergericht; die Bewertung bleibt (Bewertungen gehen nie verloren, mergeRecipes vereinigt sie).
+ */
+export function keepTrial(id: string, rating?: Rating): () => void {
+  const before = get(id);
+  const { trial: _, ...rest } = before;
+  const rated = rating
+    ? { ...rest, status: (rating >= 4 ? 'bewaehrt' : 'zum_testen') as RecipeStatus, feedback: [...rest.feedback, { id: newId('f'), versionId: currentVersion(rest).id, createdAt: now(), rating, note: '' }] }
+    : rest;
+  commit(rated);
+  return () => commit(before);
 }
 
 /** Mix & Match ist raus – alte Bausteine einmal umstellen (Saucen ins Kochbuch, Beilagen ins Archiv; mix.ts) */
@@ -561,6 +584,8 @@ interface CreateOptions {
   notes?: string;
   /** Verwandlung dieser Grundlage (week.ts) */
   fromBase?: string;
+  /** Probiergericht aus „Worauf hast du Lust?“ – noch nicht im Kochbuch (Recipe.trial) */
+  trial?: boolean;
 }
 
 /** Legt ein neues Rezept mit Version 1 an. Ohne Bild wird eines erzeugt (einmalig). */
@@ -585,6 +610,7 @@ export function createRecipe(content: RecipeContent, opts: CreateOptions, id = n
     }],
     feedback: [],
     ...(opts.fromBase ? { fromBase: opts.fromBase } : {}),
+    ...(opts.trial ? { trial: true } : {}),
   };
   commit(recipe);
   if (!opts.image) void regenerateImage(recipe.id);

@@ -22,7 +22,7 @@ function top(xs: string[], n: number): string[] {
 }
 
 export function summarizeTastes(recipes: readonly Recipe[]): string {
-  const live = recipes.filter((r) => !r.archivedAt && r.status !== 'ki_entwurf');
+  const live = recipes.filter((r) => !r.archivedAt && !r.trial && r.status !== 'ki_entwurf');
   const fav = live.filter((r) => r.favorite);
   const good = live.filter((r) => !r.favorite && liked(r));
   const basis = [...fav, ...good];

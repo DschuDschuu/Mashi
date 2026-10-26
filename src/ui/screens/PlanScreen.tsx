@@ -41,7 +41,7 @@ import { toast } from '../toast';
 import { WeekPlan } from '../components/WeekPlan';
 
 /** Was sich planen lässt: alles außer Archiv und reinen KI-Ideen (die sind noch kein Rezept). */
-const plannable = (r: Recipe) => !r.archivedAt && r.status !== 'ki_entwurf';
+const plannable = (r: Recipe) => !r.archivedAt && !r.trial && r.status !== 'ki_entwurf';
 
 /**
  * Wochenplan – Meal Prep ohne feste Tage: Gerichte sammeln, Mashi schlägt passende vor

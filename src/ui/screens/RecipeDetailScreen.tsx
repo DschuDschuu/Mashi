@@ -16,7 +16,7 @@ import type { Weekday } from '../../domain/mealplan';
 import { DAY_LONG, DAY_SHORT, weekdayOf } from '../../domain/week';
 import { describeChange, diffContent } from '../../domain/versions';
 import {
-  addToPlan, adoptToCookbook, archiveRecipe, deleteRecipe, makeBase, restoreRecipe, scheduleRecipe, markCooked, regenerateImage, setChoice, setHomemade, setPlanVariants, setStatus, toggleFavorite, togglePlanCooked, uncookRecipe, updateNotes, usePantry, usePlan, useRecipe, useRecipes,
+  addToPlan, adoptToCookbook, archiveRecipe, deleteRecipe, keepTrial, makeBase, restoreRecipe, scheduleRecipe, markCooked, regenerateImage, setChoice, setHomemade, setPlanVariants, setStatus, toggleFavorite, togglePlanCooked, uncookRecipe, updateNotes, usePantry, usePlan, useRecipe, useRecipes,
 } from '../../data/store';
 import { cookedToast } from '../cookedToast';
 import { shareMessage, shareRecipes } from '../shareRecipes';
@@ -223,9 +223,17 @@ const header = (
           <CookedButton recipe={recipe} content={c} servings={servings} />
         </div>
       )}
+      {/* Probiergericht aus „Worauf hast du Lust?“: noch nicht im Kochbuch – nach dem Kochen fragt die Startseite */}
+      {recipe.trial && (
+        <div className="trial-note">
+          <Icon name="info" size={18} />
+          <span className="small">Probiergericht – kommt erst ins Kochbuch, wenn du es willst. Nach dem Kochen fragt dich die Startseite, wie es war.</span>
+          <button type="button" className="btn btn--soft btn--sm" onClick={() => toast('Im Kochbuch', { label: 'Rückgängig', run: keepTrial(recipe.id) })}>Ins Kochbuch</button>
+        </div>
+      )}
       <StatusAction recipe={recipe} />
-      {!recipe.archivedAt && recipe.status !== 'ki_entwurf' && <PrepPanel recipe={recipe} recipes={recipes} />}
-      {!recipe.archivedAt && recipe.status !== 'ki_entwurf' && <BlockPanel recipe={recipe} />}
+      {!recipe.archivedAt && !recipe.trial && recipe.status !== 'ki_entwurf' && <PrepPanel recipe={recipe} recipes={recipes} />}
+      {!recipe.archivedAt && !recipe.trial && recipe.status !== 'ki_entwurf' && <BlockPanel recipe={recipe} />}
     </>
   );
 

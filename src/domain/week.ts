@@ -795,7 +795,7 @@ export function mhdFinds(items: readonly PantryItem[], week: Week, recipes: read
       if (!key) return { item, kind: 'free' };
       const covered = recipes.find((r) => inWeek.has(r.id) && has(r, key));
       if (covered) return { item, kind: 'covered', recipe: covered };
-      const match = recipes.find((r) => !r.archivedAt && !r.fromBase && r.status !== 'ki_entwurf' && has(r, key));
+      const match = recipes.find((r) => !r.archivedAt && !r.fromBase && !r.trial && r.status !== 'ki_entwurf' && has(r, key));
       return match ? { item, kind: 'match', recipe: match } : { item, kind: 'free' };
     });
 }

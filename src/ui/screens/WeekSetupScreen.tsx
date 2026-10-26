@@ -12,7 +12,7 @@ import { RecipeImage } from '../components/RecipeImage';
 import { TopBar } from '../components/TopBar';
 
 /** Als Grundlage taugt alles, was im Kochbuch steht – außer Verwandlungen (die hängen an ihrer Grundlage) */
-const baseCandidate = (r: Recipe) => !r.archivedAt && !r.fromBase && r.status !== 'ki_entwurf';
+const baseCandidate = (r: Recipe) => !r.archivedAt && !r.fromBase && !r.trial && r.status !== 'ki_entwurf';
 const EVENINGS = 7;
 const portionText = (n: number) => `${n} ${n === 1 ? 'Portion' : 'Portionen'}`;
 
