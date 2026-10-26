@@ -1958,3 +1958,46 @@ details.cost-line[open] > summary::after { transform: rotate(-90deg); }
 .fridge--closed { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 48px; padding: 8px 14px; color: var(--primary-text); text-align: left; }
 .fridge__title { flex: 1; font-weight: 800; color: var(--ink); }
 .fridge--closed .fridge__left { display: inline-flex; align-items: center; gap: 4px; }
+
+/* ── Worauf hast du Lust? (Julia: „wie ein Flussdiagramm, das sich öffnet“) – senkrechter Stepper ── */
+.craving-ask { display: flex; flex-direction: column; gap: 12px; }
+.lust-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.lust-steps__step { display: grid; grid-template-columns: 28px minmax(0, 1fr); column-gap: 12px; position: relative; padding-bottom: 18px; }
+/* die Linie zwischen den Punkten – beim Letzten keine */
+.lust-steps__step:not(:last-child)::before { content: ''; position: absolute; left: 13px; top: 30px; bottom: 2px; width: 2px; background: var(--line); }
+.lust-steps__step.is-done::before { background: var(--primary); }
+.lust-steps__dot {
+  width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  border: 2px solid var(--grey); color: var(--ink-3); font-size: 0.85rem; font-weight: 800; box-sizing: border-box; background: var(--bg);
+}
+.lust-steps__step.is-now .lust-steps__dot { border-color: var(--primary); color: var(--primary-text); background: var(--surface); }
+.lust-steps__step.is-done .lust-steps__dot { border-color: var(--primary); background: var(--primary); color: var(--on-primary); }
+.lust-steps__body { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.lust-steps__label { margin: 0; line-height: 28px; font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-3); }
+.lust-steps__hint { text-transform: none; letter-spacing: 0; font-weight: 600; }
+.lust-steps__step:not(.is-now):not(.is-done) .lust-steps__label { opacity: 0.7; }
+.lust-steps__done { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-top: -8px; }
+.lust-steps__value { font-weight: 800; color: var(--ink); min-width: 0; overflow-wrap: anywhere; }
+.lust-steps__options { display: flex; flex-direction: column; gap: 8px; }
+.lust-steps__option {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; min-height: 52px; padding: 8px 14px;
+  border-radius: var(--r-sm); border: 1px solid var(--line); background: var(--surface); color: var(--ink);
+}
+.lust-steps__option.is-on { border-color: var(--primary); background: var(--primary-soft); }
+.lust-steps__next { align-self: flex-start; }
+.lust-steps__later { margin-top: -8px; }
+.craving-done { padding: 16px; gap: 8px; }
+.craving-done__title { margin: 0; font-size: 1.2rem; }
+.craving-done p { margin: 0; }
+.craving-done__how { margin: 6px 0 0; font-weight: 700; }
+.craving-done__steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; font-size: 0.92rem; }
+.lust-steps__option.is-own { border-color: var(--primary-soft); }
+.lust-steps__ready { display: inline-flex; align-items: center; gap: 4px; color: var(--primary-press); font-weight: 700; }
+.lust-steps__own { display: inline-flex; align-items: center; gap: 4px; color: var(--primary-text); }
+/* „Auch als Baustein“ am Rezept – unter dem Vorkoch-Bereich, gleiche Trennlinie */
+.blocks__title { display: inline-flex; align-items: center; gap: 8px; margin: 0; }
+.blocks__title svg { color: var(--art); }
+.blocks__hint { margin: -6px 0 0; }
+.blocks__row { display: flex; flex-direction: column; gap: 6px; }
+.blocks__card { display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: var(--r-sm); background: var(--surface-2); }
+.blocks__card .chip:not(.is-on) { background: var(--surface); }

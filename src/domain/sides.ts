@@ -5,8 +5,9 @@ import type { Ingredient } from './types';
  * Baukasten für die Vorkoch-Woche (Julia: „+ Kohlenhydrat, + Protein, + Beilage, + Topping“): Bausteine, die frisch zur
  * Grundlage dazukommen – „Kürbissauce mit Pasta, Hähnchen & Parmesan“ ohne eigenes Rezept. Bewusst eine kurze feste
  * Liste – Mix & Match hatte dafür Mini-Rezepte („Reis = 100 g Reis“), das war eine zweite Welt neben dem Kochbuch.
+ * Dieselben Bausteine nutzt „Worauf hast du Lust?“ (craving.ts) – dafür kam die Stufe Sauce dazu (Julia: Guacamole zum Taco).
  */
-export type SideKind = 'carb' | 'protein' | 'veg' | 'topping';
+export type SideKind = 'carb' | 'protein' | 'sauce' | 'veg' | 'topping';
 
 export interface Side {
   id: string;
@@ -28,6 +29,7 @@ export interface SidePrep {
 export const SIDE_KINDS: readonly { kind: SideKind; label: string }[] = [
   { kind: 'carb', label: 'Kohlenhydrat' },
   { kind: 'protein', label: 'Protein' },
+  { kind: 'sauce', label: 'Sauce' },
   { kind: 'veg', label: 'Beilage' },
   { kind: 'topping', label: 'Topping' },
 ];
@@ -39,25 +41,52 @@ export const SIDES: readonly Side[] = [
   { id: 'spaetzle', name: 'Spätzle', kind: 'carb', grams: 250, prep: { text: 'in der Pfanne erhitzen', minutes: 5 } },
   { id: 'gnocchi', name: 'Gnocchi', kind: 'carb', grams: 250, prep: { text: 'in Salzwasser garen, bis sie oben schwimmen', minutes: 4 } },
   { id: 'kartoffeln', name: 'Kartoffeln', kind: 'carb', grams: 300, prep: { text: 'in Salzwasser kochen', minutes: 20 } },
+  { id: 'tortillas', name: 'Weizentortillas', kind: 'carb', grams: 2, unit: 'Stück', prep: { text: 'in der Pfanne kurz erwärmen', minutes: 2 } },
+  { id: 'wraps', name: 'Wraps', kind: 'carb', grams: 1, unit: 'Stück', prep: { text: 'in der Pfanne kurz erwärmen', minutes: 2 } },
+  { id: 'naan', name: 'Naan', kind: 'carb', grams: 1, unit: 'Stück', prep: { text: 'im Ofen aufbacken', minutes: 5 } },
+  { id: 'quinoa', name: 'Quinoa', kind: 'carb', grams: 60, prep: { text: 'mit doppelter Menge Wasser köcheln', minutes: 15 } },
+  { id: 'suesskartoffel', name: 'Süßkartoffel', kind: 'carb', grams: 250, prep: { text: 'würfeln und im Ofen rösten', minutes: 25 } },
   { id: 'haehnchen', name: 'Hähnchenbrust', kind: 'protein', grams: 125, prep: { text: 'in Streifen schneiden und braten', minutes: 8 } },
   { id: 'hack', name: 'Hackfleisch', kind: 'protein', grams: 125, prep: { text: 'krümelig anbraten', minutes: 8 } },
   { id: 'tofu', name: 'Tofu', kind: 'protein', grams: 100, prep: { text: 'würfeln und knusprig braten', minutes: 10 } },
   { id: 'linsen', name: 'Linsen', kind: 'protein', grams: 60, prep: { text: 'in Wasser weich kochen', minutes: 20 } },
+  { id: 'bohnen', name: 'Schwarze Bohnen', kind: 'protein', grams: 120, prep: { text: 'abspülen, mit Kreuzkümmel erhitzen', minutes: 5 } },
+  { id: 'kichererbsen', name: 'Kichererbsen', kind: 'protein', grams: 120, prep: { text: 'abspülen und knusprig rösten', minutes: 15 } },
+  { id: 'halloumi', name: 'Halloumi', kind: 'protein', grams: 75, prep: { text: 'in Scheiben goldbraun braten', minutes: 6 } },
+  { id: 'tomatensauce', name: 'Tomatensauce', kind: 'sauce', grams: 125, prep: { text: 'passierte Tomaten mit Knoblauch einköcheln', minutes: 10 } },
+  { id: 'pesto', name: 'Pesto', kind: 'sauce', grams: 30, prep: { text: 'unter die heißen Nudeln heben', minutes: 0 } },
+  { id: 'sahnesauce', name: 'Sahnesauce', kind: 'sauce', grams: 75, prep: { text: 'Sahne mit etwas Brühe einköcheln', minutes: 5 } },
+  { id: 'salsa', name: 'Tomatensalsa', kind: 'sauce', grams: 60, prep: { text: 'Tomaten und Zwiebel würfeln, mit Limette mischen', minutes: 5 } },
+  { id: 'guacamole', name: 'Guacamole', kind: 'sauce', grams: 60, prep: { text: 'Avocado zerdrücken, mit Limette und Salz abschmecken', minutes: 5 } },
+  { id: 'schmand', name: 'Schmand', kind: 'sauce', grams: 40, prep: { text: 'glatt rühren', minutes: 0 } },
+  { id: 'joghurt', name: 'Joghurt-Dip', kind: 'sauce', grams: 50, prep: { text: 'Joghurt mit Knoblauch und Salz verrühren', minutes: 3 } },
+  { id: 'erdnuss', name: 'Erdnusssauce', kind: 'sauce', grams: 40, prep: { text: 'Erdnussmus mit Sojasauce, Limette und Wasser glatt rühren', minutes: 3 } },
+  { id: 'kokoscurry', name: 'Kokos-Currysauce', kind: 'sauce', grams: 150, prep: { text: 'Currypaste anrösten, Kokosmilch dazu, köcheln', minutes: 10 } },
   { id: 'brokkoli', name: 'Brokkoli', kind: 'veg', grams: 150, prep: { text: 'in Röschen dämpfen', minutes: 5 } },
   { id: 'salat', name: 'Salat', kind: 'veg', grams: 50, prep: { text: 'waschen und anmachen', minutes: 5 } },
   { id: 'paprika', name: 'Paprika', kind: 'veg', grams: 100, prep: { text: 'in Streifen schneiden, kurz anbraten', minutes: 5 } },
   { id: 'zucchini', name: 'Zucchini', kind: 'veg', grams: 150, prep: { text: 'in Scheiben anbraten', minutes: 6 } },
   { id: 'spinat', name: 'Spinat', kind: 'veg', grams: 100, prep: { text: 'kurz zusammenfallen lassen', minutes: 2 } },
+  { id: 'mais', name: 'Mais', kind: 'veg', grams: 75, prep: { text: 'abtropfen lassen, kurz anrösten', minutes: 3 } },
+  { id: 'tomaten', name: 'Tomaten', kind: 'veg', grams: 100, prep: { text: 'würfeln', minutes: 2 } },
+  { id: 'zwiebeln', name: 'Rote Zwiebeln', kind: 'veg', grams: 30, prep: { text: 'in feine Ringe schneiden', minutes: 2 } },
+  { id: 'avocado', name: 'Avocado', kind: 'veg', grams: 75, prep: { text: 'in Scheiben schneiden', minutes: 2 } },
+  { id: 'gurke', name: 'Gurke', kind: 'veg', grams: 75, prep: { text: 'in Scheiben schneiden', minutes: 2 } },
+  { id: 'karotten', name: 'Karotten', kind: 'veg', grams: 100, prep: { text: 'raspeln oder in Stifte schneiden', minutes: 3 } },
   { id: 'parmesan', name: 'Parmesan', kind: 'topping', grams: 15, prep: { text: 'frisch drüberreiben', minutes: 0 } },
   { id: 'feta', name: 'Feta', kind: 'topping', grams: 40, prep: { text: 'drüberbröseln', minutes: 0 } },
   { id: 'kraeuter', name: 'Frische Kräuter', kind: 'topping', grams: 5, prep: { text: 'hacken und drüberstreuen', minutes: 0 } },
   { id: 'sesam', name: 'Sesam', kind: 'topping', grams: 5, prep: { text: 'ohne Fett kurz rösten', minutes: 2 } },
   { id: 'roestzwiebeln', name: 'Röstzwiebeln', kind: 'topping', grams: 10, prep: { text: 'drüberstreuen', minutes: 0 } },
   { id: 'ei', name: 'Ei', kind: 'topping', grams: 1, unit: 'Stück', prep: { text: 'wachsweich kochen', minutes: 7 } },
+  { id: 'kaese', name: 'Geriebener Käse', kind: 'topping', grams: 30, prep: { text: 'drüberstreuen', minutes: 0 } },
+  { id: 'koriander', name: 'Koriander', kind: 'topping', grams: 5, prep: { text: 'grob zupfen', minutes: 0 } },
+  { id: 'jalapenos', name: 'Jalapeños', kind: 'topping', grams: 15, prep: { text: 'in Ringe schneiden', minutes: 0 } },
+  { id: 'cashews', name: 'Cashews', kind: 'topping', grams: 15, prep: { text: 'ohne Fett rösten', minutes: 3 } },
 ];
 
 /** Standardmenge eigener Bausteine je Gruppe (in den Einstellungen änderbar) */
-const CUSTOM_GRAMS: Record<SideKind, number> = { carb: 100, protein: 125, veg: 100, topping: 15 };
+const CUSTOM_GRAMS: Record<SideKind, number> = { carb: 100, protein: 125, sauce: 50, veg: 100, topping: 15 };
 
 /**
  * Eigene Bausteine tragen Gruppe und Namen in der id („eigen:veg:Tomaten“) – so braucht Mashi für Titel, Einkauf und
@@ -70,7 +99,7 @@ export function customSideId(kind: SideKind, name: string): string | undefined {
 
 export const sideOf = (id: string | undefined): Side | undefined => {
   if (!id) return undefined;
-  const m = /^eigen:(carb|protein|veg|topping):(.+)$/.exec(id);
+  const m = /^eigen:(carb|protein|sauce|veg|topping):(.+)$/.exec(id);
   if (m) return { id, name: m[2], kind: m[1] as SideKind, grams: CUSTOM_GRAMS[m[1] as SideKind] };
   return SIDES.find((s) => s.id === id);
 };

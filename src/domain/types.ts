@@ -10,6 +10,7 @@
  * Zutaten berechnet (siehe domain/nutrition). So kann keine Quelle (auch
  * keine KI) Nährwerte „hineinschreiben“.
  */
+import type { SideKind } from './sides';
 
 /** Lebenszyklus eines Rezepts. Archivieren ist ein eigenes Flag (archivedAt). */
 export type RecipeStatus = 'ki_entwurf' | 'zum_testen' | 'bewaehrt' | 'kochbuch';
@@ -187,4 +188,19 @@ export interface Recipe {
    * Kochbuch-Raster (Julia: sonst steht alles doppelt). Die Zutat mit recipeId zeigt auf dieselbe Grundlage.
    */
   fromBase?: string;
+  /**
+   * Als Baustein in „Worauf hast du Lust?“ (Julia: „Knusprige Hähnchenstreifen“ als Protein beim Taco) – das ganze
+   * Rezept oder einzelne Teile (zwei Saucen in einem Rezept = zwei Bausteine). Nicht versioniert wie freezable;
+   * benennt eine neue Version einen Teil um, zieht die Markierung mit (parts.ts: followBlockParts).
+   */
+  blocks?: RecipeBlock[];
+}
+
+/** Ein Rezept (ohne part) oder ein Teil davon als Baustein */
+export interface RecipeBlock {
+  /** Name des Teils (Ingredient.part) – fehlt: das ganze Rezept */
+  part?: string;
+  kind: SideKind;
+  /** Richtungen (craving.ts: „taco“, „bowl“ …), in denen er auftaucht – leer: überall */
+  directions: string[];
 }

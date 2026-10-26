@@ -31,7 +31,7 @@ import { specialDays, type ShelfDays } from '../domain/shelfLife';
 import { withSpices, zeroOf } from '../domain/nutrition/noNutrition';
 import { DEFAULT_MACRO_GOAL, withFavorite, type MacroGoal } from '../domain/nutrition/variants';
 import { canTransition } from '../domain/status';
-import type { Rating, Recipe, RecipeContent, RecipeImage, RecipeSource, RecipeStatus } from '../domain/types';
+import type { Rating, Recipe, RecipeBlock, RecipeContent, RecipeImage, RecipeSource, RecipeStatus } from '../domain/types';
 import { foodTable, imageProvider } from '../services';
 import { LocalRecipeRepository } from './localRepository';
 import type { RecipeRepository } from './repository';
@@ -732,6 +732,20 @@ export function setPrepInfo(id: string, patch: Partial<Pick<Recipe, 'keepsDays' 
   };
   apply(patch);
   return () => apply({ keepsDays: before.keepsDays, freezable: before.freezable, togo: before.togo });
+}
+
+/**
+ * Rezept oder Teile davon als Baustein für „Worauf hast du Lust?“ (Julia: „Knusprige Hähnchenstreifen“ als Protein) –
+ * leere Liste = kein Baustein mehr. Nicht versioniert wie freezable. Gibt „Rückgängig“ zurück.
+ */
+export function setBlocks(id: string, blocks: RecipeBlock[] | undefined): () => void {
+  const before = get(id).blocks;
+  const apply = (list: RecipeBlock[] | undefined) => {
+    const { blocks: _, ...rest } = get(id);
+    commit(list?.length ? { ...rest, blocks: list } : rest);
+  };
+  apply(blocks);
+  return () => apply(before);
 }
 
 /** Variante wählen (Julia: mit Hähnchen oder Tofu) – gibt „Rückgängig“ zurück; siehe choices.ts */

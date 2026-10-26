@@ -41,6 +41,7 @@ import { useSwipe } from '../useSwipe';
 import { useSlide } from '../useSlide';
 import { RenamePanel } from '../components/RenamePanel';
 import { FromBaseLink, PrepPanel } from '../components/PrepPanel';
+import { BlockPanel } from '../components/BlockPanel';
 import { amountsText, useMorePrompt } from '../components/UseMoreSheet';
 import { useVariantPrompt } from '../components/VariantSheet';
 
@@ -224,6 +225,7 @@ const header = (
       )}
       <StatusAction recipe={recipe} />
       {!recipe.archivedAt && recipe.status !== 'ki_entwurf' && <PrepPanel recipe={recipe} recipes={recipes} />}
+      {!recipe.archivedAt && recipe.status !== 'ki_entwurf' && <BlockPanel recipe={recipe} />}
     </>
   );
 

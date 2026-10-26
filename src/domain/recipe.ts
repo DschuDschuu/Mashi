@@ -1,3 +1,4 @@
+import { followBlockParts } from './parts';
 import type { Recipe, RecipeContent, RecipeVersion, VersionAuthor } from './types';
 
 export function newId(prefix = ''): string {
@@ -69,8 +70,12 @@ export function withNewVersion(
     label,
     content: cloneContent(content),
   };
+  // Baustein-Markierungen ziehen mit, wenn diese Version einen Teil umbenennt (Julia: zwei Saucen als zwei Bausteine)
+  const blocks = recipe.blocks?.some((b) => b.part) ? followBlockParts(recipe.blocks, currentContent(recipe), content) : recipe.blocks;
+  const { blocks: _b, ...rest } = recipe;
   return {
-    ...recipe,
+    ...rest,
+    ...(blocks ? { blocks } : {}),
     versions: [...recipe.versions, version],
     currentVersionId: version.id,
     updatedAt: now,

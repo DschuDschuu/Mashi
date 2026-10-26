@@ -5,6 +5,7 @@ import type { Recipe } from '../../domain/types';
 import { addToPlan, useFoodTable, usePantry, usePlan, useRecipes } from '../../data/store';
 import { navigate } from '../../router';
 import { Empty } from '../components/Controls';
+import { CravingAsk } from '../components/CravingAsk';
 import { Icon } from '../components/Icon';
 import { PageIntro } from '../components/PageIntro';
 import { UseUpBadge } from '../components/UseUpBadge';
@@ -80,15 +81,32 @@ export function StartScreen() {
         </section>
       ) : weekTonight ? null : daily ? (
         <section className="today" aria-labelledby="today-title">
-          {/* Die Frage passt nur, wenn noch nichts geplant ist – beim Plan steht die Antwort ja schon da */}
-          <p className="home-q">Was möchtest du heute kochen?</p>
-          <h2 className="today__title" id="today-title"><Icon name="sparkles" size={18} /> Rezept des Tages</h2>
+          {/* Die Frage passt nur, wenn noch nichts geplant ist – beim Plan steht die Antwort ja schon da.
+              Statt nur zu fragen, gleich antworten lassen (Julia: „sie fragt mich, worauf habe ich Lust“) */}
+          <p className="home-q">Worauf hast du Lust?</p>
+          <CravingAsk />
+          <h2 className="today__title" id="today-title"><Icon name="sparkles" size={18} /> Oder das Rezept des Tages</h2>
           <BigCard recipe={daily} servings={currentContent(daily).servings} daily hint={usingUp.get(daily.id)} />
         </section>
       ) : (
-        <Empty icon="book">
-          Noch keine Rezepte im Kochbuch. Leg über ＋ eins an oder spiel eine Sicherung ein (Zahnrad oben → Sicherung).
-        </Empty>
+        <>
+          {/* die Bausteine brauchen kein Kochbuch – auch ohne Rezepte lässt sich etwas zusammenstellen */}
+          <section className="today" aria-label="Worauf hast du Lust?">
+            <p className="home-q">Worauf hast du Lust?</p>
+            <CravingAsk />
+          </section>
+          <Empty icon="book">
+            Noch keine Rezepte im Kochbuch. Leg über ＋ eins an oder spiel eine Sicherung ein (Zahnrad oben → Sicherung).
+          </Empty>
+        </>
+      )}
+      {/* steht heute schon etwas an, fragt Mashi nicht – aber spontan etwas anderes geht trotzdem */}
+      {(planned.length > 0 || weekTonight) && (
+        <button className="home-row" onClick={() => navigate('/lust')}>
+          <Icon name="sparkles" size={18} />
+          <span><strong>Lieber was anderes?</strong> Worauf hast du Lust</span>
+          <Icon name="chevron" size={16} />
+        </button>
       )}
       <Shortcuts />
     </main>

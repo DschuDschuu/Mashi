@@ -208,7 +208,7 @@ describe('Mit Beilage (Julia: „Bolognese mit Spätzle“ ohne eigenes Rezept) 
   it('Titel mit Beilage; unbekannte Beilage fällt still weg', () => {
     expect(mealTitle({ side: 'spaetzle' }, bolo)).toBe('Testbolognese mit Spätzle');
     expect(mealTitle({}, bolo)).toBe('Testbolognese');
-    expect(mealTitle({ side: 'quinoa' }, bolo)).toBe('Testbolognese');
+    expect(mealTitle({ side: 'gibtsnicht' }, bolo)).toBe('Testbolognese');
   });
 
   it('Einkauf: je Beilage zusammengezählt, feste Menge pro Portion, eigene Menge aus dem Haushalt', () => {

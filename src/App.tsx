@@ -9,6 +9,7 @@ import { AiCreateScreen } from './ui/screens/AiCreateScreen';
 import { ConnectScreen } from './ui/screens/ConnectScreen';
 import { CookbookScreen } from './ui/screens/CookbookScreen';
 import { CookModeScreen } from './ui/screens/CookModeScreen';
+import { CravingScreen } from './ui/screens/CravingScreen';
 import { ImportScreen } from './ui/screens/ImportScreen';
 import { MoreScreen } from './ui/screens/MoreScreens';
 import { WeekSetupScreen } from './ui/screens/WeekSetupScreen';
@@ -51,6 +52,8 @@ function resolve(route: Route): { screen: ReactElement; tab?: string; section?: 
     case 'testen': return { screen: <Redirect to="/kochbuch?segment=testen" /> };
     case 'plan': return b === 'woche' ? { screen: <WeekSetupScreen />, section: '/plan' } : { screen: <PlanScreen />, tab: '/plan' };
     case 'reste': return { screen: <UseUpScreen />, section: '/' };
+    // „Worauf hast du Lust?“ – neu getippt = neu anfangen, darum die Eingabe als key
+    case 'lust': return { screen: <CravingScreen key={route.query.get('q') ?? ''} q={route.query.get('q') ?? ''} />, section: '/' };
     case 'preise':
       // ein gespeicherter Bon / Preise nur für ein Lebensmittel
       if (b === 'bon' && c) return { screen: <BonScreen key={c} id={c} />, section: '/speisekammer' };
