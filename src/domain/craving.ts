@@ -82,6 +82,17 @@ export const DIRECTIONS: readonly Direction[] = [
       topping: ['feta', 'kraeuter', 'cashews'],
     },
   },
+  {
+    // Julia: „Burger fände ich gut“
+    id: 'burger', name: 'Burger', words: ['burgers', 'cheeseburger', 'smashburger'],
+    options: {
+      carb: ['buns'],
+      protein: ['patty', 'haehnchen', 'halloumi', 'tofu'],
+      sauce: ['burgersauce', 'guacamole', 'joghurt'],
+      veg: ['salat', 'tomaten', 'zwiebeln', 'gurke', 'avocado'],
+      topping: ['cheddar', 'roestzwiebeln', 'jalapenos', 'ei'],
+    },
+  },
 ];
 
 /**
@@ -99,6 +110,7 @@ const PAIRS: readonly (readonly [string, string])[] = [
   ['tomatensauce', 'parmesan'], ['pesto', 'parmesan'], ['sahnesauce', 'spinat'],
   ['kokoscurry', 'koriander'], ['erdnuss', 'cashews'], ['erdnuss', 'karotten'],
   ['salsa', 'koriander'], ['guacamole', 'mais'], ['schmand', 'kaese'],
+  ['patty', 'cheddar'], ['patty', 'burgersauce'], ['patty', 'zwiebeln'], ['haehnchen', 'salat'], ['halloumi', 'tomaten'],
 ];
 
 /** Stufen, bei denen man mehrere nimmt (Mais und Paprika) – die anderen schließen mit der ersten Wahl */
@@ -292,11 +304,17 @@ export function cravingText(s: CravingState, own: readonly Choice[] = []): strin
   return names.length > 1 ? `${names.slice(0, -1).join(', ')} & ${names.at(-1)}` : names[0] ?? '';
 }
 
-/** Vorschlag für den Namen: „Taco mit Hackfleisch“ – die Richtung und das Protein (oder das Erste, was es gibt) */
+/**
+ * Vorschlag für den Namen: „Taco mit Hackfleisch“ – die Richtung und das Protein (oder das Erste, was es gibt). Ist es
+ * dein Rezept, heißt es „Knusprige Hähnchenstreifen als Taco“: „Taco mit Knusprige …“ klang falsch (Julia), und Rezeptnamen
+ * lassen sich nicht zuverlässig beugen.
+ */
 export function cravingTitle(s: CravingState, own: readonly Choice[] = []): string {
   const dir = directionOf(s.direction);
   const main = (s.picks.protein ?? s.picks.sauce ?? s.picks.veg ?? [])[0];
-  const mainName = main ? choiceOf(main, own)?.name : undefined;
+  const choice = main ? choiceOf(main, own) : undefined;
+  const mainName = choice?.name;
+  if (dir && choice?.recipeId) return `${choice.name} als ${dir.name}`;
   if (dir && mainName) return `${dir.name} mit ${mainName}`;
   return dir?.name ?? mainName ?? 'Dein Gericht';
 }

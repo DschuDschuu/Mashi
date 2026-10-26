@@ -41,6 +41,7 @@ export const SIDES: readonly Side[] = [
   { id: 'spaetzle', name: 'Spätzle', kind: 'carb', grams: 250, prep: { text: 'in der Pfanne erhitzen', minutes: 5 } },
   { id: 'gnocchi', name: 'Gnocchi', kind: 'carb', grams: 250, prep: { text: 'in Salzwasser garen, bis sie oben schwimmen', minutes: 4 } },
   { id: 'kartoffeln', name: 'Kartoffeln', kind: 'carb', grams: 300, prep: { text: 'in Salzwasser kochen', minutes: 20 } },
+  { id: 'buns', name: 'Burgerbrötchen', kind: 'carb', grams: 1, unit: 'Stück', prep: { text: 'aufschneiden und kurz anrösten', minutes: 2 } },
   { id: 'tortillas', name: 'Weizentortillas', kind: 'carb', grams: 2, unit: 'Stück', prep: { text: 'in der Pfanne kurz erwärmen', minutes: 2 } },
   { id: 'wraps', name: 'Wraps', kind: 'carb', grams: 1, unit: 'Stück', prep: { text: 'in der Pfanne kurz erwärmen', minutes: 2 } },
   { id: 'naan', name: 'Naan', kind: 'carb', grams: 1, unit: 'Stück', prep: { text: 'im Ofen aufbacken', minutes: 5 } },
@@ -53,6 +54,7 @@ export const SIDES: readonly Side[] = [
   { id: 'bohnen', name: 'Schwarze Bohnen', kind: 'protein', grams: 120, prep: { text: 'abspülen, mit Kreuzkümmel erhitzen', minutes: 5 } },
   { id: 'kichererbsen', name: 'Kichererbsen', kind: 'protein', grams: 120, prep: { text: 'abspülen und knusprig rösten', minutes: 15 } },
   { id: 'halloumi', name: 'Halloumi', kind: 'protein', grams: 75, prep: { text: 'in Scheiben goldbraun braten', minutes: 6 } },
+  { id: 'patty', name: 'Hack-Patty', kind: 'protein', grams: 150, prep: { text: 'aus Hack flach formen, je Seite 3–4 Min. braten', minutes: 8 } },
   { id: 'tomatensauce', name: 'Tomatensauce', kind: 'sauce', grams: 125, prep: { text: 'passierte Tomaten mit Knoblauch einköcheln', minutes: 10 } },
   { id: 'pesto', name: 'Pesto', kind: 'sauce', grams: 30, prep: { text: 'unter die heißen Nudeln heben', minutes: 0 } },
   { id: 'sahnesauce', name: 'Sahnesauce', kind: 'sauce', grams: 75, prep: { text: 'Sahne mit etwas Brühe einköcheln', minutes: 5 } },
@@ -62,6 +64,7 @@ export const SIDES: readonly Side[] = [
   { id: 'joghurt', name: 'Joghurt-Dip', kind: 'sauce', grams: 50, prep: { text: 'Joghurt mit Knoblauch und Salz verrühren', minutes: 3 } },
   { id: 'erdnuss', name: 'Erdnusssauce', kind: 'sauce', grams: 40, prep: { text: 'Erdnussmus mit Sojasauce, Limette und Wasser glatt rühren', minutes: 3 } },
   { id: 'kokoscurry', name: 'Kokos-Currysauce', kind: 'sauce', grams: 150, prep: { text: 'Currypaste anrösten, Kokosmilch dazu, köcheln', minutes: 10 } },
+  { id: 'burgersauce', name: 'Burgersauce', kind: 'sauce', grams: 30, prep: { text: 'Mayo, Ketchup und etwas Gurkenwasser verrühren', minutes: 2 } },
   { id: 'brokkoli', name: 'Brokkoli', kind: 'veg', grams: 150, prep: { text: 'in Röschen dämpfen', minutes: 5 } },
   { id: 'salat', name: 'Salat', kind: 'veg', grams: 50, prep: { text: 'waschen und anmachen', minutes: 5 } },
   { id: 'paprika', name: 'Paprika', kind: 'veg', grams: 100, prep: { text: 'in Streifen schneiden, kurz anbraten', minutes: 5 } },
@@ -83,6 +86,7 @@ export const SIDES: readonly Side[] = [
   { id: 'koriander', name: 'Koriander', kind: 'topping', grams: 5, prep: { text: 'grob zupfen', minutes: 0 } },
   { id: 'jalapenos', name: 'Jalapeños', kind: 'topping', grams: 15, prep: { text: 'in Ringe schneiden', minutes: 0 } },
   { id: 'cashews', name: 'Cashews', kind: 'topping', grams: 15, prep: { text: 'ohne Fett rösten', minutes: 3 } },
+  { id: 'cheddar', name: 'Cheddar', kind: 'topping', grams: 1, unit: 'Stück', prep: { text: 'als Scheibe auf dem Patty schmelzen lassen', minutes: 1 } },
 ];
 
 /** Standardmenge eigener Bausteine je Gruppe (in den Einstellungen änderbar) */

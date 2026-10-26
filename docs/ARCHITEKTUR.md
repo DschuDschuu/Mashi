@@ -17,6 +17,9 @@ mashi/
 │  │  ├─ filter.ts            Suche und Filter
 │  │  ├─ mealplan.ts          Wochenplan, Einkaufsliste; Zutaten/Namen einordnen (resolveIngredient, keyOfName)
 │  │  ├─ week.ts              Vorkoch-Woche: Verteilung, Alter/Einfrieren, Mittage, Portionen, Tauschen, MHD-Funde
+│  │  ├─ sides.ts             Baukasten-Bausteine (Kohlenhydrat, Protein, Sauce, Beilage, Topping) mit Menge und Zubereitung
+│  │  ├─ craving.ts           „Worauf hast du Lust?“: Richtungen (Taco, Bowl …), was zusammenpasst, Textfeld verstehen,
+│  │  │                       Rezepte/Teile als Bausteine, aus dem Gericht ein Rezept (Probiergericht), „Passt dazu“
 │  │  ├─ weekBases.ts         Grundlage-Zutat einer Verwandlung nicht einkaufen (für Einkauf und Vorrat)
 │  │  ├─ pantry.ts            Speisekammer: Vorrat, Bon-Import, beim Kochen abziehen, Verplantes
 │  │  ├─ packs.ts             Packungen: anbrechen, „ganze Packung?“, Größe nachtragen, zusammenlegen
@@ -90,7 +93,9 @@ aus den Zutaten berechnet (gecacht je Version).
  └───────────────────────┬───────────────────┘
                          └─ Sheet: ✨ Mit KI · ✍️ Eigenes Rezept · 📷 Importieren
 
- #/                       Start
+ #/                       Start – „Worauf hast du Lust?“ (Textfeld + Richtungen), „Wie war …?“ für gekochte Probiergerichte
+ #/lust?q=Taco            Stepper: Richtung → Kohlenhydrat → Protein → Sauce → Beilage → Topping, dann kochen,
+                          einplanen oder als Rezept speichern; angefangener Stand bleibt bis Mitternacht auf dem Gerät (mashi-craving-v1)
  #/kochbuch?device=…      Kochbuch (Filter als URL → Schnellfilter sind Links)
  #/testen                 KI-Ideen · Zum Testen · Bewährt (über Start erreichbar)
  #/plan                   Deine Woche (Vorkoch-Woche) – darunter von Hand Eingeplantes, Vorschläge, Vorgekocht · „1 gegessen“

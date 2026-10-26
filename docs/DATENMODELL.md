@@ -16,6 +16,13 @@ Recipe  (Hülle – ändert sich selten)
 ├─ choice?       gewählte Variante (fehlt oder gibt es nicht mehr: die erste; nicht versioniert, siehe domain/choices.ts)
 ├─ keepsDays?, freezable?, togo?  Vorkochen: hält gekocht X Tage (sonst shelfDays.prepared), einfrierbar, zum Mitnehmen (nicht versioniert, siehe domain/week.ts)
 ├─ fromBase?    Verwandlung dieser Grundlage (steht nur unter ihr, nicht im Kochbuch-Raster; ihre Zutat mit recipeId zeigt auf die Grundlage, Einheit `Portion`)
+├─ blocks?       als Baustein in „Worauf hast du Lust?“: [{ part? (Teil – fehlt: ganzes Rezept), kind (carb|protein|sauce|veg|topping),
+│                directions[] (taco, bowl … – leer: überall) }] (nicht versioniert; benennt eine neue Version einen Teil um,
+│                zieht die Markierung mit – parts.ts: followBlockParts; siehe domain/craving.ts)
+├─ trial?       Probiergericht aus „Worauf hast du Lust?“: echtes Rezept (Plan, Kochmodus, Einkauf rechnen wie immer), aber nicht im
+│                Kochbuch, Rezept des Tages, Woche planen, Plan-Auswahl, Reste-Vorschlägen; nach dem Kochen fragt die Startseite
+│                „Wie war …?“ (behalten → Markierung weg, ab 4 Sternen „bewaehrt“; „Nicht speichern“ → gelöscht); nie gekocht,
+│                nicht eingeplant und älter als eine Woche → beim Start weggeräumt (craving.ts: staleTrials)
 ├─ mix?, goesWith?  veraltet (früheres Mix & Match) – beim Start weggeräumt: Saucen ins Kochbuch, Beilagen ins Archiv (domain/mix.ts)
 ├─ currentVersionId ─────────────┐
 ├─ versions[] ◀──────────────────┘

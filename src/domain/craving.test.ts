@@ -147,7 +147,7 @@ describe('Deine Rezepte als Bausteine', () => {
     expect(understand('Teststreifen', own)?.picks.protein).toEqual(['rezept:r1']);
     expect(understand('knusprige Teststreifen', own)?.picks.protein).toEqual(['rezept:r1']);
     expect(understand('Hähnchen', own)?.picks.protein).toEqual(['haehnchen']);
-    expect(cravingTitle(understand('Taco Teststreifen', own)!, own)).toBe('Taco mit Knusprige Teststreifen');
+    expect(cravingTitle(understand('Taco Teststreifen', own)!, own)).toBe('Knusprige Teststreifen als Taco');
   });
 
   it('Stufe vorschlagen am Namen', () => {
@@ -206,7 +206,7 @@ describe('Aus dem Gericht ein Rezept machen', () => {
     // Testplatte ist für 2 Portionen: 100 g Joghurt → 200 g für 4
     expect(c.ingredients.find((i) => i.name === 'Joghurt')).toMatchObject({ amount: 200, part: 'Testdip' });
     expect(c.ingredients.some((i) => i.name === 'Brot')).toBe(false);
-    expect(c.title).toBe('Taco mit Knusprige Teststreifen');
+    expect(c.title).toBe('Knusprige Teststreifen als Taco');
   });
 
   it('Vorgekochtes: nur aufwärmen', () => {
@@ -275,5 +275,18 @@ describe('Passt dazu – bei zwei Angaben reicht ein Treffer', () => {
     const other = { ...recipe('o', 'Testsuppe', undefined, [ing('o1', 'Karotte')]) };
     const s = understand('Pasta mit Pesto')!;
     expect(matchingRecipes(s, { recipes: [avo, sauce, other] }).map((x) => x.id).sort()).toEqual(['v', 'w']);
+  });
+});
+
+describe('Burger (Julia)', () => {
+  it('„Cheeseburger“ → Richtung Burger mit Brötchen; zum Patty passen Cheddar und Burgersauce', () => {
+    const s = understand('Cheeseburger')!;
+    expect(s.direction).toBe('burger');
+    expect(s.picks.carb).toEqual(['buns']);
+    expect(currentStep(s)).toBe('protein');
+    const p = pick(s, 'protein', 'patty');
+    expect(optionsFor(p, 'sauce')[0].id).toBe('burgersauce');
+    expect(optionsFor(p, 'topping')[0].id).toBe('cheddar');
+    expect(cravingTitle(p)).toBe('Burger mit Hack-Patty');
   });
 });

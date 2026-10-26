@@ -11,6 +11,7 @@ import { addToPlan, createRecipe, deleteRecipe, householdOf, keepTrial, useFoodT
 import { navigate } from '../../router';
 import { Stepper } from '../components/Controls';
 import { CravingAsk } from '../components/CravingAsk';
+import { clearCraving, loadCraving, saveCraving } from '../cravingMemory';
 import { Icon } from '../components/Icon';
 import { TopBar } from '../components/TopBar';
 import { RecipeImage } from '../components/RecipeImage';
@@ -46,7 +47,15 @@ function useOwnChoices(): Choice[] {
  */
 export function CravingScreen({ q }: { q: string }) {
   const own = useOwnChoices();
-  const [state, setState] = useState<CravingState | undefined>(() => (q ? understand(q, own) : undefined));
+  // angefangen und weggeblättert? Dann weiter, wo du warst (cravingMemory.ts) – sonst neu aus dem Getippten
+  const [state, setState] = useState<CravingState | undefined>(() => {
+    const mem = loadCraving();
+    return mem && q && mem.q === q ? mem.state : q ? understand(q, own) : undefined;
+  });
+  const set = (next: CravingState) => {
+    setState(next);
+    saveCraving(q, next);
+  };
   const step = state ? currentStep(state) : undefined;
   const now = useRef<HTMLLIElement>(null);
 
@@ -68,7 +77,7 @@ export function CravingScreen({ q }: { q: string }) {
   return (
     <main className="screen">
       <TopBar title={dir?.name ?? 'Worauf hast du Lust?'} backTo="/"
-        right={<button type="button" className="link small" onClick={() => navigate('/lust', { replace: true })}>Neu anfangen</button>} />
+        right={<button type="button" className="link small" onClick={() => { clearCraving(); navigate('/lust', { replace: true }); }}>Neu anfangen</button>} />
       <ol className="lust-steps">
         {STEPS.map((k, i) => {
           const isNow = k === step;
@@ -82,9 +91,9 @@ export function CravingScreen({ q }: { q: string }) {
                 </h2>
                 {done && (
                   <Done names={k === 'direction' ? [dir?.name ?? ''] : names(k)}
-                    onChange={() => setState(k === 'direction' ? { ...state, direction: undefined } : reopen(state, k))} />
+                    onChange={() => set(k === 'direction' ? { ...state, direction: undefined } : reopen(state, k))} />
                 )}
-                {isNow && <Now state={state} step={k} own={own} set={setState} />}
+                {isNow && <Now state={state} step={k} own={own} set={set} />}
                 {/* schon Getipptes („was mit Brokkoli“) steht vorgemerkt da, bis die Stufe dran ist */}
                 {!isNow && !done && k !== 'direction' && !!state.picks[k]?.length && (
                   <span className="small muted lust-steps__later">{names(k).join(', ')} vorgemerkt</span>
@@ -222,6 +231,8 @@ function Finished({ state, own }: { state: CravingState; own: Choice[] }) {
     const content = cravingContent(state, { own, recipes, household: hh, servings, title, newId: () => newId('i') });
     const id = createRecipe(content, { source: 'selbst', status: 'zum_testen', ...(trial ? { trial: true } : {}) });
     made.current = { key, id };
+    // das Gericht gibt es jetzt (Plan, Kochmodus, Kochbuch) – beim nächsten Mal fängt der Stepper frisch an
+    clearCraving();
     return id;
   };
   const cook = () => navigate(`/rezept/${ensure(true)}/kochen?p=${servings}`);
