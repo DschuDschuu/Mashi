@@ -2066,10 +2066,13 @@ details.cost-line[open] > summary::after { transform: rotate(-90deg); }
 .plate__slot--carb, .plate__slot--veg { direction: rtl; }
 .plate__slot > .plate__sign { direction: ltr; }
 .plate__slot--topping { align-items: center; }
+/* ohne Namen (Beschriftung + „+“) wächst nichts – dann mittig im Feld, sonst stand es oben zu hoch, unten zu tief (Julia) */
+.plate__slot--open { align-items: center; }
 .plate__sign--topping { max-width: 100%; }
 .plate__sign small { font-size: 0.6rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); }
 .plate__sign.is-empty, .plate__sign.is-now { background: transparent; border-color: transparent; }
-.plate__sign.is-empty .plate__name { font-size: 1.3rem; font-weight: 400; color: var(--ink-3); }
+/* das „+“ hat unter sich Leerraum in der Zeile – ohne Ausgleich saß Beschriftung + Plus sichtbar zu hoch (Julia: Topping mittig) */
+.plate__sign.is-empty .plate__name { font-size: 1.3rem; font-weight: 400; color: var(--ink-3); line-height: 1; margin-bottom: -2px; }
 .plate__sign.is-now small { color: var(--ink); }
 /* nur an Bindestrich oder Leerzeichen umbrechen – „Tomate n-…“ und „Toma-ten“ sahen kaputt aus */
 .plate__name { overflow-wrap: break-word; hyphens: manual; }

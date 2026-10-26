@@ -13,6 +13,7 @@ import { CravingAsk } from '../components/CravingAsk';
 import { CravingBuilder, useCravingView, ViewToggle } from '../components/CravingBuilder';
 import { mins } from '../components/CravingSteps';
 import { clearCraving, loadCraving, saveCraving } from '../cravingMemory';
+import { ask } from '../confirm';
 import { Icon } from '../components/Icon';
 import { TopBar } from '../components/TopBar';
 import { RecipeImage } from '../components/RecipeImage';
@@ -63,13 +64,20 @@ export function CravingScreen({ q }: { q: string }) {
   }
 
   const dir = directionOf(state.direction);
+  // erst nachfragen, wenn schon etwas gewählt ist (Julia: „Neu“ nicht aus Versehen) – leer gibt es nichts zu verlieren
+  const startOver = async () => {
+    const chosen = Object.values(state.picks).some((ids) => ids?.length);
+    if (chosen && !(await ask({ title: 'Neu anfangen?', text: 'Deine Auswahl geht verloren.', confirm: 'Neu anfangen', cancel: 'Weiter zusammenstellen', danger: true }))) return;
+    clearCraving();
+    navigate('/lust', { replace: true });
+  };
   return (
     <main className="screen">
       <TopBar title={dir?.name ?? 'Worauf hast du Lust?'} backTo="/"
         right={(
           <span className="craving-top">
             <ViewToggle view={view} onChange={setView} />
-            <button type="button" className="link small" onClick={() => { clearCraving(); navigate('/lust', { replace: true }); }}>Neu</button>
+            <button type="button" className="link small" onClick={startOver}>Neu</button>
           </span>
         )} />
       <CravingBuilder view={view} state={state} set={set} own={own} />

@@ -64,7 +64,7 @@ export function CravingPlate({ state, set, own, small = false }: { state: Cravin
             const ready = merged ? both.ready : picked(f.kind).some((c) => c.ready);
             const label = merged ? 'Protein & Sauce' : labelOf(f.kind);
             return (
-              <div key={f.kind} className={`plate__slot plate__slot--${f.kind}`} style={{ left: `${f.x - SLOT / 2}%`, width: `${SLOT}%`, top: `${f.y}%` }}>
+              <div key={f.kind} className={`plate__slot plate__slot--${f.kind}${names.length ? '' : ' plate__slot--open'}`} style={{ left: `${f.x - SLOT / 2}%`, width: `${SLOT}%`, top: `${f.y}%` }}>
               <button type="button"
                 className={`plate__sign plate__sign--${f.kind}${now ? ' is-now' : names.length || inside ? '' : ' is-empty'}`}
                 aria-label={`${label}: ${names.join(', ') || (inside ? `steckt in ${inside.name}` : 'noch leer')}`} onClick={() => open(kind)}>
