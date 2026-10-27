@@ -5,7 +5,7 @@ import { reverseKeyed, reverseList, reverseRecord } from '../domain/undo';
 import { EXTRA_PREFIX, RESTOCK_PREFIX, shoppingList, type RestockRule } from '../domain/restock';
 import { exclusiveStages, stageOf, withStage, type FoodStage } from '../domain/stage';
 import { DEFAULT_HOUSEHOLD, emptyPlan, keyOfName, normalizePlan, toggleCooked, type Household, type MealPlan, type Week, type Weekday } from '../domain/mealplan';
-import { mealPortions, removeMeal, scheduleMeal, shiftFrom, weekBaseIds, weekdayOf, weekItems, weekView } from '../domain/week';
+import { mealPortions, removeMeal, scheduleMeal, shiftFrom, weekBaseIds, weekdayOf, weekItems, weekView, withoutRecipe } from '../domain/week';
 import { baseSupply, coveredShare, type BaseSupply } from '../domain/baseStock';
 import { mergeRecipes } from '../domain/merge';
 import { pantryFromBackup, unionProducts } from '../domain/syncMerge';
@@ -17,6 +17,7 @@ import {
 import { attachPacks, changeAmount, mergeSamePacks, openItem } from '../domain/packs';
 import { addPrepared, eatPrepared } from '../domain/prepared';
 import { currentContent, currentVersion, newId, sameContent, withNewVersion } from '../domain/recipe';
+import { addChoiceFrom } from '../domain/choices';
 import { retireMix, sideContent } from '../domain/mix';
 import { staleTrials } from '../domain/craving';
 import { sideGrams, sidesOf } from '../domain/sides';
@@ -200,6 +201,26 @@ export function keepTrial(id: string, rating?: Rating): () => void {
     : rest;
   commit(rated);
   return () => commit(before);
+}
+
+/**
+ * Probiergericht als Variante in ein Rezept (Julia: „statt speichern oder verwerfen als Variante eines Rezepts“): das
+ * Rezept bekommt eine neue Version mit der Variante (choices.ts: addChoiceFrom), die Sterne gehen an das Rezept, das
+ * Probiergericht verschwindet (auch aus der Woche). Rückgängig stellt beides wieder her.
+ */
+export function trialAsChoice(trialId: string, targetId: string, name: string, rating?: Rating): () => void {
+  const trial = get(trialId);
+  const target = get(targetId);
+  const content = addChoiceFrom(currentContent(target), currentContent(trial), name, () => newId('i'));
+  const choice = content.choices!.at(-1)!;
+  let next = withNewVersion(target, content, 'nutzer', `Variante „${choice}“ aus „Worauf hast du Lust?“`);
+  if (rating) next = { ...next, feedback: [...next.feedback, { id: newId('f'), versionId: currentVersion(next).id, createdAt: now(), rating, note: `Variante „${choice}“` }] };
+  commit(next);
+  const undoDelete = deleteRecipe(trialId);
+  return () => {
+    commit(target);
+    undoDelete();
+  };
 }
 
 /** Mix & Match ist raus – alte Bausteine einmal umstellen (Saucen ins Kochbuch, Beilagen ins Archiv; mix.ts) */
@@ -806,12 +827,18 @@ export function deleteRecipe(id: string): () => void {
   recipes = recipes.filter((r) => r.id !== id);
   bumpRecipe(id); // ein laufendes Neuladen holt es sonst zurück
   if (planned) removeFromPlan(id);
+  // auch aus der Woche – sonst stand dort „Gelöschtes Rezept“ (Julia, beim Probiergericht „Nicht speichern“)
+  const week = plan.week;
+  const cleaned = week && withoutRecipe(week, id);
+  if (week && cleaned !== week) commitPlan(withWeek(plan, cleaned));
   emit();
   void tracked(repo.remove(id));
   return () => {
     if (!removed || recipes.some((r) => r.id === id)) return;
     commit(removed); // gelöscht = Grabstein in CouchDB; neu speichern legt das Rezept wieder an
     if (planned) addToPlan(id, planned.servings);
+    // nur, wenn die Woche seitdem gleich geblieben ist (verglichen wird der Inhalt – der Abgleich ersetzt das Objekt)
+    if (week && cleaned !== week && JSON.stringify(plan.week) === JSON.stringify(cleaned)) commitPlan(withWeek(plan, week));
   };
 }
 

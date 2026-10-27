@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { activeChoice, chosenContent, choicesOf, forChoice, ownOf, removeChoice, renameChoice } from './choices';
+import { activeChoice, addChoiceFrom, chosenContent, choicesOf, forChoice, ownOf, removeChoice, renameChoice } from './choices';
 import { cookingContent } from './homemade';
 import { sideContent } from './mix';
 import type { Recipe, RecipeContent } from './types';
@@ -76,5 +76,43 @@ describe('Varianten im Rezept (Julia: mit Hähnchen oder mit Tofu)', () => {
     const three = removeChoice({ ...content(), choices: ['Hähnchen', 'Tofu', 'Rind'] }, 'Tofu');
     expect(three.choices).toEqual(['Hähnchen', 'Rind']);
     expect(three.ingredients.find((i) => i.id === 'h')?.choice).toBe('Hähnchen');
+  });
+});
+
+describe('Probiergericht als Variante (Julia: „als Variante eines Rezepts speichern“)', () => {
+  const ids = () => { let n = 0; return () => `n${++n}`; };
+  const dish: RecipeContent = {
+    ...sideContent('Testspätzle mit Dip'), servings: 1,
+    ingredients: [{ id: 'sp', name: 'Spätzle', amount: 250, unit: 'g' }, { id: 'jo', name: 'Joghurt', amount: 50, unit: 'g' }],
+    steps: [{ id: 'd1', text: 'Spätzle anbraten.', ingredientIds: ['sp'] }],
+  };
+
+  it('ohne Varianten: das Bisherige wird „Original“, das Gericht die neue – umgerechnet auf die Portionen, neue IDs', () => {
+    const plain: RecipeContent = { ...sideContent('Testpasta'), servings: 2, ingredients: [{ id: 'p', name: 'Pasta', amount: 200, unit: 'g' }], steps: [{ id: 's', text: 'Pasta kochen.', ingredientIds: ['p'] }] };
+    const c = addChoiceFrom(plain, dish, 'mit Spätzle', ids());
+    expect(c.choices).toEqual(['Original', 'mit Spätzle']);
+    expect(forChoice(c, 'Original').ingredients.map((i) => i.name)).toEqual(['Pasta']);
+    const neu = forChoice(c, 'mit Spätzle');
+    expect(neu.ingredients.map((i) => [i.name, i.amount])).toEqual([['Spätzle', 500], ['Joghurt', 100]]);
+    expect(neu.steps.map((s) => s.text)).toEqual(['Spätzle anbraten.']);
+    expect(neu.steps[0].ingredientIds).toEqual([neu.ingredients[0].id]);
+    expect(neu.ingredients.some((i) => i.id === 'sp')).toBe(false);
+  });
+
+  it('mit Varianten: was für alle galt, wird je bisheriger Variante kopiert – die neue bekommt nichts davon', () => {
+    const base = { ...content(), steps: [...content().steps.map((s) => (s.id === 's1' ? { ...s, ingredientIds: ['reis'] } : s))] };
+    const c = addChoiceFrom(base, dish, 'mit Spätzle', ids());
+    expect(c.choices).toEqual(['Hähnchen', 'Tofu', 'mit Spätzle']);
+    expect(forChoice(c, 'Hähnchen').ingredients.map((i) => i.name)).toEqual(['Reis', 'Hähnchenbrust']);
+    const tofu = forChoice(c, 'Tofu');
+    expect(tofu.ingredients.map((i) => i.name)).toEqual(['Reis', 'Tofu', 'Stärke']);
+    // der Reis-Schritt der Tofu-Variante zeigt auf den Tofu-Reis
+    const reis = tofu.ingredients.find((i) => i.name === 'Reis')!;
+    expect(tofu.steps.find((s) => s.text === 'Reis kochen.')!.ingredientIds).toEqual([reis.id]);
+    expect(forChoice(c, 'mit Spätzle').ingredients.map((i) => i.name)).toEqual(['Spätzle', 'Joghurt']);
+  });
+
+  it('gleicher Name: hängt eine Zahl an statt zu überschreiben', () => {
+    expect(addChoiceFrom(content(), dish, 'Tofu', ids()).choices).toEqual(['Hähnchen', 'Tofu', 'Tofu 2']);
   });
 });

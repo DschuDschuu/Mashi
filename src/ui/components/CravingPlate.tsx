@@ -19,6 +19,8 @@ const HALF = 'M150 22 A128 128 0 0 1 150 278 Z';
 /** Platz, an dem sich ein Schild ausrichtet (Breite in %): reicht bis 4 % vor die Mittellinie (Julia: mehr Abstand) –
  *  ist der Name breiter, wächst das Schild nur nach außen */
 const SLOT = 30;
+/** mehrere in einer Stufe: „3 Beilagen“ */
+const PLURAL: Record<SideKind, string> = { carb: 'Kohlenhydrate', protein: 'Proteine', sauce: 'Saucen', veg: 'Beilagen', topping: 'Toppings' };
 const BRUSH = 'M7.5 8.6C13.5 6.6 21 6 28.5 5.7c6.6-.3 11.4-.8 15 .4 2.2.7 2 2.3.2 2.9 2.4.8 2.5 2.6.3 3.3 2.4.9 2.1 2.9-.8 3.6-5.8 1.4-13.6 2.1-21.4 2.9-6 .6-11.2 1.5-15 1-1.9-.2-2-1.5-.6-2.2-2.4-.6-2.4-2.4-.3-3-2.4-.8-2.2-2.8 0-3.3-1.4-.9-.7-2.2 1.6-2.7z';
 
 /**
@@ -32,10 +34,11 @@ export function CravingPlate({ state, set, own, small = false }: { state: Cravin
   const [focus, setFocus] = useState<SideKind | undefined>();
   const step = focus && !state.closed.includes(focus) ? focus : currentStep(state);
   const picked = (k: SideKind) => (state.picks[k] ?? []).flatMap((id) => choiceOf(id, own) ?? []);
-  // zur Hälfte nur, wenn die Wahl allein für beide steht – liegt schon Hackfleisch da, bleiben es zwei Felder
-  const ps = [...picked('protein'), ...picked('sauce')];
-  const cand = ps.find((c) => coversOf(c).includes('protein') && coversOf(c).includes('sauce'));
-  const both = cand && ps.every((c) => c.id === cand.id) ? cand : undefined;
+  // zur Hälfte, wenn eine Wahl Protein und Sauce abdeckt und beim Protein nichts anderes liegt – liegt schon Hackfleisch
+  // da, bleiben es zwei Felder. Weitere Saucen (Julia: Bolo + Joghurt-Dip) stehen unten in der Hälfte.
+  const cand = [...picked('protein'), ...picked('sauce')].find((c) => coversOf(c).includes('protein') && coversOf(c).includes('sauce'));
+  const both = cand && picked('protein').every((c) => c.id === cand.id) ? cand : undefined;
+  const extras = both ? picked('sauce').filter((c) => c.id !== both.id) : [];
   const open = (k: SideKind) => {
     if (state.closed.includes(k)) set(reopen(state, k));
     setFocus(k);
@@ -55,19 +58,30 @@ export function CravingPlate({ state, set, own, small = false }: { state: Cravin
             {both && <path d={HALF} className="plate__f plate__f--protein" />}
             <circle cx="150" cy="150" r="44" className={`plate__f plate__f--topping${picked('topping').length ? '' : ' is-empty'}`} />
           </svg>
-          {FIELDS.filter((f) => !(both && f.kind === 'sauce')).map((f) => {
+          {FIELDS.map((f) => {
             const merged = !!both && f.kind === 'protein';
+            // in der Hälfte: unten die weiteren Saucen oder „+ Sauce“ zum Dazunehmen
+            const add = !!both && f.kind === 'sauce';
             const kind = merged ? both.kind : f.kind;
-            const names = merged ? [both.name] : picked(f.kind).map((c) => c.name);
-            const inside = merged ? undefined : coveredBy(state, f.kind, own);
-            const now = step === f.kind || (merged && (step === 'protein' || step === 'sauce'));
-            const ready = merged ? both.ready : picked(f.kind).some((c) => c.ready);
+            const list = merged ? [both] : add ? extras : picked(f.kind);
+            // mehrere: nur die Anzahl, die Namen stehen unten in der Auswahl (Julia: „das Feld wird crazy zu lang“)
+            const names = list.length > 1 ? [`${list.length} ${PLURAL[f.kind]}`] : list.map((c) => c.name);
+            const inside = merged || add ? undefined : coveredBy(state, f.kind, own);
+            const now = merged ? step === both.kind : step === f.kind;
+            const ready = list.some((c) => c.ready);
             const label = merged ? 'Protein & Sauce' : labelOf(f.kind);
+            if (add && !names.length && !now) {
+              return (
+                <div key={f.kind} className="plate__slot plate__slot--sauce plate__slot--open" style={{ left: `${f.x - SLOT / 2}%`, width: `${SLOT}%`, top: `${f.y}%` }}>
+                  <button type="button" className="plate__sign plate__sign--sauce plate__sign--add" onClick={() => open('sauce')}>+ Sauce</button>
+                </div>
+              );
+            }
             return (
               <div key={f.kind} className={`plate__slot plate__slot--${f.kind}${names.length ? '' : ' plate__slot--open'}`} style={{ left: `${f.x - SLOT / 2}%`, width: `${SLOT}%`, top: `${f.y}%` }}>
               <button type="button"
                 className={`plate__sign plate__sign--${f.kind}${now ? ' is-now' : names.length || inside ? '' : ' is-empty'}`}
-                aria-label={`${label}: ${names.join(', ') || (inside ? `steckt in ${inside.name}` : 'noch leer')}`} onClick={() => open(kind)}>
+                aria-label={`${label}: ${list.map((c) => c.name).join(', ') || (inside ? `steckt in ${inside.name}` : 'noch leer')}`} onClick={() => open(kind)}>
                 {now && <svg className="plate__brush" viewBox="0 0 48 26" preserveAspectRatio="none" aria-hidden="true"><path d={BRUSH} /></svg>}
                 {names.length
                   ? <span className="plate__name">{ready && <Icon name="fridge" size={12} />} {names.join(', ')}</span>

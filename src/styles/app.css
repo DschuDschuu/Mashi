@@ -1399,7 +1399,6 @@ p { margin: 0; }
 .week-today__actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
 .week-today__hint { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 0; padding: 10px 12px; border-radius: var(--r-sm); background: var(--sky); color: var(--ink-2); font-size: 0.86rem; }
 .week-today__hint span { flex: 1; min-width: 12em; }
-.week-today__done { display: flex; align-items: center; gap: 6px; margin: 0; color: var(--primary-text); font-weight: 700; }
 /* Woche planen: oben „Mit Beilage“ (Julia: am einfachsten), darunter „Daraus machen“; „ohne Beilage“ bewusst unauffällig */
 .week-setup__label { margin: 12px 0 6px; }
 .week-setup__sides { margin-bottom: 4px; }
@@ -1879,7 +1878,8 @@ details.cost-line[open] > summary::after { transform: rotate(-90deg); }
 .week-setup__tabs { margin-top: 14px; }
 .combo__own { background: transparent; border: 1px dashed var(--line); color: var(--ink-3); }
 .combo__new { display: flex; gap: 6px; align-items: center; max-width: 100%; }
-.combo__new input { width: 9.5em; min-width: 0; min-height: 30px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); font: inherit; font-size: 0.85rem; color: var(--ink); }
+/* 16 px: darunter zoomt das iPhone beim Antippen hinein und bleibt vergrößert (Julia: „man kann wieder zoomen“) */
+.combo__new input { width: 9.5em; min-width: 0; min-height: 30px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); font: inherit; font-size: 1rem; color: var(--ink); }
 /* „So geht's“ am Baukasten-Abend */
 .combo-steps { margin: 6px 0 0; padding-left: 20px; display: grid; gap: 2px; font-size: 0.88rem; }
 .combo-steps li > span { overflow-wrap: break-word; }
@@ -2066,6 +2066,8 @@ details.cost-line[open] > summary::after { transform: rotate(-90deg); }
 .plate__slot--carb, .plate__slot--veg { direction: rtl; }
 .plate__slot > .plate__sign { direction: ltr; }
 .plate__slot--topping { align-items: center; }
+/* „+ Sauce“ in der Bolo-Hälfte: leise, damit es nicht wie eine fehlende Stufe aussieht */
+.plate__sign--add { background: transparent; border-color: transparent; color: var(--ink-3); font-weight: 700; }
 /* ohne Namen (Beschriftung + „+“) wächst nichts – dann mittig im Feld, sonst stand es oben zu hoch, unten zu tief (Julia) */
 .plate__slot--open { align-items: center; }
 .plate__sign--topping { max-width: 100%; }

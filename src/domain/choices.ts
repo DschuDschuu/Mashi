@@ -81,3 +81,41 @@ export function removeChoice(c: RecipeContent, name: string): RecipeContent {
     steps: c.steps.filter((s) => s.choice !== name).map(clear),
   };
 }
+
+/**
+ * Ein Probiergericht als neue Variante in ein Rezept (Julia: „statt speichern oder verwerfen als Variante eines Rezepts
+ * speichern“). Hatte das Rezept noch keine Varianten, wird das Bisherige zur Variante `original`. Was bisher für alle
+ * galt, gehört danach ausdrücklich zu den bisherigen Varianten – sonst stünde es auch in der neuen (bei mehreren
+ * Varianten je eine Kopie, die Schritte zeigen auf ihre Kopie). Die Zutaten des Gerichts werden auf die Portionen des
+ * Rezepts umgerechnet und bekommen neue IDs, damit nichts mit dem Rezept zusammenfällt.
+ */
+export function addChoiceFrom(target: RecipeContent, source: RecipeContent, name: string, newId: () => string, original = 'Original'): RecipeContent {
+  const list = choicesOf(target);
+  const before = list.length ? list : [original];
+  let n = name.trim() || source.title.trim() || 'Variante';
+  for (let i = 2; before.includes(n); i++) n = `${name.trim() || source.title.trim()} ${i}`;
+  const shared = (x: { choice?: string }) => !x.choice || !list.includes(x.choice);
+  // je bisheriger Variante: alte ID → ID der Kopie (die erste behält die IDs)
+  const ids = new Map(before.map((c) => [c, new Map<string, string>()]));
+  const ingredients = target.ingredients.flatMap((x) => (shared(x)
+    ? before.map((c, k) => {
+      const id = k === 0 ? x.id : newId();
+      ids.get(c)!.set(x.id, id);
+      return { ...x, id, choice: c };
+    })
+    : [x]));
+  const remap = (s: Step, c: string): Step => (s.ingredientIds ? { ...s, ingredientIds: s.ingredientIds.map((id) => ids.get(c)?.get(id) ?? id) } : s);
+  const steps = target.steps.flatMap((s) => (shared(s)
+    ? before.map((c, k) => ({ ...remap(s, c), id: k === 0 ? s.id : newId(), choice: c }))
+    : [remap(s, s.choice!)]));
+  // das Gericht: umgerechnet auf die Portionen des Rezepts
+  const f = source.servings > 0 ? target.servings / source.servings : 1;
+  const own = new Map<string, string>();
+  const added = source.ingredients.map((x) => {
+    const id = newId();
+    own.set(x.id, id);
+    return { ...x, id, choice: n, ...(x.amount !== undefined ? { amount: Math.round(x.amount * f * 100) / 100 } : {}) };
+  });
+  const addedSteps = source.steps.map((s) => ({ ...s, id: newId(), choice: n, ...(s.ingredientIds ? { ingredientIds: s.ingredientIds.map((id) => own.get(id) ?? id) } : {}) }));
+  return { ...target, choices: [...before, n], ingredients: [...ingredients, ...added], steps: [...steps, ...addedSteps] };
+}

@@ -105,8 +105,8 @@ const PAIRS: readonly (readonly [string, string])[] = [
   ['patty', 'cheddar'], ['patty', 'burgersauce'], ['patty', 'zwiebeln'], ['haehnchen', 'salat'], ['halloumi', 'tomaten'],
 ];
 
-/** Stufen, bei denen man mehrere nimmt (Mais und Paprika) – die anderen schließen mit der ersten Wahl */
-export const MULTI: ReadonlySet<SideKind> = new Set(['veg', 'topping']);
+/** Stufen, bei denen man mehrere nimmt (Mais und Paprika; Julia: Bolo und dazu ein Joghurt-Dip) – die anderen schließen mit der ersten Wahl */
+export const MULTI: ReadonlySet<SideKind> = new Set(['sauce', 'veg', 'topping']);
 
 export const STAGES: readonly SideKind[] = SIDE_KINDS.map((k) => k.kind);
 
@@ -216,9 +216,13 @@ export function optionsFor(s: CravingState, kind: SideKind, own: readonly Choice
   // „alle zeigen“: die Richtung filtert dann nicht – sortiert wird trotzdem nach dem, was passt
   const dir = all ? undefined : directionOf(s.direction);
   // auch in jeder weiteren Stufe, die es abdeckt – so steht die Bolognese schon beim Protein
-  const mine = own.filter((o) => coversOf(o).includes(kind) && (!dir || fits(o.id, dir, own)));
-  // eigene Bausteine (Julia: „Tomaten bei Beilage“) passen überall – sie stehen hinten
-  const custom = sidesOfKind(kind, household?.customSides).filter((x) => x.id.startsWith('eigen:')).map((x) => x.id);
+  // schon in einer anderen Stufe gewählt (Bolognese beim Protein) steht bei der Sauce nicht noch einmal – sonst stünde sie doppelt im Gericht
+  const elsewhere = new Set(STAGES.filter((k) => k !== kind).flatMap((k) => s.picks[k] ?? []));
+  const mine = own.filter((o) => coversOf(o).includes(kind) && !elsewhere.has(o.id) && (!dir || fits(o.id, dir, own)));
+  // eigene Bausteine (Julia: „Tomaten bei Beilage“) passen überall – sie stehen hinten; heißt einer wie ein fester
+  // (Julias „Tomaten“ von früher, bevor es die festen gab), steht nur der feste da (Julia: „2 mal Tomaten“)
+  const fixedNames = new Set(SIDES.filter((x) => x.kind === kind && !x.retired).map((x) => norm(x.name).trim()));
+  const custom = sidesOfKind(kind, household?.customSides).filter((x) => x.id.startsWith('eigen:') && !fixedNames.has(norm(x.name).trim())).map((x) => x.id);
   const ids = [...(dir ? dir.options[kind] : SIDES.filter((x) => x.kind === kind && !x.retired).map((x) => x.id)), ...custom];
   const picks = allPicks(s);
   // Gewähltes, das notiert hat, was gut dazu passt (Bolognese → Spätzle), zählt doppelt; eigene Rezepte zählen wie der
@@ -435,6 +439,31 @@ export function cravingContent(s: CravingState, opts: {
 }
 
 /**
+ * Zu welchem Rezept passt ein Probiergericht als Variante? (Julia: „als Variante eines Rezepts speichern“) – vorn, was
+ * dieselbe Grundlage nutzt (die Bolognese selbst oder ein Gericht daraus), dann gleiche Zutaten und Wörter im Titel.
+ * Nur Kochbuch-Rezepte: keine anderen Probiergerichte, nichts aus dem Archiv. Höchstens `max`.
+ */
+export function variantTargets(trial: Recipe, recipes: readonly Recipe[], max = 5): Recipe[] {
+  const c = currentContent(trial);
+  const bases = new Set(c.ingredients.flatMap((i) => i.recipeId ?? []));
+  const names = new Set(c.ingredients.map((i) => norm(i.name).trim()));
+  const words = new Set(wordsOf(c.title));
+  const score = (r: Recipe) => {
+    const rc = currentContent(r);
+    return (bases.has(r.id) || (r.fromBase && bases.has(r.fromBase)) || rc.ingredients.some((i) => i.recipeId && bases.has(i.recipeId)) ? 3 : 0)
+      + rc.ingredients.filter((i) => names.has(norm(i.name).trim())).length
+      + 2 * wordsOf(rc.title).filter((w) => words.has(w)).length;
+  };
+  return recipes
+    .filter((r) => r.id !== trial.id && !r.trial && !r.archivedAt)
+    .map((r) => ({ r, n: score(r) }))
+    .filter((x) => x.n > 0)
+    .sort((a, b) => b.n - a.n)
+    .slice(0, max)
+    .map((x) => x.r);
+}
+
+/**
  * Probiergerichte, die liegen geblieben sind: nie gekocht, nicht (mehr) im Plan und älter als eine Woche – die räumt
  * Mashi beim Start weg, damit sich keine unsichtbaren Rezepte sammeln.
  */
@@ -505,7 +534,8 @@ export function baseChoice(r: Recipe): Choice {
 export function baseCraving(r: Recipe): { state: CravingState; own: Choice[] } {
   const base = baseChoice(r);
   const own = [base];
-  const s = pick(EMPTY_CRAVING, base.kind, base.id, own);
+  // die Stufe der Grundlage ist erledigt – auch bei Mehrfach-Stufen (Tomatensauce), sonst bliebe Sauce offen
+  const s = closeStep(pick(EMPTY_CRAVING, base.kind, base.id, own), base.kind);
   return { state: base.directions?.length === 1 ? chooseDirection(s, base.directions[0], own) : s, own };
 }
 

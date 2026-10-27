@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   DIRECTIONS, EMPTY_CRAVING, STAGES, chooseDirection, closeStep, cravingSteps, cravingText, cravingTitle, currentStep,
-  baseCraving, coveredBy, cravingCombo, cravingContent, directionOf, guessKind, matchingRecipes, optionsFor, pick, recipeChoiceId, recipeChoices, reopen, staleTrials, understand,
+  baseCraving, coveredBy, cravingCombo, cravingContent, directionOf, guessKind, matchingRecipes, optionsFor, pick, recipeChoiceId, recipeChoices, reopen, staleTrials, understand, variantTargets,
 } from './craving';
 import { followBlockParts } from './parts';
 import { withNewVersion } from './recipe';
@@ -233,6 +233,25 @@ describe('Aus dem Gericht ein Rezept machen', () => {
   });
 });
 
+describe('Als Variante speichern: passende Rezepte (Julia)', () => {
+  it('vorn, was dieselbe Grundlage nutzt; dann gleiche Zutaten und Titelwörter – keine Probiergerichte, nichts aus dem Archiv', () => {
+    const bolo = recipe('bo', 'Testbolo');
+    const mitBolo = { ...recipe('sp', 'Testspaghetti', undefined, [{ id: 'x', name: 'Testbolo', recipeId: 'bo' }, ing('n', 'Nudeln')]) };
+    const trial = { ...recipe('t', 'Testspätzle mit Testbolo', undefined, [{ id: 'y', name: 'Testbolo', recipeId: 'bo' }, ing('s', 'Spätzle')]), trial: true };
+    const spaetzle = recipe('k', 'Käsespätzle', undefined, [ing('s', 'Spätzle')]);
+    const fremd = recipe('f', 'Testsuppe', undefined, [ing('m', 'Möhren')]);
+    const alt = { ...recipe('a', 'Testspätzle alt', undefined, [ing('s', 'Spätzle')]), archivedAt: '2026-01-01' };
+    const andere = { ...recipe('o', 'Testspätzle Probe'), trial: true };
+    const ids = variantTargets(trial, [fremd, spaetzle, alt, andere, mitBolo, bolo, trial]).map((r) => r.id);
+    expect(ids.slice(0, 2).sort()).toEqual(['bo', 'sp']);
+    expect(ids).toContain('k');
+    expect(ids).not.toContain('f');
+    expect(ids).not.toContain('a');
+    expect(ids).not.toContain('o');
+    expect(ids).not.toContain('t');
+  });
+});
+
 describe('Probiergerichte aufräumen', () => {
   const now = new Date('2026-10-26T12:00:00Z');
   const t = (id: string, extra: Partial<Recipe>) => ({ ...recipe(id, 'T'), trial: true, createdAt: '2026-10-01T00:00:00Z', ...extra });
@@ -325,9 +344,25 @@ describe('Ein Baustein für mehrere Stufen (Julia: Bolognese ist Protein und Sau
   it('wird sie ersetzt (doch Hack), ist die Sauce wieder offen; was dort gewählt ist, bleibt', () => {
     const s = pick(pick(chooseDirection(EMPTY_CRAVING, 'pasta'), 'protein', 'rezept:bo', own), 'protein', 'hack', own);
     expect(s.closed).not.toContain('sauce');
-    const withPesto = pick(pick(pick(chooseDirection(EMPTY_CRAVING, 'pasta'), 'sauce', 'pesto', own), 'protein', 'rezept:bo', own), 'protein', 'hack', own);
+    // Sauce ist mehrfach wählbar (Julia: Bolo + Dip) – erledigt erst mit „Weiter“
+    const pesto = closeStep(pick(chooseDirection(EMPTY_CRAVING, 'pasta'), 'sauce', 'pesto', own), 'sauce');
+    const withPesto = pick(pick(pesto, 'protein', 'rezept:bo', own), 'protein', 'hack', own);
     expect(withPesto.picks.sauce).toEqual(['pesto']);
     expect(withPesto.closed).toContain('sauce');
+  });
+
+  it('zur Bolo noch ein Dip (Julia): Sauce wieder öffnen, mehrere wählbar – die Bolo steht dort nicht noch einmal', () => {
+    let s = pick(chooseDirection(EMPTY_CRAVING, 'pasta'), 'protein', 'rezept:bo', own);
+    s = reopen(s, 'sauce');
+    expect(optionsFor(s, 'sauce', own).some((c) => c.id === 'rezept:bo')).toBe(false);
+    s = pick(pick(s, 'sauce', 'joghurt', own), 'sauce', 'pesto', own);
+    expect(s.picks.sauce).toEqual(['joghurt', 'pesto']);
+    expect(s.closed).not.toContain('sauce'); // erst „Weiter“ schließt
+    expect(pick(s, 'sauce', 'pesto', own).picks.sauce).toEqual(['joghurt']); // nochmal tippen nimmt raus
+    let n = 0;
+    const c = cravingContent(closeStep(s, 'sauce'), { own, recipes: [bolo], servings: 2, title: 'T', newId: () => `x${++n}` });
+    expect(c.ingredients.filter((i) => i.recipeId === 'bo')).toHaveLength(1);
+    expect(c.ingredients.some((i) => i.name === 'Joghurt-Dip' || i.name === 'Joghurt')).toBe(true);
   });
 
   it('Richtung wechseln lässt die abgedeckte Stufe erledigt', () => {
@@ -374,6 +409,12 @@ describe('Baukasten im Wochenplan: die Grundlage ist schon gewählt', () => {
     const list = optionsFor(s, 'veg', [], { customSides: ['eigen:veg:Testtomaten', 'eigen:topping:Testkerne'] });
     expect(list.at(-1)?.name).toBe('Testtomaten');
     expect(list.some((c) => c.name === 'Testkerne')).toBe(false);
+  });
+
+  it('heißt ein eigener wie ein fester (alte „Tomaten“), steht er nur einmal da (Julia: „2 mal Tomaten“)', () => {
+    const list = optionsFor(EMPTY_CRAVING, 'veg', [], { customSides: ['eigen:veg:tomaten', 'eigen:veg:Testtomaten'] });
+    expect(list.filter((c) => c.name.toLowerCase() === 'tomaten').map((c) => c.id)).toEqual(['tomaten']);
+    expect(list.some((c) => c.name === 'Testtomaten')).toBe(true);
   });
 });
 

@@ -121,9 +121,7 @@ export function WeekToday({ week }: { week: Week }) {
           </article>
           {fillForLunch && <p className="week-today__hint"><Icon name="bag" size={16} /> Eine Portion gleich für morgen Mittag abfüllen.</p>}
         </div>
-      ) : meal?.meal.done ? (
-        <p className="week-today__done"><Icon name="check" size={16} /> Heute Abend: {mealTitle(meal.meal, meal.recipe)} – gegessen</p>
-      ) : (
+      ) : meal?.meal.done ? null /* gegessen = erledigt, nicht mehr auf der Startseite (Julia) */ : (
         <p className="small muted">Heute Abend ist nichts aus der Woche geplant{nextCook !== undefined ? ` – nächster Kochtag: ${DAY_LONG[nextCook]}` : ''}.</p>
       )}
 

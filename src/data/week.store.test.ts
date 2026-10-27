@@ -3,7 +3,7 @@ import PouchDB from 'pouchdb-core';
 import memory from 'pouchdb-adapter-memory';
 import { describe, expect, it, vi } from 'vitest';
 import { PouchRecipeRepository, type RecipeDb } from './pouchRepository';
-import { addPantryItem, addToPlan, answerLeftover, clearPlan, cookBase, createRecipe, makeBase, markCooked, scheduleRecipe, currentPantry, currentPlan, eatMeal, eatOutToday, initStore, setHousehold, setPrepInfo, setWeek, togglePlanCooked, whenSaved } from './store';
+import { addPantryItem, addToPlan, answerLeftover, clearPlan, cookBase, createRecipe, deleteRecipe, makeBase, markCooked, scheduleRecipe, currentPantry, currentPlan, eatMeal, eatOutToday, initStore, setHousehold, setPrepInfo, setWeek, togglePlanCooked, whenSaved } from './store';
 import { buildShoppingList } from '../domain/mealplan';
 import { shoppingList } from '../domain/restock';
 import { mealKey, suggestWeek } from '../domain/week';
@@ -234,3 +234,23 @@ function currentWeekMeal(index: number): string {
   const order = [6, 0, 1, 2, 3, 4, 5];
   return [...currentPlan().week!.meals].sort((a, b) => order.indexOf(a.day) - order.indexOf(b.day))[index].id;
 }
+
+describe('Store: gelöschtes Rezept verlässt die Woche (Julia: „Heute Abend: Gelöschtes Rezept – gegessen“)', () => {
+  it('Probiergericht nicht gespeichert: Abend und Grundlage raus, der Rest bleibt; Rückgängig bringt beides zurück', async () => {
+    await freshStore('delete-week');
+    const probe = createRecipe(content('Testprobe', [{ id: 'p', name: 'Linsen', amount: 100, unit: 'g' }]), { source: 'selbst', status: 'zum_testen' });
+    const salat = createRecipe(content('Testsalat', [{ id: 's', name: 'Gurke', amount: 1, unit: 'Stück' }]), { source: 'selbst', status: 'kochbuch' });
+    setHousehold({ portions: 1, lunchDays: [] });
+    scheduleRecipe(probe, 1, 1); // Dienstag
+    scheduleRecipe(salat, 2, 1); // Mittwoch
+    const ids = () => currentPlan().week!.meals.map((m) => m.recipeId);
+    expect(ids()).toEqual([probe, salat]);
+    const undo = deleteRecipe(probe);
+    expect(ids()).toEqual([salat]);
+    expect(currentPlan().week!.bases.some((b) => b.recipeId === probe)).toBe(false);
+    expect(currentPlan().items.some((i) => i.recipeId === probe)).toBe(false);
+    undo();
+    expect(ids().sort()).toEqual([probe, salat].sort());
+    expect(currentPlan().week!.bases.some((b) => b.recipeId === probe)).toBe(true);
+  });
+});

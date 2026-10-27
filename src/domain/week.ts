@@ -412,6 +412,16 @@ export function setMealPortions(week: Week, mealId: string, portions: number, ho
 }
 
 /**
+ * Ein gelöschtes Rezept aus der Woche nehmen (Julia: „Heute Abend: Gelöschtes Rezept – gegessen“ stand noch da):
+ * seine Abende – auch gegessene –, Abende aus ihm als Grundlage und seine Grundlage selbst. Unverändert, wenn es nicht vorkommt.
+ */
+export function withoutRecipe(week: Week, recipeId: string): Week {
+  const meals = week.meals.filter((m) => m.recipeId !== recipeId && m.baseId !== recipeId);
+  const bases = week.bases.filter((b) => b.recipeId !== recipeId);
+  return meals.length === week.meals.length && bases.length === week.bases.length ? week : { ...week, meals, bases };
+}
+
+/**
  * Einen Abend rausnehmen (Julia: „simple Gerichte aus dem Wochenplan entfernen“) – Gegessenes bleibt. Die Grundlage
  * bleibt, solange noch ein Abend daraus geplant ist (ihre Portionen rechnet weekView neu); war es der letzte und gibt es
  * keine Extra-Portionen, fällt auch ihr Kochtag weg – sonst stünde „Lasagne kochen · 0 Portionen“ da.

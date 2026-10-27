@@ -3,7 +3,9 @@ import PouchDB from 'pouchdb-core';
 import memory from 'pouchdb-adapter-memory';
 import { describe, expect, it } from 'vitest';
 import { PouchRecipeRepository, type RecipeDb } from './pouchRepository';
-import { initStore, keepTrial, whenSaved } from './store';
+import { currentPlan, initStore, keepTrial, trialAsChoice, whenSaved } from './store';
+import { choicesOf } from '../domain/choices';
+import { currentContent } from '../domain/recipe';
 import { sideContent } from '../domain/mix';
 import { emptyPlan } from '../domain/mealplan';
 import type { Recipe } from '../domain/types';
@@ -60,5 +62,28 @@ describe('Store: Probiergerichte aus „Worauf hast du Lust?“', () => {
     const t = (await repo.list()).find((r) => r.id === 't')!;
     expect(t.status).toBe('zum_testen');
     expect(t.trial).toBeUndefined();
+  });
+});
+
+describe('Store: Probiergericht als Variante (Julia: „als Variante eines Rezepts speichern“)', () => {
+  it('Rezept bekommt eine neue Version mit „Original“ und der Variante, die Sterne – das Probiergericht ist weg; Rückgängig', async () => {
+    const repo = new PouchRecipeRepository(new PouchDB(`trial-choice-${Date.now()}`, { adapter: 'memory' }) as unknown as RecipeDb);
+    await repo.save(recipe('t', { trial: true, lastCookedAt: OLD }));
+    await repo.save(recipe('r', { status: 'kochbuch' }));
+    await initStore(repo);
+    const undo = trialAsChoice('t', 'r', 'mit Test', 4);
+    await whenSaved();
+    let list = await repo.list();
+    const r = list.find((x) => x.id === 'r')!;
+    expect(list.some((x) => x.id === 't')).toBe(false);
+    expect(r.versions).toHaveLength(2);
+    expect(choicesOf(currentContent(r))).toEqual(['Original', 'mit Test']);
+    expect(r.feedback.map((f) => [f.rating, f.note])).toEqual([[4, 'Variante „mit Test“']]);
+    expect(currentPlan().items.some((i) => i.recipeId === 't')).toBe(false);
+    undo();
+    await whenSaved();
+    list = await repo.list();
+    expect(list.find((x) => x.id === 't')?.trial).toBe(true);
+    expect(choicesOf(currentContent(list.find((x) => x.id === 'r')!))).toEqual([]);
   });
 });
