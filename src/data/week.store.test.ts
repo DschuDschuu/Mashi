@@ -3,10 +3,10 @@ import PouchDB from 'pouchdb-core';
 import memory from 'pouchdb-adapter-memory';
 import { describe, expect, it, vi } from 'vitest';
 import { PouchRecipeRepository, type RecipeDb } from './pouchRepository';
-import { addPantryItem, addToPlan, answerLeftover, clearPlan, cookBase, createRecipe, deleteRecipe, makeBase, markCooked, scheduleRecipe, currentPantry, currentPlan, eatMeal, eatOutToday, initStore, setHousehold, setPrepInfo, setWeek, togglePlanCooked, whenSaved } from './store';
+import { addPantryItem, addToPlan, answerLeftover, clearPlan, cookBase, cookDay, createRecipe, deleteRecipe, freezeFromFridge, makeBase, markCooked, scheduleRecipe, currentPantry, currentPlan, eatMeal, eatOutToday, initStore, setHousehold, setPrepInfo, setWeek, togglePlanCooked, unfreezeToFridge, whenSaved } from './store';
 import { buildShoppingList } from '../domain/mealplan';
 import { shoppingList } from '../domain/restock';
-import { mealKey, suggestWeek } from '../domain/week';
+import { mealKey, putMeal, setExtra, suggestWeek } from '../domain/week';
 import { foodTable } from '../services';
 import type { RecipeContent } from '../domain/types';
 
@@ -97,9 +97,11 @@ describe('Store: Vorkoch-Woche (Julia: Bolo am Sonntag, unter der Woche Nudeln u
     ]), { source: 'selbst', status: 'kochbuch' });
     setPrepInfo(bolo, { keepsDays: 3, freezable: true });
     setPrepInfo(nudeln, { togo: true });
-    setHousehold({ portions: 1, lunchDays: [0] }); // Montag mittags: Rest vom Sonntag
+    setHousehold({ portions: 1, lunchDays: [0] });
     let n = 0;
-    setWeek(suggestWeek([6], [{ baseId: bolo, meals: [nudeln, nudeln] }], () => `w${++n}`)); // So + Mo abends
+    // So + Mo abends, dazu Montagmittag – den legt Julia selbst hin (Mittag ist ein Platz wie der Abend)
+    const week = suggestWeek([6], [{ baseId: bolo, meals: [nudeln, nudeln] }], () => `w${++n}`);
+    setWeek(putMeal(setExtra(week, bolo, 1), { day: 0, lunch: true }, nudeln, bolo, { portions: 1, lunchDays: [0] }, () => `w${++n}`));
 
     await whenSaved();
     const shopping = async () => buildShoppingList(await repo.loadPlan(), await repo.list(), foodTable, currentPantry()).map((x) => x.name);
@@ -116,10 +118,10 @@ describe('Store: Vorkoch-Woche (Julia: Bolo am Sonntag, unter der Woche Nudeln u
     expect(amount('Hackfleisch')).toBe(125);
     expect(prepared()).toEqual(['3']);
 
-    // Sonntagabend: Nudeln für heute + Rest für Montagmittag
+    // Sonntagabend: Nudeln für heute – der Montagmittag isst später von seiner eigenen Portion
     const meal = eatMeal(currentWeekMeal(0))!;
-    expect(amount('Spaghetti')).toBe(300);
-    expect(prepared()).toEqual(['1']);
+    expect(amount('Spaghetti')).toBe(400);
+    expect(prepared()).toEqual(['2']);
     meal.undo();
     expect(amount('Spaghetti')).toBe(500);
     expect(prepared()).toEqual(['3']);
@@ -127,6 +129,117 @@ describe('Store: Vorkoch-Woche (Julia: Bolo am Sonntag, unter der Woche Nudeln u
     cooked.undo();
     expect(amount('Hackfleisch')).toBe(500);
     expect(prepared()).toEqual([]);
+  });
+
+  it('Kühlschrank-Kärtchen einfrieren (Julia): vor dem Kochen gemerkt, nach dem Kochen gleich gefroren – mit Rückgängig', async () => {
+    await freshStore('week-freeze');
+    const bolo = createRecipe(content('Testbolo', [{ id: 'h', name: 'Hackfleisch', amount: 125, unit: 'g' }]), { source: 'selbst', status: 'kochbuch' });
+    setPrepInfo(bolo, { keepsDays: 3, freezable: true });
+    setHousehold({ portions: 1, lunchDays: [] });
+    setWeek({ cookDays: [6], bases: [{ recipeId: bolo, day: 6, extra: 3 }], meals: [] });
+    const base = () => currentPlan().week!.bases[0];
+
+    // noch nicht gekocht: eine Portion fürs Gefrierfach gemerkt
+    const undo = freezeFromFridge(bolo)!;
+    expect([base().extra, base().freeze]).toEqual([2, 1]);
+    undo();
+    expect([base().extra, base().freeze]).toEqual([3, undefined]);
+
+    // dann kochen: nur das bewusst Eingefrorene (1) kommt gefroren in die Speisekammer, der Kühlschrank-Rest (2) bleibt frisch (Julia)
+    freezeFromFridge(bolo);
+    addPantryItem('Hackfleisch', 500, 'g');
+    cookBase(bolo);
+    const prepared = () => currentPantry().items.filter((i) => i.recipeId === bolo).map((i) => `${i.amount}${i.frozenAt ? ' gefroren' : ''}`).sort();
+    expect(prepared()).toEqual(['1 gefroren', '2']);
+    expect(unfreezeToFridge(bolo)).not.toBeNull(); // doch verteilen: bleibt gefroren, ist aber wieder im Kühlschrank
+    expect(base().freeze).toBeUndefined();
+  });
+
+  it('schon gekocht und frisch: Einfrieren friert eine Portion in der Speisekammer ein; Rückgängig taut sie zurück', async () => {
+    await freshStore('week-freeze-cooked');
+    const chili = createRecipe(content('Testchili', [{ id: 'h', name: 'Bohnen', amount: 100, unit: 'g' }]), { source: 'selbst', status: 'kochbuch' });
+    setHousehold({ portions: 1, lunchDays: [] });
+    let n = 0;
+    setWeek(suggestWeek([6], [{ baseId: chili, meals: [chili, chili, chili] }], () => `c${++n}`));
+    addPantryItem('Bohnen', 500, 'g');
+    cookBase(chili); // 3 Portionen frisch
+    // einen Abend zurück in den Kühlschrank → eine frische Portion ohne Platz
+    setWeek({ ...currentPlan().week!, meals: currentPlan().week!.meals.slice(0, 2) });
+    const prepared = () => currentPantry().items.filter((i) => i.recipeId === chili).map((i) => `${i.amount}${i.frozenAt ? ' gefroren' : ''}`).sort();
+    expect(prepared()).toEqual(['3']);
+    const undo = freezeFromFridge(chili)!;
+    expect(prepared()).toEqual(['1 gefroren', '2']);
+    expect(currentPlan().week!.bases[0].freeze).toBe(1);
+    undo();
+    expect(prepared()).toEqual(['3']);
+    expect(currentPlan().week!.bases[0].freeze).toBeUndefined();
+  });
+
+  it('Kochtag in einem Durchgang: vorkochen + heute 2 Portionen (eine aus dem Kühlschrank), ein Rückgängig für alles', async () => {
+    await freshStore('week-cookday');
+    const bolo = createRecipe(content('Testbolo', [{ id: 'h', name: 'Hackfleisch', amount: 100, unit: 'g' }]), { source: 'selbst', status: 'kochbuch' });
+    const spag = createRecipe(content('Testspaghetti', [
+      { id: 'l', name: 'Testbolo', amount: 1, unit: 'Portion', recipeId: bolo },
+      { id: 'n', name: 'Spaghetti', amount: 100, unit: 'g' },
+    ]), { source: 'selbst', status: 'kochbuch' });
+    setHousehold({ portions: 1, lunchDays: [] });
+    let n = 0;
+    const week = suggestWeek([6], [{ baseId: bolo, meals: [spag, bolo, bolo] }], () => `k${++n}`);
+    setWeek(setExtra(week, bolo, 2)); // 3 Abende + 2 im Kühlschrank = 5 Portionen
+    const today = currentPlan().week!.meals.find((m) => m.day === 6)!;
+    addPantryItem('Hackfleisch', 1000, 'g');
+    addPantryItem('Spaghetti', 500, 'g');
+    const amount = (name: string) => currentPantry().items.find((i) => i.name === name)?.amount;
+    const prepared = () => currentPantry().items.filter((i) => i.recipeId === bolo).reduce((s, i) => s + (i.amount ?? 0), 0);
+
+    const r = cookDay(bolo, { mealId: today.id, portions: 2 })!;
+    // heute 2 statt 1: die zweite kommt aus dem Kühlschrank – gekocht werden weiter 5
+    expect([r.fresh + r.frozen, r.ate]).toEqual([5, 2]);
+    expect(amount('Hackfleisch')).toBe(500);
+    expect(amount('Spaghetti')).toBe(300);
+    expect(prepared()).toBe(3);
+    const after = currentPlan().week!;
+    expect(after.bases[0]).toMatchObject({ cooked: true, extra: 1 });
+    expect(after.meals.find((m) => m.id === today.id)).toMatchObject({ done: true, portions: 2 });
+
+    r.undo();
+    expect(currentPlan().week).toEqual(setExtra(week, bolo, 2));
+    expect([amount('Hackfleisch'), amount('Spaghetti'), prepared()]).toEqual([1000, 500, 0]);
+  });
+
+  it('frisch mitkochen für 2 Tage: Frisches für alle raus, die mitgekochten Essen ziehen dann nur noch die Grundlage ab', async () => {
+    await freshStore('week-along');
+    const bolo = createRecipe(content('Testbolo', [{ id: 'h', name: 'Hackfleisch', amount: 100, unit: 'g' }]), { source: 'selbst', status: 'kochbuch' });
+    const spag = createRecipe(content('Testspaghetti', [
+      { id: 'l', name: 'Testbolo', amount: 1, unit: 'Portion', recipeId: bolo },
+      { id: 'n', name: 'Spaghetti', amount: 100, unit: 'g' },
+    ]), { source: 'selbst', status: 'kochbuch' });
+    setHousehold({ portions: 1, lunchDays: [0] });
+    setWeek({ cookDays: [6], bases: [{ recipeId: bolo, day: 6 }], meals: [
+      { id: 'abend', day: 6, recipeId: spag, baseId: bolo },
+      { id: 'mittag', day: 0, lunch: true, recipeId: spag, baseId: bolo },
+      { id: 'montag', day: 0, recipeId: spag, baseId: bolo },
+    ] });
+    addPantryItem('Hackfleisch', 1000, 'g');
+    addPantryItem('Spaghetti', 500, 'g');
+    const amount = (name: string) => currentPantry().items.find((i) => i.name === name)?.amount;
+    const prepared = () => currentPantry().items.filter((i) => i.recipeId === bolo).reduce((s, i) => s + (i.amount ?? 0), 0);
+    const meal = (id: string) => currentPlan().week!.meals.find((m) => m.id === id)!;
+
+    const r = cookDay(bolo, { mealId: 'abend', portions: 1, along: ['mittag', 'montag'] })!;
+    expect(amount('Spaghetti')).toBe(200); // heute + Montag mittags und abends
+    expect(prepared()).toBe(2); // die Bolo für Montag steht noch im Kühlschrank
+    expect([meal('mittag').freshCooked, meal('montag').freshCooked]).toEqual([true, true]);
+    expect(meal('mittag').done).toBeUndefined();
+    // die Einkaufsliste kauft die Spaghetti für morgen Mittag nicht noch einmal
+    expect(currentPlan().items.some((i) => i.recipeId === spag)).toBe(false);
+
+    const lunch = eatMeal('mittag')!;
+    expect([amount('Spaghetti'), prepared()]).toEqual([200, 1]);
+    lunch.undo();
+    r.undo();
+    expect([amount('Spaghetti'), amount('Hackfleisch'), prepared()]).toEqual([500, 1000, 0]);
+    expect(meal('mittag').freshCooked).toBeUndefined();
   });
 
   it('mit Beilage: Spätzle auf die Einkaufsliste, beim Essen aus der Speisekammer; „Rückgängig“ legt sie zurück', async () => {

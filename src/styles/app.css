@@ -485,6 +485,9 @@ p { margin: 0; }
 .cook__ing:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 .cook__ing:disabled { cursor: default; }
 .cook__ingredients li.is-changed strong { color: var(--primary-text); }
+/* Kochtag in einem Durchgang: „Vorkochen · 10 Portionen“ / „Heute frisch dazu · 2 Portionen“ */
+.cook__ingredients li.cook__ing-head { margin-top: 4px; font-weight: 600; }
+.cook__ingredients li.cook__ing-head:first-child { margin-top: 0; }
 .cook__edit { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .cook__edit input { width: 5.5em; }
 .cook__leftovers { margin-top: 12px; padding: 12px 14px; background: var(--primary-soft); border-radius: var(--r); display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
@@ -1630,6 +1633,20 @@ p { margin: 0; }
 .meal.is-done { opacity: 0.65; }
 .meal .rimg--sm { width: 52px; height: 52px; }
 .meal__day { width: 26px; flex: none; text-align: center; font-weight: 800; font-size: var(--fs-sm); color: var(--ink-3); }
+/* Mittag als eigener Platz (Julia: „gleich wie der Abend“): „mittags“/„abends“ klein unter dem Tag, Mittag etwas flacher */
+.meal__day:has(small) { width: 44px; }
+.meal__day small { display: block; font-size: 0.62rem; font-weight: 700; letter-spacing: 0.02em; line-height: 1.1; }
+.lunch-slot { display: flex; align-items: center; gap: 4px; }
+.lunch-slot .meal { flex: 1; min-width: 0; }
+.lunch-slot .lunch__x { position: relative; }
+.lunch-slot .lunch__x::after { content: ""; position: absolute; inset: -8px; } /* Trefferfläche 44 px */
+.meal--lunch { padding-block: 6px; background: var(--surface-2); border-color: transparent; }
+.meal--lunch.meal--free { background: transparent; border-color: var(--line); }
+.meal--lunch .rimg--sm { width: 40px; height: 40px; }
+/* Kühlschrank: gewähltes Kärtchen einfrieren statt verteilen; bewusst Eingefrorenes mit „doch verteilen“ */
+.fridge__pickbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
+.fridge__frozen { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 6px 0 0; color: var(--ink-2); }
+.fridge__frozen svg { color: var(--art); }
 .meal__text { flex: 1; min-width: 0; display: grid; gap: 3px; overflow-wrap: break-word; }
 .meal__text strong { font-size: var(--fs-md); line-height: 1.25; }
 .meal__hint { flex: none; font-size: var(--fs-xs); font-weight: 800; color: var(--primary-text); }
@@ -2113,6 +2130,8 @@ details.cost-line[open] > summary::after { transform: rotate(-90deg); }
 .parts-ask__item.is-on .parts-ask__box { background: var(--primary); border-color: var(--primary); }
 .parts-ask__hint { display: flex; align-items: center; gap: 6px; margin: 6px 0 0; }
 .parts-ask__go { margin-top: 16px; }
+.parts-ask__today { gap: 12px; padding: 0 4px; }
+.parts-ask__sub { margin: 0 0 -4px; }
 
 /* ── Kochbuch-Kopf: Anzahl rechts ── */
 .page-head__right { display: flex; align-items: center; gap: 10px; align-self: center; }
@@ -2213,6 +2232,8 @@ details.cost-line[open] > summary::after { transform: rotate(-90deg); }
 .dish__actions { flex-wrap: wrap; margin-top: 12px; }
 .dish__status { display: flex; align-items: center; gap: 4px; margin: 0 0 12px; }
 .dish__portions { margin: 4px 0; }
+.dish__cook { margin-top: 12px; }
+.dish__cooknote { margin: 6px 0 0; }
 .fridge--closed { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 48px; padding: 8px 14px; color: var(--primary-text); text-align: left; }
 .fridge__title { flex: 1; font-weight: 800; color: var(--ink); }
 .fridge--closed .fridge__left { display: inline-flex; align-items: center; gap: 4px; }

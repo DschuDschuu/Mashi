@@ -37,7 +37,7 @@ export function StartScreen() {
   const { expiring: all, usingUp, planned: reserved, plannedUseUp } = useUseUp();
   // Was bald weg muss, zuerst kochen – sonst bleibt die Reihenfolge wie im Plan (sort ist stabil)
   // heute Abend steht schon etwas aus der Woche an → keine Frage „Was möchtest du heute kochen?“ darunter
-  const weekTonight = !!plan.week?.meals.some((m) => m.day === weekdayOf(new Date()) && !m.done);
+  const weekTonight = !!plan.week?.meals.some((m) => !m.lunch && m.day === weekdayOf(new Date()) && !m.done);
   // Gerichte der Vorkoch-Woche zeigt „Heute aus der Woche“ – hier nur, was von Hand eingeplant ist
   const planned = plan.items
     .filter((i) => !i.fromWeek)

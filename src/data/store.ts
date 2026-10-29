@@ -4,8 +4,8 @@ import { normalizeName } from '../domain/nutrition/localFoods';
 import { reverseKeyed, reverseList, reverseRecord } from '../domain/undo';
 import { EXTRA_PREFIX, RESTOCK_PREFIX, shoppingList, type RestockRule } from '../domain/restock';
 import { exclusiveStages, stageOf, withStage, type FoodStage } from '../domain/stage';
-import { DEFAULT_HOUSEHOLD, emptyPlan, keyOfName, normalizePlan, toggleCooked, type Household, type MealPlan, type Week, type Weekday } from '../domain/mealplan';
-import { mealPortions, removeMeal, scheduleMeal, shiftFrom, weekBaseIds, weekdayOf, weekItems, weekView, withoutRecipe } from '../domain/week';
+import { DEFAULT_HOUSEHOLD, emptyPlan, keyOfName, normalizePlan, toggleCooked, type Household, type MealPlan, type Week, type WeekMeal, type Weekday } from '../domain/mealplan';
+import { freezePortions, removeMeal, scheduleMeal, servingsOf, setMealPortions, shiftFrom, unfreezePortions, weekBaseIds, weekdayOf, weekItems, weekView, withoutRecipe } from '../domain/week';
 import { baseSupply, coveredShare, type BaseSupply } from '../domain/baseStock';
 import { mergeRecipes } from '../domain/merge';
 import { pantryFromBackup, unionProducts } from '../domain/syncMerge';
@@ -985,11 +985,11 @@ function refreshWeek() {
  * Ein Gericht auf einen Tag legen (Julia: „ein Plan“) – aus dem Kochbuch oder von „irgendwann diese Woche“ (dann fällt
  * der Listen-Eintrag weg). Gibt „Rückgängig“ zurück; null, wenn der Abend schon belegt ist.
  */
-export function scheduleRecipe(recipeId: string, day: Weekday, servings: number, replaceMealId?: string): (() => void) | null {
+export function scheduleRecipe(recipeId: string, day: Weekday, servings: number, replaceMealId?: string, lunch = false): (() => void) | null {
   const r = get(recipeId);
   // „Was gibt's?“ an einem belegten Abend (Julia: anderes Gericht) – erst den alten Abend raus, dann wie neu einplanen
   const from = replaceMealId && plan.week ? removeMeal(plan.week, replaceMealId) : plan.week;
-  const week = scheduleMeal(from, r, day, servings, householdOf(), () => newId('w'), recipes, keepsFallback(), weekdayOf(new Date()));
+  const week = scheduleMeal(from, r, day, servings, householdOf(), () => newId('w'), recipes, keepsFallback(), weekdayOf(new Date()), lunch);
   if (week === plan.week) return null;
   const before = plan;
   commitPlan(withWeek({ ...plan, items: plan.items.filter((i) => i.fromWeek || i.recipeId !== recipeId) }, week));
@@ -1054,7 +1054,8 @@ function weekUndo(before: { pantry: Pantry; plan: MealPlan; recipe?: Recipe }, a
 
 /**
  * Kochtag (Julia: „Vorkochen starten“): die Grundlage mit allen Portionen kochen – Zutaten raus, Portionen als
- * Vorgekocht in die Speisekammer; was zu alt würde (und der Extra-Vorrat) gleich als gefroren.
+ * Vorgekocht in die Speisekammer; was zu alt würde und was am Kärtchen eingefroren wurde, gleich als gefroren. Der
+ * Kühlschrank-Rest bleibt frisch (Julia).
  */
 export function cookBase(baseId: string): (WeekResult & { fresh: number; frozen: number }) | null {
   const week = plan.week;
@@ -1082,44 +1083,122 @@ export function cookBase(baseId: string): (WeekResult & { fresh: number; frozen:
 }
 
 /**
- * Abendessen gegessen (samt Rest für den nächsten Mittag): frische Zutaten raus, Portionen der Grundlage aus dem
- * Vorgekochten. Ist das Gericht die Grundlage selbst (Suppe), nur aufwärmen.
+ * Kochtag in einem Durchgang (Julia: „10 Portionen vorkochen, aber heute schon was davon essen“): die Grundlage
+ * vorkochen und das Essen von heute gleich mit – frische Zutaten raus, seine Portionen aus dem gerade Gekochten,
+ * „gegessen“. Wurden die Portionen für heute beim Start geändert, gilt das wie „+1“ im Wochenplan (erst aus dem
+ * Kühlschrank). Mit `along` wird das Frische für dasselbe Gericht in den nächsten Tagen gleich mitgekocht (eatMeal).
+ * Ein Rückgängig für alles.
  */
-export function eatMeal(mealId: string): WeekResult | null {
+export function cookDay(baseId: string, today?: { mealId: string; portions: number; along?: readonly string[] }): (WeekResult & { fresh: number; frozen: number; ate: number }) | null {
+  const start = plan.week;
+  const meal = today && start?.meals.find((m) => m.id === today.mealId);
+  if (start && meal && servingsOf(meal, householdOf()) !== today.portions) commitPlan(withWeek(plan, setMealPortions(start, meal.id, today.portions, householdOf())));
+  const cooked = cookBase(baseId);
+  if (!cooked) {
+    if (plan.week !== start) commitPlan(withWeek(plan, start));
+    return null;
+  }
+  const ate = meal ? eatMeal(meal.id, today?.along) : null;
+  return {
+    used: [...cooked.used, ...(ate?.used ?? [])], toCheck: [...cooked.toCheck, ...(ate?.toCheck ?? [])],
+    fresh: cooked.fresh, frozen: cooked.frozen, ate: ate ? today!.portions : 0,
+    // rückwärts: erst das Essen, dann das Kochen, dann die Portionen von heute
+    undo: () => {
+      ate?.undo();
+      cooked.undo();
+      commitPlan(withWeek(plan, start));
+    },
+  };
+}
+
+/**
+ * Mittag- oder Abendessen gegessen: frische Zutaten raus, Portionen der Grundlage aus dem Vorgekochten.
+ * Ist das Gericht die Grundlage selbst (Suppe), nur aufwärmen.
+ */
+export function eatMeal(mealId: string, alongIds: readonly string[] = []): WeekResult | null {
   const week = plan.week;
   const meal = week?.meals.find((m) => m.id === mealId);
   if (!week || !meal || meal.done) return null;
   const hh = householdOf();
-  const n = mealPortions(weekView(week, recipes, hh, keepsFallback()), meal.day, hh);
+  const n = servingsOf(meal, hh);
   const r = recipes.find((x) => x.id === meal.recipeId);
   const before = { pantry, plan, recipe: r };
   if (r) commit(stampCooked(r));
-  const dish = r && r.id !== meal.baseId ? deductContent(pantry, cookingContent(r, recipes, [meal.baseId]), n) : { pantry, used: [], toCheck: [] };
-  // frisch dazu (Julia: „Bolognese mit Spätzle“) – die Beilage geht wie eine Zutat aus der Speisekammer
+  // Julia: „frisch mitkochen für 2 Tage“ – das Frische der mitgekochten Essen geht jetzt mit raus, ihre Portion der
+  // Grundlage erst, wenn sie gegessen werden
+  const along = week.meals.filter((m) => alongIds.includes(m.id) && m.id !== mealId && !m.done && !m.freshCooked);
+  const d = [meal, ...along].reduce((acc, m) => {
+    const f = deductFresh(acc.pantry, m, hh);
+    return { pantry: f.pantry, used: [...acc.used, ...f.used], toCheck: [...acc.toCheck, ...f.toCheck] };
+  }, { pantry, used: [] as string[], toCheck: [] as string[] });
+  const after = { ...d.pantry, items: eatBase(d.pantry.items, meal.baseId, n) };
+  commitPantry(after);
+  commitPlan(withWeek(plan, {
+    ...week,
+    meals: week.meals.map((m) => (m.id === mealId ? { ...m, done: true } : along.includes(m) ? { ...m, freshCooked: true as const } : m)),
+  }));
+  return { used: [...new Set(d.used)], toCheck: [...new Set(d.toCheck)], undo: weekUndo(before, after) };
+}
+
+/**
+ * Das Frische eines Essens aus der Speisekammer: das Gericht ohne seine Grundlage und die Bausteine (Julia: „Bolognese
+ * mit Spätzle“ – die Beilage geht wie eine Zutat raus). Schon mitgekocht (freshCooked): nichts mehr.
+ */
+function deductFresh(p: Pantry, meal: WeekMeal, hh: Household): { pantry: Pantry; used: string[]; toCheck: string[] } {
+  if (meal.freshCooked) return { pantry: p, used: [], toCheck: [] };
+  const n = servingsOf(meal, hh);
+  const r = recipes.find((x) => x.id === meal.recipeId);
+  const dish = r && r.id !== meal.baseId ? deductContent(p, cookingContent(r, recipes, [meal.baseId]), n) : { pantry: p, used: [], toCheck: [] };
   // alle Bausteine (Pasta, Hähnchen, Parmesan …) nacheinander
-  const d = sidesOf(meal.side).reduce((acc, side) => {
+  return sidesOf(meal.side).reduce((acc, side) => {
     const s = deductContent(acc.pantry, sideContent(side.name, sideGrams(side.id, hh), side.unit), n);
     return { pantry: s.pantry, used: [...acc.used, ...s.used], toCheck: [...acc.toCheck, ...s.toCheck] };
   }, dish);
-  const after = { ...d.pantry, items: eatBase(d.pantry.items, meal.baseId, n) };
-  commitPantry(after);
-  commitPlan(withWeek(plan, { ...week, meals: week.meals.map((m) => (m.id === mealId ? { ...m, done: true } : m)) }));
-  return { used: d.used, toCheck: d.toCheck, undo: weekUndo(before, after) };
 }
 
-/** Mittagsbox gegessen (Reste vom Vorabend gehen schon mit dem Abendessen) */
-export function eatLunchBox(day: Weekday): WeekResult | null {
+/**
+ * Kühlschrank-Kärtchen einfrieren statt verteilen (Julia): die Woche merkt es sich (freeze, nicht mehr verplanen);
+ * ist die Grundlage schon gekocht, wird die Portion in der Speisekammer gleich eingefroren. Gibt „Rückgängig“ zurück.
+ */
+export function freezeFromFridge(baseId: string): (() => void) | null {
+  const week = plan.week;
+  const base = week?.bases.find((b) => b.recipeId === baseId);
+  if (!week || !base) return null;
+  const n = householdOf().portions;
+  const next = freezePortions(week, baseId, n);
+  if (next === week) return null;
+  const before = { pantry, week };
+  // schon gekocht: frische Portionen dieser Grundlage einfrieren, so viele wie da sind
+  let items = pantry.items;
+  if (base.cooked) {
+    let rest = n;
+    for (const it of pantry.items.filter((x) => x.recipeId === baseId && !x.part && !x.frozenAt && (x.amount ?? 0) > 0)) {
+      if (rest <= 0) break;
+      const k = Math.min(rest, it.amount!);
+      items = freezeItem(items, it.id, now(), k, () => newId('v'));
+      rest -= k;
+    }
+    commitPantry({ ...pantry, items });
+  }
+  commitPlan(withWeek(plan, next));
+  // Rückgängig nur für die betroffenen Einträge (wie changeWithUndo) – was sich sonst inzwischen geändert hat, bleibt
+  const known = new Map(before.pantry.items.map((i) => [i.id, i]));
+  const split = items.filter((i) => !known.has(i.id)).map((i) => i.id);
+  const touched = items.filter((i) => known.has(i.id) && known.get(i.id) !== i).map((i) => i.id);
+  return () => {
+    if (base.cooked) commitPantry({ ...pantry, items: pantry.items.filter((i) => !split.includes(i.id)).map((i) => (touched.includes(i.id) ? known.get(i.id)! : i)) });
+    commitPlan(withWeek(plan, before.week));
+  };
+}
+
+/** „Doch verteilen“: eingefrorene Portionen wieder in den Kühlschrank (Gekochtes bleibt gefroren, kommt aufgetaut dran) */
+export function unfreezeToFridge(baseId: string): (() => void) | null {
   const week = plan.week;
   if (!week) return null;
-  const hh = householdOf();
-  const lunch = weekView(week, recipes, hh, keepsFallback()).days.find((d) => d.day === day)?.lunch;
-  if (!lunch || lunch.kind !== 'box') return null;
-  const before = { pantry, plan };
-  const d = lunch.recipe.id !== lunch.baseId ? deductContent(pantry, cookingContent(lunch.recipe, recipes, [lunch.baseId]), hh.portions) : { pantry, used: [], toCheck: [] };
-  const after = { ...d.pantry, items: eatBase(d.pantry.items, lunch.baseId, hh.portions) };
-  commitPantry(after);
-  commitPlan(withWeek(plan, { ...week, doneLunch: [...new Set([...(week.doneLunch ?? []), day])] }));
-  return { used: d.used, toCheck: d.toCheck, undo: weekUndo(before, after) };
+  const next = unfreezePortions(week, baseId);
+  if (next === week) return null;
+  commitPlan(withWeek(plan, next));
+  return () => commitPlan(withWeek(plan, week));
 }
 
 /** Heute auswärts (Julia): das Abendessen rückt nach – gibt Zieltag und „Rückgängig“ zurück, null = kein freier Abend */

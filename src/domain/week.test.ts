@@ -5,9 +5,9 @@ import type { Week } from './mealplan';
 import type { Ingredient, Recipe } from './types';
 import { buildShoppingList, emptyPlan } from './mealplan';
 import { localFoodTable } from './nutrition/localFoods';
-import { backToFridge, defaultCookDay, fridgeOf, potOf, potWeek, setCookDay, carbCarry, groupMeals, mixedBases, yieldChecks, swapCookDays, putPrepared, extrasOf, addBase, addToBase, byEffort, canLessPortions, choicesOf, fillEvenings, mealKey, putMeal, servingsOf, setMealPortions, stepPortions, mealTitle, mhdFinds, removeMeal, scheduleMeal, splitMealKey, weekSideNeeds, weekStarted, withCookDays } from './week';
+import { backToFridge, defaultCookDay, freezePortions, unfreezePortions, resolveClashes, fridgeOf, potOf, potWeek, setCookDay, carbCarry, groupMeals, mixedBases, yieldChecks, swapCookDays, putPrepared, extrasOf, addBase, addToBase, byEffort, canLessPortions, choicesOf, fillEvenings, mealKey, putMeal, servingsOf, setMealPortions, stepPortions, mealTitle, mhdFinds, removeMeal, scheduleMeal, splitMealKey, weekSideNeeds, weekStarted, withCookDays } from './week';
 import type { PantryItem } from './pantry';
-import { baseIdOf, canSwap, mealPortions, weekItems, withoutBases, earlierCookDay, moveBase, setExtra, shiftFrom, sortCookDays, suggestWeek, swapDays, toggleLunch, transformsOf, weekdayOf, weekOrder, weekView } from './week';
+import { baseIdOf, canSwap, weekItems, withoutBases, earlierCookDay, moveBase, setExtra, shiftFrom, sortCookDays, suggestWeek, swapSlots, toggleLunch, transformsOf, weekdayOf, weekOrder, weekView } from './week';
 
 // erfundene Rezepte – keine echten (das Repo ist öffentlich)
 const recipe = (id: string, title: string, ingredients: Ingredient[] = [], extra: Partial<Recipe> = {}): Recipe => ({
@@ -36,7 +36,10 @@ const example = (): Week => suggestWeek([MI, SO], [
   { baseId: 'bolo', meals: ['spag', 'wraps', 'ofen'] },
   { baseId: 'chili', meals: ['chilireis', 'bowl'] },
 ], newId);
-const plan = (w: Week) => w.meals.map((m) => `${m.day}:${m.recipeId}`).sort();
+const plan = (w: Week) => w.meals.map((m) => `${m.day}${m.lunch ? 'm' : ''}:${m.recipeId}`).sort();
+const hh1 = { portions: 1, lunchDays: [MO, DI, MI, DO, FR] };
+/** Mittag am Tag d */
+const mittags = (d: number) => ({ day: d, lunch: true });
 
 describe('Vorkoch-Woche (Julia: eine Bolo kochen, daraus Nudeln, Wraps …)', () => {
   it('Woche beginnt am Wochenend-Kochtag – Samstag vor Sonntag vor Montag', () => {
@@ -70,46 +73,74 @@ describe('Vorkoch-Woche (Julia: eine Bolo kochen, daraus Nudeln, Wraps …)', ()
     expect(s.days.find((d) => d.day === DI)!.meal).toMatchObject({ age: 2, frost: false, tooOld: true }); // nicht einfrierbar
   });
 
-  it('Mittagessen: Rest vom Vorabend – sonst eine Box aus der Grundlage; abwählbar', () => {
-    const w = example();
-    const v = weekView(w, all, { portions: 1, lunchDays: [MO, DI, MI, DO, FR] });
-    const lunch = (d: number) => v.days.find((x) => x.day === d)!.lunch!;
-    expect(lunch(MO)).toMatchObject({ kind: 'rest', recipe: { id: 'spag' } }); // Spaghetti vom Sonntag
-    // Dienstag Ofenkartoffel lässt sich schlecht mitnehmen → Mittwoch eine Box aus der Bolognese (erste mitnehmbare Verwandlung)
-    expect(lunch(MI)).toMatchObject({ kind: 'box', baseId: 'bolo', recipe: { id: 'spag' }, reason: 'nicht-mitnehmbar', frost: true });
-    expect(lunch(FR)).toMatchObject({ kind: 'rest', recipe: { id: 'bowl' } });
-    expect(v.days.find((x) => x.day === SA)!.lunch).toBeUndefined(); // Samstag kein Mittagstag
+  it('Mittag ist ein Platz wie der Abend: nur an Mittagstagen, Mashi rechnet nichts selbst aus; abwählbar', () => {
+    const w = putMeal(setExtra(example(), 'bolo', 1), mittags(MO), 'spag', 'bolo', hh1, newId);
+    const v = weekView(w, all, { portions: 1, lunchDays: [MO, DI] });
+    expect(v.days.find((x) => x.day === MO)!.lunch).toMatchObject({ meal: { recipeId: 'spag', lunch: true }, age: 1 });
+    expect(v.days.find((x) => x.day === DI)).toMatchObject({ hasLunch: true }); // Platz da …
+    expect(v.days.find((x) => x.day === DI)!.lunch).toBeUndefined(); // … aber leer, bis Julia etwas hinlegt
+    expect(v.days.find((x) => x.day === MI)!.hasLunch).toBe(false); // kein Mittagstag
+    expect(w.bases[0].extra).toBeUndefined(); // die Portion kam aus dem Kühlschrank
 
-    const off = weekView(toggleLunch(w, DI), all, { portions: 1, lunchDays: [MO, DI] });
-    expect(off.days.find((x) => x.day === DI)).toMatchObject({ noLunch: true });
-    expect(off.days.find((x) => x.day === DI)!.lunch).toBeUndefined();
-    expect(toggleLunch(toggleLunch(w, DI), DI).noLunch).toEqual([]);
+    // abwählen: der belegte Mittag geht zurück in den Kühlschrank
+    const off = toggleLunch(w, MO, hh1);
+    expect(off.noLunch).toEqual([MO]);
+    expect(off.meals.some((m) => m.lunch)).toBe(false);
+    expect(off.bases[0].extra).toBe(1);
+    expect(weekView(off, all, { portions: 1, lunchDays: [MO] }).days.find((x) => x.day === MO)).toMatchObject({ noLunch: true, hasLunch: false });
+    expect(toggleLunch(off, MO, hh1).noLunch).toEqual([]);
   });
 
-  it('Mittag vor dem ersten Kochtag: nichts da', () => {
-    const v = weekView(example(), all, { portions: 1, lunchDays: [SO] });
-    expect(v.days.find((x) => x.day === SO)!.lunch).toEqual({ day: SO, kind: 'none', reason: 'nichts-gekocht' });
+  it('Mittags am Kochtag ist noch nichts gekocht – schon Gekochtes aus der Speisekammer geht', () => {
+    const w = setExtra(example(), 'bolo', 1);
+    expect(putMeal(w, mittags(SO), 'spag', 'bolo', hh1, newId)).toBe(w); // Bolo kocht erst am Sonntag
+    expect(canSwap(w, { day: SO }, mittags(SO))).toBe(false);
+    expect(plan(putPrepared(w, mittags(MO), 'salat', hh1, newId))).toContain(`${MO}m:salat`);
   });
 
-  it('Portionen je Grundlage: (Abende + Mittage) × Portionen + Extra; Extra kommt ins Gefrierfach', () => {
-    const w = setExtra(example(), 'bolo', 2);
-    const v = weekView(w, all, { portions: 1, lunchDays: [MO, DI, MI, DO, FR] });
+  it('Portionen je Grundlage: Abende + Mittage + Kühlschrank + Eingefrorenes; Einfrieren statt verteilen', () => {
+    let w = setExtra(example(), 'bolo', 4);
+    for (const d of [MO, DI, MI]) w = putMeal(w, mittags(d), 'spag', 'bolo', hh1, newId);
+    const v = weekView(w, all, hh1);
     const b = v.bases.find((x) => x.base.recipeId === 'bolo')!;
-    expect([b.evenings, b.lunches, b.portions]).toEqual([3, 3, 8]); // Mo, Di, Mi mittags aus der Bolo
-    expect(b.frozen).toBe(3); // Mittwochsbox + 2 Extra
+    expect([b.evenings, b.lunches, b.portions]).toEqual([3, 3, 7]);
+    expect(b.frozen).toBe(1); // Mittwoch mittags (3 Tage alt) – die 1 im Kühlschrank bleibt frisch
     expect(setExtra(w, 'bolo', -5).bases[0].extra).toBeUndefined();
     const two = weekView(example(), all, { portions: 2, lunchDays: [] });
     expect(two.bases.map((x) => x.portions)).toEqual([6, 4]);
+
+    // Kühlschrank-Portion bewusst einfrieren: raus aus dem Kühlschrank, gekocht wird gleich viel, eingefroren wird sie
+    const eis = freezePortions(w, 'bolo', 1);
+    expect(eis.bases[0]).toMatchObject({ freeze: 1 });
+    expect(eis.bases[0].extra).toBeUndefined();
+    expect(fridgeOf(eis, all, hh1)[0].left).toBe(0);
+    expect(weekView(eis, all, hh1).bases[0]).toMatchObject({ portions: 7, frozen: 2 });
+    expect(freezePortions(eis, 'bolo', 1)).toBe(eis); // nichts mehr im Kühlschrank
+    // doch verteilen: zurück in den Kühlschrank
+    const zurueck = unfreezePortions(eis, 'bolo');
+    expect(zurueck.bases[0]).toMatchObject({ extra: 1 });
+    expect(zurueck.bases[0].freeze).toBeUndefined();
+  });
+
+  it('schon gekocht: eingefrorene Portionen zählen nicht mehr im Kühlschrank', () => {
+    const gekocht: Week = { cookDays: [SO], bases: [{ recipeId: 'chili', day: SO, cooked: true }], meals: [] };
+    const stock = new Map([['chili', 3]]);
+    const eis = freezePortions(gekocht, 'chili', 1);
+    expect(fridgeOf(eis, all, hh1, undefined, stock)[0].left).toBe(2);
+    expect(unfreezePortions(eis, 'chili').bases[0]).toEqual({ recipeId: 'chili', day: SO, cooked: true }); // bleibt gefroren, kommt aber wieder dran
   });
 
   it('Tauschen: nie vor den Kochtag der Grundlage – mit freiem Abend geht es auch', () => {
     const w = example();
-    expect(canSwap(w, MO, DI)).toBe(true);
-    expect(canSwap(w, DI, MI)).toBe(false); // Chili (Mi gekocht) dürfte nicht auf Dienstag
-    expect(canSwap(w, FR, SA)).toBe(false); // zwei freie Abende
-    expect(plan(swapDays(w, MO, DI))).toContain(`${MO}:ofen`);
-    expect(swapDays(w, DI, MI)).toBe(w);
-    expect(plan(swapDays(w, DO, FR))).toContain(`${FR}:bowl`);
+    expect(canSwap(w, { day: MO }, { day: DI })).toBe(true);
+    expect(canSwap(w, { day: DI }, { day: MI })).toBe(false); // Chili (Mi gekocht) dürfte nicht auf Dienstag
+    expect(canSwap(w, { day: FR }, { day: SA })).toBe(false); // zwei freie Abende
+    expect(plan(swapSlots(w, { day: MO }, { day: DI }))).toContain(`${MO}:ofen`);
+    expect(swapSlots(w, { day: DI }, { day: MI })).toBe(w);
+    expect(plan(swapSlots(w, { day: DO }, { day: FR }))).toContain(`${FR}:bowl`);
+    // Abend ↔ Mittag (Julia: „der Mittag wie der Abend“)
+    expect(plan(swapSlots(w, { day: DI }, mittags(MI)))).toContain(`${MI}m:ofen`);
+    expect(canSwap(w, { day: MI }, mittags(MI))).toBe(false); // Chili wird erst Mittwoch gekocht
   });
 
   it('Heute auswärts: rückt bis zum nächsten freien Abend nach – sonst null', () => {
@@ -135,18 +166,16 @@ describe('Vorkoch-Woche (Julia: eine Bolo kochen, daraus Nudeln, Wraps …)', ()
     expect(moveBase(w, 'chili', FR)).toBe(w); // Freitag ist kein Kochtag
   });
 
-  it('Woche als Plan-Einträge: Grundlage mit allen Portionen, Gerichte mit ihren Abenden (+ Rest für den Mittag)', () => {
-    const w = example();
-    const hh = { portions: 1, lunchDays: [MO, DI, MI, DO, FR] };
-    const items = Object.fromEntries(weekItems(w, all, hh).map((i) => [i.recipeId, i.servings]));
-    // Bolo: 3 Abende + 3 Mittage; Spaghetti So + Rest Mo-Mittag = 2; Ofenkartoffel ohne Rest; Mi-Box = Spaghetti
-    expect(items).toEqual({ bolo: 6, chili: 4, spag: 3, wraps: 2, ofen: 1, chilireis: 2, bowl: 2 });
-    expect(mealPortions(weekView(w, all, hh), SO, hh)).toBe(2);
+  it('Woche als Plan-Einträge: Grundlage mit allen Portionen, Gerichte mit ihren Mittagen und Abenden', () => {
+    const w = putMeal(setExtra(example(), 'bolo', 1), mittags(MO), 'spag', 'bolo', hh1, newId);
+    const items = Object.fromEntries(weekItems(w, all, hh1).map((i) => [i.recipeId, i.servings]));
+    // Bolo: 3 Abende + 1 Mittag; Spaghetti Sonntag abends + Montag mittags
+    expect(items).toEqual({ bolo: 4, chili: 2, spag: 2, wraps: 1, ofen: 1, chilireis: 1, bowl: 1 });
     // gekocht und gegessen fällt raus
-    const later = { ...w, bases: w.bases.map((b) => (b.recipeId === 'bolo' ? { ...b, cooked: true } : b)), meals: w.meals.map((m) => (m.recipeId === 'spag' ? { ...m, done: true } : m)) };
-    const rest = Object.fromEntries(weekItems(later, all, hh).map((i) => [i.recipeId, i.servings]));
+    const later = { ...w, bases: w.bases.map((b) => (b.recipeId === 'bolo' ? { ...b, cooked: true } : b)), meals: w.meals.map((m) => (m.recipeId === 'spag' && !m.lunch ? { ...m, done: true } : m)) };
+    const rest = Object.fromEntries(weekItems(later, all, hh1).map((i) => [i.recipeId, i.servings]));
     expect(rest.bolo).toBeUndefined();
-    expect(rest.spag).toBe(1); // nur noch die Mittwochsbox
+    expect(rest.spag).toBe(1); // nur noch der Montagmittag
   });
 
   it('Einkaufsliste kauft die Grundlage nicht doppelt – „1 Bolognese“ kommt aus dem Vorgekochten', () => {
@@ -221,11 +250,10 @@ describe('Mit Beilage (Julia: „Bolognese mit Spätzle“ ohne eigenes Rezept) 
     expect(weekSideNeeds(undefined, all)).toEqual([]);
   });
 
-  it('Rest für den Mittag: lässt sich die Grundlage mitnehmen, kommt die Beilage doppelt', () => {
-    const togoBolo = { ...bolo, togo: true };
+  it('Mittag mit Beilage zählt im Einkauf mit wie ein Abend', () => {
     const w = sideWeek(['bolo+spaetzle']);
-    expect(weekSideNeeds(w, [togoBolo, ...all.filter((r) => r.id !== 'bolo')], { portions: 1, lunchDays: [MO] })[0].amount).toBe(500);
-    expect(weekView(w, [togoBolo], { portions: 1, lunchDays: [MO] }).days.find((d) => d.day === MO)!.lunch).toMatchObject({ kind: 'rest', side: 'spaetzle' });
+    const mit = putMeal(setExtra(w, 'bolo', 1), mittags(MO), 'bolo', 'bolo', { portions: 1, lunchDays: [MO] }, newId, 'spaetzle');
+    expect(weekSideNeeds(mit, all, { portions: 1, lunchDays: [MO] })[0].amount).toBe(500);
   });
 
   it('auf der Einkaufsliste – mit der Beilage, ohne „1 Portion Bolognese“', () => {
@@ -393,7 +421,7 @@ describe('Wochenanfang und Vorrat', () => {
     expect(weekOrder(sa).indexOf(MI)).toBeLessThan(weekOrder(sa).indexOf(SA));
   });
   it('Vorgekochtes auf einen Abend: als gekochte Grundlage, nichts einzukaufen', () => {
-    const w = putPrepared({ cookDays: [SO], bases: [], meals: [] }, DI, 'chili', hh, newId);
+    const w = putPrepared({ cookDays: [SO], bases: [], meals: [] }, { day: DI }, 'chili', hh, newId);
     expect(w.bases).toEqual([{ recipeId: 'chili', day: DI, cooked: true }]);
     expect(w.meals.find((m) => m.day === DI)).toMatchObject({ recipeId: 'chili', baseId: 'chili' });
     expect(weekItems(w, all, hh)).toEqual([]);
@@ -437,12 +465,12 @@ describe('Portionen füllen freie Abende (Julia: „steht bei Mittwoch statt ein
 
   it('„Was gibt\'s?“: freier Abend isst zuerst vom Vorrat, mit Beilage nur bei der Grundlage selbst; vor dem Kochtag nicht', () => {
     const w: Week = { ...start(), bases: [{ recipeId: 'chili', day: SO, extra: 3 }] };
-    const di = putMeal(w, DI, 'chili', 'chili', hh, newId, 'reis');
+    const di = putMeal(w, { day: DI }, 'chili', 'chili', hh, newId, 'reis');
     expect(di.meals.find((m) => m.day === DI)).toMatchObject({ recipeId: 'chili', side: 'reis' });
     expect(di.bases[0].extra).toBe(1);
-    expect(putMeal(w, DI, 'bowl', 'chili', hh, newId, 'reis').meals.find((m) => m.day === DI)?.side).toBeUndefined();
+    expect(putMeal(w, { day: DI }, 'bowl', 'chili', hh, newId, 'reis').meals.find((m) => m.day === DI)?.side).toBeUndefined();
     const mitte: Week = { cookDays: [SO, MI], bases: [{ recipeId: 'chili', day: MI }], meals: [] };
-    expect(putMeal(mitte, MO, 'chili', 'chili', hh, newId)).toBe(mitte);
+    expect(putMeal(mitte, { day: MO }, 'chili', 'chili', hh, newId)).toBe(mitte);
   });
 
   it('belegten Abend tauschen: Portionen bleiben, Grundlage ohne Abend fällt weg', () => {
@@ -450,7 +478,7 @@ describe('Portionen füllen freie Abende (Julia: „steht bei Mittwoch statt ein
       cookDays: [SO], bases: [{ recipeId: 'chili', day: SO }, { recipeId: 'bolo', day: SO }],
       meals: [{ id: 'a', day: SO, recipeId: 'chilireis', baseId: 'chili' }, { id: 'b', day: MO, recipeId: 'spag', baseId: 'bolo', portions: 4 }],
     };
-    const neu = putMeal(w, MO, 'bowl', 'chili', hh, newId);
+    const neu = putMeal(w, { day: MO }, 'bowl', 'chili', hh, newId);
     expect(neu.meals.find((m) => m.day === MO)).toEqual({ id: 'b', day: MO, recipeId: 'bowl', baseId: 'chili', portions: 4 });
     expect(neu.bases.map((b) => b.recipeId)).toEqual(['chili']);
   });
@@ -459,10 +487,30 @@ describe('Portionen füllen freie Abende (Julia: „steht bei Mittwoch statt ein
     const gaeste = setMealPortions(start(), 'a', 5, hh);
     expect(gaeste.meals[0].portions).toBe(5);
     expect(portions(gaeste).portions).toBe(5);
-    const view = weekView(gaeste, all, hh);
-    expect(mealPortions(view, SO, hh)).toBe(5);
     expect(servingsOf(gaeste.meals[0], hh)).toBe(5);
     expect(setMealPortions(gaeste, 'a', 2, hh).meals[0]).not.toHaveProperty('portions');
+  });
+
+  it('+1 nimmt zuerst aus dem Kühlschrank, −1 legt zurück – gekocht wird gleich viel (Julia)', () => {
+    // Haushalt 2: der Abend isst 2, im Kühlschrank liegen 2 → 4 werden gekocht
+    const w: Week = { ...start(), bases: [{ recipeId: 'chili', day: SO, extra: 2 }] };
+    expect(portions(w).portions).toBe(4);
+    const plus = setMealPortions(w, 'a', 3, hh);
+    expect(plus.bases[0].extra).toBe(1);
+    expect(portions(plus).portions).toBe(4);
+    // Kühlschrank nur noch 1: +2 nimmt die eine, die zweite wird mehr gekocht
+    const mehr = setMealPortions(plus, 'a', 5, hh);
+    expect(mehr.bases[0].extra).toBeUndefined();
+    expect(portions(mehr).portions).toBe(5);
+    // −1 zurück in den Kühlschrank
+    const weniger = setMealPortions(mehr, 'a', 4, hh);
+    expect(weniger.bases[0].extra).toBe(1);
+    expect(portions(weniger).portions).toBe(5);
+    // schon gekocht oder gegessen: der Kühlschrank (Speisekammer) rechnet selbst – extra bleibt
+    const gekocht: Week = { ...w, bases: [{ ...w.bases[0], cooked: true }] };
+    expect(setMealPortions(gekocht, 'a', 3, hh).bases[0].extra).toBe(2);
+    const gegessen: Week = { ...w, meals: [{ ...w.meals[0], done: true }] };
+    expect(setMealPortions(gegessen, 'a', 3, hh).bases[0].extra).toBe(2);
   });
 });
 
@@ -502,7 +550,7 @@ describe('Topf + Kühlschrank (Julia: „ich koche X Portionen und verteile sie�
 
   it('Kärtchen auf einen Abend: nimmt eine Portion aus dem Kühlschrank; zu alt = einfrieren (weekView sagt frost)', () => {
     const w = potWeek([{ recipeId: 'bolo', portions: 2 }], hh);
-    const mi = putMeal(w, MI, 'bolo', 'bolo', hh, newId);
+    const mi = putMeal(w, { day: MI }, 'bolo', 'bolo', hh, newId);
     expect(mi.bases[0].extra).toBe(1);
     expect(weekView(mi, all, hh).days.find((d) => d.day === MI)?.meal).toMatchObject({ age: 3, frost: true });
   });
@@ -528,5 +576,40 @@ describe('Topf + Kühlschrank (Julia: „ich koche X Portionen und verteile sie�
     // die Woche dreht sich nicht mit: Sonntag bleibt der erste Tag
     expect(weekOrder(sa)[0]).toBe(SO);
     expect(setCookDay({ ...w, bases: [{ ...w.bases[0], cooked: true }, w.bases[1]] }, 'bolo', MO, hh).bases[0].day).toBe(SO);
+  });
+});
+
+describe('Mittage beim Neu-Verteilen (Julia: „der Mittag wie der Abend“)', () => {
+  it('anderer Kochtag: Mittage rücken auf Mittage, was nicht passt, geht in den Kühlschrank', () => {
+    const hh = { portions: 1, lunchDays: [MO, DI] };
+    const w = putMeal(setExtra(example(), 'chili', 1), mittags(DO), 'bowl', 'chili', { portions: 1, lunchDays: [DO] }, newId);
+    // Chili von Mittwoch auf Sonntag: Abende ab Sonntag; der Mittag rückt auf den ersten freien Mittagstag danach
+    const so = setCookDay(w, 'chili', SO, hh);
+    expect(plan(so)).toContain(`${MO}m:bowl`);
+    // ohne passenden Mittagstag: zurück in den Kühlschrank
+    const ohne = setCookDay(w, 'chili', SO, { portions: 1, lunchDays: [] });
+    expect(ohne.meals.some((m) => m.lunch)).toBe(false);
+    expect(ohne.bases.find((b) => b.recipeId === 'chili')!.extra).toBe(1);
+  });
+
+  it('Abgleich: zwei Essen auf einem Platz – eins rückt auf den nächsten freien Platz derselben Art', () => {
+    const w: Week = {
+      cookDays: [SO], bases: [{ recipeId: 'bolo', day: SO }],
+      meals: [
+        { id: 'a', day: MO, lunch: true, recipeId: 'spag', baseId: 'bolo' },
+        { id: 'b', day: MO, lunch: true, recipeId: 'wraps', baseId: 'bolo' },
+        { id: 'c', day: MO, recipeId: 'ofen', baseId: 'bolo' },
+      ],
+    };
+    expect(plan(resolveClashes(w))).toEqual([`${MO}:ofen`, `${MO}m:spag`, `${DI}m:wraps`].sort());
+  });
+
+  it('Kochtage neu wählen: Mittage bleiben, wenn die Grundlage dann schon gekocht ist', () => {
+    const w = putMeal(setExtra(example(), 'bolo', 1), mittags(DI), 'wraps', 'bolo', hh1, newId);
+    expect(plan(withCookDays(w, [SA, MI], newId, hh1))).toContain(`${DI}m:wraps`);
+    // Bolo erst am Dienstag gekocht → Dienstagmittag ist dann noch nichts da: zurück in den Kühlschrank
+    const spaet = withCookDays(w, [DI], newId, hh1);
+    expect(spaet.meals.some((m) => m.lunch)).toBe(false);
+    expect(spaet.bases.find((b) => b.recipeId === 'bolo')!.extra).toBe(1);
   });
 });

@@ -52,18 +52,25 @@ export interface WeekBase {
   recipeId: string;
   /** Kochtag */
   day: Weekday;
-  /** Portionen über die geplanten Mahlzeiten hinaus – als Vorrat ins Gefrierfach (Julia: Portionen anpassen) */
+  /** Portionen über die geplanten Mahlzeiten hinaus – liegen im Kühlschrank, bis sie einen Platz haben (Julia: Portionen anpassen) */
   extra?: number;
+  /** bewusst eingefroren statt verteilt (Julia: „manches nicht in den Wochenplan, sondern einfrieren“) – nicht verplanen */
+  freeze?: number;
   /** am Kochtag gekocht – steht jetzt als Vorgekocht in der Speisekammer */
   cooked?: boolean;
   /** MHD-Fund aus dem Einkauf, der hier hineinkommt (Julia: Zucchini in die Bolo) – Name, nur zur Anzeige */
   adds?: string[];
 }
 
-/** Ein Abendessen der Woche. Mittagessen werden daraus abgeleitet (Rest vom Vorabend, sonst eine Box) – siehe week.ts. */
+/**
+ * Ein Essen der Woche – abends, oder mittags (`lunch`). Der Mittag ist ein Platz wie der Abend (Julia: „gleich wie der
+ * Abend“): Kärtchen aus dem Kühlschrank drauf, tauschen, Portionen. Fehlt `lunch`, ist es ein Abend (alte Wochen bleiben gültig).
+ */
 export interface WeekMeal {
   id: string;
   day: Weekday;
+  /** mittags statt abends */
+  lunch?: true;
   /** das Gericht – eine Verwandlung (Bolo-Wraps) oder die Grundlage selbst (Kürbissuppe) */
   recipeId: string;
   /** aus welcher Grundlage (WeekBase.recipeId) – gespeichert, damit Tauschen nicht jedes Mal suchen muss */
@@ -72,8 +79,13 @@ export interface WeekMeal {
   side?: string;
   /** Portionen an diesem Abend, wenn anders als im Haushalt (Julia: Gäste am Freitag) – fehlt = Haushalt */
   portions?: number;
-  /** gegessen (mit dem Rest für den nächsten Mittag) */
+  /** gegessen */
   done?: boolean;
+  /**
+   * das Frische ist schon gekocht – am Abend vorher mitgekocht (Julia: Mittag zum Mitnehmen). Beim Essen geht nur noch
+   * die Grundlage aus dem Kühlschrank, die Einkaufsliste rechnet das Frische nicht mehr.
+   */
+  freshCooked?: true;
 }
 
 export interface Week {
@@ -83,7 +95,7 @@ export interface Week {
   meals: WeekMeal[];
   /** diese Woche kein Mittagessen (Kantine, auswärts) */
   noLunch?: Weekday[];
-  /** Mittagsboxen schon gegessen (Reste vom Vorabend gehen mit dem Abendessen) */
+  /** veraltet: gegessene Mittagsboxen aus der Zeit, als Mashi Mittage selbst ableitete – wird nicht mehr gelesen */
   doneLunch?: Weekday[];
   /** erster Tag der Woche, wenn fest (Julia: Samstag dazu soll nicht vor Mittwoch rutschen) – fehlt = erster Kochtag */
   start?: Weekday;

@@ -1,12 +1,13 @@
 import { currentContent } from '../../domain/recipe';
-import { DAY_LONG, carbCarry, mealPortions, mealTitle, weekdayOf, weekView } from '../../domain/week';
+import { DAY_LONG, carbCarry, mealTitle, servingsOf, weekdayOf, weekView, type MealView } from '../../domain/week';
+import { cookStart } from '../../domain/cookDay';
 import { sideGrams, sidesOf } from '../../domain/sides';
 import { ComboSteps } from './ComboSteps';
 import { formatAmount } from '../../domain/scaling';
 import type { Week } from '../../domain/mealplan';
 import type { Recipe } from '../../domain/types';
 import { specialDays } from '../../domain/shelfLife';
-import { currentPlan, eatLunchBox, eatMeal, eatOutToday, householdOf, thawPantryItem, usePantry, usePlan, useRecipes } from '../../data/store';
+import { currentPlan, eatMeal, eatOutToday, householdOf, thawPantryItem, usePantry, usePlan, useRecipes } from '../../data/store';
 import { navigate } from '../../router';
 import { toast } from '../toast';
 import { Icon } from './Icon';
@@ -31,6 +32,10 @@ export function WeekToday({ week }: { week: Week }) {
   const tomorrow = view.days[i + 1];
   const cookToday = view.bases.filter((b) => b.base.day === today && !b.base.cooked);
   const meal = d?.meal;
+  // Kochtag verpasst (nicht als vorgekocht markiert): ein Gericht mit frischen Zutaten trotzdem kochen – wie bisher.
+  // Schon mitgekocht: nur noch „Gegessen“
+  const go = meal && (cookStart(view, meal, hh)
+    ?? (meal.meal.recipeId !== meal.meal.baseId && !meal.meal.freshCooked ? { prep: false as const, recipeId: meal.meal.recipeId, mealId: meal.meal.id, portions: servingsOf(meal.meal, hh) } : undefined));
   const sides = sidesOf(meal?.meal.side);
   const carry = carbCarry(view, hh).get(today);
   const lunch = d?.lunch;
@@ -38,11 +43,13 @@ export function WeekToday({ week }: { week: Week }) {
   const uncooked = view.bases.filter((b) => !b.base.cooked).map((b) => b.base.day);
   const nextCook = [...view.order.slice(i + 1), ...view.order.slice(0, i + 1)].find((x) => uncooked.includes(x) && x !== today);
 
-  // morgen ein Gericht aus dem Gefrierfach → heute auftauen
-  const thaw = tomorrow?.meal && !tomorrow.meal.meal.done && tomorrow.meal.frost
-    ? pantry.items.find((x) => x.recipeId === tomorrow.meal!.meal.baseId && x.frozenAt && !x.part && (x.amount ?? 0) > 0)
+  // morgen etwas aus dem Gefrierfach (mittags oder abends) → heute auftauen
+  const frozenTomorrow: MealView | undefined = [tomorrow?.lunch, tomorrow?.meal].find((m) => m && !m.meal.done && m.frost);
+  const thaw = frozenTomorrow
+    ? pantry.items.find((x) => x.recipeId === frozenTomorrow.meal.baseId && x.frozenAt && !x.part && (x.amount ?? 0) > 0)
     : undefined;
-  const fillForLunch = meal && !meal.meal.done && tomorrow?.lunch?.kind === 'rest' && tomorrow.lunch.recipe.id === meal.meal.recipeId;
+  // morgen mittags dasselbe wie heute Abend → gleich abfüllen
+  const fillForLunch = meal && !meal.meal.done && tomorrow?.lunch && !tomorrow.lunch.meal.done && tomorrow.lunch.meal.recipeId === meal.meal.recipeId;
 
   return (
     <section className="week-today" aria-label="Heute aus der Woche">
@@ -54,20 +61,19 @@ export function WeekToday({ week }: { week: Week }) {
         </button>
       )}
 
-      {lunch && lunch.kind !== 'none' && (
+      {/* der Mittag ist ein Essen wie der Abend (Julia) – „Gegessen“ zieht wie abends aus dem Vorgekochten ab */}
+      {lunch && !lunch.meal.done && (
         <div className="week-today__lunch">
-          <RecipeImage image={lunch.recipe.image} size="sm" />
+          <RecipeImage image={lunch.recipe?.image} size="sm" />
           <span className="week-today__text">
             <small>Heute Mittag</small>
-            <strong>{lunch.kind === 'rest' ? mealTitle(lunch, lunch.recipe) : title(lunch.recipe)}</strong>
-            <small>{lunch.kind === 'rest' ? 'Rest von gestern Abend' : lunch.frost ? 'aus dem Gefrierfach' : 'Box aus dem Kühlschrank'}</small>
+            <strong>{mealTitle(lunch.meal, lunch.recipe)}</strong>
+            <small>{lunch.meal.freshCooked ? 'schon mitgekocht' : lunch.frost ? 'aus dem Gefrierfach' : lunch.meal.recipeId === lunch.meal.baseId ? 'aufwärmen' : `${title(recipes.find((r) => r.id === lunch.meal.baseId))} aus dem Kühlschrank`}</small>
           </span>
-          {lunch.kind === 'box' && !(week.doneLunch ?? []).includes(today) && (
-            <button type="button" className="btn btn--soft btn--sm" onClick={() => {
-              const r = eatLunchBox(today);
-              if (r) toast('Mittagessen gegessen', { label: 'Rückgängig', run: r.undo });
-            }}>Gegessen</button>
-          )}
+          <button type="button" className="btn btn--soft btn--sm" onClick={() => {
+            const r = eatMeal(lunch.meal.id);
+            if (r) toast('Mittagessen gegessen', { label: 'Rückgängig', run: r.undo });
+          }}>Gegessen</button>
         </div>
       )}
 
@@ -84,11 +90,12 @@ export function WeekToday({ week }: { week: Week }) {
             <div className="bigcard__body">
               <h3 className="bigcard__title">{mealTitle(meal.meal, meal.recipe)}</h3>
               <p className="small muted">
-                {meal.meal.recipeId !== meal.meal.baseId ? `${title(recipes.find((r) => r.id === meal.meal.baseId))} aus dem ${meal.frost ? 'Gefrierfach' : 'Kühlschrank'} + frisch dazu`
+                {meal.meal.freshCooked ? 'Schon mitgekocht – nur aufwärmen'
+                  : meal.meal.recipeId !== meal.meal.baseId ? `${title(recipes.find((r) => r.id === meal.meal.baseId))} aus dem ${meal.frost ? 'Gefrierfach' : 'Kühlschrank'} + frisch dazu`
                   : sides.length ? `Aufwärmen · ${sides.map((x) => {
                     // zweimal Nudeln: heute gleich mitkochen bzw. von gestern aufwärmen (week.ts: carbCarry)
                     if (carry?.side === x.id && carry.from !== undefined) return `${x.name} von ${DAY_LONG[carry.from]}`;
-                    const n = mealPortions(view, today, hh) + (carry?.side === x.id ? carry.portions ?? 0 : 0);
+                    const n = servingsOf(meal.meal, hh) + (carry?.side === x.id ? carry.portions ?? 0 : 0);
                     return `${formatAmount(sideGrams(x.id, hh) * n)} ${x.unit === 'Stück' ? '×' : 'g'} ${x.name}${carry?.side === x.id && carry.with !== undefined ? ` (mit für ${DAY_LONG[carry.with]})` : ''}`;
                   }).join(', ')} dazu`
                     : 'Nur aufwärmen'}
@@ -96,17 +103,18 @@ export function WeekToday({ week }: { week: Week }) {
               {/* Baukasten-Abend: so geht's (Julia) – das Längste zuerst */}
               {meal.meal.recipeId === meal.meal.baseId && sides.length > 0 && meal.recipe && <ComboSteps side={meal.meal.side!} base={meal.recipe} household={hh} carry={carry} />}
               <div className="week-today__actions">
-                {meal.meal.recipeId === meal.meal.baseId
+                {/* am Kochtag, noch nicht vorgekocht: Vorkochen und das Essen in einem Durchgang (Julia) */}
+                {go
                   ? (
+                    <button type="button" className="btn btn--primary" onClick={() => navigate(go.prep ? `/rezept/${go.baseId}/kochen?p=${go.portions}&vorkochen=1` : `/rezept/${go.recipeId}/kochen?p=${go.portions}&meal=${go.mealId}`)}>
+                      <Icon name="play" size={18} /> Kochen
+                    </button>
+                  )
+                  : (
                     <button type="button" className="btn btn--primary" onClick={() => {
                       const r = eatMeal(meal.meal.id);
                       if (r) toast('Guten Appetit!', { label: 'Rückgängig', run: r.undo });
                     }}><Icon name="check" size={18} /> Gegessen</button>
-                  )
-                  : (
-                    <button type="button" className="btn btn--primary" onClick={() => navigate(`/rezept/${meal.meal.recipeId}/kochen?p=${mealPortions(view, today, hh)}&meal=${meal.meal.id}`)}>
-                      <Icon name="play" size={18} /> Kochen
-                    </button>
                   )}
                 <button type="button" className="btn btn--ghost" onClick={() => {
                   const r = eatOutToday(today);
@@ -128,8 +136,8 @@ export function WeekToday({ week }: { week: Week }) {
       {thaw && (
         <div className="week-today__hint">
           <Icon name="snow" size={16} />
-          <span>Für morgen ({mealTitle(tomorrow!.meal!.meal, tomorrow!.meal!.recipe)}): eine Portion {title(recipes.find((r) => r.id === tomorrow!.meal!.meal.baseId))} aus dem Gefrierfach nehmen.</span>
-          <button type="button" className="btn btn--soft btn--sm" onClick={() => toast('Zum Auftauen in den Kühlschrank', { label: 'Rückgängig', run: thawPantryItem(thaw.id, mealPortions(view, tomorrow!.day, hh)) })}>Auftauen</button>
+          <span>Für morgen {frozenTomorrow!.meal.lunch ? 'Mittag' : 'Abend'} ({mealTitle(frozenTomorrow!.meal, frozenTomorrow!.recipe)}): eine Portion {title(recipes.find((r) => r.id === frozenTomorrow!.meal.baseId))} aus dem Gefrierfach nehmen.</span>
+          <button type="button" className="btn btn--soft btn--sm" onClick={() => toast('Zum Auftauen in den Kühlschrank', { label: 'Rückgängig', run: thawPantryItem(thaw.id, servingsOf(frozenTomorrow!.meal, hh)) })}>Auftauen</button>
         </div>
       )}
     </section>

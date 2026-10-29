@@ -54,7 +54,7 @@ export function PlanScreen() {
   const pantry = usePantry();
   const [picking, setPicking] = useState(false);
   // „Was gibt's?“ → „Aus dem Kochbuch“ (Julia: freien Abend antippen) – derselbe Picker, aber für einen Abend
-  const [dayPick, setDayPick] = useState<{ day: Weekday; replace?: string } | null>(null);
+  const [dayPick, setDayPick] = useState<{ day: Weekday; lunch?: boolean; replace?: string } | null>(null);
   // Vorgekochtes deckt Grundlagen (Julia: „Meldung, dass nur 2 da sind“) – gleiche Verteilung wie auf der Einkaufsliste
   const supply = useMemo(() => baseSupply(plan, recipes, pantry.items, weekBaseIds(plan.week)), [plan, recipes, pantry.items]);
 
@@ -94,14 +94,14 @@ export function PlanScreen() {
   };
 
   // Julia: „ein Plan“ – oben die Woche mit ihren Tagen (oder der Einstieg), darunter, was noch keinen Tag hat
-  const weekPart = plan.week ? <WeekPlan week={plan.week} onPickDish={(day, replace) => setDayPick({ day, replace })} /> : (
+  const weekPart = plan.week ? <WeekPlan week={plan.week} onPickDish={(slot, replace) => setDayPick({ ...slot, replace })} /> : (
     <section className="week-start">
       <h2 className="h3">Diese Woche</h2>
       <p className="small muted">Noch keine Abende geplant. Plan die Woche mit Grundlagen zum Vorkochen – oder leg ein Gericht auf einen Tag (im Kochbuch: „Zum Wochenplan“).</p>
       <button type="button" className="btn btn--primary" onClick={() => navigate('/plan/woche')}><Icon name="calendar" size={18} /> Woche planen</button>
     </section>
   );
-  const takenDays = new Set(plan.week?.meals.map((m) => m.day) ?? []);
+  const takenDays = new Set(plan.week?.meals.filter((m) => !m.lunch).map((m) => m.day) ?? []);
   const planList = (
     <>
       {weekPart}
@@ -218,11 +218,11 @@ export function PlanScreen() {
       {more.sheet}
       {picking && <RecipePicker recipes={recipes.filter(plannable)} planned={plan.items.map((i) => i.recipeId)} suggestions={suggestions} onPick={add} onClose={() => setPicking(false)} />}
       {dayPick && (
-        <RecipePicker title={`Gericht für ${DAY_LONG[dayPick.day]}`} recipes={recipes.filter(plannable)} planned={[]} suggestions={suggestions} onClose={() => setDayPick(null)}
+        <RecipePicker title={`Gericht für ${DAY_LONG[dayPick.day]}${dayPick.lunch ? ' mittags' : ''}`} recipes={recipes.filter(plannable)} planned={[]} suggestions={suggestions} onClose={() => setDayPick(null)}
           onPick={(r) => {
             setDayPick(null);
-            const undo = scheduleRecipe(r.id, dayPick.day, householdOf(plan).portions, dayPick.replace);
-            if (undo) toast(`„${currentContent(r).title}“ am ${DAY_LONG[dayPick.day]}`, { label: 'Rückgängig', run: undo });
+            const undo = scheduleRecipe(r.id, dayPick.day, householdOf(plan).portions, dayPick.replace, dayPick.lunch);
+            if (undo) toast(`„${currentContent(r).title}“ am ${DAY_LONG[dayPick.day]}${dayPick.lunch ? ' mittags' : ''}`, { label: 'Rückgängig', run: undo });
           }} />
       )}
     </main>

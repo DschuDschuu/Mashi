@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { ask } from '../confirm';
 import { leftoverSuggestions, pantryAfterPlan } from '../../domain/pantry';
 import { packSuggestions } from '../../domain/packs';
@@ -8,9 +8,12 @@ import { cookingContent } from '../../domain/homemade';
 import { asCooked, formatAmount, formatQuantity, formatUnitAmount, scaleIngredients } from '../../domain/scaling';
 import { orderByUse } from '../../domain/stepIngredients';
 import type { Ingredient } from '../../domain/types';
-import { basesFor, cookBase, cookParts, currentPlan, eatMeal, householdOf, markCooked, setPlanAmounts, useFoodTable, usePantry, usePlan, useRecipe, useRecipes } from '../../data/store';
+import { basesFor, cookDay, cookParts, currentPlan, eatMeal, householdOf, markCooked, setPlanAmounts, useFoodTable, usePantry, usePlan, useRecipe, useRecipes } from '../../data/store';
 import { coveredShare } from '../../domain/baseStock';
-import { weekView } from '../../domain/week';
+import { DAY_SHORT, FRESH_DAYS, mealTitle, servingsOf, setMealPortions, weekView } from '../../domain/week';
+import type { WeekMeal } from '../../domain/mealplan';
+import { alongMeals, cookDayMeal, freshFor, TODAY } from '../../domain/cookDay';
+import { Stepper } from '../components/Controls';
 import { doneParts, forParts, partLabel, partsOf, preselectParts } from '../../domain/parts';
 import { lastParts, rememberParts, type CookHow } from '../cookPartsMemory';
 import { goBack, navigate } from '../../router';
@@ -28,7 +31,7 @@ import { amountsText, stockText, untilLabel, UseMoreSheet } from '../components/
 import { newId } from '../../domain/recipe';
 import { byUrgency, isDone, isRunning, newlyDone, pauseTimer, remainingOf, removeTimer, resumeTimer, startTimer, type CookTimer } from '../../domain/timers';
 
-export function CookModeScreen({ id, servings, variants, prep, mealId }: {
+export function CookModeScreen({ id, servings: asked, variants, prep, mealId }: {
   id: string; servings?: number; variants?: Record<string, string>;
   /** Kochtag der Vorkoch-Woche: die Grundlage auf Vorrat kochen (week.ts) */
   prep?: boolean;
@@ -57,9 +60,33 @@ export function CookModeScreen({ id, servings, variants, prep, mealId }: {
   const pantry = usePantry();
   const plan = usePlan();
   const recipes = useRecipes();
-  /** so, wie gekocht wird – selbst gemachte Gnocchi mit ihren Zutaten und Schritten als eigener Teil (siehe homemade.ts) */
+  // Kochtag in einem Durchgang (Julia: „10 Portionen vorkochen, aber heute schon was davon essen“): das Essen von heute
+  // aus dieser Grundlage kommt frisch dazu – mit den Portionen aus dem Wochenplan, beim Start änderbar
+  const hh = householdOf(plan);
+  const todayMeal = prep && plan.week ? cookDayMeal(plan.week, id) : undefined;
+  const fresh = useMemo(() => (todayMeal ? freshFor(todayMeal, recipes, hh) : undefined), [todayMeal, recipes, hh]);
+  /** Portionen für heute – undefined: wie im Plan, null: heute nicht mitkochen */
+  const [todayN, setTodayN] = useState<number | null>();
+  const plannedN = todayMeal ? servingsOf(todayMeal, hh) : 0;
+  const freshN = fresh ? (todayN === undefined ? plannedN : todayN) : null;
+  // so viele Portionen werden vorgekocht – mehr für heute nimmt erst aus dem Kühlschrank (wie „+1“ im Wochenplan)
+  const prepFor = (n: number | null): number | undefined => {
+    if (!plan.week) return asked;
+    const week = todayMeal && n !== null && n !== plannedN ? setMealPortions(plan.week, todayMeal.id, n, hh) : plan.week;
+    return weekView(week, recipes, hh).bases.find((b) => b.base.recipeId === id)?.portions ?? asked;
+  };
   // Abendessen der Vorkoch-Woche (?meal=): die Grundlage kommt aus dem Kühlschrank – nicht noch einmal kochen
-  const mealBase = mealId ? plan.week?.meals.find((m) => m.id === mealId)?.baseId : undefined;
+  const thisMeal = mealId ? plan.week?.meals.find((m) => m.id === mealId) : undefined;
+  const mealBase = thisMeal?.baseId;
+  // Julia: dasselbe Gericht in den nächsten 2 Tagen → das Frische gleich mitkochen (am Kochtag nur, wenn heute frisch gekocht wird)
+  const eatNow = prep ? (fresh ? todayMeal : undefined) : thisMeal;
+  const along = plan.week && eatNow ? alongMeals(plan.week, eatNow) : [];
+  /** abgewählt – sonst wird alles mitgekocht, was angeboten wird */
+  const [skipAlong, setSkipAlong] = useState<string[]>([]);
+  const alongOn = !prep || freshN ? along.filter((m) => !skipAlong.includes(m.id)) : [];
+  const alongN = alongOn.reduce((n, m) => n + servingsOf(m, hh), 0);
+  const servings = prep ? prepFor(freshN) : asked !== undefined && alongN ? asked + alongN : asked;
+  /** so, wie gekocht wird – selbst gemachte Gnocchi mit ihren Zutaten und Schritten als eigener Teil (siehe homemade.ts) */
   // sonst: Vorgekochtes deckt seine Grundlage (baseStock.ts) – wie beim Abziehen, wenn du fertig bist (store: basesFor)
   const full = useMemo(() => {
     if (!recipe) return undefined;
@@ -82,8 +109,10 @@ export function CookModeScreen({ id, servings, variants, prep, mealId }: {
     // nur die Teile von heute – mit „zum Schluss“, wenn das Gericht damit fertig wird
     const c = forParts(full, today, done);
     // Reihenfolge wie beim Kochen: was im ersten Schritt gebraucht wird, zuerst
-    return orderByUse(scaleIngredients(c, servings ?? c.servings), c.steps);
-  }, [full, servings, today, done]);
+    const own = orderByUse(scaleIngredients(c, servings ?? c.servings), c.steps);
+    // das Frische für heute dahinter – für die Portionen von heute (und morgen Mittag), nicht für alle (Julia)
+    return fresh && freshN ? [...own, ...orderByUse(scaleIngredients(fresh, freshN + alongN), fresh.steps)] : own;
+  }, [full, servings, today, done, fresh, freshN, alongN]);
   // Reste mitverbrauchen – aber nicht, was andere geplante Gerichte noch brauchen
   const table = useFoodTable();
   const { leftovers, packs } = useMemo(() => {
@@ -110,7 +139,8 @@ export function CookModeScreen({ id, servings, variants, prep, mealId }: {
     setReady(true);
   }, [recipe, linked, planned]);
   useEffect(() => {
-    if (ready && linked && recipe) setPlanAmounts(recipe.id, amounts); // gleich wie im Plan: tut nichts
+    // gleich wie im Plan: tut nichts. Das Frische für heute gehört nicht zum Plan-Eintrag der Grundlage
+    if (ready && linked && recipe) setPlanAmounts(recipe.id, Object.fromEntries(Object.entries(amounts).filter(([k]) => !k.startsWith(TODAY))));
   }, [ready, linked, recipe, amounts]);
 
   // Läuft ein Timer, 4× pro Sekunde neu zeichnen
@@ -135,8 +165,18 @@ export function CookModeScreen({ id, servings, variants, prep, mealId }: {
   const c = full;
   const parts = partsOf(c);
   const cook = forParts(c, today, done);
+  // Kochtag: erst die Grundlage, dann das Frische für heute
+  const all = [...cook.steps, ...(fresh && freshN ? fresh.steps : [])];
   // nur „zusammenstellen“ ohne eigene Schritte: ein Schritt, damit „Fertig“ erreichbar bleibt
-  const steps = cook.steps.length ? cook.steps : [{ id: 'nur-fertig', text: 'Für diese Auswahl gibt es keine eigenen Schritte – tippe auf „Fertig“.' }];
+  const steps = all.length ? all : [{ id: 'nur-fertig', text: 'Für diese Auswahl gibt es keine eigenen Schritte – tippe auf „Fertig“.' }];
+  const todayTitle = todayMeal ? mealTitle(todayMeal, recipes.find((r) => r.id === todayMeal.recipeId)) : '';
+  const toggleToday = () => {
+    setTodayN(freshN ? null : plannedN);
+    setStep(0);
+  };
+  // nur, was angehakt ist – sonst, was angeboten wird
+  const alongText = along.length === 1 ? `+ ${slotLabel(along[0])} · ${alongN || servingsOf(along[0], hh)}` : `+ ${alongOn.length || along.length} weitere${alongN ? ` · ${alongN}` : ''}`;
+  const toggleAlong = () => setSkipAlong(alongOn.length ? along.map((m) => m.id) : []);
   const open = parts.filter((p) => !done.includes(p));
   const togglePart = (p: string) => {
     const on = today.includes(p);
@@ -153,15 +193,20 @@ export function CookModeScreen({ id, servings, variants, prep, mealId }: {
    * Bestätigt (nicht nur weggewischt) und kein Abend aus dem Plan: als „wie letztes Mal“ merken.
    */
   const how: CookHow = prep ? 'vorkochen' : 'normal';
-  const startParts = (heute: string[], confirmed: boolean) => {
+  const startParts = (heute: string[], confirmed: boolean, eat: number | null, skip: string[]) => {
     setAskParts(false);
     setChosen(heute.length && heute.length < open.length ? heute : null);
     setStep(0);
-    if (confirmed && !mealId) rememberParts(recipe.id, how, heute);
+    if (fresh) setTodayN(eat);
+    setSkipAlong(skip);
+    if (confirmed && !mealId && open.length > 1) rememberParts(recipe.id, how, heute);
   };
-  // Vorauswahl: Abend aus dem Plan → alles Offene; sonst wie letztes Mal; sonst beim Vorkochen alles außer „Frisch“
-  const pre = askParts && open.length > 1 ? preselectParts(open, { prep, meal: !!mealId, last: mealId ? undefined : lastParts(recipe.id, how) }) : undefined;
+  // Vorauswahl: Abend aus dem Plan → alles Offene; sonst wie letztes Mal; sonst beim Vorkochen alles außer „Frisch“.
+  // Am Kochtag mit Essen von heute wird auch ohne Teile gefragt – wie viele heute mitessen (Julia: „einfach nachfragen“),
+  // ebenso, wenn es dasselbe in den nächsten Tagen gibt (gleich mitkochen?)
+  const pre = askParts && (open.length > 1 || fresh || along.length) ? preselectParts(open, { prep, meal: !!mealId, last: mealId ? undefined : lastParts(recipe.id, how) }) : undefined;
   const s = steps[Math.min(step, steps.length - 1)];
+  const freshStep = s.id.startsWith(TODAY);
   const last = step >= steps.length - 1;
   const ingredients = base.map((i) => (i.id in amounts ? { ...i, amount: amounts[i.id] } : i));
   const openLeftovers = noLeftovers ? [] : leftovers.filter((l) => !(l.ingredientId in amounts));
@@ -190,23 +235,29 @@ export function CookModeScreen({ id, servings, variants, prep, mealId }: {
 
   const finish = () => {
     // Kochtag (Julia: „Vorkochen starten“): Portionen in die Speisekammer, dann die nächste Grundlage des Tages
+    // mit dem Essen von heute in einem Durchgang: das ist dann auch gleich gegessen
     if (prep) {
-      const result = cookBase(recipe.id);
+      const result = cookDay(recipe.id, todayMeal && freshN ? { mealId: todayMeal.id, portions: freshN, along: alongOn.map((m) => m.id) } : undefined);
       if (result) {
-        toast(`${c.title}: ${result.fresh + result.frozen} ${result.fresh + result.frozen === 1 ? 'Portion' : 'Portionen'} in der Speisekammer${result.frozen ? `, davon ${result.frozen} eingefroren` : ''}`, { label: 'Rückgängig', run: result.undo });
+        const total = result.fresh + result.frozen;
+        const portions = `${total} ${total === 1 ? 'Portion' : 'Portionen'}`;
+        toast(result.ate
+          ? `${c.title}: ${portions} gekocht, ${result.ate} davon heute${result.frozen ? `, ${result.frozen} eingefroren` : ''} – ${alongN ? `für ${alongOn.map(slotLabel).join(', ')} gleich abfüllen` : 'guten Appetit!'}`
+          : `${c.title}: ${portions} in der Speisekammer${result.frozen ? `, davon ${result.frozen} eingefroren` : ''}`, { label: 'Rückgängig', run: result.undo });
         const p = currentPlan();
         const day = p.week?.bases.find((b) => b.recipeId === recipe.id)?.day;
         const next = p.week ? weekView(p.week, recipes, householdOf(p)).bases.find((b) => b.base.day === day && !b.base.cooked) : undefined;
         if (next) navigate(`/rezept/${next.base.recipeId}/kochen?p=${next.portions}&vorkochen=1`, { replace: true });
-        else navigate('/plan', { replace: true });
+        else navigate(result.ate ? '/' : '/plan', { replace: true });
         return;
       }
     }
     // Abendessen der Woche: frische Zutaten raus, die Grundlage aus dem Vorgekochten
     if (mealId) {
-      const result = eatMeal(mealId);
+      const result = eatMeal(mealId, alongOn.map((m) => m.id));
       if (result) {
-        toast(result.used.length ? `Aus der Speisekammer: ${result.used.join(', ')}` : 'Guten Appetit!', { label: 'Rückgängig', run: result.undo });
+        const later = alongN ? `Für ${alongOn.map(slotLabel).join(', ')} gleich abfüllen` : '';
+        toast(result.used.length ? `Aus der Speisekammer: ${result.used.join(', ')}${later ? ` – ${later.toLowerCase()}` : ''}` : later ? `${later} – guten Appetit!` : 'Guten Appetit!', { label: 'Rückgängig', run: result.undo });
         navigate('/', { replace: true });
         return;
       }
@@ -261,10 +312,12 @@ export function CookModeScreen({ id, servings, variants, prep, mealId }: {
       {/* Julia: was schon in der Speisekammer steht, erkennt Mashi selbst – gefragt wird nur nach den offenen Teilen; bleibt eins übrig, wird das gekocht */}
       {pre && (
         <PartsAskSheet parts={open} done={done} initial={pre.parts} onDone={startParts}
+          today={fresh ? { title: todayTitle, portions: plannedN } : undefined} prep={prep ? { title: c.title, portionsFor: prepFor } : undefined}
+          along={along.map((m) => ({ id: m.id, label: slotLabel(m), portions: servingsOf(m, hh) }))}
           hint={pre.fromLast ? 'Wie letztes Mal' : prep && pre.parts.length < open.length ? '„Frisch“ kochst du am Abend' : undefined} />
       )}
-      {/* Julia: welche Teile heute – fertige (Vorgekocht) stehen mit Haken da */}
-      {parts.length > 0 && (
+      {/* Julia: welche Teile heute – fertige (Vorgekocht) stehen mit Haken da; am Kochtag auch das Essen von heute */}
+      {(parts.length > 0 || fresh || along.length > 0) && (
         <div className="cook__parts" role="group" aria-label="Was kochst du heute?">
           <span className="small muted">Heute:</span>
           {parts.map((p) => {
@@ -276,6 +329,16 @@ export function CookModeScreen({ id, servings, variants, prep, mealId }: {
               </button>
             );
           })}
+          {fresh && (
+            <button type="button" className={`chip chip--sm${freshN ? ' is-on' : ''}`} aria-pressed={!!freshN} onClick={toggleToday}>
+              {todayTitle}{freshN ? ` · ${freshN}` : ''}
+            </button>
+          )}
+          {along.length > 0 && (!prep || !!freshN) && (
+            <button type="button" className={`chip chip--sm${alongN ? ' is-on' : ''}`} aria-pressed={alongN > 0} onClick={toggleAlong}>
+              {alongText}
+            </button>
+          )}
         </div>
       )}
       {/* mit den Mengen von gerade (3 statt 1 Paprika) – wie Plan-Karte und Reste */}
@@ -284,11 +347,18 @@ export function CookModeScreen({ id, servings, variants, prep, mealId }: {
       {(wide || showIngredients) && (
         <div className="cook__ingredients">
           <ul>
-            {ingredients.map((i) => {
+            {ingredients.map((i, n) => {
               const original = base.find((b) => b.id === i.id)!;
               const changed = i.id in amounts;
+              // Kochtag: wofür welche Menge – die Grundlage für alle Portionen, das Frische nur für heute
+              const head = fresh && freshN && i.id.startsWith(TODAY) && !ingredients[n - 1]?.id.startsWith(TODAY)
+                ? `Heute frisch dazu · ${freshN + alongN} ${freshN + alongN === 1 ? 'Portion' : 'Portionen'}${alongN ? ` (${alongN} für ${alongOn.map(slotLabel).join(', ')})` : ''}` : undefined;
               return (
-                <li key={i.id} className={changed ? 'is-changed' : undefined}>
+                <Fragment key={i.id}>
+                {n === 0 && fresh && freshN && !i.id.startsWith(TODAY) && <li className="cook__ing-head small muted">Vorkochen · {servings} Portionen</li>}
+                {n === 0 && !prep && alongN > 0 && <li className="cook__ing-head small muted">{servings} Portionen · {alongN} davon für {alongOn.map(slotLabel).join(', ')}</li>}
+                {head && <li className="cook__ing-head small muted">{head}</li>}
+                <li className={changed ? 'is-changed' : undefined}>
                   {editing === i.id ? (
                     <AmountEdit ing={i} changed={changed} onSave={(v) => setAmount(i, v)} onCancel={() => setEditing(null)} />
                   ) : (
@@ -299,6 +369,7 @@ export function CookModeScreen({ id, servings, variants, prep, mealId }: {
                     </button>
                   )}
                 </li>
+                </Fragment>
               );
             })}
           </ul>
@@ -363,8 +434,9 @@ export function CookModeScreen({ id, servings, variants, prep, mealId }: {
       )}
 
       <section className="cook__step" aria-live="polite">
-        <p className="cook__title">{c.title}</p>
-        <StepIngredients step={s} ingredients={ingredients} large />
+        <p className="cook__title">{freshStep ? `Heute: ${todayTitle}` : c.title}</p>
+        {/* je Schritt nur seine Seite – sonst stünden bei „Zwiebeln anbraten“ auch die Zwiebeln von heute */}
+        <StepIngredients step={s} ingredients={ingredients.filter((i) => i.id.startsWith(TODAY) === freshStep)} large />
         <p className="cook__text">{s.text}</p>
 
         {s.timerMinutes && !here && (
@@ -439,6 +511,9 @@ function AmountEdit({ ing, changed, onSave, onCancel }: { ing: Ingredient; chang
   );
 }
 
+/** „Fr mittags“ – für das Mitkochen */
+const slotLabel = (m: Pick<WeekMeal, 'day' | 'lunch'>) => `${DAY_SHORT[m.day]} ${m.lunch ? 'mittags' : 'abends'}`;
+
 const QUICK_MINUTES = [5, 10, 15, 20, 30];
 
 /** Eigener Timer: Schnellwahl für nasse Hände, sonst eigene Zeit; der Name ist freiwillig („Ofen“) */
@@ -494,35 +569,86 @@ function useWakeLock() {
  * „Was kochst du heute?“ (Julia: mehrere Teile wählbar, nicht nur „Nur Sauce kochen“): jedes offene Teil zum
  * An- und Abhaken, der Knopf sagt, was passiert („Sauce + Dressing kochen“). Vorgekochtes erkennt Mashi in der
  * Speisekammer (kein „schon gekocht“-Haken). Wegwischen ohne Wahl = die Vorauswahl.
+ * Am Kochtag steht das Essen von heute mit dabei (Julia: „wie im Wochenplan eingestellt bzw. einfach nachfragen“):
+ * angehakt mit den Portionen aus dem Plan, hier noch änderbar – und darüber, wie viel dafür vorgekocht wird.
  */
-function PartsAskSheet({ parts, done, initial, hint, onDone }: {
-  parts: string[]; done: string[]; initial: string[]; hint?: string; onDone: (heute: string[], confirmed: boolean) => void;
+function PartsAskSheet({ parts, done, initial, hint, today, prep, along, onDone }: {
+  parts: string[]; done: string[]; initial: string[]; hint?: string;
+  /** das Essen von heute aus dieser Grundlage – Portionen wie im Wochenplan */
+  today?: { title: string; portions: number };
+  /** Vorkochen: so viele Portionen, wenn heute so viele mitessen (null = heute nicht) */
+  prep?: { title: string; portionsFor: (eat: number | null) => number | undefined };
+  /** dasselbe Gericht in den nächsten 2 Tagen (Julia: frisch gleich mitkochen) – je Essen abwählbar */
+  along: { id: string; label: string; portions: number }[];
+  onDone: (heute: string[], confirmed: boolean, eat: number | null, skip: string[]) => void;
 }) {
-  const ref = useSheet(() => onDone(initial, false));
+  const ref = useSheet(() => onDone(initial, false, today?.portions ?? null, []));
   const [picked, setPicked] = useState(initial);
+  const [eat, setEat] = useState<number | null>(today?.portions ?? null);
+  const [skip, setSkip] = useState<string[]>([]);
   // Reihenfolge wie im Rezept, egal in welcher Reihenfolge getippt wird
   const toggle = (p: string) => setPicked((now) => (now.includes(p) ? now.filter((x) => x !== p) : parts.filter((x) => x === p || now.includes(x))));
-  const label = picked.length === parts.length ? 'Alles kochen' : picked.length ? `${picked.map(partLabel).join(' + ')} kochen` : 'Wähle, was du kochst';
+  // nur ein Teil (oder keiner): nichts zu wählen, gefragt wird nur nach heute
+  const many = parts.length > 1;
+  const label = today || !many ? 'Kochmodus starten' : picked.length === parts.length ? 'Alles kochen' : picked.length ? `${picked.map(partLabel).join(' + ')} kochen` : 'Wähle, was du kochst';
+  const prepN = prep?.portionsFor(eat);
   return (
-    <div className="sheet-backdrop" onClick={() => onDone(initial, false)}>
+    <div className="sheet-backdrop" onClick={() => onDone(initial, false, today?.portions ?? null, [])}>
       <div className="sheet parts-ask" role="dialog" aria-modal="true" aria-label="Was kochst du heute?" onClick={(e) => e.stopPropagation()} ref={ref}>
         <div className="sheet__grip" />
         <h2 className="sheet__title">Was kochst du heute?</h2>
+        {prep && prepN !== undefined && today && (
+          <p className="small muted">{prep.title} vorkochen: {prepN} {prepN === 1 ? 'Portion' : 'Portionen'}{eat ? `, ${eat} davon heute` : ''}</p>
+        )}
         {done.length > 0 && <p className="small muted">Schon gekocht und in der Speisekammer: {done.map(partLabel).join(' · ')}</p>}
-        {hint && <p className="small muted parts-ask__hint"><Icon name="refresh" size={14} /> {hint}</p>}
-        <div className="parts-ask__list" role="group" aria-label="Teile">
-          {parts.map((p) => {
-            const on = picked.includes(p);
-            return (
-              <button key={p} type="button" role="checkbox" aria-checked={on} className={`parts-ask__item${on ? ' is-on' : ''}`} onClick={() => toggle(p)}>
-                <span className="parts-ask__box" aria-hidden="true">{on && <Icon name="check" size={16} />}</span>
-                <strong>{partLabel(p)}</strong>
-                {!on && <small>später</small>}
-              </button>
-            );
-          })}
-        </div>
-        <button type="button" className="btn btn--primary btn--block btn--lg parts-ask__go" disabled={!picked.length} onClick={() => onDone(picked, true)}>
+        {hint && many && <p className="small muted parts-ask__hint"><Icon name="refresh" size={14} /> {hint}</p>}
+        {many && (
+          <div className="parts-ask__list" role="group" aria-label="Teile">
+            {parts.map((p) => {
+              const on = picked.includes(p);
+              return (
+                <button key={p} type="button" role="checkbox" aria-checked={on} className={`parts-ask__item${on ? ' is-on' : ''}`} onClick={() => toggle(p)}>
+                  <span className="parts-ask__box" aria-hidden="true">{on && <Icon name="check" size={16} />}</span>
+                  <strong>{partLabel(p)}</strong>
+                  {!on && <small>später</small>}
+                </button>
+              );
+            })}
+          </div>
+        )}
+        {today && (
+          <div className="parts-ask__list" role="group" aria-label="Heute Abend">
+            <button type="button" role="checkbox" aria-checked={eat !== null} className={`parts-ask__item${eat !== null ? ' is-on' : ''}`} onClick={() => setEat(eat === null ? today.portions : null)}>
+              <span className="parts-ask__box" aria-hidden="true">{eat !== null && <Icon name="check" size={16} />}</span>
+              <strong>Heute Abend: {today.title}</strong>
+              {eat === null && <small>später</small>}
+            </button>
+            {eat !== null && (
+              <div className="row-between parts-ask__today">
+                <span className="small">Frisch für so viele Portionen</span>
+                <Stepper small value={eat} onChange={setEat} label="Portionen für heute" />
+              </div>
+            )}
+          </div>
+        )}
+        {/* dasselbe gibt es bald wieder – nur, wenn heute überhaupt frisch gekocht wird */}
+        {along.length > 0 && (!today || eat !== null) && (
+          <div className="parts-ask__list" role="group" aria-label="Gleich mitkochen">
+            <p className="small muted parts-ask__sub">Gleich mitkochen – hält {FRESH_DAYS} Tage</p>
+            {along.map((a) => {
+              const on = !skip.includes(a.id);
+              return (
+                <button key={a.id} type="button" role="checkbox" aria-checked={on} className={`parts-ask__item${on ? ' is-on' : ''}`}
+                  onClick={() => setSkip(on ? [...skip, a.id] : skip.filter((x) => x !== a.id))}>
+                  <span className="parts-ask__box" aria-hidden="true">{on && <Icon name="check" size={16} />}</span>
+                  <strong>{a.label}</strong>
+                  <small>+{a.portions} {a.portions === 1 ? 'Portion' : 'Portionen'}</small>
+                </button>
+              );
+            })}
+          </div>
+        )}
+        <button type="button" className="btn btn--primary btn--block btn--lg parts-ask__go" disabled={many && !picked.length} onClick={() => onDone(picked, true, eat, skip)}>
           {label}
         </button>
       </div>

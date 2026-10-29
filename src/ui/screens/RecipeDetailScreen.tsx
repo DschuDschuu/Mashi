@@ -511,7 +511,7 @@ function PlanButton({ recipe, content, servings }: { recipe: Recipe; content: Re
  */
 function WhenSheet({ recipe, servings, onSomeday, onClose }: { recipe: Recipe; servings: number; onSomeday: (n: number) => void; onClose: () => void }) {
   const ref = useSheet(onClose);
-  const taken = new Set(usePlan().week?.meals.map((m) => m.day) ?? []);
+  const taken = new Set(usePlan().week?.meals.filter((m) => !m.lunch).map((m) => m.day) ?? []);
   // „Irgendwann“ gibt es nicht mehr (Julia) – vorgewählt ist der nächste freie Abend ab heute; nur wenn alle belegt sind, landet es ohne Tag
   const [day, setDay] = useState<Weekday | 'irgendwann'>(() => {
     const today = weekdayOf(new Date());
