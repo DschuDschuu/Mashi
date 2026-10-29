@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { navigate } from '../../router';
 import { useSheet } from '../useSheet';
 import { Icon, type IconName } from './Icon';
@@ -19,9 +19,16 @@ const TABS: { path: string; label: string; icon: IconName }[] = [
 export function BottomNav({ active, onlyTablet = false }: { active?: string; onlyTablet?: boolean }) {
   const [sheet, setSheet] = useState(false);
   const halloween = useSpecial() === 'halloween';
+  // Halloween: beim Reiterwechsel steigt kurz ein kleiner Geist aus dem neuen Grabstein (Julia) – nicht beim ersten Zeichnen
+  const [rise, setRise] = useState(0);
+  const before = useRef(active);
+  useEffect(() => {
+    if (before.current !== active && active) setRise((n) => n + 1);
+    before.current = active;
+  }, [active]);
   const tab = (t: (typeof TABS)[number]) => (
     <button key={t.path} className={`nav__item${active === t.path ? ' is-active' : ''}`} onClick={() => navigate(t.path)} aria-current={active === t.path ? 'page' : undefined}>
-      <NavIcon name={t.icon} stone={halloween} />
+      <NavIcon name={t.icon} stone={halloween} rise={halloween && active === t.path ? rise : 0} />
       <span>{t.label}</span>
     </button>
   );
@@ -32,6 +39,8 @@ export function BottomNav({ active, onlyTablet = false }: { active?: string; onl
         {TABS.slice(0, 2).map(tab)}
         <button className="nav__plus" onClick={() => setSheet(true)} aria-label="Neu: Rezept, Kassenbon oder Vorrat" aria-haspopup="dialog">
           {/* Halloween: der runde Knopf wird zum Kürbis mit Stiel und Rippen */}
+          {/* abends glimmt er von innen wie eine Laterne (CSS: :root[data-hw-evening]) */}
+          {halloween && <span className="nav__glow" aria-hidden="true" />}
           {halloween && (
             <svg className="nav__pumpkin" viewBox="0 0 50 50" aria-hidden="true">
               <path className="nav__pumpkin-body" d="M25 13c-3.4-2-8.6-2.4-12.6.3C7 16.8 5.2 22.6 5.8 27.6c.8 7.2 5.6 11.8 11.4 11.6 2.9 0 5.3-1 7.8-1s4.9 1 7.8 1c5.8.2 10.6-4.4 11.4-11.6.6-5-1.2-10.8-6.6-14.3-4-2.7-9.2-2.3-12.6-.3z" />
@@ -58,10 +67,16 @@ export function BottomNav({ active, onlyTablet = false }: { active?: string; onl
  * Die Form: kräftiger Zug, beide Enden ausgefranst, ein paar Borstenspuren.
  * Halloween: statt des Pinsels steht jedes Icon auf einem grauen Grabstein, der aktive wird orange (Julia).
  */
-function NavIcon({ name, stone = false }: { name: IconName; stone?: boolean }) {
+function NavIcon({ name, stone = false, rise = 0 }: { name: IconName; stone?: boolean; rise?: number }) {
   if (stone) {
     return (
       <span className="nav__icon nav__icon--stone">
+        {rise > 0 && (
+          <svg className="nav__rise" key={rise} width="22" height="27" viewBox="0 0 24 30" aria-hidden="true">
+            <path d="M4 26V12a8 8 0 0 1 16 0v14l-2.7-2-2.6 2-2.7-2-2.7 2-2.6-2z" />
+            <circle cx="9.5" cy="12.5" r="1.3" /><circle cx="14.5" cy="12.5" r="1.3" />
+          </svg>
+        )}
         <svg className="nav__stone" viewBox="0 0 40 42" aria-hidden="true">
           <path d="M5 42V17C5 8.2 11.7 2 20 2s15 6.2 15 15v25z" />
           <path className="nav__stone-crack" d="M27 9l-2.4 3.4 1.6 1.4-1.8 3" />

@@ -1,6 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { currentContent, totalMinutes } from '../../domain/recipe';
 import { recipeOfTheDay } from '../../domain/recipeOfTheDay';
+import { isAutumnRecipe } from '../../domain/seasons';
+import { useSpecial } from '../settings';
+import { ChefGhost } from '../components/HalloweenDeko';
 import type { Recipe } from '../../domain/types';
 import { addToPlan, useFoodTable, usePantry, usePlan, useRecipes } from '../../data/store';
 import { navigate } from '../../router';
@@ -44,7 +47,12 @@ export function StartScreen() {
     .sort((a, b) => Number(plannedUseUp.has(b.recipe.id)) - Number(plannedUseUp.has(a.recipe.id)));
   // Jeder Name nur einmal – die Liste ist nach Dringlichkeit sortiert, der dringendste Eintrag bleibt
   const expiring = all.filter((e, i) => !e.item.recipeId && all.findIndex((o) => o.item.name === e.item.name) === i);
-  const daily = recipeOfTheDay(recipes, new Date(), new Set(usingUp.keys()));
+  const halloween = useSpecial() === 'halloween';
+  // Halloween: Kürbis & Co. kommen öfter als Rezept des Tages dran (Julia)
+  const autumn = halloween
+    ? new Set(recipes.filter((r) => { const c = currentContent(r); return isAutumnRecipe(c.title, c.ingredients.map((i) => i.name)); }).map((r) => r.id))
+    : undefined;
+  const daily = recipeOfTheDay(recipes, new Date(), new Set(usingUp.keys()), autumn);
 
   return (
     <main className="screen screen--tabbed">
@@ -79,7 +87,7 @@ export function StartScreen() {
               darunter die Unterüberschrift mit Symbol – zum Plan geht es unten über die Navigation */}
           <h2 className="home-q home-q--title" id="today-title">Bereit zum Kochen</h2>
           <p className="today__title"><Icon name="calendar" size={18} /> Aus deinem Wochenplan</p>
-          <Swiper items={planned} />
+          <Perch on={halloween}><Swiper items={planned} /></Perch>
         </section>
       ) : weekTonight ? null : daily ? (
         <section className="today" aria-labelledby="today-title">
@@ -88,7 +96,7 @@ export function StartScreen() {
           <p className="home-q">Worauf hast du Lust?</p>
           <CravingAsk />
           <h2 className="today__title" id="today-title"><Icon name="sparkles" size={18} /> Oder das Rezept des Tages</h2>
-          <BigCard recipe={daily} servings={currentContent(daily).servings} daily hint={usingUp.get(daily.id)} />
+          <Perch on={halloween}><BigCard recipe={daily} servings={currentContent(daily).servings} daily hint={usingUp.get(daily.id)} /></Perch>
         </section>
       ) : (
         <>
@@ -189,6 +197,17 @@ function Swiper({ items }: { items: { recipe: Recipe; servings: number }[] }) {
         </div>
       )}
     </>
+  );
+}
+
+/** Halloween: Platz über der Startkachel, auf deren Kante der Koch-Geist sitzt – hinter dem Swiper, damit er beim Wischen bleibt */
+function Perch({ on, children }: { on: boolean; children: ReactNode }) {
+  if (!on) return <>{children}</>;
+  return (
+    <div className="perch">
+      <ChefGhost />
+      <div className="perch__card">{children}</div>
+    </div>
   );
 }
 

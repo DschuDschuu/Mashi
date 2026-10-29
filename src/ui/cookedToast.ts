@@ -1,3 +1,4 @@
+import { celebrate } from './celebrate';
 import type { CookedResult } from '../data/store';
 import { toast } from './toast';
 
@@ -13,6 +14,7 @@ export function cookedToast(result: CookedResult | null) {
     result.used.length ? `Aus der Speisekammer: ${result.used.join(', ')}` : '',
     result.toCheck.length ? `Bitte prüfen: ${result.toCheck.join(', ')}` : '',
   ].filter(Boolean);
+  celebrate(); // Halloween: Fledermausschwarm (sonst hört niemand zu)
   const action = result.undo ? { label: 'Rückgängig', run: result.undo } : undefined;
   toast(parts.length ? parts.join(' · ') : 'Als gekocht gemerkt', action);
 }

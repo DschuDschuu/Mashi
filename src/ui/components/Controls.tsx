@@ -72,32 +72,11 @@ export function Section({ title, icon, action, children }: { title: string; icon
 }
 
 export function Empty({ icon, children }: { icon: IconName; children: ReactNode }) {
-  const box = (
+  return (
     <div className="empty">
       <Icon name={icon} size={28} />
       <div>{children}</div>
     </div>
-  );
-  if (useSpecial() !== 'halloween') return box;
-  // Halloween: hinter dem Kasten wohnt ein Koch-Geist, der ab und zu oben herausguckt (Julia)
-  return (
-    <div className="empty-peek">
-      <ChefGhost />
-      {box}
-    </div>
-  );
-}
-
-/** Geist mit Kochmütze und Kochlöffel – nur Deko, für Vorleser unsichtbar */
-function ChefGhost() {
-  return (
-    <svg className="chef-ghost" width="42" height="48" viewBox="0 0 30 34" aria-hidden="true">
-      <path className="chef-ghost__hat" d="M8.5 9.2a3 3 0 0 1 2-5.4 3.6 3.6 0 0 1 6.6-.6 3 3 0 0 1 3.4 5.6v2.2h-12z" />
-      <path className="chef-ghost__body" d="M6 32V20a9 9 0 0 1 18 0v12l-3-2-3 2-3-2-3 2-3-2z" />
-      <g className="chef-ghost__face"><circle cx="12" cy="19.5" r="1.4" /><circle cx="18" cy="19.5" r="1.4" /><ellipse cx="15" cy="24" rx="1.6" ry="1.9" /></g>
-      <path className="chef-ghost__spoon" d="M24 22l4.5-5.5" />
-      <ellipse className="chef-ghost__bowl" cx="28.6" cy="15.6" rx="1.6" ry="2.2" transform="rotate(40 28.6 15.6)" />
-    </svg>
   );
 }
 

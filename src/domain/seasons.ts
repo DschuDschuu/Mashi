@@ -51,3 +51,18 @@ export function toggleSpecial(id: SpecialId, on: boolean, day: string): SpecialO
   if (on) return inSeason ? undefined : { id, until: 'immer' };
   return inSeason ? { id: 'aus', until: seasonEnd(season, day) } : undefined;
 }
+
+/** Abends (18 bis 6 Uhr, Ortszeit): Mond in der Ecke, Kürbis-Laterne leuchtet */
+export const isEvening = (now: Date) => now.getHours() >= 18 || now.getHours() < 6;
+
+/** Der 31. Oktober selbst: ein bisschen mehr Halloween (Mond den ganzen Tag, dritte Fledermaus, Hexenhut) */
+export const isHalloweenNight = (day: string) => day.slice(5, 10) === '10-31';
+
+/** Herbstzutaten fürs „Rezept des Tages“ in der Halloween-Saison – bewusst ohne Möhre/Apfel, die stecken in fast allem */
+const AUTUMN = ['kürbis', 'hokkaido', 'butternut', 'süßkartoffel', 'maronen', 'esskastanie', 'pastinake', 'steckrübe'];
+
+/** Passt ein Rezept zur Saison? Schaut in Titel und Zutaten. */
+export function isAutumnRecipe(title: string, ingredients: string[]): boolean {
+  const text = [title, ...ingredients].join(' ').toLowerCase();
+  return AUTUMN.some((w) => text.includes(w));
+}

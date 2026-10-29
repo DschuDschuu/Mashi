@@ -35,3 +35,21 @@ describe('Rezept des Tages', () => {
     expect(recipeOfTheDay([make('x', { status: 'zum_testen' })], day(24))).toBeUndefined();
   });
 });
+
+describe('Rezept des Tages mit Bonus (Halloween: Kürbis & Co.)', () => {
+  const pool = ['a', 'b', 'c', 'd', 'e', 'f'].map((id) => make(id));
+  const days = Array.from({ length: 60 }, (_, d) => new Date(2026, 9, d + 1, 12));
+
+  it('Bonus-Rezepte kommen öfter dran, die anderen aber auch', () => {
+    const picks = days.map((d) => recipeOfTheDay(pool, d, new Set(), new Set(['a']))?.id);
+    const a = picks.filter((id) => id === 'a').length;
+    expect(a).toBeGreaterThan(60 / 6);
+    expect(new Set(picks).size).toBeGreaterThanOrEqual(4);
+  });
+
+  it('auch mit Bonus nie zweimal hintereinander dasselbe', () => {
+    for (let i = 1; i < days.length; i++) {
+      expect(recipeOfTheDay(pool, days[i], new Set(), new Set(['a']))?.id).not.toBe(recipeOfTheDay(pool, days[i - 1], new Set(), new Set(['a']))?.id);
+    }
+  });
+});

@@ -1266,7 +1266,7 @@ p { margin: 0; }
   --ink: #231a14; --ink-2: #5e4c3f; --ink-3: #75625a;
   --primary: #ef7f1a; --primary-press: #8a420a; --primary-soft: #fde6cf; --primary-text: #a8500c;
   --art: #a8500c; --star: #ef7f1a; --on-primary: #1c140e;
-  --hw-night: #1b1613; --hw-stone: #6b6460; --hw-ghost: #8a7a6e;
+  --hw-night: #1b1613; --hw-stone: #6b6460; --hw-ghost: #fffdf9; --hw-ghost-line: #5e4c3f;
 }
 /* „Spezial“ in den Einstellungen – eingeklappt, zeigt darunter, was gerade an ist */
 .special summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 12px; color: var(--ink); }
@@ -1299,87 +1299,186 @@ p { margin: 0; }
 .nav__icon--stone .nav__glyph { margin-bottom: 6px; color: #f1ebe5; }
 .nav__item.is-active .nav__stone { fill: var(--primary); }
 .nav__item.is-active .nav__icon--stone .nav__glyph { color: var(--on-primary); }
-/* Plus als Kürbis mit grünem Stiel */
+/* Plus als Kürbis mit grünem Stiel – abends glimmt er von innen wie eine Laterne und flackert */
 :root[data-theme="halloween"] .nav__plus { position: relative; z-index: 1; background: none; box-shadow: none; }
 .nav__pumpkin { position: absolute; inset: -4px; width: calc(100% + 8px); height: calc(100% + 8px); }
 .nav__pumpkin-body { fill: var(--primary); }
 .nav__pumpkin-ribs { fill: none; stroke: rgb(28 20 14 / 0.22); stroke-width: 1.6; stroke-linecap: round; }
 .nav__pumpkin-stem { fill: none; stroke: #5d7a3a; stroke-width: 3; stroke-linecap: round; }
 :root[data-theme="halloween"] .nav__plus-icon { position: relative; margin-top: 6px; }
+.nav__glow { position: absolute; inset: -14px; border-radius: 50%; pointer-events: none; opacity: 0; background: radial-gradient(closest-side, rgb(255 196 100 / 0.75), rgb(255 140 30 / 0.28) 60%, transparent); }
+:root[data-hw-evening] .nav__glow { animation: hw-flicker 2.4s ease-in-out infinite; }
+:root[data-hw-evening] .nav__pumpkin-body { fill: #ff9a3c; }
+@keyframes hw-flicker { 0%, 100% { opacity: 0.55; } 18% { opacity: 0.9; } 22% { opacity: 0.6; } 47% { opacity: 0.85; } 63% { opacity: 0.5; } 80% { opacity: 0.95; } }
+
+/* Kleiner Geist steigt beim Reiterwechsel aus dem Grabstein – startet hinter dem Stein (steht im DOM davor) */
+.nav__rise { position: absolute; left: 50%; top: 2px; margin-left: -11px; pointer-events: none; fill: #fffdf9; opacity: 0; animation: hw-rise 1.1s ease-out forwards; }
+.nav__rise circle { fill: #231a14; }
+@keyframes hw-rise {
+  0% { transform: translateY(14px) scale(0.6); opacity: 0; }
+  25% { opacity: 1; }
+  70% { transform: translateY(-26px) scale(1) rotate(-6deg); opacity: 0.9; }
+  100% { transform: translateY(-40px) scale(1.05) rotate(4deg); opacity: 0; }
+}
+
+/* Nebel zieht über den Friedhof: drei Schwaden in eigenen Kacheln, je um genau eine Kachel verschoben → nahtlos */
+:root[data-theme="halloween"] .nav::after {
+  content: ""; position: absolute; left: 0; right: 0; top: 28px; height: 28px; z-index: 2; pointer-events: none;
+  background:
+    radial-gradient(48px 9px at 30% 50%, rgb(255 250 240 / 0.16), transparent),
+    radial-gradient(70px 11px at 60% 45%, rgb(255 250 240 / 0.12), transparent),
+    radial-gradient(40px 8px at 50% 60%, rgb(255 250 240 / 0.15), transparent);
+  background-size: 220px 100%, 300px 100%, 170px 100%;
+  background-repeat: repeat-x;
+  animation: hw-fog 24s linear infinite;
+}
+@keyframes hw-fog { to { background-position: 220px 0, -300px 0, 170px 0; } }
 
 /* Himmel hinter den Karten: .app wird eigene Ebene, der Himmel liegt darin ganz unten (über dem Hintergrund) */
 :root[data-theme="halloween"] .app { isolation: isolate; }
 .hw-sky { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
-.hw-bat { position: absolute; left: 0; color: var(--hw-night); animation: hw-cross 9s linear infinite; }
-.hw-bat--1 { top: 14%; }
-.hw-bat--2 { top: 42%; animation-name: hw-cross-back; animation-delay: -3s; }
-.hw-bat--3 { top: 68%; animation-delay: -6s; }
-@keyframes hw-cross { from { transform: translate(-60px, 0); } to { transform: translate(calc(100vw + 60px), -70px); } }
-@keyframes hw-cross-back { from { transform: translate(calc(100vw + 60px), 0) scaleX(-1); } to { transform: translate(-60px, -50px) scaleX(-1); } }
-.hw-bob { display: block; animation: hw-bob 0.9s ease-in-out infinite alternate; }
-@keyframes hw-bob { to { transform: translateY(10px); } }
-.hw-bat__svg { display: block; fill: currentColor; transform-origin: center; animation: hw-flap 0.2s ease-in-out infinite alternate; }
-@keyframes hw-flap { to { transform: scaleY(0.5); } }
-/* Geist erschrickt: schwebt, Fledermaus kommt, große Augen, Hüpfer, weg – alle 14 s */
-.hw-chase { position: absolute; left: 0; right: 0; top: 55%; height: 60px; }
-.hw-chase__bat { position: absolute; top: 14px; left: 0; color: var(--hw-night); animation: hw-chase-bat 14s ease-in-out infinite; }
-.hw-chase__bat .hw-bat__svg { width: 34px; height: 17px; }
-.hw-chase__ghost { position: absolute; top: 0; left: 0; animation: hw-chase-ghost 14s ease-in-out infinite; }
-.hw-ghost__body { fill: var(--hw-ghost); }
-.hw-ghost__calm, .hw-ghost__shock { fill: var(--bg); }
-.hw-ghost__calm path { fill: none; stroke: var(--bg); stroke-width: 1.2; stroke-linecap: round; }
-.hw-ghost__calm { animation: hw-calm 14s step-end infinite; }
-.hw-ghost__shock { opacity: 0; animation: hw-shock 14s step-end infinite; }
-@keyframes hw-chase-ghost {
-  0% { transform: translate(40vw, 4px); }
-  15% { transform: translate(44vw, -4px); }
-  17% { transform: translate(44vw, -16px) scale(1.12); }
-  20% { transform: translate(44vw, -12px); }
-  35%, 100% { transform: translate(calc(100vw + 60px), -30px); }
-}
-@keyframes hw-chase-bat { 0% { transform: translate(-60px, 0); } 16% { transform: translate(calc(44vw - 50px), 4px); } 20% { transform: translate(calc(44vw - 40px), 0); } 38%, 100% { transform: translate(calc(100vw + 60px), -10px); } }
-@keyframes hw-shock { 0% { opacity: 0; } 15.5% { opacity: 1; } 35% { opacity: 0; } }
-@keyframes hw-calm { 0% { opacity: 1; } 15.5% { opacity: 0; } 35% { opacity: 1; } }
+/* zwei Bahnen, je gut 60 % der Zeit unterwegs – meist eine, manchmal zwei (Julia: etwas weniger); am 31.10. eine dritte */
+.hw-flight { position: absolute; left: 0; animation: hw-cross 15s linear infinite; }
+.hw-flight--1 { top: 16%; }
+.hw-flight--2 { top: 46%; animation-name: hw-cross-back; animation-duration: 19s; animation-delay: -9s; }
+.hw-flight--3 { top: 72%; animation-duration: 13s; animation-delay: -4s; }
+@keyframes hw-cross { 0% { transform: translateX(-70px); } 62%, 100% { transform: translateX(calc(100vw + 70px)); } }
+@keyframes hw-cross-back { 0% { transform: translateX(calc(100vw + 70px)) scaleX(-1); } 62%, 100% { transform: translateX(-70px) scaleX(-1); } }
+/* Bogenflug: auf und ab, dazu eine Viertelphase versetzt die Neigung – Nase unten, wenn sie am schnellsten sinkt */
+.hw-swoop { display: block; animation: hw-swoop 2.8s ease-in-out infinite alternate; }
+@keyframes hw-swoop { from { transform: translateY(-16px); } to { transform: translateY(22px); } }
+.hw-tilt { display: block; animation: hw-tilt 2.8s ease-in-out infinite alternate; animation-delay: -1.4s; }
+@keyframes hw-tilt { from { transform: rotate(-9deg); } to { transform: rotate(9deg); } }
+.hw-bat { display: block; overflow: visible; fill: var(--hw-night); }
+.hw-bat__eye { fill: #ff9a3c; }
+/* Jeder Flügel dreht sich an der Schulter: dreimal schlagen, dann gleiten */
+.hw-wing { transform-box: view-box; }
+.hw-wing--r { transform-origin: 33px 13px; animation: hw-flap-r 1.8s ease-in-out infinite; }
+.hw-wing--l { transform-origin: 27px 13px; animation: hw-flap-l 1.8s ease-in-out infinite; }
+.hw-flight--2 .hw-wing { animation-duration: 2.2s; }
+@keyframes hw-flap-r { 0% { transform: rotate(4deg); } 8% { transform: rotate(-30deg); } 18% { transform: rotate(26deg) scaleY(0.75); } 28% { transform: rotate(-30deg); } 38% { transform: rotate(26deg) scaleY(0.75); } 50%, 100% { transform: rotate(4deg); } }
+@keyframes hw-flap-l { 0% { transform: rotate(-4deg); } 8% { transform: rotate(30deg); } 18% { transform: rotate(-26deg) scaleY(0.75); } 28% { transform: rotate(30deg); } 38% { transform: rotate(-26deg) scaleY(0.75); } 50%, 100% { transform: rotate(-4deg); } }
+/* flattern auf der Stelle (Verfolgung, Schwarm) */
+@keyframes hw-fast-r { from { transform: rotate(-30deg); } to { transform: rotate(26deg) scaleY(0.75); } }
+@keyframes hw-fast-l { from { transform: rotate(30deg); } to { transform: rotate(-26deg) scaleY(0.75); } }
+@keyframes hw-hover { to { transform: translateY(5px); } }
 
-/* Netz mit Spinne oben rechts – über der Kopfleiste, aber durchsichtig und nicht anklickbar */
-.hw-corner { position: fixed; top: env(safe-area-inset-top, 0px); right: max(0px, calc((100vw - 560px) / 2)); width: 90px; height: 70px; z-index: 6; pointer-events: none; }
+/* Geist erschrickt (alle 12 s): schwebt, Fledermaus taucht vor ihm auf, Hüpfer, Zittern, „!“, Schwung holen, weg */
+.hw-chase { position: absolute; left: 0; right: 0; top: 58%; height: 90px; }
+.hw-chase__ghost { position: absolute; left: 0; top: 24px; animation: hw-ghost-x 12s ease-in-out infinite; }
+@keyframes hw-ghost-x {
+  0% { transform: translate(28vw, 0); opacity: 0; }
+  8% { opacity: 1; }
+  40% { transform: translate(40vw, 0); opacity: 1; }
+  43% { transform: translate(40vw, -16px) scale(1.08); }
+  45% { transform: translate(calc(40vw - 3px), -12px); }
+  47% { transform: translate(calc(40vw + 3px), -12px); }
+  49% { transform: translate(calc(40vw - 3px), -12px); }
+  51% { transform: translate(calc(40vw + 3px), -12px); }
+  53% { transform: translate(40vw, -12px) scale(1); }
+  57% { transform: translate(calc(40vw + 8px), -12px) scale(0.9, 1.1); }
+  66% { transform: translate(-60px, -26px) scale(1.35, 0.82); opacity: 1; }
+  68%, 100% { transform: translate(-80px, -26px); opacity: 0; }
+}
+.hw-chase__bob { position: relative; display: block; animation: hw-gbob 1.4s ease-in-out infinite alternate; }
+@keyframes hw-gbob { to { transform: translateY(-6px); } }
+.hw-ghost { display: block; overflow: visible; filter: drop-shadow(0 3px 4px rgb(35 26 20 / 0.12)); }
+.hw-ghost__body { fill: var(--hw-ghost); stroke: var(--hw-ghost-line); stroke-width: 1.3; stroke-linejoin: round; }
+.hw-ink { fill: var(--ink); }
+.hw-line { fill: none; stroke: var(--ink); stroke-width: 1.3; stroke-linecap: round; }
+.hw-blush { fill: var(--primary); opacity: 0.35; }
+.hw-big { fill: #ffffff; stroke: var(--ink); stroke-width: 0.8; }
+.hw-arms { fill: none; stroke: var(--hw-ghost-line); stroke-width: 1.6; stroke-linecap: round; }
+.hw-ghost__calm { animation: hw-calm 12s step-end infinite; }
+.hw-ghost__shock { opacity: 0; animation: hw-shock 12s step-end infinite; }
+@keyframes hw-calm { 0% { opacity: 1; } 42% { opacity: 0; } 70% { opacity: 1; } }
+@keyframes hw-shock { 0% { opacity: 0; } 42% { opacity: 1; } 70% { opacity: 0; } }
+.hw-bang { position: absolute; left: 30px; top: -10px; font-weight: 900; font-size: 1.25rem; line-height: 1; color: var(--primary); opacity: 0; transform-origin: bottom center; animation: hw-bang 12s ease-out infinite; }
+@keyframes hw-bang { 0%, 42% { opacity: 0; transform: scale(0); } 44% { opacity: 1; transform: scale(1.4); } 46%, 54% { opacity: 1; transform: scale(1); } 57%, 100% { opacity: 0; transform: scale(1); } }
+.hw-speed { position: absolute; right: -16px; top: 16px; display: flex; flex-direction: column; gap: 5px; opacity: 0; animation: hw-speed 12s linear infinite; }
+.hw-speed i { display: block; height: 2px; border-radius: 2px; background: var(--hw-ghost-line); }
+.hw-speed i:nth-child(1) { width: 12px; } .hw-speed i:nth-child(2) { width: 16px; margin-left: 4px; } .hw-speed i:nth-child(3) { width: 10px; }
+@keyframes hw-speed { 0%, 57% { opacity: 0; } 59%, 64% { opacity: 0.6; } 67%, 100% { opacity: 0; } }
+/* die Fledermaus kommt von rechts, schwebt kurz vor ihm und jagt ihm dann hinterher */
+.hw-chase__bat { position: absolute; left: 0; top: 0; animation: hw-cbat-x 12s ease-in-out infinite; }
+@keyframes hw-cbat-x {
+  0%, 30% { transform: translate(calc(100vw + 60px), -10px); }
+  41% { transform: translate(calc(40vw + 40px), 4px); }
+  52% { transform: translate(calc(40vw + 30px), 0); }
+  70%, 100% { transform: translate(-90px, -20px); }
+}
+.hw-chase__flip { display: block; transform: scaleX(-1); }
+.hw-chase__bat .hw-bat, .hw-swarm .hw-bat { animation: hw-hover 0.5s ease-in-out infinite alternate; }
+.hw-chase__bat .hw-wing--r, .hw-swarm .hw-wing--r { animation: hw-fast-r 0.32s ease-in-out infinite alternate; }
+.hw-chase__bat .hw-wing--l, .hw-swarm .hw-wing--l { animation: hw-fast-l 0.32s ease-in-out infinite alternate; }
+
+/* Nach „Gekocht“: ein kleiner Schwarm fliegt einmal von unten links nach oben rechts – über allem, nicht anklickbar */
+.hw-swarm { position: fixed; inset: 0; z-index: 70; pointer-events: none; overflow: hidden; animation: hw-swarm-life 2.9s linear forwards; }
+@keyframes hw-swarm-life { to { visibility: visible; } } /* nur damit onAnimationEnd den Schwarm wieder abbaut */
+.hw-swarm__bat { position: absolute; left: 0; bottom: 0; opacity: 0; animation: hw-swarm 2.4s ease-in forwards; animation-delay: calc(var(--i) * 0.07s); }
+@keyframes hw-swarm {
+  0% { opacity: 0; transform: translate(calc(var(--i) * 9vw), 20px) scale(0.7); }
+  10% { opacity: 1; }
+  100% { opacity: 1; transform: translate(calc(30vw + var(--i) * 11vw), calc(-100vh - 40px)) scale(1.1); }
+}
+
+/* Netz mit Spinne oben rechts – über der Kopfleiste, aber durchsichtig und nicht anklickbar; abends ein Mond daneben */
+.hw-corner { position: fixed; top: env(safe-area-inset-top, 0px); right: max(0px, calc((100vw - 560px) / 2)); width: 140px; height: 70px; z-index: 6; pointer-events: none; }
 .cobweb { fill: none; stroke: currentColor; stroke-width: 1; stroke-linecap: round; }
 .hw-corner__web { position: absolute; top: 0; right: 0; width: 64px; height: 64px; color: var(--ink); opacity: 0.22; }
-.hw-spider { position: absolute; top: -10px; right: 74px; color: var(--ink); opacity: 0.75; animation: hw-dangle 3.2s ease-in-out infinite; }
+.hw-moon { position: absolute; top: calc(env(safe-area-inset-top, 0px) + 12px); right: max(110px, calc((100vw - 560px) / 2 + 110px)); fill: #f3c76b; stroke: #a8500c; stroke-width: 0.8; filter: drop-shadow(0 0 5px rgb(243 199 107 / 0.8)); }
+/* Pendel: Faden und Spinne schwingen um den Aufhängepunkt; beim Scrollen wird der Faden länger (--drop aus HalloweenDeko) */
+.hw-drop { position: absolute; top: 0; right: 74px; width: 16px; transform-origin: top center; animation: hw-swing 3.2s ease-in-out infinite alternate; }
+@keyframes hw-swing { from { transform: rotate(-6deg); } to { transform: rotate(6deg); } }
+.hw-thread { position: absolute; top: 0; left: 7.5px; width: 1px; height: calc(12px + var(--drop, 0px)); background: var(--ink); opacity: 0.6; }
+.hw-spider { position: absolute; top: calc(10px + var(--drop, 0px)); left: 0; color: var(--ink); opacity: 0.8; }
 .hw-spider path { fill: none; stroke: currentColor; stroke-width: 1.1; stroke-linecap: round; }
 .hw-spider ellipse { fill: currentColor; }
-@keyframes hw-dangle { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(5px); } }
-@media (min-width: 768px) { .hw-corner { right: 0; } }
+@media (min-width: 768px) { .hw-corner { right: 0; } .hw-moon { right: 110px; } }
 
 /* Netz in der Ecke von Rezepten ohne Foto */
 :root[data-theme="halloween"] .rimg--ph { position: relative; }
 .rimg__web { position: absolute; top: 0; left: 0; width: 28%; max-width: 72px; aspect-ratio: 1; color: var(--art); opacity: 0.35; transform: scaleX(-1); }
 
-/* Koch-Geist hinter leeren Kästen – guckt oben rechts heraus, nickt, taucht wieder ab */
-.empty-peek { position: relative; isolation: isolate; }
-.empty-peek > .empty { position: relative; z-index: 1; }
-.chef-ghost { position: absolute; right: 24px; top: 8px; animation: hw-peek 9s ease-in-out infinite; }
-.chef-ghost__hat { fill: #ffffff; stroke: var(--hw-ghost); stroke-width: 1.2; }
-.chef-ghost__body { fill: var(--hw-ghost); }
-.chef-ghost__face { fill: var(--bg); }
-.chef-ghost__spoon { fill: none; stroke: var(--primary-text); stroke-width: 1.6; stroke-linecap: round; }
-.chef-ghost__bowl { fill: var(--primary-text); }
-@keyframes hw-peek {
-  0%, 40% { transform: translateY(0) rotate(0); }
-  48%, 64% { transform: translateY(-30px) rotate(-8deg); }
-  67% { transform: translateY(-30px) rotate(2deg); }
-  70% { transform: translateY(-30px) rotate(-8deg); }
-  78%, 100% { transform: translateY(0) rotate(0); }
-}
+/* Koch-Geist auf der Startkachel (Julia: sitzt immer da) – hinter der Karte, hält sich mit einer Hand an der Kante fest */
+.perch { position: relative; isolation: isolate; margin-top: 40px; }
+.perch__card { position: relative; z-index: 1; }
+.chef { position: absolute; right: 30px; top: -40px; z-index: 0; width: 52px; height: 56px; padding: 0; border: 0; background: none; border-radius: 45% 45% 0 0; }
+.chef__giggle { display: block; }
+.chef__giggle.is-on { animation: chef-giggle 0.6s ease-in-out; }
+@keyframes chef-giggle { 20% { transform: rotate(-8deg) translateY(-3px); } 40% { transform: rotate(7deg); } 60% { transform: rotate(-5deg) translateY(-2px); } 80% { transform: rotate(3deg); } }
+.chef__svg { display: block; overflow: visible; transform-origin: 26px 56px; animation: chef-tilt 6s ease-in-out infinite; }
+@keyframes chef-tilt { 0%, 60% { transform: rotate(0); } 68%, 82% { transform: rotate(-7deg); } 90%, 100% { transform: rotate(0); } }
+.chef__cap { fill: #ffffff; stroke: var(--hw-ghost-line); stroke-width: 1.2; stroke-linejoin: round; }
+.chef__band { fill: none; stroke: var(--hw-ghost-line); stroke-width: 1; }
+.chef__witch { fill: var(--hw-night); }
+.chef__witch-band { fill: none; stroke: var(--primary); stroke-width: 2.4; }
+.chef__hat--witch { display: none; }
+:root[data-hw-night] .chef__hat--witch { display: inline; } /* 31.10.: Hexenhut statt Kochmütze */
+:root[data-hw-night] .chef__hat--cook { display: none; }
+.chef__body { fill: var(--hw-ghost); stroke: var(--hw-ghost-line); stroke-width: 1.3; }
+.chef__eyes { transform-box: view-box; transform-origin: 24px 31px; animation: chef-blink 3s linear infinite; }
+@keyframes chef-blink { 0%, 70% { transform: scaleY(1); } 72% { transform: scaleY(0.1); } 74%, 100% { transform: scaleY(1); } }
+.chef__arm { transform-box: view-box; transform-origin: 37px 34px; animation: chef-wave 6s ease-in-out infinite; }
+@keyframes chef-wave { 0%, 10% { transform: rotate(0); } 15% { transform: rotate(-25deg); } 20% { transform: rotate(12deg); } 25% { transform: rotate(-25deg); } 30% { transform: rotate(12deg); } 35%, 100% { transform: rotate(0); } }
+.chef__arm-line { fill: none; stroke: var(--hw-ghost-line); stroke-width: 1.6; stroke-linecap: round; }
+.chef__ladle { fill: none; stroke: var(--primary-text); stroke-width: 1.8; stroke-linecap: round; }
+.chef__bowl { fill: var(--primary-text); }
+.chef__hand { position: absolute; right: 64px; top: -5px; z-index: 2; width: 12px; height: 9px; border-radius: 6px 6px 5px 5px; background: var(--hw-ghost); border: 1.2px solid var(--hw-ghost-line); pointer-events: none; }
+.perch:has(.swiper) .chef__hand { top: -1px; } /* der Swiper hat oben 4 px Luft */
+.chef__bubble { position: absolute; right: 88px; bottom: calc(100% + 6px); /* wächst nach oben, falls zweizeilig */ z-index: 3; max-width: min(220px, calc(100% - 100px)); padding: 6px 12px; border-radius: 14px 14px 4px 14px; background: var(--surface); color: var(--ink); border: 1px solid var(--line); box-shadow: var(--shadow); font-size: 0.82rem; font-weight: 700; line-height: 1.3; animation: chef-bubble 0.25s ease-out; }
+@keyframes chef-bubble { from { opacity: 0; transform: translateY(6px) scale(0.9); } }
 
 @media (min-width: 768px) {
-  :root[data-theme="halloween"] .nav::before { display: none; } /* Seitenleiste: kein Hügel */
+  :root[data-theme="halloween"] .nav::before, :root[data-theme="halloween"] .nav::after { display: none; } /* Seitenleiste: kein Hügel, kein Nebel */
 }
 @media (prefers-reduced-motion: reduce) {
-  .hw-bat, .hw-bob, .hw-bat__svg, .hw-chase__bat, .hw-chase__ghost, .hw-ghost__calm, .hw-ghost__shock, .hw-spider, .chef-ghost { animation: none; }
-  .hw-chase { display: none; } /* ohne Bewegung ergibt die Geschichte keinen Sinn */
-  /* stehen still verteilt am Himmel statt alle am linken Rand */
-  .hw-bat--1 { left: 68%; } .hw-bat--2 { left: 12%; } .hw-bat--3 { left: 46%; }
+  .hw-flight, .hw-swoop, .hw-tilt, .hw-wing, .hw-drop, .chef__svg, .chef__arm, .chef__eyes, .chef__giggle, .nav__glow { animation: none !important; }
+  :root[data-theme="halloween"] .nav::after { animation: none; }
+  .hw-chase, .hw-swarm, .nav__rise { display: none; } /* ohne Bewegung ergeben Geschichte, Schwarm und Aufsteigen keinen Sinn */
+  /* Fledermäuse stehen still verteilt am Himmel statt alle am linken Rand */
+  .hw-flight--1 { left: 68%; } .hw-flight--2 { left: 12%; transform: scaleX(-1); } .hw-flight--3 { left: 46%; }
+  :root[data-hw-evening] .nav__glow { opacity: 0.7; }
   .nav__stone, .special summary > svg:last-child { transition: none; }
 }
 

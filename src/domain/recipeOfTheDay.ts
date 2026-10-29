@@ -12,17 +12,30 @@ function hash(text: string): number {
  * „Rezept des Tages“ aus Kochbuch und Bewährtem – zufällig, aber den ganzen Tag gleich
  * (auf allen Geräten, bei jedem Öffnen). Nie zweimal hintereinander dasselbe.
  * @param prefer Rezepte, die Verderbliches aufbrauchen – gibt es welche, wird unter ihnen gewählt
+ * @param boost Rezepte, die öfter drankommen sollen (Halloween: Kürbis & Co.) – dreifaches Los statt nur
+ *   noch sie, damit es mit nur einer Kürbissuppe nicht jeden zweiten Tag dieselbe ist (Julia)
  */
-export function recipeOfTheDay(recipes: Recipe[], now = new Date(), prefer: ReadonlySet<string> = new Set()): Recipe | undefined {
+export function recipeOfTheDay(recipes: Recipe[], now = new Date(), prefer: ReadonlySet<string> = new Set(), boost: ReadonlySet<string> = new Set()): Recipe | undefined {
   const all = recipes.filter((r) => !r.archivedAt && !r.fromBase && !r.trial && (r.status === 'kochbuch' || r.status === 'bewaehrt'));
   const preferred = all.filter((r) => prefer.has(r.id));
-  const pool = (preferred.length ? preferred : all)
+  const sorted = (preferred.length ? preferred : all)
     .sort((a, b) => a.id.localeCompare(b.id)); // feste Reihenfolge, egal wie die Liste gerade sortiert ist
-  if (!pool.length) return undefined;
+  if (!sorted.length) return undefined;
+  const pool = sorted.flatMap((r) => (boost.has(r.id) ? [r, r, r] : [r]));
 
-  const pick = (d: Date) => hash(dayKey(d)) % pool.length;
-  const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
-  let i = pick(now);
-  if (pool.length > 1 && i === pick(yesterday)) i = (i + 1) % pool.length;
-  return pool[i];
+  // Als Kette ab einem festen Tag: jeder Tag kennt das TATSÄCHLICHE Rezept von gestern. Nur das gestrige Los zu
+  // vergleichen reichte nicht – war gestern selbst weitergerückt, konnte heute genau das wieder drankommen.
+  // „Nicht dasselbe“ heißt dasselbe Rezept, nicht dasselbe Los (ein Rezept kann mehrere Lose haben).
+  let before: string | undefined;
+  let pickToday = pool[0];
+  for (let d = new Date(CHAIN_START); d <= now; d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1)) {
+    let i = hash(dayKey(d)) % pool.length;
+    for (let n = 0; sorted.length > 1 && pool[i].id === before && n < pool.length; n++) i = (i + 1) % pool.length;
+    pickToday = pool[i];
+    before = pickToday.id;
+  }
+  return pickToday;
 }
+
+/** Beginn der Kette – fest, damit gestern und heute aus derselben Rechnung kommen (ein paar hundert Schritte, kostet nichts) */
+const CHAIN_START = new Date(2026, 0, 1);
