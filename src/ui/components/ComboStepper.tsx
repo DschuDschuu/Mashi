@@ -11,8 +11,9 @@ import { Icon } from './Icon';
  * Grundlage ist schon gewählt und füllt ihre Stufen (Bolognese: Protein und Sauce), den Rest geht man durch. `onAdd`
  * bekommt wie früher die gespeicherte Form der Bausteine („pasta,parmesan“) oder undefined für die Grundlage pur.
  * Eigene Rezepte stehen hier nicht zur Wahl – ein Abend der Woche ist die Grundlage plus feste Bausteine.
+ * `lunch`: für einen Mittag – dann heißt der Knopf auch so.
  */
-export function ComboStepper({ base, onAdd, label = 'Zusammenstellen' }: { base: Recipe; onAdd: (side: string | undefined) => void; label?: string }) {
+export function ComboStepper({ base, onAdd, label = 'Zusammenstellen', lunch = false }: { base: Recipe; onAdd: (side: string | undefined) => void; label?: string; lunch?: boolean }) {
   const start = useMemo(() => baseCraving(base), [base]);
   const [open, setOpen] = useState(false);
   const [state, setState] = useState(start.state);
@@ -40,7 +41,7 @@ export function ComboStepper({ base, onAdd, label = 'Zusammenstellen' }: { base:
       <CravingBuilder view={view} state={state} set={setState} own={start.own} small />
       <div className="row-gap">
         <button type="button" className="btn btn--primary btn--sm" onClick={() => { onAdd(combo); close(); }}>
-          <Icon name="plus" size={14} /> Als Abend{combo ? ` · mit ${comboText(combo)}` : ' · pur'}
+          <Icon name="plus" size={14} /> Für diesen {lunch ? 'Mittag' : 'Abend'}{combo ? ` · mit ${comboText(combo)}` : ' · pur'}
         </button>
         <button type="button" className="btn btn--ghost btn--sm" onClick={cancel}>Abbrechen</button>
       </div>

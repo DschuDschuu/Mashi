@@ -19,8 +19,8 @@ const HALF = 'M150 22 A128 128 0 0 1 150 278 Z';
 /** Platz, an dem sich ein Schild ausrichtet (Breite in %): reicht bis 4 % vor die Mittellinie (Julia: mehr Abstand) –
  *  ist der Name breiter, wächst das Schild nur nach außen */
 const SLOT = 30;
-/** mehrere in einer Stufe: „3 Beilagen“ */
-const PLURAL: Record<SideKind, string> = { carb: 'Kohlenhydrate', protein: 'Proteine', sauce: 'Saucen', veg: 'Beilagen', topping: 'Toppings' };
+/** mehrere in einer Stufe: „3 Gemüse“ */
+const PLURAL: Record<SideKind, string> = { carb: 'Kohlenhydrate', protein: 'Proteine', sauce: 'Saucen', veg: 'Gemüse', topping: 'Toppings' };
 const BRUSH = 'M7.5 8.6C13.5 6.6 21 6 28.5 5.7c6.6-.3 11.4-.8 15 .4 2.2.7 2 2.3.2 2.9 2.4.8 2.5 2.6.3 3.3 2.4.9 2.1 2.9-.8 3.6-5.8 1.4-13.6 2.1-21.4 2.9-6 .6-11.2 1.5-15 1-1.9-.2-2-1.5-.6-2.2-2.4-.6-2.4-2.4-.3-3-2.4-.8-2.2-2.8 0-3.3-1.4-.9-.7-2.2 1.6-2.7z';
 
 /**

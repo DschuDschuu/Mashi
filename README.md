@@ -13,7 +13,7 @@ Live: <https://dschudschuu.github.io/Mashi/> · installierbar als App (PWA), fun
 
 - **Worauf hast du Lust?** auf der Startseite: Tortilla (Taco/Wrap), Bowl, Pasta, Curry, Ofengemüse, Burger antippen oder
   frei eintippen („Tacos mit Hähnchen“, „was mit Brokkoli“) – Mashi baut das Gericht Stufe für Stufe (Kohlenhydrat,
-  Protein, Sauce, Beilage, Topping) und schlägt vor, was dazu passt; eigene Rezepte oder einzelne Teile davon lassen
+  Protein, Sauce, Gemüse, Topping) und schlägt vor, was dazu passt; eigene Rezepte oder einzelne Teile davon lassen
   sich als Baustein markieren – auch für mehrere Stufen (Bolognese = Protein und Sauce) oder statt eines festen Bausteins
   (deine Guacamole), mit „Passt gut zu“ (Bolognese → Spätzle, Parmesan); Vorgekochtes steht vorn. Am Ende: jetzt kochen, in den Wochenplan
   oder als Rezept speichern – nach dem Kochen fragt die Startseite „Wie war's?“, erst dann kommt es ins Kochbuch

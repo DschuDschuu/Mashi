@@ -1,7 +1,10 @@
-import type { Household } from './mealplan';
+import { basicsKeys, keyOfName, type Household } from './mealplan';
+import type { FoodTable } from './nutrition/types';
 import type { Pantry } from './pantry';
+import { useUpKeys } from './shelfLife';
 import { partOf, partsOf, stepPart } from './parts';
 import { currentContent, totalMinutes } from './recipe';
+import { searchRecipes } from './recipeSearch';
 import { SIDE_KINDS, SIDES, comboOf, prepOf, sideIngredient, sideOf, sidesOfKind, type SideKind, type SidePrep } from './sides';
 import type { Ingredient, Recipe, RecipeContent, RecipeImage, Step } from './types';
 
@@ -152,6 +155,29 @@ export interface Choice {
   pairs?: readonly string[];
   /** fester Baustein, den es ersetzt (RecipeBlock.replaces) – der feste steht dann nicht zur Wahl */
   replaces?: string;
+  /** nur feste und eigene Bausteine: zu Hause bzw. läuft bald ab – der Vorrats-Punkt am Chip (stockMarks) */
+  stock?: StockMark;
+}
+
+/** Vorrats-Punkt: zu Hause – oder läuft bald ab, dann gehört es erst recht auf den Teller */
+export type StockMark = 'da' | 'bald';
+
+/**
+ * Was von den Bausteinen zu Hause ist (Julia: Vorrats-Punkte) – damit man nimmt, was da ist, statt einzukaufen. Zählt die
+ * Speisekammer (ohne Vorgekochtes, das steht als Karte mit Kühlschrank da; Gefrorenes zählt mit) und „Immer im Haus“;
+ * „bald“ läuft in den nächsten 2 Tagen ab (wie „Bald verbrauchen“). Verglichen wird über den Lebensmittel-Schlüssel –
+ * „Hähnchenbrustfilet“ im Vorrat ist die Hähnchenbrust.
+ */
+export function stockMarks(pantry: Pantry, table: FoodTable, now = new Date()): (name: string) => StockMark | undefined {
+  const have = new Set([
+    ...pantry.items.filter((it) => !it.recipeId && (it.amount ?? 1) > 0).flatMap((it) => keyOfName(it.name, table) ?? []),
+    ...basicsKeys(pantry, table),
+  ]);
+  const soon = useUpKeys(pantry, table, now);
+  return (name) => {
+    const key = keyOfName(name, table);
+    return !key ? undefined : soon.has(key) ? 'bald' : have.has(key) ? 'da' : undefined;
+  };
 }
 
 /** ids für Rezepte als Baustein – „rezept:<id>“ bzw. „rezept:<id>:<Teil>“ */
@@ -210,9 +236,13 @@ export function currentStep(s: CravingState): SideKind | undefined {
 
 /**
  * Was in einer Stufe zur Wahl steht: zuerst Vorgekochtes aus dem Kühlschrank, dann deine Rezepte, dann die festen
- * Bausteine der Richtung – bei denen rückt nach vorn, was gut zum schon Gewählten passt.
+ * Bausteine der Richtung – bei denen steht vorn, was weg muss, dann was da ist (`stock`, stockMarks), und innerhalb davon,
+ * was gut zum schon Gewählten passt.
  */
-export function optionsFor(s: CravingState, kind: SideKind, own: readonly Choice[] = [], household?: Pick<Household, 'sidePrep' | 'customSides'>, all = false): Choice[] {
+export function optionsFor(
+  s: CravingState, kind: SideKind, own: readonly Choice[] = [], household?: Pick<Household, 'sidePrep' | 'customSides'>, all = false,
+  stock?: (name: string) => StockMark | undefined,
+): Choice[] {
   // „alle zeigen“: die Richtung filtert dann nicht – sortiert wird trotzdem nach dem, was passt
   const dir = all ? undefined : directionOf(s.direction);
   // auch in jeder weiteren Stufe, die es abdeckt – so steht die Bolognese schon beim Protein
@@ -233,13 +263,17 @@ export function optionsFor(s: CravingState, kind: SideKind, own: readonly Choice
     + 2 * chosen.filter((c) => c.pairs?.includes(id)).length;
   // was dein Rezept ersetzt, steht nicht mehr zur Wahl
   const replaced = new Set(mine.flatMap((o) => o.replaces ?? []));
-  // sort ist stabil: ohne Paar bleibt die Reihenfolge der Richtung
-  const fixed = [...ids].filter((id) => !replaced.has(id)).sort((a, b) => score(b) - score(a)).flatMap((id) => choiceOf(id, [], household) ?? []);
+  const rank = (c: Choice) => (c.stock === 'bald' ? 2 : c.stock === 'da' ? 1 : 0);
+  // sort ist stabil: ohne Vorrat und Paar bleibt die Reihenfolge der Richtung
+  const fixed = [...ids].filter((id) => !replaced.has(id))
+    .flatMap((id) => choiceOf(id, [], household) ?? [])
+    .map((c) => { const mark = stock?.(c.name); return mark ? { ...c, stock: mark } : c; })
+    .sort((a, b) => rank(b) - rank(a) || score(b.id) - score(a.id));
   return [...mine.filter((o) => o.ready), ...mine.filter((o) => !o.ready), ...fixed];
 }
 
 /**
- * Wahl in einer Stufe: einzeln (schließt die Stufe) oder bei Beilage/Topping an- und abwählen. Deckt die Wahl weitere
+ * Wahl in einer Stufe: einzeln (schließt die Stufe) oder bei Sauce, Gemüse und Topping an- und abwählen. Deckt die Wahl weitere
  * Stufen ab (Bolognese beim Protein → auch Sauce), sind die erledigt, solange dort nichts gewählt ist; wird sie
  * ersetzt, gehen die wieder auf.
  */
@@ -252,7 +286,12 @@ export function pick(s: CravingState, kind: SideKind, id: string, own: readonly 
   if (!MULTI.has(kind)) {
     const prev = s.picks[kind]?.[0];
     const freed = prev && prev !== id ? extraOf(prev).filter((k) => !s.picks[k]?.length) : [];
-    next = { ...s, picks: { ...s.picks, [kind]: [id] }, closed: closeStage(s.closed.filter((k) => !freed.includes(k)), kind) };
+    // ein Kohlenhydrat, das nur zu einer Richtung gehört (Tortillas, Naan, Gnocchi …), gibt sie vor, wenn noch keine
+    // passende da ist – sonst stünde nach den Tortillas noch Kokos-Currysauce zur Wahl. Nur die Richtung setzen, nichts
+    // wieder öffnen (anders als chooseDirection): Was schon erledigt ist, bleibt erledigt.
+    const byCarb = kind === 'carb' ? DIRECTIONS.filter((d) => d.options.carb.includes(id)) : [];
+    const direction = byCarb.length === 1 && !directionOf(s.direction)?.options.carb.includes(id) ? byCarb[0].id : s.direction;
+    next = { ...s, ...(direction ? { direction } : {}), picks: { ...s.picks, [kind]: [id] }, closed: closeStage(s.closed.filter((k) => !freed.includes(k)), kind) };
   } else {
     const now = s.picks[kind] ?? [];
     if (now.includes(id)) return { ...s, picks: { ...s.picks, [kind]: now.filter((x) => x !== id) } };
@@ -318,7 +357,20 @@ export function understand(text: string, own: readonly Choice[] = []): CravingSt
   const fixed: Choice[] = SIDES.filter((x) => !x.retired && !replaced.has(x.id)).map((x) => ({ id: x.id, name: x.name, kind: x.kind }));
   // dein Rezept, das einen festen Baustein ersetzt, hört auch auf dessen Namen („Guacamole“ → deine „Avocado-Creme“)
   const alias = (c: Choice) => (c.replaces ? sideOf(c.replaces)?.name ?? '' : '');
+  // „ohne“ gilt bis zum nächsten „mit“: „Pasta ohne Hack“ wählte sonst gerade das Hack. „ohne Hack und Käse“ – beides
+  // nicht; „ohne Sauce“ – die Stufe ist gleich erledigt
+  let negated = false;
+  const without = new Set<SideKind>();
   for (const word of wordsOf(text)) {
+    if (word === 'ohne' || word === 'mit') {
+      negated = word === 'ohne';
+      continue;
+    }
+    if (negated) {
+      const stage = SIDE_KINDS.find((k) => hit(word, k.label) >= 0.75);
+      if (stage) without.add(stage.kind);
+      continue;
+    }
     const dir = DIRECTIONS.find((d) => hit(word, d.name) || d.words.some((w) => hit(word, w)));
     // Richtung zuerst. Ist das Wort genau ein Baustein der Richtung („Wraps“, „Pasta“), ist der auch gleich gewählt
     if (dir) {
@@ -336,13 +388,15 @@ export function understand(text: string, own: readonly Choice[] = []): CravingSt
     if (!best) continue;
     found = true;
     if (byText.has(best.kind) && !MULTI.has(best.kind)) continue;
-    // „Brokkoli“ wählt vor, die Beilagen-Stufe bleibt offen – vielleicht kommt noch Paprika dazu
+    // „Brokkoli“ wählt vor, die Gemüse-Stufe bleibt offen – vielleicht kommt noch Paprika dazu
     if (!s.picks[best.kind]?.includes(best.id)) s = pick(s, best.kind, best.id, own);
     byText.add(best.kind);
   }
   if (!found) return undefined;
-  // erst jetzt die Richtung anwenden, falls Bausteine nach ihr kamen – so stimmt, was offen bleibt
-  return s.direction ? chooseDirection(s, s.direction, own) : s;
+  // erst jetzt die Richtung anwenden, falls Bausteine nach ihr kamen – so stimmt, was offen bleibt; danach erst „ohne …“
+  // schließen, sonst öffnete die Richtung die Einzel-Stufe wieder
+  const done = s.direction ? chooseDirection(s, s.direction, own) : s;
+  return [...without].reduce((acc, k) => closeStep({ ...acc, picks: { ...acc.picks, [k]: undefined } }, k), done);
 }
 
 /** Alles Gewählte in der Reihenfolge der Stufen */
@@ -371,13 +425,32 @@ export function cravingTitle(s: CravingState, own: readonly Choice[] = []): stri
 }
 
 /**
+ * Was mit Vorgekochtem zu tun ist: Warmes aufwärmen, Gemüse und Toppings nur herausnehmen – einen Dip oder Salat
+ * „wärmt“ man nicht auf. Eine Stelle für „So geht's“ und das Rezept daraus, damit beide dasselbe sagen.
+ */
+const readyPrep = (kind: SideKind): SidePrep =>
+  kind === 'veg' || kind === 'topping' ? { text: 'aus dem Kühlschrank nehmen', minutes: 0 }
+    : kind === 'sauce' ? { text: 'aus dem Kühlschrank, bei Bedarf erwärmen', minutes: 3 }
+      : { text: 'aus dem Kühlschrank aufwärmen', minutes: 5 };
+
+/**
  * „So geht's“: das Längste zuerst, damit alles gleichzeitig fertig ist (wie comboSteps beim Baukasten-Abend).
- * Vorgekochtes wird nur aufgewärmt (5 Min.).
+ * Vorgekochtes kommt nur aus dem Kühlschrank (readyPrep).
  */
 export function cravingSteps(s: CravingState, own: readonly Choice[] = [], household?: Pick<Household, 'sidePrep'>): { id: string; name: string; text?: string; minutes: number }[] {
   return cravingChoices(s, own, household)
-    .map((c) => (c.ready ? { id: c.id, name: c.name, text: 'aus dem Kühlschrank aufwärmen', minutes: 5 } : { id: c.id, name: c.name, text: c.prep?.text, minutes: c.prep?.minutes ?? 0 }))
+    .map((c) => ({ id: c.id, name: c.name, ...(c.ready ? readyPrep(c.kind) : { text: c.prep?.text, minutes: c.prep?.minutes ?? 0 }) }))
     .sort((a, b) => b.minutes - a.minutes);
+}
+
+/**
+ * Wie lange es ungefähr dauert: Das Längste läuft, nebenher schafft man etwa die Hälfte vom Rest – allein geht nicht
+ * alles gleichzeitig (neun Bausteine waren sonst „in 8 Min. fertig“). Auf 5 Minuten aufgerundet; 0 = nichts zu tun.
+ */
+export function cravingMinutes(steps: readonly { minutes: number }[]): number {
+  const all = steps.map((x) => x.minutes).sort((a, b) => b - a);
+  const total = (all[0] ?? 0) + all.slice(1).reduce((n, m) => n + m, 0) / 2;
+  return Math.ceil(total / 5) * 5;
 }
 
 /**
@@ -410,7 +483,14 @@ export function cravingContent(s: CravingState, opts: {
   const steps: { minutes: number; list: Step[] }[] = [];
   for (const c of cravingChoices(s, own, household)) {
     const recipe = c.recipeId ? recipes.find((r) => r.id === c.recipeId) : undefined;
-    if (recipe && c.from) {
+    if (recipe && c.ready) {
+      // Vorgekochtes nur aus dem Kühlschrank. Ein ganzes Rezept bleibt verknüpfte Zutat – seine Portionen gehen beim
+      // Kochen aus der Speisekammer. Ein fertiger Teil bringt keine Zutaten mit: Die Speisekammer kennt ihn nur unter
+      // seinem Rezept, im neuen Gericht stünden sie sonst noch einmal auf der Einkaufsliste.
+      const prep = readyPrep(c.kind);
+      if (!c.from) ingredients.push({ id: newId(), name: c.name, amount: servings, unit: 'Portion', recipeId: recipe.id });
+      steps.push({ minutes: prep.minutes, list: [{ id: newId(), text: `${c.name} ${prep.text}`, ...(prep.minutes ? { timerMinutes: prep.minutes } : {}) }] });
+    } else if (recipe && c.from) {
       // ein Teil („Testdip“): Zutaten und Schritte übernehmen, auf die Portionen umgerechnet
       const rc = currentContent(recipe);
       const part = c.name;
@@ -420,8 +500,8 @@ export function cravingContent(s: CravingState, opts: {
       steps.push({ minutes: c.prep?.minutes ?? 0, list: partSteps });
     } else if (recipe) {
       ingredients.push({ id: newId(), name: c.name, amount: servings, unit: 'Portion', recipeId: recipe.id });
-      const minutes = c.ready ? 5 : c.prep?.minutes ?? 0;
-      steps.push({ minutes, list: [{ id: newId(), text: c.ready ? `${c.name} aus dem Kühlschrank aufwärmen` : `${c.name} nach deinem Rezept zubereiten`, ...(minutes ? { timerMinutes: minutes } : {}) }] });
+      const minutes = c.prep?.minutes ?? 0;
+      steps.push({ minutes, list: [{ id: newId(), text: `${c.name} nach deinem Rezept zubereiten`, ...(minutes ? { timerMinutes: minutes } : {}) }] });
     } else {
       const ing = sideIngredient(c.id, servings, household);
       if (ing) ingredients.push({ ...ing, id: newId() });
@@ -432,7 +512,7 @@ export function cravingContent(s: CravingState, opts: {
   const ordered = [...steps].sort((a, b) => b.minutes - a.minutes);
   return {
     title: opts.title.trim() || cravingTitle(s, own), description: cravingText(s, own), servings,
-    prepMinutes: 0, cookMinutes: Math.max(0, ...steps.map((x) => x.minutes)), difficulty: 1,
+    prepMinutes: 0, cookMinutes: cravingMinutes(steps), difficulty: 1,
     ingredients, steps: ordered.flatMap((x) => x.list).length ? ordered.flatMap((x) => x.list) : [{ id: newId(), text: '' }],
     categories: [], tags: directionOf(s.direction) ? [directionOf(s.direction)!.name] : [], devices: [],
   };
@@ -511,6 +591,18 @@ export function matchingRecipes(s: CravingState, opts: {
     .sort((a, b) => b.score - a.score || Number(b.r.favorite) - Number(a.r.favorite) || rated(b.r) - rated(a.r))
     .slice(0, limit)
     .map((x) => x.r);
+}
+
+/**
+ * Ausweg, wenn Mashi das Getippte nicht zusammenbauen kann („Lasagne“): Rezepte aus dem Kochbuch, die dazu passen – erst
+ * zum ganzen Text, sonst zu einzelnen Wörtern („was mit Kartoffelsalat“). Kein Archiv, keine Probiergerichte, keine
+ * KI-Entwürfe; höchstens `limit`.
+ */
+export function cookbookMatches(text: string, recipes: readonly Recipe[], limit = 4): Recipe[] {
+  const shown = recipes.filter((r) => !r.archivedAt && !r.trial && r.status !== 'ki_entwurf');
+  const whole = searchRecipes(shown, text);
+  const hits = whole.length ? whole : text.split(/\s+/).filter((w) => w.length >= 4).flatMap((w) => searchRecipes(shown, w));
+  return [...new Set(hits.map((h) => h.recipe))].slice(0, limit);
 }
 
 /**

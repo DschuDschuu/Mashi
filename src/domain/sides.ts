@@ -32,7 +32,8 @@ export const SIDE_KINDS: readonly { kind: SideKind; label: string }[] = [
   { kind: 'carb', label: 'Kohlenhydrat' },
   { kind: 'protein', label: 'Protein' },
   { kind: 'sauce', label: 'Sauce' },
-  { kind: 'veg', label: 'Beilage' },
+  // „Gemüse“, nicht „Beilage“ (Julia): Beilagen sind im Deutschen gerade Reis, Nudeln, Kartoffeln – die Stufe Kohlenhydrat
+  { kind: 'veg', label: 'Gemüse' },
   { kind: 'topping', label: 'Topping' },
 ];
 
@@ -120,7 +121,7 @@ export const sidesOfKind = (kind: SideKind, custom: readonly string[] = []): Sid
  */
 export const sidesOf = (side: string | undefined): Side[] => (side ? side.split(',').flatMap((id) => sideOf(id) ?? []) : []);
 
-/** Bausteine → gespeicherte Form, in fester Reihenfolge (Kohlenhydrat, Protein, Beilage, Topping) */
+/** Bausteine → gespeicherte Form, in fester Reihenfolge (Kohlenhydrat, Protein, Sauce, Gemüse, Topping) */
 export const comboOf = (ids: readonly string[]): string | undefined => {
   const order = SIDE_KINDS.map((k) => k.kind);
   const list = ids.flatMap((id) => sideOf(id) ?? []).sort((a, b) => order.indexOf(a.kind) - order.indexOf(b.kind));

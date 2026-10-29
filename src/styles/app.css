@@ -2295,6 +2295,12 @@ details.cost-line[open] > summary::after { transform: rotate(-90deg); }
 .blocks__pairs { margin-top: 2px; }
 /* Stepper: „alle zeigen“ unter den Chips; deine Rezepte als Karussell mit Bild (Julia) – wischen, nichts ragt aus der Seite */
 .lust-steps__all { align-self: flex-start; margin-top: -4px; }
+/* Vorrats-Punkte (Julia): grün = hast du da, gelb = bald verbrauchen; auf dem gewählten Chip mit hellem Rand, damit er sich abhebt */
+.stock-dot { flex: none; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--green); }
+.stock-dot--bald { background: var(--yellow); }
+.chip.is-on .stock-dot { box-shadow: 0 0 0 1.5px var(--on-primary); }
+.stock-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: -4px 0 0; }
+.stock-legend > span { display: inline-flex; align-items: center; gap: 6px; }
 .lust-carousel { list-style: none; margin: 0; padding: 2px 2px 6px; display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; max-width: 100%; }
 .lust-carousel > li { flex: none; scroll-snap-align: start; }
 .lust-card {

@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
-  DIRECTIONS, EMPTY_CRAVING, STAGES, chooseDirection, closeStep, cravingSteps, cravingText, cravingTitle, currentStep,
-  baseCraving, coveredBy, cravingCombo, cravingContent, directionOf, guessKind, matchingRecipes, optionsFor, pick, recipeChoiceId, recipeChoices, reopen, staleTrials, understand, variantTargets,
+  DIRECTIONS, EMPTY_CRAVING, STAGES, chooseDirection, closeStep, cookbookMatches, cravingMinutes, cravingSteps, cravingText, cravingTitle, currentStep,
+  baseCraving, coveredBy, cravingCombo, cravingContent, directionOf, guessKind, matchingRecipes, optionsFor, pick, recipeChoiceId, recipeChoices, reopen, staleTrials, stockMarks, understand, variantTargets,
 } from './craving';
+import { localFoodTable } from './nutrition/localFoods';
+import { emptyPantry, type Pantry, type PantryItem } from './pantry';
 import { followBlockParts } from './parts';
 import { withNewVersion } from './recipe';
 import { sideOf } from './sides';
@@ -72,7 +74,7 @@ describe('understand – das Textfeld', () => {
     expect(s.direction).toBe('taco');
     expect(s.picks.protein).toEqual(['hack']);
     expect(s.picks.veg).toEqual(['mais']);
-    // Beilage bleibt offen – da kommt vielleicht noch mehr dazu
+    // Gemüse bleibt offen – da kommt vielleicht noch mehr dazu
     expect(currentStep(s)).toBe('sauce');
   });
 
@@ -84,10 +86,45 @@ describe('understand – das Textfeld', () => {
     expect(understand('irgendwas Leckeres')).toBeUndefined();
     expect(understand('')).toBeUndefined();
   });
+
+  it('„ohne“ wählt nichts aus – bis zum nächsten „mit“; „ohne Sauce“ erledigt die Stufe', () => {
+    const s = understand('Pasta ohne Hack')!;
+    expect(s.direction).toBe('pasta');
+    expect(s.picks.protein).toBeUndefined();
+    expect(currentStep(s)).toBe('protein');
+    expect(understand('Tacos ohne Hack und Käse mit Mais')).toMatchObject({ direction: 'taco', picks: { veg: ['mais'] } });
+    expect(understand('Tacos ohne Hack und Käse mit Mais')!.picks.topping).toBeUndefined();
+    const t = understand('Taco ohne Sauce')!;
+    expect(t.closed).toContain('sauce');
+    expect(t.picks.sauce).toBeUndefined();
+    // auch eine Einzel-Stufe bleibt zu, obwohl die Richtung sonst offene Stufen wieder öffnet
+    expect(understand('Bowl ohne Protein')!.closed).toContain('protein');
+  });
+});
+
+describe('Kohlenhydrat gibt die Richtung vor', () => {
+  it('ohne Richtung: Gnocchi → Pasta, Naan → Curry; Reis passt zu zweien → keine', () => {
+    const s = understand('Hähnchen')!;
+    expect(pick(s, 'carb', 'gnocchi').direction).toBe('pasta');
+    expect(pick(s, 'carb', 'naan').direction).toBe('curry');
+    expect(pick(s, 'carb', 'reis').direction).toBeUndefined();
+  });
+
+  it('eine gewählte Richtung bleibt, solange das Kohlenhydrat dazu passt; sonst wechselt sie', () => {
+    const bowl = chooseDirection(EMPTY_CRAVING, 'bowl');
+    expect(pick(bowl, 'carb', 'reis').direction).toBe('bowl');
+    // „alle zeigen“ und doch Tortillas: dann ist es eine Tortilla
+    expect(pick(bowl, 'carb', 'tortillas').direction).toBe('taco');
+  });
+
+  it('öffnet nichts wieder, was schon erledigt ist', () => {
+    const s = closeStep(EMPTY_CRAVING, 'protein');
+    expect(pick(s, 'carb', 'pasta').closed).toContain('protein');
+  });
 });
 
 describe('Stufen', () => {
-  it('Einzel-Stufe schließt mit der Wahl, Beilage sammelt bis „Weiter“', () => {
+  it('Einzel-Stufe schließt mit der Wahl, Gemüse sammelt bis „Weiter“', () => {
     let s = chooseDirection(EMPTY_CRAVING, 'bowl');
     expect(currentStep(s)).toBe('carb');
     s = pick(s, 'carb', 'reis');
@@ -211,7 +248,8 @@ describe('Aus dem Gericht ein Rezept machen', () => {
     expect(c.steps.map((st) => st.timerMinutes)).toEqual([15, 10]);
     expect(c.steps[0].text).toContain('Reis');
     expect(c.tags).toEqual(['Bowl']);
-    expect(c.cookMinutes).toBe(15);
+    // Reis 15 Min., nebenher die Hälfte vom Tofu (10 Min.) → 20 – nicht nur der längste Schritt
+    expect(c.cookMinutes).toBe(20);
   });
 
   it('ganzes Rezept → verknüpfte Zutat in Portionen; Teil → seine Zutaten (umgerechnet) und Schritte', () => {
@@ -230,6 +268,65 @@ describe('Aus dem Gericht ein Rezept machen', () => {
     const own = recipeChoices([streifen], { items: [{ id: 'p', name: 'x', amount: 4, unit: 'Stück', addedAt: '', recipeId: 'r1' }] });
     const c = cravingContent(pick(chooseDirection(EMPTY_CRAVING, 'taco'), 'protein', 'rezept:r1'), { own, recipes: [streifen], servings: 2, title: 'T', newId });
     expect(c.steps.some((st) => st.text === 'Knusprige Teststreifen aus dem Kühlschrank aufwärmen')).toBe(true);
+  });
+
+  it('ein vorgekochter Teil: keine Zutaten (sonst wieder auf der Einkaufsliste), nur aus dem Kühlschrank – wie in „So geht’s“', () => {
+    const own = recipeChoices([dips], { items: [{ id: 'p', name: 'x', amount: 2, unit: 'Stück', addedAt: '', recipeId: 'r2', part: 'Testdip' }] });
+    const s = pick(chooseDirection(EMPTY_CRAVING, 'taco'), 'sauce', 'rezept:r2:Testdip', own);
+    const c = cravingContent(s, { own, recipes: [dips], servings: 2, title: 'T', newId });
+    expect(c.ingredients).toEqual([expect.objectContaining({ name: 'Tortillas' })]);
+    expect(c.steps.map((st) => st.text)).toContain('Testdip aus dem Kühlschrank, bei Bedarf erwärmen');
+    expect(c.steps.some((st) => st.text === 'machen')).toBe(false);
+    // Anzeige und Rezept sagen dasselbe
+    expect(cravingSteps(s, own).find((st) => st.id === 'rezept:r2:Testdip')).toMatchObject({ text: 'aus dem Kühlschrank, bei Bedarf erwärmen', minutes: 3 });
+  });
+});
+
+describe('Vorrats-Punkte (Julia)', () => {
+  const NOW = new Date(2026, 8, 25, 10);
+  const iso = (d: number) => new Date(2026, 8, d, 12).toISOString();
+  const item = (name: string, bought: number, extra: Partial<PantryItem> = {}): PantryItem => ({ id: name, name, addedAt: iso(bought), boughtAt: iso(bought), ...extra });
+  const pantry = (items: PantryItem[], basics: string[] = []): Pantry => ({ ...emptyPantry(), items, basics });
+
+  it('Speisekammer = da, läuft bald ab = bald, „Immer im Haus“ = da; Vorgekochtes und Fehlendes ohne Punkt', () => {
+    const marks = stockMarks(pantry([item('Pasta', 1), item('Hähnchenbrust', 24), item('Tofu', 24, { recipeId: 'r1' })], ['Reis']), localFoodTable, NOW);
+    expect(marks('Pasta')).toBe('da');
+    expect(marks('Hähnchenbrust')).toBe('bald');
+    expect(marks('Reis')).toBe('da');
+    expect(marks('Tofu')).toBeUndefined();
+    expect(marks('Brokkoli')).toBeUndefined();
+  });
+
+  it('Reihenfolge: was weg muss, dann was da ist – innerhalb davon, was gut passt; der Punkt steht an der Wahl', () => {
+    const marks = (n: string) => (n === 'Brokkoli' ? 'da' as const : n === 'Tomaten' ? 'bald' as const : undefined);
+    const s = pick(chooseDirection(EMPTY_CRAVING, 'pasta'), 'protein', 'linsen');
+    // ohne Vorrat: Spinat (passt zu Linsen) vorn, sonst die Reihenfolge der Richtung
+    expect(optionsFor(s, 'veg').map((c) => c.id)).toEqual(['spinat', 'zucchini', 'brokkoli', 'tomaten', 'paprika']);
+    const opts = optionsFor(s, 'veg', [], undefined, false, marks);
+    expect(opts.map((c) => c.id)).toEqual(['tomaten', 'brokkoli', 'spinat', 'zucchini', 'paprika']);
+    expect(opts.map((c) => c.stock)).toEqual(['bald', 'da', undefined, undefined, undefined]);
+  });
+});
+
+describe('Wie lange es dauert', () => {
+  it('das Längste plus die Hälfte vom Rest, auf 5 Minuten aufgerundet', () => {
+    // Tortilla mit neun Bausteinen: war „in 8 Min. fertig“
+    expect(cravingMinutes([8, 5, 5, 5, 5, 3, 2, 0, 0].map((minutes) => ({ minutes })))).toBe(25);
+    expect(cravingMinutes([{ minutes: 10 }, { minutes: 0 }])).toBe(10);
+    expect(cravingMinutes([{ minutes: 0 }])).toBe(0);
+    expect(cravingMinutes([])).toBe(0);
+  });
+});
+
+describe('Ausweg: aus dem Kochbuch, wenn Mashi nichts zusammenbauen kann', () => {
+  const lasagne = recipe('l1', 'Omas Testlasagne');
+  const archiv = { ...recipe('l2', 'Alte Testlasagne'), archivedAt: '2026-01-01' };
+  const probe = { ...recipe('l3', 'Probier-Testlasagne'), trial: true };
+  it('findet am ganzen Text oder an einzelnen Wörtern – ohne Archiv und Probiergerichte', () => {
+    expect(understand('Testlasagne')).toBeUndefined();
+    expect(cookbookMatches('Testlasagne', [lasagne, archiv, probe]).map((r) => r.id)).toEqual(['l1']);
+    expect(cookbookMatches('was mit Testlasagne', [lasagne]).map((r) => r.id)).toEqual(['l1']);
+    expect(cookbookMatches('Gibtsnicht', [lasagne])).toEqual([]);
   });
 });
 

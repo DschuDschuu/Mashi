@@ -387,7 +387,7 @@ function WhatSheet({ cook, slot, replace, from, view, recipes, fallback, stock, 
               {dishes.length > 0 ? dishes.map((r) => chip(r.id, b.base.recipeId, title(r))) : chip(b.base.recipeId, b.base.recipeId, title(b.recipe))}
             </div>
             {/* Grundlage mit Bausteinen (Julia: Baukasten statt nur „+ Beilage“) */}
-            {dishes.length > 0 && b.recipe && <ComboStepper base={b.recipe} onAdd={(side) => onPut(b.base.recipeId, b.base.recipeId, side)} />}
+            {dishes.length > 0 && b.recipe && <ComboStepper base={b.recipe} lunch={slot.lunch} onAdd={(side) => onPut(b.base.recipeId, b.base.recipeId, side)} />}
           </section>
         ))}
         {onCookbook && (
@@ -614,7 +614,7 @@ function DishSheet({ m, view, recipes, asks, servings, onCook, cookNote, onPut, 
               {combos.map((side) => chip(baseId, `mit ${comboText(side)}`, side))}
               {dishes.map((r) => chip(r.id, title(r)))}
             </div>
-            {base && <ComboStepper base={base} onAdd={(side) => onPut(baseId, side)} />}
+            {base && <ComboStepper base={base} lunch={slot.lunch} onAdd={(side) => onPut(baseId, side)} />}
           </section>
         )}
         <div className="row-between dish__portions">

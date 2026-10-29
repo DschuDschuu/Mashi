@@ -61,8 +61,9 @@ export function BlockPanel({ recipe }: { recipe: Recipe }) {
     <section className="prep blocks" aria-labelledby="blocks-title">
       <div className="row-between">
         <h2 className="h3 blocks__title" id="blocks-title"><Icon name="grid" size={18} /> Auch als Baustein</h2>
-        <button type="button" className={`chip chip--sm${on ? ' is-on' : ''}`} aria-pressed={on}
-          onClick={() => save(on ? [] : [add()], on ? 'Kein Baustein mehr' : 'Als Baustein')}>{on ? 'an' : 'aus'}</button>
+        {/* derselbe Schalter wie in den Einstellungen – ein Chip „an“/„aus“ las sich wie ein Etikett */}
+        <button type="button" role="switch" aria-checked={on} aria-labelledby="blocks-title" className={`switch${on ? ' is-on' : ''}`}
+          onClick={() => save(on ? [] : [add()], on ? 'Kein Baustein mehr' : 'Als Baustein')}><span /></button>
       </div>
       {!on && <p className="small muted blocks__hint">Dann taucht es bei „Worauf hast du Lust?“ als Stufe auf – zum Beispiel als Protein beim Taco.</p>}
       {on && parts.length > 0 && (
@@ -89,8 +90,9 @@ export function BlockPanel({ recipe }: { recipe: Recipe }) {
             </div>
           </div>
           <div className="blocks__row">
-            <span className="small muted">Passt zu {b.directions.length ? '' : '– noch keine gewählt: überall'}</span>
-            <div className="chips" role="group" aria-label={`Passt zu – ${nameOf(b.part)}`}>
+            {/* nicht „Passt zu“ – direkt darunter steht „Passt gut zu“ (Bausteine), das verwechselte man */}
+            <span className="small muted">Taucht auf bei {b.directions.length ? '' : '– noch nichts gewählt: überall'}</span>
+            <div className="chips" role="group" aria-label={`Taucht auf bei – ${nameOf(b.part)}`}>
               {DIRECTIONS.map((d) => (
                 <button key={d.id} type="button" className={`chip chip--sm${dirsOf(b).includes(d.id) ? ' is-on' : ''}`} aria-pressed={dirsOf(b).includes(d.id)}
                   onClick={() => toggleDir(b, d.id)}>{d.name}</button>

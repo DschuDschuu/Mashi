@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  MULTI, STAGES, choiceOf, closeStep, coveredBy, currentStep, directionOf, optionsFor, pick, reopen, type Choice, type CravingState,
+  MULTI, STAGES, choiceOf, closeStep, coveredBy, currentStep, directionOf, optionsFor, pick, reopen, stockMarks, type Choice, type CravingState,
 } from '../../domain/craving';
 import { SIDE_KINDS, customSideId, type SideKind } from '../../domain/sides';
 import { currentContent } from '../../domain/recipe';
-import { householdOf, setHousehold, usePantry, usePlan, useProducts, useRecipes } from '../../data/store';
+import { householdOf, setHousehold, useFoodTable, usePantry, usePlan, useProducts, useRecipes } from '../../data/store';
 import { formatMinutes, portionCount } from '../format';
 import { toast } from '../toast';
 import { Icon } from './Icon';
@@ -74,8 +74,8 @@ function CardInfo({ c }: { c: Choice }) {
 
 /**
  * Die Stufe, die dran ist (Julia: „die Zutaten ohne die Anweisung“ – wie man es macht, steht am Ende unter „So geht's“):
- * feste Bausteine als Chips, darunter deine Rezepte als Karussell mit Bild. Bei Kohlenhydrat, Protein und Sauce schließt
- * ein Tipp die Stufe, bei Beilage und Topping sammelt man bis „Weiter“. „+ eigene“ legt einen Baustein dauerhaft an.
+ * feste Bausteine als Chips, darunter deine Rezepte als Karussell mit Bild. Bei Kohlenhydrat und Protein schließt ein
+ * Tipp die Stufe, bei Sauce, Gemüse und Topping sammelt man bis „Weiter“. „+ eigene“ legt einen Baustein dauerhaft an.
  * Dieselbe Auswahl im Stepper und unter dem Teller (CravingPlate).
  */
 export function StageOptions({ state, step, own, set, mini = false }: {
@@ -84,12 +84,13 @@ export function StageOptions({ state, step, own, set, mini = false }: {
 }) {
   const hh = householdOf(usePlan());
   const known = useKnownNames();
+  const stock = useStockMarks();
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState('');
   // kam eine Richtung vom Chip („Bowl“), zeigt Mashi nur Passendes – „alle zeigen“ hebt das für diese Stufe auf
   const [all, setAll] = useState(false);
   const dir = directionOf(state.direction);
-  const options = optionsFor(state, step, own, hh, all);
+  const options = optionsFor(state, step, own, hh, all, stock);
   const fixed = options.filter((c) => !c.recipeId);
   const mine = options.filter((c) => c.recipeId);
   const chosen = state.picks[step] ?? [];
@@ -113,7 +114,9 @@ export function StageOptions({ state, step, own, set, mini = false }: {
       <div className="chips" role="group" aria-label={label}>
         {fixed.map((c) => (
           <button key={c.id} type="button" className={`chip${chosen.includes(c.id) ? ' is-on' : ''}`} aria-pressed={chosen.includes(c.id)} onClick={() => choose(c.id)}>
+            {c.stock && <span className={`stock-dot stock-dot--${c.stock}`} aria-hidden="true" />}
             {c.name}
+            {c.stock && <span className="visually-hidden">{c.stock === 'bald' ? ' – bald verbrauchen' : ' – hast du da'}</span>}
           </button>
         ))}
         {adding
@@ -128,6 +131,13 @@ export function StageOptions({ state, step, own, set, mini = false }: {
           )
           : <button type="button" className="chip combo__own" onClick={() => setAdding(true)}><Icon name="plus" size={12} /> eigene</button>}
       </div>
+      {/* die Punkte erklären sich nicht von selbst – nur zeigen, was gerade vorkommt */}
+      {fixed.some((c) => c.stock) && (
+        <p className="small muted stock-legend">
+          {fixed.some((c) => c.stock === 'da') && <span><span className="stock-dot stock-dot--da" aria-hidden="true" /> hast du da</span>}
+          {fixed.some((c) => c.stock === 'bald') && <span><span className="stock-dot stock-dot--bald" aria-hidden="true" /> bald verbrauchen</span>}
+        </p>
+      )}
       {dir && (
         <button type="button" className="link small lust-steps__all" onClick={() => setAll(!all)}>
           {all ? `nur, was zu ${dir.name} passt` : 'alle zeigen'}
@@ -163,6 +173,13 @@ export function StageOptions({ state, step, own, set, mini = false }: {
       </div>
     </>
   );
+}
+
+/** Vorrats-Punkte: was von den Bausteinen zu Hause ist oder bald weg muss (stockMarks) – einmal je Vorrat, nicht je Chip */
+function useStockMarks() {
+  const pantry = usePantry();
+  const table = useFoodTable();
+  return useMemo(() => stockMarks(pantry, table), [pantry, table]);
 }
 
 /** Lebensmittel-Namen, die es bei dir schon gibt: Meine Lebensmittel, Speisekammer (ohne Vorgekochtes), Rezeptzutaten */

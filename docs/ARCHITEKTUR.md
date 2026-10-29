@@ -17,7 +17,7 @@ mashi/
 │  │  ├─ filter.ts            Suche und Filter
 │  │  ├─ mealplan.ts          Wochenplan, Einkaufsliste; Zutaten/Namen einordnen (resolveIngredient, keyOfName)
 │  │  ├─ week.ts              Vorkoch-Woche: Verteilung, Alter/Einfrieren, Mittage, Portionen, Tauschen, MHD-Funde
-│  │  ├─ sides.ts             Baukasten-Bausteine (Kohlenhydrat, Protein, Sauce, Beilage, Topping) mit Menge und Zubereitung
+│  │  ├─ sides.ts             Baukasten-Bausteine (Kohlenhydrat, Protein, Sauce, Gemüse, Topping) mit Menge und Zubereitung
 │  │  ├─ craving.ts           „Worauf hast du Lust?“: Richtungen (Tortilla, Bowl …), was zusammenpasst, Textfeld verstehen,
 │  │  │                       Rezepte/Teile als Bausteine (auch für mehrere Stufen), aus dem Gericht ein Rezept
 │  │  │                       (Probiergericht), „Passt dazu“, Grundlage als Start für den Baukasten im Wochenplan
@@ -95,7 +95,7 @@ aus den Zutaten berechnet (gecacht je Version).
                          └─ Sheet: ✨ Mit KI · ✍️ Eigenes Rezept · 📷 Importieren
 
  #/                       Start – „Worauf hast du Lust?“ (Textfeld + Richtungen), „Wie war …?“ für gekochte Probiergerichte
- #/lust?q=Taco            Baukasten: Kohlenhydrat → Protein → Sauce → Beilage → Topping (Richtung nur als Filter), dann kochen,
+ #/lust?q=Taco            Baukasten: Kohlenhydrat → Protein → Sauce → Gemüse → Topping (Richtung nur als Filter), dann kochen,
                           einplanen oder als Rezept speichern; angefangener Stand bleibt bis Mitternacht auf dem Gerät (mashi-craving-v1)
                           Ansicht Teller (CravingPlate) oder Liste (CravingSteps), gemerkt in mashi-craving-view; auch im Wochenplan
  #/kochbuch?device=…      Kochbuch (Filter als URL → Schnellfilter sind Links)
