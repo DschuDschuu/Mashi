@@ -416,7 +416,7 @@ export function buildShoppingList(plan: MealPlan, all: Recipe[], table: FoodTabl
     if (!r) continue;
     const title = currentContent(r).title;
     // Julia: ist die Sauce schon fertig (Vorgekocht), stehen ihre Zutaten nicht mehr auf der Liste
-    for (const x of resolveRecipe(r, all, item.servings, table, doneParts(pantry?.items ?? [], r.id), weekBases, coveredShare(supply.get(r.id)))) add(x, title);
+    for (const x of resolveRecipe(r, all, item.servings, table, doneParts(pantry?.items ?? [], r.id, r.partsFrom), weekBases, coveredShare(supply.get(r.id)))) add(x, title);
   }
   for (const s of sides) {
     const x = resolveIngredient(s, 1, table);

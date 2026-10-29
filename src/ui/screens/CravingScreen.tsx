@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import {
-  cookbookMatches, cravingContent, cravingMinutes, cravingSteps, cravingText, cravingTitle, currentStep, directionOf, matchingRecipes,
+  cookbookMatches, cravingContent, cravingCooking, cravingMinutes, cravingPartsFrom, cravingSteps, cravingText, cravingTitle, currentStep, directionOf, matchingRecipes,
   recipeChoices, understand, type Choice, type CravingState,
 } from '../../domain/craving';
 import type { Recipe } from '../../domain/types';
@@ -18,8 +18,10 @@ import { ask } from '../confirm';
 import { Icon } from '../components/Icon';
 import { TopBar } from '../components/TopBar';
 import { RecipeImage } from '../components/RecipeImage';
-import { formatMinutesShort } from '../format';
+import { euro, formatMinutesShort } from '../format';
 import { toast } from '../toast';
+import { useRecipeCost } from '../useCosts';
+import { useNutrition } from '../useNutrition';
 
 /**
  * Deine Rezepte (und Teile) als Bausteine, mit dem, was davon vorgekocht im Kühlschrank steht – Portionen, die im
@@ -92,11 +94,37 @@ export function CravingScreen({ q }: { q: string }) {
             <button type="button" className="link small" onClick={startOver}>Neu</button>
           </span>
         )} />
-      <CravingBuilder view={view} state={state} set={set} own={own} />
+      <CravingBuilder view={view} state={state} set={set} own={own} summary={<LiveValues state={state} own={own} />} />
       {!currentStep(state) && <Finished q={q} state={state} own={own} />}
       {/* im Teller nicht (Julia: dort gehören nur die eigenen Rezepte der Stufe hin – die stehen im Karussell) */}
       {view === 'list' && <Inspiration state={state} own={own} />}
     </main>
+  );
+}
+
+/**
+ * Live-Werte (Julia: kcal, Eiweiß und Preis wachsen beim Zusammenstellen mit) – pro Portion, aus dem Gericht, wie es
+ * gekocht würde (cravingCooking), mit denselben Rechnungen wie die Rezeptseite. Wie dort: „ca.“, fehlen Werte oder Preise
+ * „ab“; ist nichts davon bekannt, steht es nicht da.
+ */
+function LiveValues({ state, own }: { state: CravingState; own: Choice[] }) {
+  const plan = usePlan();
+  const recipes = useRecipes();
+  const hh = useMemo(() => householdOf(plan), [plan]);
+  const servings = Math.max(1, hh.portions);
+  const content = useMemo(() => cravingCooking(state, { own, recipes, household: hh, servings }), [state, own, recipes, hh, servings]);
+  const n = useNutrition(content);
+  const cost = useRecipeCost(content, servings);
+  const values = n.perServing ?? n.partial?.perServing;
+  const about = (partial: boolean) => (partial ? 'ab' : 'ca.');
+  if (!content.ingredients.length || (!values && !cost)) return null;
+  return (
+    <p className="craving-values" aria-live="polite">
+      {values && <span><strong>{about(!n.perServing)} {Math.round(values.kcal)}</strong> kcal</span>}
+      {values && <span><strong>{Math.round(values.protein)} g</strong> Eiweiß</span>}
+      {cost && <span><strong>{about(cost.missing.length > 0)} {euro(cost.perServing)}</strong></span>}
+      <small className="muted">pro Portion</small>
+    </p>
   );
 }
 
@@ -161,7 +189,9 @@ function Finished({ q, state, own }: { q: string; state: CravingState; own: Choi
       return known.id;
     }
     const content = cravingContent(state, { own, recipes, household: hh, servings, title, newId: () => newId('i') });
-    const id = createRecipe(content, { source: 'selbst', status: 'zum_testen', ...(trial ? { trial: true } : {}) });
+    // woher die Teile stammen – so erkennt das Gericht den vorgekochten Dip (Recipe.partsFrom)
+    const partsFrom = cravingPartsFrom(state, own);
+    const id = createRecipe(content, { source: 'selbst', status: 'zum_testen', ...(trial ? { trial: true } : {}), ...(partsFrom ? { partsFrom } : {}) });
     made.current = { key, id };
     // das Gericht gibt es jetzt (Plan, Kochmodus, Kochbuch) – beim nächsten Mal fängt der Stepper frisch an
     clearCraving();

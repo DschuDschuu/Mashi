@@ -19,7 +19,7 @@ import { thawFit, thawNeeds, type ThawNeed } from '../../domain/pantry';
 import { packLabel } from '../../domain/pantryLabel';
 import { specialDays } from '../../domain/shelfLife';
 import {
-  addToPlan, clearCooked, clearPlan, eatPreparedPortions, householdOf, removeFromPlan, scheduleRecipe, setPlanAmounts, setPlanServings, thawPantryItem, togglePlanCooked, useFoodTable, usePantry, usePlan, useRecipes,
+  addToPlan, clearCooked, clearPlan, eatPreparedPortions, householdOf, removeFromPlan, scheduleRecipe, setPlanAmounts, setPlanServings, thawPantryItem, togglePlanCooked, useFoodTable, usePantry, usePlan, useRecipe, useRecipes,
 } from '../../data/store';
 import { navigate } from '../../router';
 import { CartButton } from '../components/CartButton';
@@ -481,7 +481,7 @@ function ThawPill({ needs, recipeId, title, servings }: { needs: ThawNeed[]; rec
 
 /** Teile, die schon fertig in der Speisekammer stehen (Julia: „Sauce gestern gekocht“) – „Sauce fertig“ */
 function DonePartsLine({ recipeId }: { recipeId: string }) {
-  const done = doneParts(usePantry().items, recipeId);
+  const done = doneParts(usePantry().items, recipeId, useRecipe(recipeId)?.partsFrom);
   if (!done.length) return null;
   return <span className="small plan-done-parts"><Icon name="check" size={13} /> {done.map(partLabel).join(', ')} fertig</span>;
 }

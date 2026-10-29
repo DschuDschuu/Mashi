@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { choiceOf, coveredBy, coversOf, currentStep, reopen, type Choice, type CravingState } from '../../domain/craving';
 import type { SideKind } from '../../domain/sides';
 import { labelOf, StageOptions } from './CravingSteps';
@@ -29,7 +29,10 @@ const BRUSH = 'M7.5 8.6C13.5 6.6 21 6 28.5 5.7c6.6-.3 11.4-.8 15 .4 2.2.7 2 2.3.
  * ist frei – jedes Schild antippen öffnet seine Stufe. Deckt eine Wahl Protein und Sauce ab (Bolognese), werden die beiden
  * Viertel zu einer Hälfte, das Schild bleibt in der Ecke (Julia). Darunter dieselbe Auswahl wie im Stepper.
  */
-export function CravingPlate({ state, set, own, small = false }: { state: CravingState; set: (s: CravingState) => void; own: readonly Choice[]; small?: boolean }) {
+export function CravingPlate({ state, set, own, small = false, summary }: {
+  state: CravingState; set: (s: CravingState) => void; own: readonly Choice[]; small?: boolean;
+  /** unter dem Teller, über der Auswahl (Live-Werte) */ summary?: ReactNode;
+}) {
   // angetippt: diese Stufe – sonst die nächste offene; ist die angetippte erledigt, geht es dort weiter
   const [focus, setFocus] = useState<SideKind | undefined>();
   const step = focus && !state.closed.includes(focus) ? focus : currentStep(state);
@@ -92,6 +95,7 @@ export function CravingPlate({ state, set, own, small = false }: { state: Cravin
           })}
         </div>
       </div>
+      {summary}
       {step && (
         <section className="plate-sheet" aria-label={labelOf(step)}>
           <h2 className="plate-sheet__title">{labelOf(step)}</h2>

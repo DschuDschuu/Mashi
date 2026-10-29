@@ -200,6 +200,12 @@ export interface Recipe {
    */
   pairs?: string[];
   /**
+   * Teile, die aus einem anderen Rezept stammen: Teilname → dessen id (der Honig-Senf-Dip aus „Knusprige Hähnchenstreifen“
+   * im Baukasten-Gericht). Steht der Teil dort vorgekocht in der Speisekammer, zählt er hier als fertig (parts.ts:
+   * doneParts) – nicht auf die Einkaufsliste, beim Kochen gegessen. Nicht versioniert wie pairs.
+   */
+  partsFrom?: Record<string, string>;
+  /**
    * Probiergericht aus „Worauf hast du Lust?“ (Julia: „ich teste erst, wie es ist, dann speicher ich es“): ein echtes
    * Rezept, damit Kochmodus, Plan und Einkaufsliste wie immer funktionieren – aber noch nicht im Kochbuch. Nach dem
    * Kochen fragt die Startseite „Wie war's?“; speichern nimmt die Markierung weg, „Nicht speichern“ löscht es.

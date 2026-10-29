@@ -173,6 +173,34 @@ describe('Store: Rezept-Teile (Julia: Sauce gestern, Nudeln und Fleisch heute)',
     expect(amount('Passata')).toBe(500);
     expect(currentPantry().items.some((i) => i.part)).toBe(false);
   });
+
+  it('Teil aus einem anderen Rezept (partsFrom: der Dip vom Wochenende im Baukasten-Gericht): nicht einkaufen, beim Kochen nur die Portionen von heute', async () => {
+    const repo = await freshStore('parts-from');
+    const content = (title: string, ingredients: { id: string; name: string; amount: number; unit: 'g' | 'Stück'; part?: string }[]) => ({
+      title, description: '', servings: 2, prepMinutes: 0, cookMinutes: 0, difficulty: 1 as const, ingredients,
+      steps: [{ id: 's1', text: 'Joghurt verrühren.' }, { id: 's2', text: 'Tortillas wärmen.' }], categories: [], tags: [], devices: [],
+    });
+    // erfundene Rezepte: eine Platte mit Dip – und ein Gericht, das den Dip als Teil mitbringt und weiß, woher er stammt
+    const platte = createRecipe(content('Testplatte', [{ id: 'a', name: 'Joghurt', amount: 200, unit: 'g', part: 'Testdip' }, { id: 'b', name: 'Gurke', amount: 1, unit: 'Stück' }]), { source: 'selbst', status: 'kochbuch' });
+    cookParts(platte, ['Testdip'], 4);
+    const dip = () => currentPantry().items.find((i) => i.part === 'Testdip');
+    expect(dip()).toMatchObject({ recipeId: platte, amount: 4 });
+
+    const taco = createRecipe(content('Testtaco', [{ id: 'x', name: 'Joghurt', amount: 200, unit: 'g', part: 'Testdip' }, { id: 'y', name: 'Tortillas', amount: 4, unit: 'Stück' }]),
+      { source: 'selbst', status: 'zum_testen', partsFrom: { Testdip: platte } });
+    addToPlan(taco, 2);
+    await settle();
+    const shopping = buildShoppingList(await repo.loadPlan(), await repo.list(), foodTable, currentPantry()).map((x) => x.name);
+    expect(shopping).toContain('Tortillas');
+    // auf der Liste heißt er „Joghurt 3,5 %“ – darum am Wortanfang prüfen, sonst wäre das immer grün
+    expect(shopping.filter((n) => n.startsWith('Joghurt'))).toEqual([]);
+
+    // gekocht: 2 der 4 Dip-Portionen gegessen, der Rest bleibt für das nächste Mal; Rückgängig legt sie zurück
+    const cooked = togglePlanCooked(taco);
+    expect(dip()).toMatchObject({ recipeId: platte, amount: 2 });
+    cooked?.undo?.();
+    expect(dip()).toMatchObject({ amount: 4 });
+  });
 });
 
 describe('Store: Inventur und eigene Einträge', () => {

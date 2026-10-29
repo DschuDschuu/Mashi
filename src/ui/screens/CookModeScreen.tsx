@@ -101,7 +101,7 @@ export function CookModeScreen({ id, servings: asked, variants, prep, mealId }: 
   const [chosen, setChosen] = useState<string[] | null>(null);
   /** Dialog „Was kochst du heute?“ beim Start – einmal je Besuch, solange noch mindestens zwei Teile offen sind (Julia: Mashi erkennt Vorgekochtes selbst) */
   const [askParts, setAskParts] = useState(true);
-  const done = useMemo(() => (recipe ? doneParts(pantry.items, recipe.id) : []), [recipe, pantry.items]);
+  const done = useMemo(() => (recipe ? doneParts(pantry.items, recipe.id, recipe.partsFrom) : []), [recipe, pantry.items]);
   const today = useMemo(() => {
     if (!full) return [];
     return chosen ?? partsOf(full).filter((p) => !done.includes(p));

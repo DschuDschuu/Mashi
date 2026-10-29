@@ -65,9 +65,15 @@ export function remainingContent<C extends RecipeContent>(c: C, done: readonly s
   return forParts(c, all.filter((p) => !done.includes(p)), done);
 }
 
-/** Schon fertige Teile eines Gerichts: Vorgekochtes mit Teil in der Speisekammer (eingefroren zählt mit) */
-export function doneParts(items: readonly { recipeId?: string; part?: string; amount?: number }[], recipeId: string): string[] {
-  return [...new Set(items.filter((i) => i.recipeId === recipeId && i.part && (i.amount === undefined || i.amount > 0)).map((i) => i.part!))];
+/**
+ * Schon fertige Teile eines Gerichts: Vorgekochtes mit Teil in der Speisekammer (eingefroren zählt mit) – auch ein Teil
+ * aus einem anderen Rezept (`from` = Recipe.partsFrom: der Dip, der unter seinem Ursprungsrezept vorgekocht steht)
+ */
+export function doneParts(
+  items: readonly { recipeId?: string; part?: string; amount?: number }[], recipeId: string, from: Readonly<Record<string, string>> = {},
+): string[] {
+  const own = (i: { recipeId?: string; part?: string }) => i.recipeId === recipeId || (!!i.part && Object.hasOwn(from, i.part) && from[i.part] === i.recipeId);
+  return [...new Set(items.filter((i) => i.part && own(i) && (i.amount === undefined || i.amount > 0)).map((i) => i.part!))];
 }
 
 /** vorübergehender Teil für „Grundlage daraus machen“ – kann kein echter Teilname sein */

@@ -116,7 +116,7 @@ function Detail({ recipe }: { recipe: Recipe }) {
   const ingredients = orderByUse(scaleIngredients(shown, servings), c.steps);
   /** Rezept-Teile (Julia) und welche davon schon als Vorgekocht in der Speisekammer stehen */
   const parts = partsOf(c);
-  const doneNow = doneParts(usePantry().items, recipe.id);
+  const doneNow = doneParts(usePantry().items, recipe.id, recipe.partsFrom);
   const { stock, soon } = useRecipeStock(recipe, servings);
   const ratingIcon = useRatingIcon();
   const rating = recipe.feedback.length

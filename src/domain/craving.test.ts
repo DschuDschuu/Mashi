@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
-  DIRECTIONS, EMPTY_CRAVING, STAGES, chooseDirection, closeStep, cookbookMatches, cravingMinutes, cravingSteps, cravingText, cravingTitle, currentStep,
+  DIRECTIONS, EMPTY_CRAVING, STAGES, chooseDirection, closeStep, cookbookMatches, cravingCooking, cravingMinutes, cravingPartsFrom, cravingSteps, cravingText, cravingTitle, currentStep,
   baseCraving, coveredBy, cravingCombo, cravingContent, directionOf, guessKind, matchingRecipes, optionsFor, pick, recipeChoiceId, recipeChoices, reopen, staleTrials, stockMarks, understand, variantTargets,
 } from './craving';
 import { localFoodTable } from './nutrition/localFoods';
 import { emptyPantry, type Pantry, type PantryItem } from './pantry';
-import { followBlockParts } from './parts';
+import { doneParts, followBlockParts } from './parts';
 import { withNewVersion } from './recipe';
 import { sideOf } from './sides';
 import type { Ingredient, Recipe, RecipeBlock, RecipeContent } from './types';
@@ -270,15 +270,22 @@ describe('Aus dem Gericht ein Rezept machen', () => {
     expect(c.steps.some((st) => st.text === 'Knusprige Teststreifen aus dem Kühlschrank aufwärmen')).toBe(true);
   });
 
-  it('ein vorgekochter Teil: keine Zutaten (sonst wieder auf der Einkaufsliste), nur aus dem Kühlschrank – wie in „So geht’s“', () => {
-    const own = recipeChoices([dips], { items: [{ id: 'p', name: 'x', amount: 2, unit: 'Stück', addedAt: '', recipeId: 'r2', part: 'Testdip' }] });
+  it('ein vorgekochter Teil: bleibt Teil mit Zutaten, das Gericht merkt sich seine Herkunft – dann zählt er als fertig', () => {
+    const items = [{ id: 'p', name: 'x', amount: 2, unit: 'Stück' as const, addedAt: '', recipeId: 'r2', part: 'Testdip' }];
+    const own = recipeChoices([dips], { items });
     const s = pick(chooseDirection(EMPTY_CRAVING, 'taco'), 'sauce', 'rezept:r2:Testdip', own);
     const c = cravingContent(s, { own, recipes: [dips], servings: 2, title: 'T', newId });
-    expect(c.ingredients).toEqual([expect.objectContaining({ name: 'Tortillas' })]);
-    expect(c.steps.map((st) => st.text)).toContain('Testdip aus dem Kühlschrank, bei Bedarf erwärmen');
-    expect(c.steps.some((st) => st.text === 'machen')).toBe(false);
-    // Anzeige und Rezept sagen dasselbe
+    // die Zutaten des Dips bleiben (Nährwerte; selbst kochen, wenn er nicht mehr da ist) …
+    expect(c.ingredients.find((i) => i.name === 'Joghurt')).toMatchObject({ part: 'Testdip' });
+    // … und die Herkunft macht ihn fertig: nicht einkaufen, im Kochmodus übersprungen (doneParts)
+    const from = cravingPartsFrom(s, own);
+    expect(from).toEqual({ Testdip: 'r2' });
+    expect(doneParts(items, 'neues-gericht', from)).toEqual(['Testdip']);
+    expect(doneParts(items, 'neues-gericht')).toEqual([]);
+    // Anzeige: nur aus dem Kühlschrank – und so zählt er auch in der Zeit
     expect(cravingSteps(s, own).find((st) => st.id === 'rezept:r2:Testdip')).toMatchObject({ text: 'aus dem Kühlschrank, bei Bedarf erwärmen', minutes: 3 });
+    // feste Bausteine und ganze Rezepte haben keine Herkunft
+    expect(cravingPartsFrom(pick(chooseDirection(EMPTY_CRAVING, 'taco'), 'protein', 'hack'))).toBeUndefined();
   });
 });
 
@@ -305,6 +312,16 @@ describe('Vorrats-Punkte (Julia)', () => {
     const opts = optionsFor(s, 'veg', [], undefined, false, marks);
     expect(opts.map((c) => c.id)).toEqual(['tomaten', 'brokkoli', 'spinat', 'zucchini', 'paprika']);
     expect(opts.map((c) => c.stock)).toEqual(['bald', 'da', undefined, undefined, undefined]);
+  });
+});
+
+describe('Live-Werte am Teller: das Gericht, wie es gekocht würde', () => {
+  it('ein ganzes Rezept als Baustein wird in seine Zutaten aufgelöst – feste Bausteine bleiben, wie sie sind', () => {
+    const own = recipeChoices([streifen]);
+    const s = pick(chooseDirection(EMPTY_CRAVING, 'taco'), 'protein', 'rezept:r1', own);
+    const c = cravingCooking(s, { own, recipes: [streifen], servings: 2 });
+    expect(c.ingredients.map((i) => i.name)).toEqual(expect.arrayContaining(['Tortillas', 'Testmehl']));
+    expect(c.ingredients.some((i) => i.unit === 'Portion')).toBe(false);
   });
 });
 

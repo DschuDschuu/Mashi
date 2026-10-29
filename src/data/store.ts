@@ -214,6 +214,11 @@ export function trialAsChoice(trialId: string, targetId: string, name: string, r
   const content = addChoiceFrom(currentContent(target), currentContent(trial), name, () => newId('i'));
   const choice = content.choices!.at(-1)!;
   let next = withNewVersion(target, content, 'nutzer', `Variante „${choice}“ aus „Worauf hast du Lust?“`);
+  // Teile aus anderen Rezepten (der vorgekochte Dip) wandern mit – außer das Rezept hat selbst schon einen Teil des Namens,
+  // dann bliebe sonst dessen eigener Teil an fremdem Vorgekochten hängen
+  const ownParts = partsOf(currentContent(target));
+  const links = Object.entries(trial.partsFrom ?? {}).filter(([p]) => !ownParts.includes(p));
+  if (links.length) next = { ...next, partsFrom: { ...next.partsFrom, ...Object.fromEntries(links) } };
   if (rating) next = { ...next, feedback: [...next.feedback, { id: newId('f'), versionId: currentVersion(next).id, createdAt: now(), rating, note: `Variante „${choice}“` }] };
   commit(next);
   const undoDelete = deleteRecipe(trialId);
@@ -534,13 +539,18 @@ function consume(r: Recipe, servings: number, amounts: Record<string, number> = 
   if (!pantry.items.length) return { used: [], toCheck: [] };
   const before = pantry;
   // schon fertige Teile (die Sauce von gestern): nur noch der Rest – und die gelagerte Sauce ist jetzt verbraucht
-  const done = doneParts(pantry.items, r.id);
+  const done = doneParts(pantry.items, r.id, r.partsFrom);
   // Grundlagen: aus der Vorkoch-Woche kommen sie aus dem Vorgekochten (eatMeal), sonst deckt Vorgekochtes seinen Teil –
   // dann gehen dessen Portionen aus der Speisekammer, nicht die Zutaten der Grundlage (baseStock.ts)
   const { without, supply } = basesFor(r, servings);
   const d = deductRecipe(pantry, remainingContent(cookingContent(r, recipes, without, coveredShare(supply)), done), servings, currentFoodTable(), amounts, variants);
   const eaten = supply.reduce((items, s) => eatBase(items, s.baseId, s.have), d.pantry.items);
-  const after = { ...d.pantry, items: done.length ? eaten.filter((it) => !(it.recipeId === r.id && it.part)) : eaten };
+  // eigene fertige Teile ganz weg (für genau dieses Gericht gekocht); ein Teil aus einem anderen Rezept (partsFrom: der
+  // Dip vom Wochenende) nur mit den Portionen von heute – der Rest bleibt für das nächste Mal
+  const ownDone = new Set(eaten.flatMap((it) => (it.recipeId === r.id && it.part ? [it.part] : [])));
+  const linked = done.filter((p) => !ownDone.has(p) && r.partsFrom?.[p]);
+  const rest = eaten.filter((it) => !(it.recipeId === r.id && it.part));
+  const after = { ...d.pantry, items: done.length ? linked.reduce((items, p) => eatBase(items, r.partsFrom![p], servings, p), rest) : eaten };
   if (!d.used.length && !d.toCheck.length && !done.length && !supply.length) return { used: [], toCheck: [] };
   const taken = takenBetween(before, after);
   commitPantry(log ? { ...after, cookLog: { ...pruneCookLog(after.cookLog), [r.id]: taken } } : after);
@@ -556,7 +566,7 @@ export function cookParts(id: string, parts: readonly string[], servings?: numbe
   const r = get(id);
   const c = cookingContent(r, recipes);
   const all = partsOf(c);
-  const done = doneParts(pantry.items, id);
+  const done = doneParts(pantry.items, id, r.partsFrom);
   if (!all.length || all.every((p) => parts.includes(p) || done.includes(p))) return { ...markCooked(id, servings, amounts, variants), stored: [] };
   const planned = plan.items.find((i) => i.recipeId === id);
   const cookedServings = servings ?? planned?.servings ?? c.servings;
@@ -607,6 +617,8 @@ interface CreateOptions {
   fromBase?: string;
   /** Probiergericht aus „Worauf hast du Lust?“ – noch nicht im Kochbuch (Recipe.trial) */
   trial?: boolean;
+  /** Teile aus anderen Rezepten (Recipe.partsFrom) */
+  partsFrom?: Record<string, string>;
 }
 
 /** Legt ein neues Rezept mit Version 1 an. Ohne Bild wird eines erzeugt (einmalig). */
@@ -632,6 +644,7 @@ export function createRecipe(content: RecipeContent, opts: CreateOptions, id = n
     feedback: [],
     ...(opts.fromBase ? { fromBase: opts.fromBase } : {}),
     ...(opts.trial ? { trial: true } : {}),
+    ...(opts.partsFrom && Object.keys(opts.partsFrom).length ? { partsFrom: opts.partsFrom } : {}),
   };
   commit(recipe);
   if (!opts.image) void regenerateImage(recipe.id);
@@ -1016,11 +1029,14 @@ export function setHousehold(h: Household): () => void {
   return () => commitPlan(withWeek(plan, plan.week, before ?? DEFAULT_HOUSEHOLD));
 }
 
-/** Portionen aus dem Vorgekochten einer Grundlage essen – erst Frisches, dann Aufgetautes, dann Gefrorenes */
-function eatBase(items: PantryItem[], baseId: string, portions: number): PantryItem[] {
+/**
+ * Portionen aus dem Vorgekochten einer Grundlage essen – erst Frisches, dann Aufgetautes, dann Gefrorenes. Mit `part`:
+ * aus einem vorgekochten Teil des Rezepts (der Dip aus einem anderen Rezept, Recipe.partsFrom)
+ */
+function eatBase(items: PantryItem[], baseId: string, portions: number, part?: string): PantryItem[] {
   let left = portions;
   const order = items
-    .filter((x) => x.recipeId === baseId && !x.part && (x.amount ?? 0) > 0)
+    .filter((x) => x.recipeId === baseId && (x.part || undefined) === part && (x.amount ?? 0) > 0)
     .sort((a, b) => Number(!!a.frozenAt) - Number(!!b.frozenAt));
   for (const x of order) {
     if (left <= 0) break;

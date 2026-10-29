@@ -5,6 +5,7 @@ import { useUpKeys } from './shelfLife';
 import { partOf, partsOf, stepPart } from './parts';
 import { currentContent, totalMinutes } from './recipe';
 import { searchRecipes } from './recipeSearch';
+import { cookingContent } from './homemade';
 import { SIDE_KINDS, SIDES, comboOf, prepOf, sideIngredient, sideOf, sidesOfKind, type SideKind, type SidePrep } from './sides';
 import type { Ingredient, Recipe, RecipeContent, RecipeImage, Step } from './types';
 
@@ -483,21 +484,21 @@ export function cravingContent(s: CravingState, opts: {
   const steps: { minutes: number; list: Step[] }[] = [];
   for (const c of cravingChoices(s, own, household)) {
     const recipe = c.recipeId ? recipes.find((r) => r.id === c.recipeId) : undefined;
-    if (recipe && c.ready) {
-      // Vorgekochtes nur aus dem Kühlschrank. Ein ganzes Rezept bleibt verknüpfte Zutat – seine Portionen gehen beim
-      // Kochen aus der Speisekammer. Ein fertiger Teil bringt keine Zutaten mit: Die Speisekammer kennt ihn nur unter
-      // seinem Rezept, im neuen Gericht stünden sie sonst noch einmal auf der Einkaufsliste.
-      const prep = readyPrep(c.kind);
-      if (!c.from) ingredients.push({ id: newId(), name: c.name, amount: servings, unit: 'Portion', recipeId: recipe.id });
-      steps.push({ minutes: prep.minutes, list: [{ id: newId(), text: `${c.name} ${prep.text}`, ...(prep.minutes ? { timerMinutes: prep.minutes } : {}) }] });
-    } else if (recipe && c.from) {
-      // ein Teil („Testdip“): Zutaten und Schritte übernehmen, auf die Portionen umgerechnet
+    if (recipe && c.from) {
+      // ein Teil („Testdip“): Zutaten und Schritte übernehmen, auf die Portionen umgerechnet. Das Gericht merkt sich, woher
+      // er stammt (cravingPartsFrom → Recipe.partsFrom): Steht er dort vorgekocht, ist er fertig (parts.ts: doneParts) –
+      // nicht auf der Einkaufsliste, beim Kochen übersprungen und aus der Speisekammer gegessen. Sonst kochst du ihn mit.
       const rc = currentContent(recipe);
       const part = c.name;
       const f = servings / (rc.servings || 1);
       for (const i of rc.ingredients.filter((x) => partOf(x) === part)) ingredients.push({ ...i, id: newId(), part, ...(i.amount != null ? { amount: Math.round(i.amount * f * 10) / 10 } : {}) });
       const partSteps = rc.steps.filter((st) => stepPart(st, rc) === part).map((st) => ({ id: newId(), text: st.text, part, ...(st.timerMinutes ? { timerMinutes: st.timerMinutes } : {}) }));
-      steps.push({ minutes: c.prep?.minutes ?? 0, list: partSteps });
+      steps.push({ minutes: c.ready ? readyPrep(c.kind).minutes : c.prep?.minutes ?? 0, list: partSteps });
+    } else if (recipe && c.ready) {
+      // ein ganzes Rezept, vorgekocht: verknüpfte Zutat – seine Portionen gehen beim Kochen aus der Speisekammer
+      const prep = readyPrep(c.kind);
+      ingredients.push({ id: newId(), name: c.name, amount: servings, unit: 'Portion', recipeId: recipe.id });
+      steps.push({ minutes: prep.minutes, list: [{ id: newId(), text: `${c.name} ${prep.text}`, ...(prep.minutes ? { timerMinutes: prep.minutes } : {}) }] });
     } else if (recipe) {
       ingredients.push({ id: newId(), name: c.name, amount: servings, unit: 'Portion', recipeId: recipe.id });
       const minutes = c.prep?.minutes ?? 0;
@@ -516,6 +517,29 @@ export function cravingContent(s: CravingState, opts: {
     ingredients, steps: ordered.flatMap((x) => x.list).length ? ordered.flatMap((x) => x.list) : [{ id: newId(), text: '' }],
     categories: [], tags: directionOf(s.direction) ? [directionOf(s.direction)!.name] : [], devices: [],
   };
+}
+
+/**
+ * Das Gericht, wie es gekocht würde – für die Live-Werte am Teller (Julia: Eiweiß und Preis wachsen beim Zusammenstellen
+ * mit): dasselbe Rezept wie beim Speichern, verknüpfte Rezepte (die Bolognese) aufgelöst in ihre Zutaten wie auf der
+ * Rezeptseite (homemade.ts: cookingContent). So zeigt der Teller, was das gespeicherte Rezept später auch zeigt.
+ */
+export function cravingCooking(s: CravingState, opts: {
+  own?: readonly Choice[]; recipes?: readonly Recipe[]; household?: Pick<Household, 'sides' | 'sidePrep'>; servings: number;
+}): RecipeContent {
+  let n = 0;
+  const content = cravingContent(s, { ...opts, title: '', newId: () => `vorschau${++n}` });
+  const draft: Recipe = {
+    id: 'vorschau', createdAt: '', updatedAt: '', status: 'zum_testen', source: 'selbst', favorite: false, notes: '', feedback: [],
+    currentVersionId: 'v', versions: [{ id: 'v', number: 1, createdAt: '', author: 'nutzer', content }],
+  };
+  return cookingContent(draft, opts.recipes ?? []);
+}
+
+/** Woher die Teile im Gericht stammen (Recipe.partsFrom): „Testdip“ → Testplatte – so erkennt Mashi den vorgekochten Dip */
+export function cravingPartsFrom(s: CravingState, own: readonly Choice[] = []): Record<string, string> | undefined {
+  const links = cravingChoices(s, own).flatMap((c) => (c.recipeId && c.from ? [[c.name, c.recipeId] as const] : []));
+  return links.length ? Object.fromEntries(links) : undefined;
 }
 
 /**

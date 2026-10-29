@@ -23,6 +23,9 @@ Recipe  (Hülle – ändert sich selten)
 │                zieht die Markierung mit – parts.ts: followBlockParts; siehe domain/craving.ts)
 ├─ pairs?       „Passt gut zu“: Baustein-ids (Bolognese → spaetzle, parmesan) – stehen im Stepper vorn, sobald das Rezept
 │                gewählt ist, auch im Baukasten des Wochenplans (nicht versioniert)
+├─ partsFrom?   Teile aus einem anderen Rezept: Teilname → dessen id (der Dip aus „Knusprige Hähnchenstreifen“ im Baukasten-
+│                Gericht). Steht der Teil dort vorgekocht, zählt er hier als fertig (parts.ts: doneParts): nicht auf die
+│                Einkaufsliste, im Kochmodus übersprungen, beim Kochen nur die Portionen von heute gegessen (nicht versioniert)
 ├─ trial?       Probiergericht aus „Worauf hast du Lust?“: echtes Rezept (Plan, Kochmodus, Einkauf rechnen wie immer), aber nicht im
 │                Kochbuch, Rezept des Tages, Woche planen, Plan-Auswahl, Reste-Vorschlägen; nach dem Kochen fragt die Startseite
 │                „Wie war …?“ (behalten → Markierung weg, ab 4 Sternen „bewaehrt“; „Nicht speichern“ → gelöscht); nie gekocht,

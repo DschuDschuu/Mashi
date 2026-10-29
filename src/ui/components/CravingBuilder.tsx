@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import type { Choice, CravingState } from '../../domain/craving';
 import { loadView, saveView, type CravingView } from '../cravingMemory';
 import { CravingPlate } from './CravingPlate';
@@ -14,10 +14,13 @@ export function useCravingView(): [CravingView, (v: CravingView) => void] {
  * Das Zusammenstellen in der gewählten Ansicht (Julia: „die kreative Ansicht oder beim Stepper bleiben“) – beide zeigen
  * denselben Stand, umschalten verliert nichts. Auf der Lust-Seite und im Wochenplan.
  */
-export function CravingBuilder({ view, state, set, own, small = false }: {
+export function CravingBuilder({ view, state, set, own, small = false, summary }: {
   view: CravingView; state: CravingState; set: (s: CravingState) => void; own: readonly Choice[]; small?: boolean;
+  /** direkt unter dem Teller bzw. über der Liste – die Live-Werte der Lust-Seite */
+  summary?: ReactNode;
 }) {
-  return view === 'plate' ? <CravingPlate state={state} set={set} own={own} small={small} /> : <CravingSteps state={state} set={set} own={own} />;
+  if (view === 'plate') return <CravingPlate state={state} set={set} own={own} small={small} summary={summary} />;
+  return <>{summary}<CravingSteps state={state} set={set} own={own} /></>;
 }
 
 /** Umschalter Teller | Liste */

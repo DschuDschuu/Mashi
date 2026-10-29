@@ -2369,6 +2369,9 @@ details.cost-line[open] > summary::after { transform: rotate(-90deg); }
 .plate__name svg { color: var(--art); vertical-align: -1px; }
 /* der Pinselstrich aus der Navigation hinter dem Feld, das dran ist */
 .plate__brush { position: absolute; left: -10px; top: 0; z-index: -1; width: calc(100% + 20px); height: 100%; fill: var(--nav-brush); }
+/* Live-Werte unter dem Teller (Julia): kcal · Eiweiß · Preis pro Portion – eine ruhige Zeile, auf 375 px darf sie umbrechen */
+.craving-values { display: flex; flex-wrap: wrap; justify-content: center; align-items: baseline; gap: 4px 14px; margin: 0; font-size: var(--fs-sm); color: var(--ink-2); }
+.craving-values strong { color: var(--ink); font-variant-numeric: tabular-nums; }
 .plate-sheet { display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: var(--r-lg); background: var(--surface); box-shadow: var(--shadow); }
 .plate-sheet__title { margin: 0; font-size: var(--fs-md); }
 .combo-stepper__top { display: flex; justify-content: flex-end; }
