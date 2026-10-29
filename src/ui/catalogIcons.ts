@@ -1,3 +1,4 @@
+import type { FoodCategory } from '../domain/categories';
 import type { RecipeStatus } from '../domain/types';
 import type { IconName } from './components/Icon';
 
@@ -20,6 +21,21 @@ export const STATUS_ICONS: Record<RecipeStatus, IconName> = {
   zum_testen: 'flask',
   bewaehrt: 'heart',
   kochbuch: 'book',
+};
+
+/** Ladenabteilungen als Abschnitte (Einkaufsliste, Speisekammer) – jeder Abschnitt hat ein Icon (UX-Rundgang) */
+export const CATEGORY_ICONS: Record<FoodCategory, IconName> = {
+  'obst-gemuese': 'apple',
+  'fleisch-fisch': 'drumstick',
+  'milch-eier': 'glass',
+  'nudeln-reis-brot': 'bread',
+  'muesli-nuesse': 'rice',
+  konserven: 'archive',
+  saucen: 'ladle',
+  backen: 'cake',
+  tiefkuehl: 'snow',
+  getraenke: 'cup',
+  sonstiges: 'bag',
 };
 
 /** Unbekannte (später ergänzte) Geräte bekommen ein neutrales Icon statt eines Fehlers. */

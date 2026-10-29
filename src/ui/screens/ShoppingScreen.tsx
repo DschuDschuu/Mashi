@@ -7,6 +7,7 @@ import { toast } from '../toast';
 import { navigate, useRoute } from '../../router';
 import { Empty, Section } from '../components/Controls';
 import { Icon } from '../components/Icon';
+import { CATEGORY_ICONS } from '../catalogIcons';
 import { TopBar } from '../components/TopBar';
 import { groupByCategory } from '../../domain/categories';
 import { useCategoryOf } from '../useCategory';
@@ -52,9 +53,10 @@ export function ShoppingScreen() {
         </Empty>
       ) : (
         <>
-          <div className="segments" role="tablist" aria-label="Einkaufsliste">
+          {/* zwei Ansichten, kein Filter – darum unterstrichen wie die Tabs im Rezept */}
+          <div className="tabs tabs--page" role="tablist" aria-label="Einkaufsliste">
             {(['liste', 'basics'] as View[]).map((v) => (
-              <button key={v} role="tab" aria-selected={view === v} className={`segment${view === v ? ' is-on' : ''}`} onClick={() => setView(v)}>
+              <button key={v} role="tab" aria-selected={view === v} className={`tab${view === v ? ' is-on' : ''}`} onClick={() => setView(v)}>
                 {v === 'liste' ? 'Liste' : 'Basics'}{count(v) ? ` (${count(v)})` : ''}
               </button>
             ))}
@@ -67,12 +69,12 @@ export function ShoppingScreen() {
             </p>
           )}
           {groupByCategory(open, (i) => categoryOf(i.name)).map((g) => (
-            <Section key={g.title} title={g.title}>
+            <Section key={g.title} title={g.title} icon={CATEGORY_ICONS[g.id]}>
               <ul className="shopping panel">{g.items.map((i) => <ShoppingRow key={i.key} item={i} checked={false} />)}</ul>
             </Section>
           ))}
           {done.length > 0 && (
-            <Section title={`Im Wagen (${done.length})`}>
+            <Section title={`Im Wagen (${done.length})`} icon="cart">
               <ul className="shopping panel">{done.map((i) => <ShoppingRow key={i.key} item={i} checked />)}</ul>
               {/* alles Abgehakte von der Liste – eigene Einträge und die vom Wochenplan (Julia) */}
               <button className="link link--muted" onClick={() => {
@@ -82,7 +84,7 @@ export function ShoppingScreen() {
             </Section>
           )}
           {have.length > 0 && (
-            <Section title={`Hast du schon (${have.length})`}>
+            <Section title={`Hast du schon (${have.length})`} icon="check">
               <ul className="shopping panel">
                 {have.map((i) => (
                   <li key={i.key} className="shopping__item is-have">

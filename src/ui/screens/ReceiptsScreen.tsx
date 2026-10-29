@@ -60,7 +60,7 @@ function BonList({ bons }: { bons: SavedBon[] }) {
   if (!bons.length) return null;
   const shown = [...bons].reverse();
   return (
-    <Section title={`Gespeicherte Kassenbons (${bons.length})`}>
+    <Section title={`Gespeicherte Kassenbons (${bons.length})`} icon="clipboard">
       <ul className="bonview">
         {shown.map((b) => {
           const saved = b.savings ? b.savings.offers + b.savings.lidlPlus + b.savings.mhd : 0;
@@ -88,7 +88,7 @@ function OldDays() {
   const days = unsavedDays(usePantry());
   if (!days.length) return null;
   return (
-    <Section title="Eingelesen vor dem Speichern der Bons">
+    <Section title="Eingelesen vor dem Speichern der Bons" icon="archive">
       <ul className="bonview">
         {days.map(({ day, names }) => (
           <li key={day} className="bonview__line old-day">

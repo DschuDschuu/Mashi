@@ -6,6 +6,7 @@ import { deleteRecipe, keepTrial, trialAsChoice, useRecipes } from '../../data/s
 import { toast } from '../toast';
 import { useSheet } from '../useSheet';
 import { Icon } from './Icon';
+import { useRatingIcon } from './Controls';
 import { RecipeImage } from './RecipeImage';
 
 /**
@@ -24,6 +25,7 @@ export function TrialAsk() {
 function TrialCard({ recipe }: { recipe: Recipe }) {
   const [rating, setRating] = useState<Rating | undefined>();
   const [asChoice, setAsChoice] = useState(false);
+  const ratingIcon = useRatingIcon();
   const title = currentContent(recipe).title;
   return (
     <section className="trial-ask" aria-labelledby="trial-ask-title">
@@ -31,7 +33,7 @@ function TrialCard({ recipe }: { recipe: Recipe }) {
       <div className="trial-ask__stars" role="group" aria-label="Bewertung">
         {([1, 2, 3, 4, 5] as const).map((n) => (
           <button key={n} type="button" className="iconbtn" aria-label={`${n} ${n === 1 ? 'Stern' : 'Sterne'}`} aria-pressed={rating === n} onClick={() => setRating(n)}>
-            <Icon name="star" size={26} filled={!!rating && n <= rating} />
+            <Icon name={ratingIcon} size={26} filled={!!rating && n <= rating} />
           </button>
         ))}
       </div>

@@ -13,7 +13,8 @@ import { orderByUse } from '../../domain/stepIngredients';
 import { doneParts, partLabel, partOf, partsOf, REST, stepPart } from '../../domain/parts';
 import type { Recipe, RecipeContent } from '../../domain/types';
 import type { Weekday } from '../../domain/mealplan';
-import { DAY_LONG, DAY_SHORT, weekdayOf } from '../../domain/week';
+import { DAY_LONG, DAY_SHORT, keepsOf, weekdayOf } from '../../domain/week';
+import { specialDays } from '../../domain/shelfLife';
 import { describeChange, diffContent } from '../../domain/versions';
 import {
   addToPlan, adoptToCookbook, archiveRecipe, deleteRecipe, keepTrial, makeBase, restoreRecipe, scheduleRecipe, markCooked, regenerateImage, setChoice, setHomemade, setPlanVariants, setStatus, toggleFavorite, togglePlanCooked, uncookRecipe, updateNotes, usePantry, usePlan, useRecipe, useRecipes,
@@ -21,7 +22,7 @@ import {
 import { cookedToast } from '../cookedToast';
 import { shareMessage, shareRecipes } from '../shareRecipes';
 import { goBack, navigate } from '../../router';
-import { ChipSelect, Empty, Stars, Stepper } from '../components/Controls';
+import { ChipSelect, Empty, Stars, Stepper, useRatingIcon } from '../components/Controls';
 import { Icon } from '../components/Icon';
 import { PageIntro } from '../components/PageIntro';
 import { deviceIcon } from '../catalogIcons';
@@ -117,6 +118,7 @@ function Detail({ recipe }: { recipe: Recipe }) {
   const parts = partsOf(c);
   const doneNow = doneParts(usePantry().items, recipe.id);
   const { stock, soon } = useRecipeStock(recipe, servings);
+  const ratingIcon = useRatingIcon();
   const rating = recipe.feedback.length
     ? { avg: recipe.feedback.reduce((s, f) => s + f.rating, 0) / recipe.feedback.length, count: recipe.feedback.length }
     : null;
@@ -185,7 +187,7 @@ const header = (
         <span><Icon name="users" size={16} /> {portionCount(c.servings)}</span>
         <span>{DIFFICULTY_LABEL[c.difficulty]}</span>
         {rating && (
-          <span className="facts__star"><Icon name="star" size={16} filled /> {rating.avg.toLocaleString('de-DE', { maximumFractionDigits: 1 })} ({rating.count})</span>
+          <span className="facts__star"><Icon name={ratingIcon} size={16} filled /> {rating.avg.toLocaleString('de-DE', { maximumFractionDigits: 1 })} ({rating.count})</span>
         )}
       </div>
 
@@ -232,10 +234,10 @@ const header = (
         </div>
       )}
       <StatusAction recipe={recipe} />
-      {!recipe.archivedAt && !recipe.trial && recipe.status !== 'ki_entwurf' && <PrepPanel recipe={recipe} recipes={recipes} />}
-      {!recipe.archivedAt && !recipe.trial && recipe.status !== 'ki_entwurf' && <BlockPanel recipe={recipe} />}
     </>
   );
+  // Vorkochen & Baukasten: selten gebraucht – eingeklappt unter den Zutaten statt davor (UX-Rundgang: Zutaten erst nach ~1100 px)
+  const prepFold = !recipe.archivedAt && !recipe.trial && recipe.status !== 'ki_entwurf' && <PrepFold recipe={recipe} recipes={recipes} />;
 
   const ingredientsPanel = (
     <>
@@ -359,6 +361,7 @@ const header = (
           </section>
           {cookButton}
           {tabArea}
+          {prepFold}
         </div>
       </main>
     );
@@ -370,9 +373,32 @@ const header = (
       <div className="detail">
         {header}
         {tabArea}
+        {prepFold}
       </div>
       <div className="bottom-cta">{cookButton}</div>
     </main>
+  );
+}
+
+/** Eingeklappt: Haltbarkeit, Verwandlungen, Baustein, „Passt gut zu“ – die Zeile verrät, was eingestellt ist */
+function PrepFold({ recipe, recipes }: { recipe: Recipe; recipes: readonly Recipe[] }) {
+  const pantry = usePantry();
+  const keeps = keepsOf(recipe, specialDays('prepared', pantry.shelfDays));
+  const summary = [
+    !recipe.fromBase && `hält ${keeps} ${keeps === 1 ? 'Tag' : 'Tage'}`,
+    recipe.freezable && 'einfrierbar',
+    recipe.blocks?.length ? 'Baustein' : 'kein Baustein',
+  ].filter(Boolean).join(' · ');
+  return (
+    <details className="panel prep-fold disclosure">
+      <summary>
+        <Icon name="sliders" size={20} />
+        <span className="prep-fold__head"><strong>Vorkochen &amp; Baukasten</strong><small className="muted">{summary}</small></span>
+        <Icon name="chevron" size={18} />
+      </summary>
+      <PrepPanel recipe={recipe} recipes={recipes} />
+      <BlockPanel recipe={recipe} />
+    </details>
   );
 }
 

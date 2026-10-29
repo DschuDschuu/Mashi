@@ -105,10 +105,10 @@ export function WeekSetupScreen() {
       </section>
 
       {/* Julia: Grundrezepte und Rezepte als Tabs – die Zahl zeigt, was davon im Topf ist */}
-      <div className="segments week-setup__tabs" role="tablist">
+      <div className="tabs tabs--page week-setup__tabs" role="tablist">
         {groups.map(([label, list]) => {
           const n = list.filter((c) => inPot(c.r.id)).length;
-          return <button key={label} type="button" role="tab" aria-selected={tab === label} className={`segment${tab === label ? ' is-on' : ''}`} onClick={() => setTab(label)}>{label}{n ? ` · ${n}` : ''}</button>;
+          return <button key={label} type="button" role="tab" aria-selected={tab === label} className={`tab${tab === label ? ' is-on' : ''}`} onClick={() => setTab(label)}>{label}{n ? ` · ${n}` : ''}</button>;
         })}
       </div>
       {groups.filter(([label]) => label === tab).map(([label, list]) => (

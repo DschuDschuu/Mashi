@@ -86,7 +86,7 @@ export function StartScreen() {
           {/* derselbe Aufbau wie ohne Plan („Was möchtest du heute kochen?“ + „Rezept des Tages“): mittige Überschrift,
               darunter die Unterüberschrift mit Symbol – zum Plan geht es unten über die Navigation */}
           <h2 className="home-q home-q--title" id="today-title">Bereit zum Kochen</h2>
-          <p className="today__title"><Icon name="calendar" size={18} /> Aus deinem Wochenplan</p>
+          <p className="today__title"><Icon name="calendar" size={20} /> Aus deinem Wochenplan</p>
           <Perch on={halloween}><Swiper items={planned} /></Perch>
         </section>
       ) : weekTonight ? null : daily ? (
@@ -95,7 +95,7 @@ export function StartScreen() {
               Statt nur zu fragen, gleich antworten lassen (Julia: „sie fragt mich, worauf habe ich Lust“) */}
           <p className="home-q">Worauf hast du Lust?</p>
           <CravingAsk />
-          <h2 className="today__title" id="today-title"><Icon name="sparkles" size={18} /> Oder das Rezept des Tages</h2>
+          <h2 className="today__title" id="today-title"><Icon name="sparkles" size={20} /> Oder das Rezept des Tages</h2>
           <Perch on={halloween}><BigCard recipe={daily} servings={currentContent(daily).servings} daily hint={usingUp.get(daily.id)} /></Perch>
         </section>
       ) : (

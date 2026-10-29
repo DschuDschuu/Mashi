@@ -142,7 +142,7 @@ export function FoodPriceScreen({ name, title }: { name: string; title: string }
           {(['g', 'Stück'] as const).filter((u) => unitCount(u) > 0 && points.length > 1).map((u) => {
             const lines = seriesFor(u, false);
             return (
-              <Section key={u} title={`${mode === 'bezahlt' ? 'Bezahlt' : 'Regalpreis'} je ${displayUnit(u)}`}>
+              <Section key={u} title={`${mode === 'bezahlt' ? 'Bezahlt' : 'Regalpreis'} je ${displayUnit(u)}`} icon="cart">
                 <div className="price-card">
                   <PriceLines series={seriesFor(u, true)} unit={u} label={title} />
                   {/* statt der Chips (Julia: nehmen zu viel Platz): schmale Legende, antippen blendet aus */}
@@ -189,7 +189,7 @@ export function FoodPriceScreen({ name, title }: { name: string; title: string }
           })}
 
           {unsorted.length > 0 && sorts.length > 0 && (
-            <Section title="Ältere Preise ohne Sorte">
+            <Section title="Ältere Preise ohne Sorte" icon="clock">
               <div className="price-card stack stack--tight">
                 <p className="small muted">Eingelesen, bevor Mashi Bons gespeichert hat. Welche Sorte war das?</p>
                 {unsorted.length > 1 && (
@@ -213,7 +213,7 @@ export function FoodPriceScreen({ name, title }: { name: string; title: string }
           )}
 
           {shownPurchases.length > 0 && (
-            <Section title="Alle Einkäufe">
+            <Section title="Alle Einkäufe" icon="list">
               <ul className="bonview">
                 {[...shownPurchases].reverse().map(({ purchase: p, paid, unit: u }) => {
                   const sort = sortOf(p!.line.productId);

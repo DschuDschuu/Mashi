@@ -19,9 +19,13 @@ export function Stepper({ value, min = 1, max = 24, step = 1, onChange, label, s
   );
 }
 
+/** Symbol für Bewertungen – Halloween: Kürbisse statt Sterne, die Note bleibt dieselbe. Nicht für „Lieblingssorte“ (bleibt Stern). */
+export function useRatingIcon(): IconName {
+  return useSpecial() === 'halloween' ? 'pumpkin' : 'star';
+}
+
 export function Stars({ value, onChange, size = 34 }: { value: number; onChange?: (v: Rating) => void; size?: number }) {
-  // Halloween: Kürbisse statt Sterne – die Note bleibt dieselbe
-  const icon: IconName = useSpecial() === 'halloween' ? 'pumpkin' : 'star';
+  const icon = useRatingIcon();
   return (
     <div className="stars" role={onChange ? 'radiogroup' : undefined} aria-label="Bewertung">
       {([1, 2, 3, 4, 5] as Rating[]).map((n) =>

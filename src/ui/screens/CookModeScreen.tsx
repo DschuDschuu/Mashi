@@ -11,7 +11,8 @@ import type { Ingredient } from '../../domain/types';
 import { basesFor, cookBase, cookParts, currentPlan, eatMeal, householdOf, markCooked, setPlanAmounts, useFoodTable, usePantry, usePlan, useRecipe, useRecipes } from '../../data/store';
 import { coveredShare } from '../../domain/baseStock';
 import { weekView } from '../../domain/week';
-import { doneParts, forParts, partLabel, partsOf, REST } from '../../domain/parts';
+import { doneParts, forParts, partLabel, partsOf, preselectParts } from '../../domain/parts';
+import { lastParts, rememberParts, type CookHow } from '../cookPartsMemory';
 import { goBack, navigate } from '../../router';
 import { Icon } from '../components/Icon';
 import { PageIntro } from '../components/PageIntro';
@@ -149,12 +150,17 @@ export function CookModeScreen({ id, servings, variants, prep, mealId }: {
   /**
    * „Was kochst du heute?“ (Julia): Was schon gekocht ist, erkennt Mashi an der Speisekammer – gewählt wird nur unter den
    * offenen Teilen. Alles Offene heute = wie ohne Auswahl (null), sonst genau die gewählten Teile.
+   * Bestätigt (nicht nur weggewischt) und kein Abend aus dem Plan: als „wie letztes Mal“ merken.
    */
-  const startParts = (heute: string[]) => {
+  const how: CookHow = prep ? 'vorkochen' : 'normal';
+  const startParts = (heute: string[], confirmed: boolean) => {
     setAskParts(false);
     setChosen(heute.length && heute.length < open.length ? heute : null);
     setStep(0);
+    if (confirmed && !mealId) rememberParts(recipe.id, how, heute);
   };
+  // Vorauswahl: Abend aus dem Plan → alles Offene; sonst wie letztes Mal; sonst beim Vorkochen alles außer „Frisch“
+  const pre = askParts && open.length > 1 ? preselectParts(open, { prep, meal: !!mealId, last: mealId ? undefined : lastParts(recipe.id, how) }) : undefined;
   const s = steps[Math.min(step, steps.length - 1)];
   const last = step >= steps.length - 1;
   const ingredients = base.map((i) => (i.id in amounts ? { ...i, amount: amounts[i.id] } : i));
@@ -253,7 +259,10 @@ export function CookModeScreen({ id, servings, variants, prep, mealId }: {
       </header>
       <PageIntro id="kochen" />
       {/* Julia: was schon in der Speisekammer steht, erkennt Mashi selbst – gefragt wird nur nach den offenen Teilen; bleibt eins übrig, wird das gekocht */}
-      {askParts && open.length > 1 && <PartsAskSheet parts={open} done={done} onDone={startParts} />}
+      {pre && (
+        <PartsAskSheet parts={open} done={done} initial={pre.parts} onDone={startParts}
+          hint={pre.fromLast ? 'Wie letztes Mal' : prep && pre.parts.length < open.length ? '„Frisch“ kochst du am Abend' : undefined} />
+      )}
       {/* Julia: welche Teile heute – fertige (Vorgekocht) stehen mit Haken da */}
       {parts.length > 0 && (
         <div className="cook__parts" role="group" aria-label="Was kochst du heute?">
@@ -482,37 +491,40 @@ function useWakeLock() {
 }
 
 /**
- * „Was kochst du heute?“ (Julia): die Situationen als große Knöpfe – „Alles kochen“ und je Teil „Nur Sauce kochen“
- * (das Übrige kommt später). Gefragt wird nur nach den offenen Teilen: Vorgekochtes erkennt Mashi in der Speisekammer
- * (kein „schon gekocht“-Knopf); bleibt nur eins offen, startet der Kochmodus gleich dafür. Schließen ohne Wahl = alles kochen.
+ * „Was kochst du heute?“ (Julia: mehrere Teile wählbar, nicht nur „Nur Sauce kochen“): jedes offene Teil zum
+ * An- und Abhaken, der Knopf sagt, was passiert („Sauce + Dressing kochen“). Vorgekochtes erkennt Mashi in der
+ * Speisekammer (kein „schon gekocht“-Haken). Wegwischen ohne Wahl = die Vorauswahl.
  */
-function PartsAskSheet({ parts, done, onDone }: { parts: string[]; done: string[]; onDone: (heute: string[]) => void }) {
-  const ref = useSheet(() => onDone(parts));
-  const names = (list: string[]) => list.map(partLabel).join(' · ');
-  // Ist noch nichts gekocht, gibt es „Nur X kochen“ für jedes Teil außer „Frisch“ – das Frische ist das, was übrig bleibt.
-  // Ist schon etwas fertig, stehen die übrigen Teile alle einzeln zur Wahl, auch „Frisch“.
-  const single = done.length ? parts : parts.filter((p) => p !== REST);
-  const choices: { key: string; title: string; text: string; heute: string[]; primary?: boolean }[] = [
-    { key: 'alles', title: 'Alles kochen', text: names(parts), heute: parts, primary: true },
-    ...single.map((p) => ({
-      key: `nur-${p}`, title: `Nur ${partLabel(p)} kochen`,
-      text: `${names(parts.filter((x) => x !== p))} kochst du später`, heute: [p],
-    })),
-  ];
+function PartsAskSheet({ parts, done, initial, hint, onDone }: {
+  parts: string[]; done: string[]; initial: string[]; hint?: string; onDone: (heute: string[], confirmed: boolean) => void;
+}) {
+  const ref = useSheet(() => onDone(initial, false));
+  const [picked, setPicked] = useState(initial);
+  // Reihenfolge wie im Rezept, egal in welcher Reihenfolge getippt wird
+  const toggle = (p: string) => setPicked((now) => (now.includes(p) ? now.filter((x) => x !== p) : parts.filter((x) => x === p || now.includes(x))));
+  const label = picked.length === parts.length ? 'Alles kochen' : picked.length ? `${picked.map(partLabel).join(' + ')} kochen` : 'Wähle, was du kochst';
   return (
-    <div className="sheet-backdrop" onClick={() => onDone(parts)}>
+    <div className="sheet-backdrop" onClick={() => onDone(initial, false)}>
       <div className="sheet parts-ask" role="dialog" aria-modal="true" aria-label="Was kochst du heute?" onClick={(e) => e.stopPropagation()} ref={ref}>
         <div className="sheet__grip" />
         <h2 className="sheet__title">Was kochst du heute?</h2>
-        {done.length > 0 && <p className="small muted">Schon gekocht und in der Speisekammer: {names(done)}</p>}
-        <div className="parts-ask__list">
-          {choices.map((o) => (
-            <button key={o.key} type="button" className={`parts-ask__choice${o.primary ? ' is-primary' : ''}`} onClick={() => onDone(o.heute)}>
-              <strong>{o.title}</strong>
-              <small>{o.text}</small>
-            </button>
-          ))}
+        {done.length > 0 && <p className="small muted">Schon gekocht und in der Speisekammer: {done.map(partLabel).join(' · ')}</p>}
+        {hint && <p className="small muted parts-ask__hint"><Icon name="refresh" size={14} /> {hint}</p>}
+        <div className="parts-ask__list" role="group" aria-label="Teile">
+          {parts.map((p) => {
+            const on = picked.includes(p);
+            return (
+              <button key={p} type="button" role="checkbox" aria-checked={on} className={`parts-ask__item${on ? ' is-on' : ''}`} onClick={() => toggle(p)}>
+                <span className="parts-ask__box" aria-hidden="true">{on && <Icon name="check" size={16} />}</span>
+                <strong>{partLabel(p)}</strong>
+                {!on && <small>später</small>}
+              </button>
+            );
+          })}
         </div>
+        <button type="button" className="btn btn--primary btn--block btn--lg parts-ask__go" disabled={!picked.length} onClick={() => onDone(picked, true)}>
+          {label}
+        </button>
       </div>
     </div>
   );

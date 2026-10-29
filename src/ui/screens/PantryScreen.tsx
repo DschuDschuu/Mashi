@@ -14,7 +14,8 @@ import { DishNutrition } from '../components/DishNutrition';
 import { navigate, useRoute } from '../../router';
 import { foodTable } from '../../services';
 import { Empty, Section, Stepper, Switch } from '../components/Controls';
-import { Icon } from '../components/Icon';
+import { Icon, type IconName } from '../components/Icon';
+import { CATEGORY_ICONS } from '../catalogIcons';
 import { PageIntro } from '../components/PageIntro';
 import { FoodsButton } from '../components/FoodsButton';
 import { PantryTabs, usePantrySwipe } from '../components/PlanTabs';
@@ -116,11 +117,11 @@ export function PantryScreen() {
   // alles bleibt sichtbar, auch ganz Verplantes („800 g · davon 800 g verplant“)
   const shown = sorted;
   const prepared = shown.filter((i) => i.recipeId && !i.frozenAt);
-  const groups = [
+  const groups: { title: string; icon: IconName; items: typeof shown }[] = [
     // Vorgekochtes zuerst – es hält am kürzesten und will gegessen werden
-    ...(prepared.length ? [{ title: 'Vorgekocht', items: prepared }] : []),
-    ...groupByCategory(shown.filter((i) => !i.frozenAt && !i.recipeId), (i) => categoryOf(i.name, i.productId)),
-    ...(shown.some((i) => i.frozenAt) ? [{ title: 'Gefroren', items: shown.filter((i) => i.frozenAt) }] : []),
+    ...(prepared.length ? [{ title: 'Vorgekocht', icon: 'pot' as const, items: prepared }] : []),
+    ...groupByCategory(shown.filter((i) => !i.frozenAt && !i.recipeId), (i) => categoryOf(i.name, i.productId)).map((g) => ({ ...g, icon: CATEGORY_ICONS[g.id] })),
+    ...(shown.some((i) => i.frozenAt) ? [{ title: 'Gefroren', icon: 'snow' as const, items: shown.filter((i) => i.frozenAt) }] : []),
   ];
   // Eine Zeile je Lebensmittel: „Joghurt · 4 × 500 g + 400 g offen“ – antippen klappt die Teile auf
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -305,9 +306,9 @@ export function PantryScreen() {
           {pantry.items.length === 0 ? (
             <Empty icon="archive">Noch leer. Tippe auf ＋ – „Kassenbon importieren“ oder „Vorrat eintragen“. Mashi zeigt dir dann, was du damit kochen kannst.</Empty>
           ) : (
-            groups.map(({ title, items }) => {
+            groups.map(({ title, icon, items }) => {
               return (
-                <Section key={title} title={`${title} (${clusters(items).length})`}>
+                <Section key={title} title={`${title} (${clusters(items).length})`} icon={icon}>
                   <ul className="pantry">
                     {clusters(items).flatMap(clusterRow)}
                   </ul>
@@ -327,9 +328,9 @@ export function PantryScreen() {
             </Section>
           )}
 
-          {/* Abgesetzt: das sind Einstellungen, keine Vorräte – eigener Kopf, zurückhaltender Stil */}
+          {/* Abgesetzt: das sind Einstellungen, keine Vorräte – Abschnittskopf wie überall (UX-Rundgang: vorher Großbuchstaben) */}
           <section className="manage" aria-labelledby="manage-title">
-            <h2 className="manage__title" id="manage-title">Verwalten</h2>
+            <div className="section__head"><h2 id="manage-title"><Icon name="sliders" size={20} />Verwalten</h2></div>
             <ShelfSettings />
 
 

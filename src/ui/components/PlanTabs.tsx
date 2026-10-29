@@ -9,12 +9,15 @@ const ORDER: { key: Active; label: string; path: string }[] = [
   { key: 'bons', label: 'Einkäufe', path: '/einkaeufe' },
 ];
 
-/** Umschalter im Tab „Speisekammer“: Vorräte und Preise – beides kommt vom Kassenbon. */
+/**
+ * Umschalter im Tab „Speisekammer“: Vorräte und Preise – beides kommt vom Kassenbon.
+ * Unterstrichen wie die Tabs im Rezept: unterstrichen = Ansicht wechseln, Pillen = filtern (UX-Rundgang).
+ */
 export function PantryTabs({ active }: { active: Active }) {
   return (
-    <div className="segments" role="tablist" aria-label="Speisekammer">
+    <div className="tabs tabs--page" role="tablist" aria-label="Speisekammer">
       {ORDER.map((t) => (
-        <button key={t.key} role="tab" aria-selected={active === t.key} className={`segment${active === t.key ? ' is-on' : ''}`}
+        <button key={t.key} role="tab" aria-selected={active === t.key} className={`tab${active === t.key ? ' is-on' : ''}`}
           onClick={() => active !== t.key && navigate(t.path, { replace: true })}>{t.label}</button>
       ))}
     </div>

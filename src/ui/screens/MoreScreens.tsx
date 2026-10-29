@@ -32,36 +32,7 @@ export function MoreScreen() {
     <main className="screen">
       <TopBar title="Einstellungen" backTo="/" />
 
-      <Section title="Über Mashi">
-        <div className="panel">
-          <p><span lang="ko">맛있다</span> <em>(mashitda)</em> heißt auf Koreanisch „es schmeckt“. Mashi ist dein persönliches Kochbuch – es wächst mit jedem Rezept, das du wirklich ausprobiert hast.</p>
-          <p className="muted small">Keine Werbung, kein Tracking, keine Weitergabe deiner Rezepte.</p>
-        </div>
-      </Section>
-
-      <Section title={`Archiv (${archived.length})`}>
-        {archived.length === 0 ? (
-          <Empty icon="archive">Nichts archiviert.</Empty>
-        ) : (
-          <ul className="list">
-            {archived.map((r) => (
-              <li key={r.id} className="list__item">
-                <RecipeImage image={r.image} size="sm" />
-                <span className="list__title">{currentContent(r).title}</span>
-                <button className="btn btn--soft btn--sm" onClick={() => { restoreRecipe(r.id); toast('Wiederhergestellt'); }}>Zurückholen</button>
-                <button className="iconbtn iconbtn--sm iconbtn--danger" aria-label="Endgültig löschen"
-                  onClick={async () => {
-                    if (await ask({ title: `„${currentContent(r).title}“ endgültig löschen?`, text: 'Es verschwindet auf allen deinen Geräten und kann nicht wiederhergestellt werden.', confirm: 'Endgültig löschen', danger: true })) deleteRecipe(r.id);
-                  }}>
-                  <Icon name="trash" size={18} />
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Section>
-
-      <Section title="Einstellungen">
+      <Section title="Einstellungen" icon="gear">
         <div className="panel">
           <Switch
             label="Zutaten bei jedem Schritt anzeigen"
@@ -99,12 +70,42 @@ export function MoreScreen() {
         </button>
       </Section>
 
-      <Section title="Sicherung">
+      <Section title="Sicherung" icon="file">
         <BackupPanel recipes={all} />
       </Section>
 
-      <Section title="Synchronisation">
+      <Section title="Synchronisation" icon="refresh">
         {isDemo() ? <DemoPanel /> : <SyncPanel />}
+      </Section>
+
+      {/* Archiv und „Über Mashi“ ans Ende: die Seite heißt „Einstellungen“ und beginnt jetzt auch damit (UX-Rundgang) */}
+      <Section title={`Archiv (${archived.length})`} icon="archive">
+        {archived.length === 0 ? (
+          <Empty icon="archive">Nichts archiviert.</Empty>
+        ) : (
+          <ul className="list">
+            {archived.map((r) => (
+              <li key={r.id} className="list__item">
+                <RecipeImage image={r.image} size="sm" />
+                <span className="list__title">{currentContent(r).title}</span>
+                <button className="btn btn--soft btn--sm" onClick={() => { restoreRecipe(r.id); toast('Wiederhergestellt'); }}>Zurückholen</button>
+                <button className="iconbtn iconbtn--sm iconbtn--danger" aria-label="Endgültig löschen"
+                  onClick={async () => {
+                    if (await ask({ title: `„${currentContent(r).title}“ endgültig löschen?`, text: 'Es verschwindet auf allen deinen Geräten und kann nicht wiederhergestellt werden.', confirm: 'Endgültig löschen', danger: true })) deleteRecipe(r.id);
+                  }}>
+                  <Icon name="trash" size={18} />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Section>
+
+      <Section title="Über Mashi" icon="heart">
+        <div className="panel">
+          <p><span lang="ko">맛있다</span> <em>(mashitda)</em> heißt auf Koreanisch „es schmeckt“. Mashi ist dein persönliches Kochbuch – es wächst mit jedem Rezept, das du wirklich ausprobiert hast.</p>
+          <p className="muted small">Keine Werbung, kein Tracking, keine Weitergabe deiner Rezepte.</p>
+        </div>
       </Section>
     </main>
   );

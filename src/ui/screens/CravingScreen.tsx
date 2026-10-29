@@ -96,7 +96,7 @@ function Inspiration({ state, own }: { state: CravingState; own: Choice[] }) {
   if (!list.length) return null;
   return (
     <section className="craving-ideas" aria-labelledby="craving-ideas-title">
-      <h2 className="small muted craving-ideas__title" id="craving-ideas-title">Passt dazu aus deinem Kochbuch</h2>
+      <div className="section__head"><h2 id="craving-ideas-title"><Icon name="book" size={20} />Passt dazu aus deinem Kochbuch</h2></div>
       <ul className="prep__list">
         {list.map((r) => {
           const c = currentContent(r);

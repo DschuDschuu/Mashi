@@ -127,3 +127,16 @@ export function followBlockParts(blocks: readonly RecipeBlock[] | undefined, bef
   const unique = out.filter((b, i) => out.findIndex((o) => o.part === b.part) === i);
   return unique.length ? unique : undefined;
 }
+
+/**
+ * Vorauswahl für „Was kochst du heute?“ (Julia: mehrere Teile wählbar, nicht nur „Nur Sauce kochen“):
+ * Abend aus dem Wochenplan → alles Offene (du isst gleich). Sonst wie letztes Mal, soweit davon noch etwas offen ist.
+ * Ohne gemerkte Wahl: beim Vorkochen alles, was sich hält (ohne „Frisch“ – das kochst du am Abend), sonst alles Offene.
+ */
+export function preselectParts(open: string[], how: { prep?: boolean; meal?: boolean; last?: readonly string[] }): { parts: string[]; fromLast: boolean } {
+  if (how.meal) return { parts: open, fromLast: false };
+  const last = open.filter((p) => how.last?.includes(p));
+  if (last.length) return { parts: last, fromLast: true };
+  const keeps = open.filter((p) => p !== REST);
+  return { parts: how.prep && keeps.length ? keeps : open, fromLast: false };
+}

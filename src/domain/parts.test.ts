@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { doneParts, extractPart, extractToBase, FINISH, forParts, partsOf, remainingContent, REST, stepPart } from './parts';
+import { doneParts, extractPart, extractToBase, FINISH, forParts, partsOf, preselectParts, remainingContent, REST, stepPart } from './parts';
 import type { RecipeContent } from './types';
 import { describeChange, diffContent } from './versions';
 
@@ -107,5 +107,31 @@ describe('Grundlage daraus machen (Julia: aus „Chili mit Reis“ wird die Grun
   it('das Gericht verweist mit 4 Portionen darauf; Reis und der gemischte Schritt bleiben', () => {
     expect(dish.ingredients.map((i) => [i.name, i.amount, i.unit, i.recipeId])).toEqual([['Testchili', 4, 'Portion', 'chili'], ['Reis', 250, 'g', undefined]]);
     expect(dish.steps.map((s) => s.id)).toEqual(['s2', 's3']);
+  });
+});
+
+describe('Vorauswahl „Was kochst du heute?“', () => {
+  const open = [REST, 'Sauce', 'Dressing'];
+
+  it('am Abend aus dem Plan: alles Offene – auch wenn letztes Mal etwas anderes gewählt war', () => {
+    expect(preselectParts(open, { meal: true, last: ['Sauce'] })).toEqual({ parts: open, fromLast: false });
+  });
+
+  it('wie letztes Mal – nur, was noch offen ist', () => {
+    expect(preselectParts(open, { last: ['Sauce', 'Dressing'] })).toEqual({ parts: ['Sauce', 'Dressing'], fromLast: true });
+    expect(preselectParts([REST, 'Dressing'], { last: ['Sauce', 'Dressing'] })).toEqual({ parts: ['Dressing'], fromLast: true });
+  });
+
+  it('ist vom letzten Mal nichts mehr offen, gilt die Vorauswahl', () => {
+    expect(preselectParts([REST, 'Dressing'], { last: ['Sauce'] })).toEqual({ parts: [REST, 'Dressing'], fromLast: false });
+  });
+
+  it('Vorkochen ohne gemerkte Wahl: alles außer „Frisch“; ist nur noch „Frisch“ offen, das', () => {
+    expect(preselectParts(open, { prep: true })).toEqual({ parts: ['Sauce', 'Dressing'], fromLast: false });
+    expect(preselectParts([REST], { prep: true })).toEqual({ parts: [REST], fromLast: false });
+  });
+
+  it('normal ohne gemerkte Wahl: alles Offene', () => {
+    expect(preselectParts(open, {})).toEqual({ parts: open, fromLast: false });
   });
 });
