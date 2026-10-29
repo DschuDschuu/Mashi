@@ -29,14 +29,13 @@ export function PrepPanel({ recipe, recipes }: { recipe: Recipe; recipes: readon
   return (
     <section className="prep" aria-label="Vorkochen">
       <div className="prep__row">
-        {!transform && (
-          <span className="prep__keeps">
-            <span className="small muted">Hält gekocht</span>
-            <Stepper small value={keeps} min={1} max={14} label="Tage haltbar"
-              onChange={(v) => toast(`Hält ${v} ${v === 1 ? 'Tag' : 'Tage'}`, { label: 'Rückgängig', run: setPrepInfo(recipe.id, { keepsDays: v === fallback ? undefined : v }) })} />
-            <span className="small muted">Tage</span>
-          </span>
-        )}
+        {/* auch bei Verwandlungen (Julia): so lange kocht Mashi das Frische für dasselbe Gericht gleich mit (cookDay.ts) */}
+        <span className="prep__keeps">
+          <span className="small muted">Hält gekocht</span>
+          <Stepper small value={keeps} min={1} max={14} label="Tage haltbar"
+            onChange={(v) => toast(`Hält ${v} ${v === 1 ? 'Tag' : 'Tage'}${transform ? ' – so lange wird Frisches mitgekocht' : ''}`, { label: 'Rückgängig', run: setPrepInfo(recipe.id, { keepsDays: v === fallback ? undefined : v }) })} />
+          <span className="small muted">Tage</span>
+        </span>
         <span className="chips">
           {!transform && (
             <button type="button" className={`chip chip--sm${recipe.freezable ? ' is-on' : ''}`} aria-pressed={!!recipe.freezable} onClick={() => flip('freezable', 'Einfrierbar')}>

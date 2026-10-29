@@ -55,7 +55,10 @@ function moveTo(m: WeekMeal, s: Slot): WeekMeal {
 /** Reihenfolge der Plätze: mittags vor abends */
 export const slotIndex = (order: readonly Weekday[], s: Slot) => order.indexOf(s.day) * 2 + (s.lunch ? 0 : 1);
 
-/** so lange hält frisch Gekochtes (Nudeln, Reis …), das für später mitgekocht wird – carbCarry und Mitkochen (cookDay.ts) */
+/**
+ * so viele Tage später ist frisch Gekochtes (Nudeln, Reis …) noch gut, das für später mitgekocht wird – carbCarry und
+ * Mitkochen ohne eigene Haltbarkeit am Gericht (cookDay.ts: freshDaysOf)
+ */
 export const FRESH_DAYS = 2;
 /**
  * Frühester Platz für Essen aus einer Grundlage: gekocht wird am Kochtag zwischen Mittag und Abend – mittags am Kochtag

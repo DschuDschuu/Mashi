@@ -21,7 +21,7 @@ const spag = recipe('spag', 'Testspaghetti mit Bolo', {
 });
 const all = [bolo, spag];
 const hh = { portions: 2, lunchDays: [] };
-const SO = 6, MO = 0, DI = 1, MI = 2;
+const SO = 6, MO = 0, DI = 1, MI = 2, DO = 3;
 
 describe('Kochtag in einem Durchgang (Julia: „vorkochen und heute schon was davon essen“)', () => {
   it('das Essen am Kochtag: abends, noch nicht gegessen, Grundlage noch nicht gekocht', () => {
@@ -84,7 +84,7 @@ describe('Kochtag in einem Durchgang (Julia: „vorkochen und heute schon was da
         { id: 'd', day: MI, lunch: true, recipeId: 'spag', baseId: 'bolo' }, // 3 Tage später – zu alt
       ],
     };
-    const ids = (week: Week, id: string) => alongMeals(week, week.meals.find((m) => m.id === id)!).map((m) => m.id);
+    const ids = (week: Week, id: string, rs = all) => alongMeals(week, week.meals.find((m) => m.id === id)!, rs).meals.map((m) => m.id);
     expect(ids(w, 'a')).toEqual(['m', 'c']);
     // vom Mittag aus: der Abend am selben Tag zählt mit, Mittwoch (2 Tage nach Montag) auch
     expect(ids(w, 'm')).toEqual(['c', 'd']);
@@ -93,6 +93,28 @@ describe('Kochtag in einem Durchgang (Julia: „vorkochen und heute schon was da
     expect(ids(schon, 'a')).toEqual(['c']);
     const andereBeilage = { ...w, meals: w.meals.map((m) => (m.id === 'm' ? { ...m, side: 'pasta' } : m)) };
     expect(ids(andereBeilage, 'a')).toEqual(['c']);
+  });
+
+  it('hält das Gericht länger oder kürzer, richtet sich das Mitkochen danach (Julia) – „frisch bis“ wie beim Kühlschrank', () => {
+    const w: Week = {
+      cookDays: [SO], bases: [{ recipeId: 'bolo', day: SO }],
+      meals: [
+        { id: 'a', day: SO, recipeId: 'spag', baseId: 'bolo' },
+        { id: 'c', day: DI, recipeId: 'spag', baseId: 'bolo' },
+        { id: 'd', day: MI, recipeId: 'spag', baseId: 'bolo' },
+        { id: 'e', day: DO, recipeId: 'spag', baseId: 'bolo' },
+      ],
+    };
+    const along = (rs: Recipe[], id = 'a') => alongMeals(w, w.meals.find((m) => m.id === id)!, rs);
+    expect(along(all)).toEqual({ meals: [w.meals[1]], until: DI }); // ohne Angabe: Vorgekochtes hält 3 Tage → bis Di
+    // eigene Einstellung „Vorgekochtes hält 4 Tage“ gilt auch hier – wie der Regler auf der Rezeptseite
+    expect(alongMeals(w, w.meals[0], all, 4).until).toBe(MI);
+    expect(along([bolo, { ...spag, keepsDays: 4 }])).toEqual({ meals: [w.meals[1], w.meals[2]], until: MI });
+    expect(along([bolo, { ...spag, keepsDays: 1 }])).toEqual({ meals: [], until: SO });
+    // Grundlage mit Bausteinen: frisch sind nur die Nudeln – wie lange die Bolo hält, zählt nicht
+    const combo: Week = { ...w, meals: w.meals.map((m) => ({ ...m, recipeId: 'bolo', side: 'pasta' })) };
+    const lang = [{ ...bolo, keepsDays: 5 }, spag];
+    expect(alongMeals(combo, combo.meals[0], lang).meals.map((m) => m.id)).toEqual(['c']);
   });
 
   it('schon Mitgekochtes kauft die Einkaufsliste nicht noch einmal – die Grundlage zählt weiter', () => {

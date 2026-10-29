@@ -10,10 +10,11 @@ import { orderByUse } from '../../domain/stepIngredients';
 import type { Ingredient } from '../../domain/types';
 import { basesFor, cookDay, cookParts, currentPlan, eatMeal, householdOf, markCooked, setPlanAmounts, useFoodTable, usePantry, usePlan, useRecipe, useRecipes } from '../../data/store';
 import { coveredShare } from '../../domain/baseStock';
-import { DAY_SHORT, FRESH_DAYS, mealTitle, servingsOf, setMealPortions, weekView } from '../../domain/week';
+import { DAY_SHORT, mealTitle, servingsOf, setMealPortions, weekView } from '../../domain/week';
 import type { WeekMeal } from '../../domain/mealplan';
 import { alongMeals, cookDayMeal, freshFor, TODAY } from '../../domain/cookDay';
 import { Stepper } from '../components/Controls';
+import { specialDays } from '../../domain/shelfLife';
 import { doneParts, forParts, partLabel, partsOf, preselectParts } from '../../domain/parts';
 import { lastParts, rememberParts, type CookHow } from '../cookPartsMemory';
 import { goBack, navigate } from '../../router';
@@ -78,9 +79,11 @@ export function CookModeScreen({ id, servings: asked, variants, prep, mealId }: 
   // Abendessen der Vorkoch-Woche (?meal=): die Grundlage kommt aus dem Kühlschrank – nicht noch einmal kochen
   const thisMeal = mealId ? plan.week?.meals.find((m) => m.id === mealId) : undefined;
   const mealBase = thisMeal?.baseId;
-  // Julia: dasselbe Gericht in den nächsten 2 Tagen → das Frische gleich mitkochen (am Kochtag nur, wenn heute frisch gekocht wird)
+  // Julia: dasselbe Gericht in den nächsten Tagen → das Frische gleich mitkochen (am Kochtag nur, wenn heute frisch gekocht wird)
   const eatNow = prep ? (fresh ? todayMeal : undefined) : thisMeal;
-  const along = plan.week && eatNow ? alongMeals(plan.week, eatNow) : [];
+  // so lange es frisch bleibt – nach „Hält gekocht“ am Gericht, sonst 2 Tage (Julia)
+  const offer = plan.week && eatNow ? alongMeals(plan.week, eatNow, recipes, specialDays('prepared', pantry.shelfDays)) : undefined;
+  const along = offer?.meals ?? [];
   /** abgewählt – sonst wird alles mitgekocht, was angeboten wird */
   const [skipAlong, setSkipAlong] = useState<string[]>([]);
   const alongOn = !prep || freshN ? along.filter((m) => !skipAlong.includes(m.id)) : [];
@@ -313,7 +316,7 @@ export function CookModeScreen({ id, servings: asked, variants, prep, mealId }: 
       {pre && (
         <PartsAskSheet parts={open} done={done} initial={pre.parts} onDone={startParts}
           today={fresh ? { title: todayTitle, portions: plannedN } : undefined} prep={prep ? { title: c.title, portionsFor: prepFor } : undefined}
-          along={along.map((m) => ({ id: m.id, label: slotLabel(m), portions: servingsOf(m, hh) }))}
+          along={along.map((m) => ({ id: m.id, label: slotLabel(m), portions: servingsOf(m, hh) }))} freshUntil={offer ? DAY_SHORT[offer.until] : ''}
           hint={pre.fromLast ? 'Wie letztes Mal' : prep && pre.parts.length < open.length ? '„Frisch“ kochst du am Abend' : undefined} />
       )}
       {/* Julia: welche Teile heute – fertige (Vorgekocht) stehen mit Haken da; am Kochtag auch das Essen von heute */}
@@ -572,14 +575,16 @@ function useWakeLock() {
  * Am Kochtag steht das Essen von heute mit dabei (Julia: „wie im Wochenplan eingestellt bzw. einfach nachfragen“):
  * angehakt mit den Portionen aus dem Plan, hier noch änderbar – und darüber, wie viel dafür vorgekocht wird.
  */
-function PartsAskSheet({ parts, done, initial, hint, today, prep, along, onDone }: {
+function PartsAskSheet({ parts, done, initial, hint, today, prep, along, freshUntil, onDone }: {
   parts: string[]; done: string[]; initial: string[]; hint?: string;
   /** das Essen von heute aus dieser Grundlage – Portionen wie im Wochenplan */
   today?: { title: string; portions: number };
   /** Vorkochen: so viele Portionen, wenn heute so viele mitessen (null = heute nicht) */
   prep?: { title: string; portionsFor: (eat: number | null) => number | undefined };
-  /** dasselbe Gericht in den nächsten 2 Tagen (Julia: frisch gleich mitkochen) – je Essen abwählbar */
+  /** dasselbe Gericht, solange es frisch bleibt (Julia: frisch gleich mitkochen) – je Essen abwählbar */
   along: { id: string; label: string; portions: number }[];
+  /** letzter Tag, an dem das Mitgekochte noch frisch ist („Sa“) */
+  freshUntil: string;
   onDone: (heute: string[], confirmed: boolean, eat: number | null, skip: string[]) => void;
 }) {
   const ref = useSheet(() => onDone(initial, false, today?.portions ?? null, []));
@@ -634,7 +639,7 @@ function PartsAskSheet({ parts, done, initial, hint, today, prep, along, onDone 
         {/* dasselbe gibt es bald wieder – nur, wenn heute überhaupt frisch gekocht wird */}
         {along.length > 0 && (!today || eat !== null) && (
           <div className="parts-ask__list" role="group" aria-label="Gleich mitkochen">
-            <p className="small muted parts-ask__sub">Gleich mitkochen – hält {FRESH_DAYS} Tage</p>
+            <p className="small muted parts-ask__sub">Gleich mitkochen – frisch bis {freshUntil}</p>
             {along.map((a) => {
               const on = !skip.includes(a.id);
               return (

@@ -1,9 +1,9 @@
 import { cookingContent } from './homemade';
-import type { Household, Week, WeekMeal } from './mealplan';
+import type { Household, Week, WeekMeal, Weekday } from './mealplan';
 import { scaleIngredients } from './scaling';
 import { comboSteps, sideIngredient } from './sides';
 import type { Recipe, RecipeContent, Step } from './types';
-import { FRESH_DAYS, servingsOf, slotIndex, slotOf, weekOrder, type MealView, type WeekView } from './week';
+import { FRESH_DAYS, keepsOf, servingsOf, slotIndex, slotOf, weekOrder, type MealView, type WeekView } from './week';
 
 /**
  * Kochtag in einem Durchgang (Julia: „10 Portionen vorkochen, aber heute schon was davon essen – die frischen Zutaten
@@ -37,20 +37,34 @@ export function cookStart(view: WeekView, m: MealView, household: Household): Co
 }
 
 /**
- * Dasselbe Gericht in den nächsten Tagen (Julia: „frisch mitkochen für 2 Tage, wie die Haltbarkeit-Logik“ – wie bei
- * zweimal Nudeln, carbCarry): der Kochmodus bietet an, das Frische dafür gleich mitzukochen. Mittags und abends,
- * höchstens FRESH_DAYS Tage später, noch offen, gleiches Gericht mit gleichen Bausteinen – in der Reihenfolge der Woche.
+ * Wie viele Tage später mitgekochtes Frisches noch gut ist (Julia: „wenn etwas länger hält, soll es sich daran
+ * orientieren“): „Hält gekocht X Tage“ am Gericht – ohne eigene Angabe „Vorgekochtes hält“ (keepsFallback), wie der
+ * Regler auf der Rezeptseite zeigt – frisch bis X−1 Tage nach dem Kochen, wie beim Kühlschrank (fridgeOf). Bei der
+ * Grundlage mit Bausteinen sind nur Nudeln, Reis … frisch – dass die Bolo 3 Tage hält, sagt nichts über die Nudeln:
+ * dann FRESH_DAYS wie bei zweimal Nudeln (carbCarry).
  */
-export function alongMeals(week: Week, meal: WeekMeal): WeekMeal[] {
+export function freshDaysOf(meal: Pick<WeekMeal, 'recipeId' | 'baseId'>, recipes: readonly Recipe[], keepsFallback?: number): number {
+  const dish = meal.recipeId !== meal.baseId ? recipes.find((r) => r.id === meal.recipeId) : undefined;
+  return dish ? Math.max(0, keepsOf(dish, keepsFallback) - 1) : FRESH_DAYS;
+}
+
+/**
+ * Dasselbe Gericht in den nächsten Tagen: der Kochmodus bietet an, das Frische dafür gleich mitzukochen. Mittags und
+ * abends, solange es frisch bleibt (freshDaysOf, `until` = letzter frischer Tag), noch offen, gleiches Gericht mit
+ * gleichen Bausteinen – in der Reihenfolge der Woche.
+ */
+export function alongMeals(week: Week, meal: WeekMeal, recipes: readonly Recipe[], keepsFallback?: number): { meals: WeekMeal[]; until: Weekday } {
   const order = weekOrder(week);
   const at = slotIndex(order, slotOf(meal));
-  return week.meals
+  const from = order.indexOf(meal.day);
+  const days = freshDaysOf(meal, recipes, keepsFallback);
+  const meals = week.meals
     .filter((m) => {
       const later = slotIndex(order, slotOf(m)) - at;
-      const days = order.indexOf(m.day) - order.indexOf(meal.day);
-      return later > 0 && days <= FRESH_DAYS && !m.done && !m.freshCooked && m.recipeId === meal.recipeId && m.baseId === meal.baseId && m.side === meal.side;
+      return later > 0 && order.indexOf(m.day) - from <= days && !m.done && !m.freshCooked && m.recipeId === meal.recipeId && m.baseId === meal.baseId && m.side === meal.side;
     })
     .sort((a, b) => slotIndex(order, slotOf(a)) - slotIndex(order, slotOf(b)));
+  return { meals, until: order[Math.min(order.length - 1, from + days)] };
 }
 
 /** vor jeder id – damit sich Frisches und Grundlage nicht mischen (Mengen „nur dieses Mal“ hängen an der id) */
