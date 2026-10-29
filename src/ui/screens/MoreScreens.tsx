@@ -16,7 +16,9 @@ import { TasteSettings } from '../components/TasteSettings';
 import { HouseholdSettings } from '../components/HouseholdSettings';
 import { Icon } from '../components/Icon';
 import { RecipeImage } from '../components/RecipeImage';
-import { THEMES, updateSettings, useSettings } from '../settings';
+import { SPECIAL_THEMES, specialOf, THEMES, updateSettings, useSettings } from '../settings';
+import { localDay } from '../../domain/dates';
+import { seasonOn, toggleSpecial } from '../../domain/seasons';
 import { resetIntros } from '../components/PageIntro';
 import { recipeCount } from '../format';
 import { toast } from '../toast';
@@ -83,6 +85,7 @@ export function MoreScreen() {
             ))}
           </div>
         </div>
+        <SpecialThemes />
         <MacroGoalSettings />
         <TasteSettings />
         <HouseholdSettings />
@@ -299,5 +302,47 @@ function BackupPanel({ recipes }: { recipes: Recipe[] }) {
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * „Spezial“: Feiertagsthemen, eingeklappt unter dem Farbthema (Julia).
+ * In der Saison von selbst an – Antippen schaltet für dieses Gerät um, das eigene Thema bleibt gespeichert.
+ */
+function SpecialThemes() {
+  const settings = useSettings();
+  const active = specialOf(settings);
+  const label = SPECIAL_THEMES.find((t) => t.id === active)?.label;
+  return (
+    <details className="panel special">
+      <summary>
+        <Icon name="pumpkin" size={22} />
+        <span className="special__head">
+          <strong>Spezial</strong>
+          <small className="muted">{label ? `${label} ist an` : 'Themen für Feiertage'}</small>
+        </span>
+        <Icon name="chevron" size={18} />
+      </summary>
+      <div className="special__body">
+        {SPECIAL_THEMES.map((t) => {
+          const on = active === t.id;
+          const inSeason = seasonOn(localDay())?.id === t.id;
+          return (
+            <button key={t.id} type="button" aria-pressed={on} className={`special__pick${on ? ' is-on' : ''}`}
+              onClick={() => updateSettings({ specialOverride: toggleSpecial(t.id, !on, localDay()) })}>
+              <span className="special__swatch" aria-hidden>{t.colors.map((c) => <i key={c} style={{ background: c }} />)}</span>
+              {t.label}
+              <small className="muted">{on ? 'an' : inSeason ? 'aus bis nächstes Jahr' : 'aus'}</small>
+            </button>
+          );
+        })}
+        <div className="special__pick is-soon" aria-hidden>
+          <span className="special__swatch"><i style={{ background: '#f3f1ec' }} /><i style={{ background: '#b3322c' }} /><i style={{ background: '#2f5b40' }} /></span>
+          Weihnachten
+          <small className="muted">kommt bald</small>
+        </div>
+      </div>
+      <p className="small muted">Vom 15. Oktober bis 2. November von selbst an. Gilt nur für dieses Gerät.</p>
+    </details>
   );
 }

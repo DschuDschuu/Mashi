@@ -12,7 +12,7 @@ import './styles/app.css';
 import { applyTheme, currentSettings } from './ui/settings';
 
 // Farbthema vor dem ersten Bild – sonst blitzt beim Start kurz das Standardgrün auf
-applyTheme(currentSettings().theme);
+applyTheme(currentSettings());
 
 const root = createRoot(document.getElementById('root')!);
 

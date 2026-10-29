@@ -1,4 +1,6 @@
 import { useSyncExternalStore } from 'react';
+import { localDay } from '../domain/dates';
+import { activeSpecial, type SpecialId, type SpecialOverride } from '../domain/seasons';
 
 /**
  * Einstellungen dieses Geräts – bewusst NICHT abgeglichen:
@@ -9,6 +11,8 @@ export interface Settings {
   showStepIngredients: boolean;
   /** Farbthema – je Gerät, z. B. am Tablet anders als am Handy */
   theme: Theme;
+  /** Feiertagsthema von Hand an/aus – ohne Eintrag entscheidet die Saison (domain/seasons.ts) */
+  specialOverride?: SpecialOverride;
 }
 
 export type Theme = 'salbei' | 'bordeaux' | 'sonne' | 'nacht';
@@ -21,12 +25,30 @@ export const THEMES: { id: Theme; label: string; colors: [string, string, string
   { id: 'nacht', label: 'Nachtblau', colors: ['#f4f6fa', '#2b3d6b', '#1d2842'] },
 ];
 
-/** Thema aufs Dokument legen (CSS: :root[data-theme=…]) und die Browserleiste mitfärben */
-export function applyTheme(theme: Theme) {
+/** Feiertagsthemen – gleiche Vorschau-Farben wie oben; die Deko dazu liegt in ui/components/HalloweenDeko.tsx */
+export const SPECIAL_THEMES: { id: SpecialId; label: string; colors: [string, string, string] }[] = [
+  { id: 'halloween', label: 'Halloween', colors: ['#fbf5ee', '#ef7f1a', '#1b1613'] },
+];
+
+/** Feiertagsthema, das heute gilt (Saison oder eigene Wahl) */
+export const specialOf = (s: Settings): SpecialId | undefined => activeSpecial(localDay(), s.specialOverride);
+
+/**
+ * Thema aufs Dokument legen (CSS: :root[data-theme=…]) und die Browserleiste mitfärben.
+ * Ein Feiertagsthema liegt über dem eigenen Thema – das bleibt gespeichert und kommt nach der Saison zurück.
+ */
+export function applyTheme(s: Settings) {
   const root = document.documentElement;
+  const theme: Theme | SpecialId = specialOf(s) ?? s.theme;
   if (theme === 'salbei') delete root.dataset.theme;
   else root.dataset.theme = theme;
-  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', THEMES.find((t) => t.id === theme)?.colors[0] ?? '#f8f6f1');
+  const colors = [...THEMES, ...SPECIAL_THEMES].find((t) => t.id === theme)?.colors;
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', colors?.[0] ?? '#f8f6f1');
+}
+
+/** Für Komponenten: welches Feiertagsthema gerade an ist */
+export function useSpecial(): SpecialId | undefined {
+  return specialOf(useSettings());
 }
 
 const KEY = 'mashi-settings';
@@ -46,7 +68,7 @@ const listeners = new Set<() => void>();
 
 export function updateSettings(patch: Partial<Settings>) {
   current = { ...current, ...patch };
-  if (patch.theme) applyTheme(patch.theme);
+  if ('theme' in patch || 'specialOverride' in patch) applyTheme(current);
   try {
     localStorage.setItem(KEY, JSON.stringify(current));
   } catch {

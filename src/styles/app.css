@@ -1258,6 +1258,131 @@ p { margin: 0; }
 .theme-pick__dots span { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--surface); margin-left: -5px; }
 .theme-pick__dots span:first-child { margin-left: 0; }
 
+/* ── Feiertagsthema Halloween (Einstellungen → Spezial; von selbst an vom 15.10. bis 2.11.) ─────
+   Hell wie Sonnengelb, nur in Kürbis-Orange; schwarze Schrift auf den Knöpfen (8 : 1),
+   orange Linkschrift auf Weiß 5,5 : 1. Dazu die schwarze Leiste mit Grabsteinen (Julia: A + Leiste aus C). */
+:root[data-theme="halloween"] {
+  --bg: #fbf5ee; --surface: #ffffff; --surface-2: #f6ebdf; --line: #efdfcd; --backdrop: #f1e6d9;
+  --ink: #231a14; --ink-2: #5e4c3f; --ink-3: #75625a;
+  --primary: #ef7f1a; --primary-press: #8a420a; --primary-soft: #fde6cf; --primary-text: #a8500c;
+  --art: #a8500c; --star: #ef7f1a; --on-primary: #1c140e;
+  --hw-night: #1b1613; --hw-stone: #6b6460; --hw-ghost: #8a7a6e;
+}
+/* „Spezial“ in den Einstellungen – eingeklappt, zeigt darunter, was gerade an ist */
+.special summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 12px; color: var(--ink); }
+.special summary::-webkit-details-marker { display: none; }
+.special summary > svg:first-child { color: var(--art); flex: none; }
+.special summary > svg:last-child { margin-left: auto; color: var(--ink-3); transition: transform 0.2s; flex: none; }
+.special[open] summary > svg:last-child { transform: rotate(90deg); }
+.special__head { display: flex; flex-direction: column; min-width: 0; }
+.special__body { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+.special__pick { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 10px; border-radius: var(--r-sm); border: 1px solid var(--line); background: var(--surface); font-size: 0.85rem; font-weight: 700; color: var(--ink); text-align: left; }
+.special__pick.is-on { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary); }
+.special__pick.is-soon { border-style: dashed; color: var(--ink-3); }
+.special__pick small { font-weight: 400; font-size: 0.76rem; }
+.special__swatch { display: flex; width: 100%; height: 22px; border-radius: 7px; overflow: hidden; }
+.special__swatch i { flex: 1; }
+.special > p { margin: 10px 0 0; }
+
+/* Leiste: schwarz, jeder Reiter ein grauer Grabstein auf einem kleinen Hügel, der aktive orange */
+:root[data-theme="halloween"] .nav { background: rgb(27 22 19 / 0.97); border-top-color: transparent; border-right-color: transparent; }
+:root[data-theme="halloween"] .nav::before {
+  content: ""; position: absolute; left: 0; right: 0; top: 40px; height: 12px; pointer-events: none;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 360 12' preserveAspectRatio='none'%3E%3Cpath fill='%232c241f' d='M0 6c30-5 60-5 90 0s60 5 90 0 60-5 90 0 60 5 90 0v6H0z'/%3E%3C/svg%3E") 0 0 / 100% 100% no-repeat;
+}
+:root[data-theme="halloween"] .nav__item { position: relative; z-index: 1; color: #c9b6a6; }
+:root[data-theme="halloween"] .nav__item.is-active { color: #ff9a3c; }
+:root[data-theme="halloween"] .nav__logo { color: #ff9a3c; }
+.nav__icon--stone { width: 36px; height: 36px; place-items: end center; }
+.nav__stone { position: absolute; inset: 0; width: 100%; height: 100%; fill: var(--hw-stone); transition: fill 0.2s; }
+.nav__stone-crack { fill: none; stroke: rgb(0 0 0 / 0.25); stroke-width: 1.1; stroke-linecap: round; stroke-linejoin: round; }
+.nav__icon--stone .nav__glyph { margin-bottom: 6px; color: #f1ebe5; }
+.nav__item.is-active .nav__stone { fill: var(--primary); }
+.nav__item.is-active .nav__icon--stone .nav__glyph { color: var(--on-primary); }
+/* Plus als Kürbis mit grünem Stiel */
+:root[data-theme="halloween"] .nav__plus { position: relative; z-index: 1; background: none; box-shadow: none; }
+.nav__pumpkin { position: absolute; inset: -4px; width: calc(100% + 8px); height: calc(100% + 8px); }
+.nav__pumpkin-body { fill: var(--primary); }
+.nav__pumpkin-ribs { fill: none; stroke: rgb(28 20 14 / 0.22); stroke-width: 1.6; stroke-linecap: round; }
+.nav__pumpkin-stem { fill: none; stroke: #5d7a3a; stroke-width: 3; stroke-linecap: round; }
+:root[data-theme="halloween"] .nav__plus-icon { position: relative; margin-top: 6px; }
+
+/* Himmel hinter den Karten: .app wird eigene Ebene, der Himmel liegt darin ganz unten (über dem Hintergrund) */
+:root[data-theme="halloween"] .app { isolation: isolate; }
+.hw-sky { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
+.hw-bat { position: absolute; left: 0; color: var(--hw-night); animation: hw-cross 9s linear infinite; }
+.hw-bat--1 { top: 14%; }
+.hw-bat--2 { top: 42%; animation-name: hw-cross-back; animation-delay: -3s; }
+.hw-bat--3 { top: 68%; animation-delay: -6s; }
+@keyframes hw-cross { from { transform: translate(-60px, 0); } to { transform: translate(calc(100vw + 60px), -70px); } }
+@keyframes hw-cross-back { from { transform: translate(calc(100vw + 60px), 0) scaleX(-1); } to { transform: translate(-60px, -50px) scaleX(-1); } }
+.hw-bob { display: block; animation: hw-bob 0.9s ease-in-out infinite alternate; }
+@keyframes hw-bob { to { transform: translateY(10px); } }
+.hw-bat__svg { display: block; fill: currentColor; transform-origin: center; animation: hw-flap 0.2s ease-in-out infinite alternate; }
+@keyframes hw-flap { to { transform: scaleY(0.5); } }
+/* Geist erschrickt: schwebt, Fledermaus kommt, große Augen, Hüpfer, weg – alle 14 s */
+.hw-chase { position: absolute; left: 0; right: 0; top: 55%; height: 60px; }
+.hw-chase__bat { position: absolute; top: 14px; left: 0; color: var(--hw-night); animation: hw-chase-bat 14s ease-in-out infinite; }
+.hw-chase__bat .hw-bat__svg { width: 34px; height: 17px; }
+.hw-chase__ghost { position: absolute; top: 0; left: 0; animation: hw-chase-ghost 14s ease-in-out infinite; }
+.hw-ghost__body { fill: var(--hw-ghost); }
+.hw-ghost__calm, .hw-ghost__shock { fill: var(--bg); }
+.hw-ghost__calm path { fill: none; stroke: var(--bg); stroke-width: 1.2; stroke-linecap: round; }
+.hw-ghost__calm { animation: hw-calm 14s step-end infinite; }
+.hw-ghost__shock { opacity: 0; animation: hw-shock 14s step-end infinite; }
+@keyframes hw-chase-ghost {
+  0% { transform: translate(40vw, 4px); }
+  15% { transform: translate(44vw, -4px); }
+  17% { transform: translate(44vw, -16px) scale(1.12); }
+  20% { transform: translate(44vw, -12px); }
+  35%, 100% { transform: translate(calc(100vw + 60px), -30px); }
+}
+@keyframes hw-chase-bat { 0% { transform: translate(-60px, 0); } 16% { transform: translate(calc(44vw - 50px), 4px); } 20% { transform: translate(calc(44vw - 40px), 0); } 38%, 100% { transform: translate(calc(100vw + 60px), -10px); } }
+@keyframes hw-shock { 0% { opacity: 0; } 15.5% { opacity: 1; } 35% { opacity: 0; } }
+@keyframes hw-calm { 0% { opacity: 1; } 15.5% { opacity: 0; } 35% { opacity: 1; } }
+
+/* Netz mit Spinne oben rechts – über der Kopfleiste, aber durchsichtig und nicht anklickbar */
+.hw-corner { position: fixed; top: env(safe-area-inset-top, 0px); right: max(0px, calc((100vw - 560px) / 2)); width: 90px; height: 70px; z-index: 6; pointer-events: none; }
+.cobweb { fill: none; stroke: currentColor; stroke-width: 1; stroke-linecap: round; }
+.hw-corner__web { position: absolute; top: 0; right: 0; width: 64px; height: 64px; color: var(--ink); opacity: 0.22; }
+.hw-spider { position: absolute; top: -10px; right: 74px; color: var(--ink); opacity: 0.75; animation: hw-dangle 3.2s ease-in-out infinite; }
+.hw-spider path { fill: none; stroke: currentColor; stroke-width: 1.1; stroke-linecap: round; }
+.hw-spider ellipse { fill: currentColor; }
+@keyframes hw-dangle { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(5px); } }
+@media (min-width: 768px) { .hw-corner { right: 0; } }
+
+/* Netz in der Ecke von Rezepten ohne Foto */
+:root[data-theme="halloween"] .rimg--ph { position: relative; }
+.rimg__web { position: absolute; top: 0; left: 0; width: 28%; max-width: 72px; aspect-ratio: 1; color: var(--art); opacity: 0.35; transform: scaleX(-1); }
+
+/* Koch-Geist hinter leeren Kästen – guckt oben rechts heraus, nickt, taucht wieder ab */
+.empty-peek { position: relative; isolation: isolate; }
+.empty-peek > .empty { position: relative; z-index: 1; }
+.chef-ghost { position: absolute; right: 24px; top: 8px; animation: hw-peek 9s ease-in-out infinite; }
+.chef-ghost__hat { fill: #ffffff; stroke: var(--hw-ghost); stroke-width: 1.2; }
+.chef-ghost__body { fill: var(--hw-ghost); }
+.chef-ghost__face { fill: var(--bg); }
+.chef-ghost__spoon { fill: none; stroke: var(--primary-text); stroke-width: 1.6; stroke-linecap: round; }
+.chef-ghost__bowl { fill: var(--primary-text); }
+@keyframes hw-peek {
+  0%, 40% { transform: translateY(0) rotate(0); }
+  48%, 64% { transform: translateY(-30px) rotate(-8deg); }
+  67% { transform: translateY(-30px) rotate(2deg); }
+  70% { transform: translateY(-30px) rotate(-8deg); }
+  78%, 100% { transform: translateY(0) rotate(0); }
+}
+
+@media (min-width: 768px) {
+  :root[data-theme="halloween"] .nav::before { display: none; } /* Seitenleiste: kein Hügel */
+}
+@media (prefers-reduced-motion: reduce) {
+  .hw-bat, .hw-bob, .hw-bat__svg, .hw-chase__bat, .hw-chase__ghost, .hw-ghost__calm, .hw-ghost__shock, .hw-spider, .chef-ghost { animation: none; }
+  .hw-chase { display: none; } /* ohne Bewegung ergibt die Geschichte keinen Sinn */
+  /* stehen still verteilt am Himmel statt alle am linken Rand */
+  .hw-bat--1 { left: 68%; } .hw-bat--2 { left: 12%; } .hw-bat--3 { left: 46%; }
+  .nav__stone, .special summary > svg:last-child { transition: none; }
+}
+
 /* Geführte Tour pro Seite – abgedunkelt, ein Knopf hervorgehoben, daneben die Sprechblase */
 .tour { position: fixed; inset: 0; z-index: 60; }
 .tour__dim { position: fixed; background: rgb(20 32 33 / 0.55); }

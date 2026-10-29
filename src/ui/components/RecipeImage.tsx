@@ -1,5 +1,7 @@
 import type { CSSProperties, ReactNode } from 'react';
 import type { ImageMotif, RecipeImage as Img } from '../../domain/types';
+import { useSpecial } from '../settings';
+import { CobwebCorner } from './HalloweenDeko';
 
 /**
  * Rezeptbild. Im Prototyp eine Linienzeichnung auf Pastellgrund – im Stil der
@@ -7,6 +9,7 @@ import type { ImageMotif, RecipeImage as Img } from '../../domain/types';
  * der Rest der App merkt davon nichts.
  */
 export function RecipeImage({ image, size = 'md', className = '' }: { image?: Img; size?: 'sm' | 'md' | 'lg'; className?: string }) {
+  const halloween = useSpecial() === 'halloween';
   if (image?.kind === 'url') {
     return <img className={`rimg rimg--${size} ${className}`} src={image.url} alt="" loading="lazy" />;
   }
@@ -14,6 +17,8 @@ export function RecipeImage({ image, size = 'md', className = '' }: { image?: Im
   return (
     <div className={`rimg rimg--ph rimg--${size} ${className}`} style={style} role="img" aria-label="Platzhalterbild">
       <LineArt motif={image?.motif ?? 'bowl'} />
+      {/* Halloween: ein Spinnennetz in der Ecke – nur am Platzhalter, echte Fotos bleiben unberührt */}
+      {halloween && size !== 'sm' && <CobwebCorner className="rimg__web" />}
     </div>
   );
 }
