@@ -1,19 +1,19 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  cookbookMatches, cravingContent, cravingCooking, cravingMinutes, cravingPartsFrom, cravingSteps, cravingText, cravingTitle, currentStep, directionOf, matchingRecipes,
-  recipeChoices, understand, type Choice, type CravingState,
+  EMPTY_CRAVING, cookbookMatches, cravingContent, cravingCooking, cravingMinutes, cravingPartsFrom, cravingSteps, cravingText, cravingTimeline, cravingTitle,
+  currentStep, directionOf, matchingRecipes, startLabel, understand, type Choice, type CravingState,
 } from '../../domain/craving';
 import type { Recipe } from '../../domain/types';
 import { keyOfName } from '../../domain/mealplan';
 import { currentContent, newId, totalMinutes } from '../../domain/recipe';
-import { servingsOf } from '../../domain/week';
-import { addToPlan, createRecipe, deleteRecipe, householdOf, keepTrial, useFoodTable, usePantry, usePlan, useRecipes } from '../../data/store';
+import { addToPlan, createRecipe, deleteRecipe, householdOf, keepTrial, useFoodTable, usePlan, useRecipes } from '../../data/store';
+import { useOwnChoices, useRoll } from '../cravingHooks';
 import { goBack, navigate } from '../../router';
 import { Stepper } from '../components/Controls';
 import { CravingAsk } from '../components/CravingAsk';
 import { CravingBuilder, useCravingView, ViewToggle } from '../components/CravingBuilder';
 import { mins } from '../components/CravingSteps';
-import { clearCraving, loadCraving, saveCraving } from '../cravingMemory';
+import { SURPRISE, clearCraving, loadCraving, rememberPlate, saveCraving } from '../cravingMemory';
 import { ask } from '../confirm';
 import { Icon } from '../components/Icon';
 import { TopBar } from '../components/TopBar';
@@ -25,22 +25,6 @@ import { useNutrition } from '../useNutrition';
 import { uncounted } from '../../domain/nutrition/engine';
 
 /**
- * Deine Rezepte (und Teile) als Bausteine, mit dem, was davon vorgekocht im Kühlschrank steht – Portionen, die im
- * Wochenplan schon einen Abend haben, zählen nicht (die sind ja verplant)
- */
-function useOwnChoices(): Choice[] {
-  const recipes = useRecipes();
-  const pantry = usePantry();
-  const plan = usePlan();
-  return useMemo(() => {
-    const hh = householdOf(plan);
-    const reserved = new Map<string, number>();
-    for (const m of plan.week?.meals ?? []) if (!m.done) reserved.set(m.baseId, (reserved.get(m.baseId) ?? 0) + servingsOf(m, hh));
-    return recipeChoices(recipes, pantry, reserved);
-  }, [recipes, pantry, plan]);
-}
-
-/**
  * „Worauf hast du Lust?“ als Stepper (Julia: „wie ein Flussdiagramm, das sich öffnet“): oben das Erledigte mit
  * „Ändern“, dann die Stufe, die dran ist, darunter blass, was noch kommt. Mit allem anfangen: das Getippte (`q`) füllt
  * vor, was Mashi daran erkennt. Noch ohne Speichern – das Gericht lebt nur auf dieser Seite.
@@ -48,16 +32,23 @@ function useOwnChoices(): Choice[] {
 export function CravingScreen({ q }: { q: string }) {
   const own = useOwnChoices();
   const recipes = useRecipes();
-  // angefangen und weggeblättert? Dann weiter, wo du warst (cravingMemory.ts) – sonst neu aus dem Getippten
+  const roll = useRoll(own);
+  // angefangen und weggeblättert? Dann weiter, wo du warst (cravingMemory.ts) – sonst neu aus dem Getippten;
+  // „Überrasch mich“ von der Startseite: gleich ein ganzer gewürfelter Teller
   const [state, setState] = useState<CravingState | undefined>(() => {
     const mem = loadCraving();
-    return mem && q && mem.q === q ? mem.state : q ? understand(q, own) : undefined;
+    if (mem && q && mem.q === q) return mem.state;
+    return q === SURPRISE ? roll(EMPTY_CRAVING) : q ? understand(q, own) : undefined;
   });
   const [view, setView] = useCravingView();
   const set = (next: CravingState) => {
     setState(next);
     saveCraving(q, next);
   };
+  // den Wurf gleich merken – sonst läge beim Zurückblättern ein anderer Teller da
+  useEffect(() => {
+    if (state && q === SURPRISE && loadCraving()?.q !== q) saveCraving(q, state);
+  }, [state, q]);
   if (!state) {
     // nichts zum Zusammenbauen („Lasagne“) – dann vielleicht ein fertiges Rezept aus dem Kochbuch statt einer Sackgasse
     const hits = q ? cookbookMatches(q, recipes) : [];
@@ -95,8 +86,19 @@ export function CravingScreen({ q }: { q: string }) {
             <button type="button" className="link small" onClick={startOver}>Neu</button>
           </span>
         )} />
-      <CravingBuilder view={view} state={state} set={set} own={own} summary={<LiveValues state={state} own={own} />} />
-      {!currentStep(state) && <Finished q={q} state={state} own={own} />}
+      <CravingBuilder view={view} state={state} set={set} own={own} summary={(
+        <div className="craving-summary">
+          <LiveValues state={state} own={own} />
+          {/* Würfel (Julia): füllt, was offen ist – nochmal tauscht nur das Gewürfelte; nichts offen und nichts gewürfelt: kein Knopf */}
+          {(state.rolled || currentStep(state) || !state.direction) && (
+            <button type="button" className="btn btn--soft btn--sm" onClick={() => set(roll(state))}>
+              <Icon name="dice" size={16} /> {state.rolled ? 'Nochmal würfeln' : 'Würfeln'}
+            </button>
+          )}
+        </div>
+      )} />
+      {/* neue Wahl (auch ein neuer Wurf) = neuer Vorschlag für Name und Portionen */}
+      {!currentStep(state) && <Finished key={JSON.stringify(state.picks)} q={q} state={state} own={own} />}
       {/* im Teller nicht (Julia: dort gehören nur die eigenen Rezepte der Stufe hin – die stehen im Karussell) */}
       {view === 'list' && <Inspiration state={state} own={own} />}
     </main>
@@ -190,6 +192,7 @@ function Finished({ q, state, own }: { q: string; state: CravingState; own: Choi
   // dasselbe Gericht nicht zweimal anlegen (erst „In den Wochenplan“, dann doch „Jetzt kochen“) – solange nichts geändert ist
   const made = useRef<{ key: string; id: string } | null>(null);
   const steps = cravingSteps(state, own, hh);
+  const timeline = cravingTimeline(steps);
   const text = cravingText(state, own);
   const total = cravingMinutes(steps);
 
@@ -205,8 +208,10 @@ function Finished({ q, state, own }: { q: string; state: CravingState; own: Choi
     const partsFrom = cravingPartsFrom(state, own);
     const id = createRecipe(content, { source: 'selbst', status: 'zum_testen', ...(trial ? { trial: true } : {}), ...(partsFrom ? { partsFrom } : {}) });
     made.current = { key, id };
-    // das Gericht gibt es jetzt (Plan, Kochmodus, Kochbuch) – beim nächsten Mal fängt der Stepper frisch an
+    // das Gericht gibt es jetzt (Plan, Kochmodus, Kochbuch) – beim nächsten Mal fängt der Stepper frisch an; dafür steht
+    // es auf der Startseite unter „Wie letztes Mal?“ (Julia)
     clearCraving();
+    rememberPlate(state, title.trim() || cravingTitle(state, own));
     return id;
   };
   const cook = () => navigate(`/rezept/${ensure(true)}/kochen?p=${servings}`);
@@ -240,8 +245,15 @@ function Finished({ q, state, own }: { q: string; state: CravingState; own: Choi
       {steps.length > 0 && (
         <>
           <h3 className="small muted craving-done__how">So geht's{total ? ` · in etwa ${mins(total)} fertig` : ''}</h3>
-          <ol className="craving-done__steps">
-            {steps.map((s) => <li key={s.id}><strong>{s.name}</strong>{s.text ? ` ${s.text}` : ''}{s.minutes ? ` · ${mins(s.minutes)}` : ''}</li>)}
+          {/* als Zeitleiste (Julia): wann du was anfängst, damit alles zusammen fertig ist */}
+          <ol className="craving-done__steps craving-timeline">
+            {timeline.steps.map((s) => (
+              <li key={s.id}>
+                <span className="craving-timeline__at">{startLabel(s)}</span>
+                <span><strong>{s.name}</strong>{s.text ? ` ${s.text}` : ''}{s.minutes ? ` · ${mins(s.minutes)}` : ''}
+                  {s.alone && <span className="muted"> · läuft allein</span>}</span>
+              </li>
+            ))}
           </ol>
         </>
       )}

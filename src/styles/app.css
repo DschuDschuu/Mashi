@@ -2263,6 +2263,10 @@ details.cost-line[open] > summary::after { transform: rotate(-90deg); }
 .craving-done p { margin: 0; }
 .craving-done__how { margin: 6px 0 0; font-weight: 700; }
 .craving-done__steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; font-size: var(--fs-md); }
+/* Zeitleiste (Julia): links wann, rechts was – statt Nummern */
+.craving-timeline { list-style: none; padding-left: 0; gap: 8px; }
+.craving-timeline > li { display: grid; grid-template-columns: 5.6rem 1fr; gap: 10px; align-items: baseline; }
+.craving-timeline__at { font-size: var(--fs-sm); font-weight: 700; color: var(--primary-text); white-space: nowrap; }
 .lust-steps__ready { display: inline-flex; align-items: center; gap: 4px; color: var(--primary-press); font-weight: 700; }
 /* „Auch als Baustein“ am Rezept – unter dem Vorkoch-Bereich, gleiche Trennlinie */
 .blocks__title { display: inline-flex; align-items: center; gap: 8px; margin: 0; }
@@ -2375,6 +2379,13 @@ details.cost-line[open] > summary::after { transform: rotate(-90deg); }
 .craving-values__line { display: flex; flex-wrap: wrap; justify-content: center; align-items: baseline; gap: 4px 14px; margin: 0; }
 .craving-values strong { color: var(--ink); font-variant-numeric: tabular-nums; }
 .craving-values__missing { margin: 0; text-align: center; }
+/* „Wie letztes Mal?“ auf der Startseite – lange Namen kürzen statt aus der Karte zu ragen (375 px) */
+.craving-recent { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.craving-recent__chip { max-width: 100%; }
+.craving-recent__chip svg { flex: none; } /* die Uhr schrumpft sonst bei langen Namen */
+.craving-recent__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* unter dem Teller: Live-Werte, darunter der Würfel – mittig, in Teller- und Listenansicht gleich */
+.craving-summary { display: flex; flex-direction: column; align-items: center; gap: 8px; }
 .plate-sheet { display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: var(--r-lg); background: var(--surface); box-shadow: var(--shadow); }
 .plate-sheet__title { margin: 0; font-size: var(--fs-md); }
 .combo-stepper__top { display: flex; justify-content: flex-end; }

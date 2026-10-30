@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   DIRECTIONS, EMPTY_CRAVING, STAGES, chooseDirection, closeStep, cookbookMatches, cravingCooking, cravingMinutes, cravingPartsFrom, cravingSteps, cravingText, cravingTitle, currentStep,
-  baseCraving, coveredBy, cravingCombo, cravingContent, directionOf, guessKind, matchingRecipes, optionsFor, pick, recipeChoiceId, recipeChoices, reopen, staleTrials, stockMarks, understand, variantTargets,
+  baseCraving, coveredBy, cravingCombo, cravingContent, directionOf, guessKind, matchingRecipes, optionsFor, pick, recipeChoiceId, recipeChoices, reopen, rollCraving, runsAlone, staleTrials, startLabel, stockMarks, understand, variantTargets, withoutGone, cravingTimeline,
+  type StockMark,
 } from './craving';
 import { localFoodTable } from './nutrition/localFoods';
 import { emptyPantry, type Pantry, type PantryItem } from './pantry';
@@ -257,12 +258,13 @@ describe('Aus dem Gericht ein Rezept machen', () => {
     expect(c.ingredients.map(({ name, amount, unit }) => ({ name, amount, unit }))).toEqual([
       { name: 'Reis', amount: 150, unit: 'g' }, { name: 'Tofu', amount: 200, unit: 'g' },
     ]);
-    // Reis (15 Min.) vor Tofu (10 Min.)
+    // Zeitleiste: Reis köchelt allein (sofort), Tofu braucht dich 10 Min. und endet mit dem Reis (nach 5 Min.)
     expect(c.steps.map((st) => st.timerMinutes)).toEqual([15, 10]);
-    expect(c.steps[0].text).toContain('Reis');
+    expect(c.steps[0].text).toMatch(/^Sofort – Reis: /);
+    expect(c.steps[1].text).toMatch(/^Nach 5 Min\. – Tofu: /);
     expect(c.tags).toEqual(['Bowl']);
-    // Reis 15 Min., nebenher die Hälfte vom Tofu (10 Min.) → 20 – nicht nur der längste Schritt
-    expect(c.cookMinutes).toBe(20);
+    // der Reis läuft allein, der Tofu passt hinein → 15
+    expect(c.cookMinutes).toBe(15);
   });
 
   it('ganzes Rezept → verknüpfte Zutat in Portionen; Teil → seine Zutaten (umgerechnet) und Schritte', () => {
@@ -280,7 +282,8 @@ describe('Aus dem Gericht ein Rezept machen', () => {
   it('Vorgekochtes: nur aufwärmen', () => {
     const own = recipeChoices([streifen], { items: [{ id: 'p', name: 'x', amount: 4, unit: 'Stück', addedAt: '', recipeId: 'r1' }] });
     const c = cravingContent(pick(chooseDirection(EMPTY_CRAVING, 'taco'), 'protein', 'rezept:r1'), { own, recipes: [streifen], servings: 2, title: 'T', newId });
-    expect(c.steps.some((st) => st.text === 'Knusprige Teststreifen aus dem Kühlschrank aufwärmen')).toBe(true);
+    // aufwärmen läuft allein – sofort; die Tortillas brauchen dich zum Schluss
+    expect(c.steps.some((st) => st.text === 'Sofort – Knusprige Teststreifen aus dem Kühlschrank aufwärmen')).toBe(true);
   });
 
   it('ein vorgekochter Teil: bleibt Teil mit Zutaten, das Gericht merkt sich seine Herkunft – dann zählt er als fertig', () => {
@@ -373,10 +376,125 @@ describe('Live-Werte am Teller: das Gericht, wie es gekocht würde', () => {
   });
 });
 
-describe('Wie lange es dauert', () => {
-  it('das Längste plus die Hälfte vom Rest, auf 5 Minuten aufgerundet', () => {
-    // Tortilla mit neun Bausteinen: war „in 8 Min. fertig“
-    expect(cravingMinutes([8, 5, 5, 5, 5, 3, 2, 0, 0].map((minutes) => ({ minutes })))).toBe(25);
+describe('Würfeln (Julia: „Überrasch mich“)', () => {
+  // fester, wiederholbarer Zufall (mulberry32) – jeder Testlauf würfelt gleich; ein einfacher Generator lieferte bei
+  // kleinen Startwerten zuerst fast immer ≈ 0, dann würfelten die Tests gar nicht richtig
+  const seeded = (seed: number) => () => {
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  const seeds = Array.from({ length: 100 }, (_, i) => i + 1);
+
+  it('füllt alles, was offen ist – mit einer Richtung und nur Passendem; beim Gemüse höchstens zwei', () => {
+    for (const n of seeds.slice(0, 30)) {
+      const s = rollCraving(EMPTY_CRAVING, { rng: seeded(n) });
+      expect(currentStep(s), `Wurf ${n}`).toBeUndefined();
+      const dir = directionOf(s.direction)!;
+      for (const k of STAGES) for (const id of s.picks[k] ?? []) expect(dir.options[k], `${dir.name}: ${id}`).toContain(id);
+      expect((s.picks.veg ?? []).length).toBeLessThanOrEqual(2);
+      expect(s.rolled?.direction).toBe(s.direction);
+    }
+  });
+
+  it('deine Wahl bleibt – nochmal würfeln tauscht nur das Gewürfelte; ein bewusstes „Ohne Sauce weiter“ auch', () => {
+    const mine = closeStep(pick(chooseDirection(EMPTY_CRAVING, 'bowl'), 'protein', 'tofu'), 'sauce');
+    const first = rollCraving(mine, { rng: seeded(7) });
+    expect(first.picks.protein).toEqual(['tofu']);
+    expect(first.picks.sauce).toBeUndefined();
+    expect(first.rolled!.picks).not.toContain('tofu');
+    expect(first.rolled!.direction).toBeUndefined(); // die Richtung war deine
+    const again = rollCraving(first, { rng: seeded(99) });
+    expect(again.direction).toBe('bowl');
+    expect(again.picks.protein).toEqual(['tofu']);
+    expect(again.picks.sauce).toBeUndefined();
+    expect(currentStep(again)).toBeUndefined();
+  });
+
+  it('nochmal würfeln wechselt meist – das zuletzt Gewürfelte zählt weniger (sonst blieb die Sauce oft Pesto)', () => {
+    // je Stufe gemessen, nicht am ganzen Teller: der wiederholt sich wegen zwei Gemüsen auch ohne Abschlag kaum
+    const pasta = pick(chooseDirection(EMPTY_CRAVING, 'pasta'), 'protein', 'haehnchen');
+    const sameSauce = seeds.filter((n) => {
+      const first = rollCraving(pasta, { rng: seeded(n) });
+      return rollCraving(first, { rng: seeded(n + 1000) }).picks.sauce?.[0] === first.picks.sauce?.[0];
+    }).length;
+    // gemessen: ohne Abschlag 37 von 100, mit 6
+    expect(sameSauce).toBeLessThan(20);
+  });
+
+  it('nie, was du ausgeschlossen hast („Tacos ohne Hack“)', () => {
+    const s = understand('Tacos ohne Hack')!;
+    for (const n of seeds) expect(rollCraving(s, { rng: seeded(n) }).picks.protein ?? []).not.toEqual(expect.arrayContaining(['hack']));
+  });
+
+  it('klug gewichtet: was bald weg muss, landet deutlich öfter auf dem Teller', () => {
+    const pasta = pick(chooseDirection(EMPTY_CRAVING, 'pasta'), 'protein', 'haehnchen');
+    const count = (stock?: (n: string) => StockMark | undefined) =>
+      seeds.filter((n) => rollCraving(pasta, { rng: seeded(n), stock }).picks.veg?.includes('brokkoli')).length;
+    const withStock = count((n) => (n === 'Brokkoli' ? 'bald' : undefined));
+    expect(withStock).toBeGreaterThan(70);
+    expect(withStock).toBeGreaterThan(count() + 20);
+  });
+});
+
+describe('Gemerkter Teller (Julia: „Wie letztes Mal?“)', () => {
+  it('was es nicht mehr gibt, fällt weg – die Stufe ist dann wieder offen; Bekanntes bleibt erledigt', () => {
+    const own = recipeChoices([streifen]);
+    const s = { direction: 'taco', picks: { carb: ['tortillas'], protein: ['rezept:weg'], sauce: ['salsa', 'eigen:sauce:Weg'] }, closed: [...STAGES] };
+    const now = withoutGone(s, own);
+    expect(now.picks).toEqual({ carb: ['tortillas'], sauce: ['salsa', 'eigen:sauce:Weg'] }); // eigene Bausteine stehen in der id
+    expect(currentStep(now)).toBe('protein');
+    expect(withoutGone({ ...s, picks: { protein: ['rezept:r1'] } }, own).picks.protein).toEqual(['rezept:r1']);
+  });
+});
+
+describe('Wie lange es dauert – die Zeitleiste (Julia: „was wann starten“)', () => {
+  it('erkennt, was allein läuft – auch in eigenen Zubereitungen', () => {
+    for (const t of ['mit doppelter Menge Wasser köcheln', 'in Salzwasser kochen', 'würfeln und im Ofen rösten', 'in Röschen dämpfen', 'aus dem Kühlschrank aufwärmen']) {
+      expect(runsAlone(t), t).toBe(true);
+    }
+    for (const t of ['in Streifen schneiden und braten', 'drüberstreuen', 'Joghurt mit Knoblauch verrühren', undefined]) expect(runsAlone(t), t).toBe(false);
+  });
+
+  it('was allein läuft, startet so, dass es zum Schluss fertig ist; deine Hände: erst das Kalte, dann das Heiße', () => {
+    const t = cravingTimeline([
+      { id: 'reis', minutes: 15, text: 'mit doppelter Menge Wasser köcheln' },
+      { id: 'tofu', minutes: 10, text: 'würfeln und knusprig braten' },
+      { id: 'gurke', minutes: 2, text: 'in Scheiben schneiden' },
+      { id: 'sesam', minutes: 2, text: 'ohne Fett kurz rösten' },
+      { id: 'feta', minutes: 0, text: 'drüberbröseln' },
+    ]);
+    expect(t.total).toBe(15);
+    // Gurke schneiden zuerst, der Tofu wird erst danach gebraten – sonst wäre er kalt, bis alles fertig ist
+    expect(t.steps.map((s) => [s.id, startLabel(s)])).toEqual([
+      ['reis', 'sofort'], ['gurke', 'nach 1 Min.'], ['tofu', 'nach 3 Min.'], ['sesam', 'nach 13 Min.'], ['feta', 'zum Schluss'],
+    ]);
+  });
+
+  it('Tortilla: Guacamole und Salsa zuerst, Hähnchen braten danach, die Tortillas ganz zum Schluss warm', () => {
+    const t = cravingTimeline([
+      { id: 'tortillas', minutes: 2, text: 'in der Pfanne kurz erwärmen' },
+      { id: 'haehnchen', minutes: 8, text: 'in Streifen schneiden und braten' },
+      { id: 'guacamole', minutes: 5, text: 'Avocado zerdrücken, mit Limette und Salz abschmecken' },
+      { id: 'salsa', minutes: 5, text: 'Tomaten und Zwiebel würfeln, mit Limette mischen' },
+    ]);
+    expect(t.steps.map((s) => s.id)).toEqual(['guacamole', 'salsa', 'haehnchen', 'tortillas']);
+    expect(t.total).toBe(20);
+  });
+
+  it('braucht die Handarbeit länger, setzt das Alleinlaufende später auf – nie zwei Dinge gleichzeitig in deinen Händen', () => {
+    const t = cravingTimeline([
+      { id: 'pasta', minutes: 10, text: 'in Salzwasser kochen' },
+      { id: 'haehnchen', minutes: 8, text: 'in Streifen schneiden und braten' },
+      { id: 'paprika', minutes: 5, text: 'in Streifen schneiden, kurz anbraten' },
+    ]);
+    expect(t.total).toBe(13);
+    expect(t.steps.map((s) => [s.id, s.start])).toEqual([['haehnchen', 0], ['pasta', 3], ['paprika', 8]]);
+  });
+
+  it('Gesamtzeit auf 5 Minuten aufgerundet – neun Bausteine nur mit Handarbeit waren früher „in 8 Min. fertig“', () => {
+    expect(cravingMinutes([8, 5, 5, 5, 5, 3, 2, 0, 0].map((minutes) => ({ minutes })))).toBe(35);
     expect(cravingMinutes([{ minutes: 10 }, { minutes: 0 }])).toBe(10);
     expect(cravingMinutes([{ minutes: 0 }])).toBe(0);
     expect(cravingMinutes([])).toBe(0);

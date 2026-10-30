@@ -38,6 +38,8 @@ const PATHS = {
   grid: 'M4 4h6v6H4z M14 4h6v6h-6z M4 14h6v6H4z M14 14h6v6h-6z',
   // Mix & Match – Saucen und Beilagen kreuz und quer kombinieren
   shuffle: 'M16 3h5v5 M4 20 21 3 M21 16v5h-5 M15 15l6 6 M4 4l5 5',
+  // Würfel mit fünf Augen – „Überrasch mich“ im Baukasten
+  dice: 'M6 3h12a3 3 0 0 1 3 3v12a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3z M7.6 8a.6.6 0 1 0 1.2 0 .6.6 0 1 0-1.2 0z M15.2 8a.6.6 0 1 0 1.2 0 .6.6 0 1 0-1.2 0z M11.4 12a.6.6 0 1 0 1.2 0 .6.6 0 1 0-1.2 0z M7.6 16a.6.6 0 1 0 1.2 0 .6.6 0 1 0-1.2 0z M15.2 16a.6.6 0 1 0 1.2 0 .6.6 0 1 0-1.2 0z',
   image: 'M5 4h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z M4 16l5-5 4 4 3-3 4 4 M15.5 8.5h.01',
   file: 'M6 3h8l4 4v14H6z M14 3v4h4 M9 13h6 M9 17h6',
   clipboard: 'M9 3.5h6v3H9z M9 5H6v16h12V5h-3 M9 12h6 M9 16h4',

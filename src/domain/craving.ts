@@ -121,6 +121,8 @@ export interface CravingState {
   closed: SideKind[];
   /** Ausgeschlossenes aus dem Textfeld („Pasta ohne Hack“) – steht nicht zur Wahl, bis „alle zeigen“ oder du es doch wählst */
   without?: string[];
+  /** was der letzte Wurf gesetzt hat (rollCraving) – „Nochmal würfeln“ tauscht nur das, deine eigene Wahl bleibt */
+  rolled?: { picks: string[]; closed: SideKind[]; direction?: string };
 }
 
 export const EMPTY_CRAVING: CravingState = { picks: {}, closed: [] };
@@ -342,6 +344,92 @@ export function chooseDirection(s: CravingState, id: string, own: readonly Choic
   return { ...s, direction: id, picks, closed: only ? closeStage(closed, 'carb') : closed };
 }
 
+/**
+ * Ein gemerkter Teller („Wie letztes Mal?“): was es nicht mehr gibt (gelöschtes Rezept, entfernter eigener Baustein),
+ * fällt weg – die Stufe ist dann wieder offen, statt mit einem leeren Schild dazustehen
+ */
+export function withoutGone(s: CravingState, own: readonly Choice[] = []): CravingState {
+  const picks: CravingState['picks'] = {};
+  const emptied: SideKind[] = [];
+  for (const k of STAGES) {
+    const now = s.picks[k] ?? [];
+    const kept = now.filter((id) => choiceOf(id, own));
+    if (kept.length) picks[k] = kept;
+    else if (now.length) emptied.push(k);
+  }
+  return { ...s, picks, closed: s.closed.filter((k) => !emptied.includes(k)) };
+}
+
+/** eins aus der Liste, je nach Gewicht – `rng` liefert 0 ≤ x < 1 (Math.random, in Tests vorgegeben) */
+function weighted<T>(items: readonly T[], weight: (x: T, i: number) => number, rng: () => number): T {
+  const ws = items.map(weight);
+  let r = rng() * ws.reduce((a, b) => a + b, 0);
+  for (let i = 0; i < items.length; i++) {
+    r -= ws[i];
+    if (r < 0) return items[i];
+  }
+  return items[items.length - 1];
+}
+
+/** Das zuletzt Gewürfelte wieder heraus – deine eigene Wahl bleibt; was der Wurf erledigt hat, ist wieder offen */
+function unroll(s: CravingState): CravingState {
+  if (!s.rolled) return s;
+  const { rolled, ...rest } = s;
+  const out = new Set(rolled.picks);
+  const picks: CravingState['picks'] = {};
+  for (const k of STAGES) {
+    const left = (s.picks[k] ?? []).filter((id) => !out.has(id));
+    if (left.length) picks[k] = left;
+  }
+  const back: CravingState = { ...rest, picks, closed: s.closed.filter((k) => !rolled.closed.includes(k)) };
+  // die gewürfelte Richtung nur, wenn du sie nicht inzwischen selbst gewechselt hast
+  if (rolled.direction && back.direction === rolled.direction) delete back.direction;
+  return back;
+}
+
+/**
+ * Würfeln (Julia: „Überrasch mich“): füllt, was noch offen ist – was du gewählt hast, bleibt, ein bewusstes „Ohne …
+ * weiter“ auch. Klug gewichtet (Julia): was bald weg muss, zählt am meisten, dann Vorgekochtes und was da ist, dann was
+ * gut zum schon Gewählten passt (optionsFor stellt es nach vorn) – aber nicht jedes Mal dasselbe. Ausgeschlossenes
+ * („ohne Hack“) nie. Ohne Richtung würfelt er zuerst eine, die zum Gewählten passt. Beim Gemüse zwei, sonst eins.
+ * Nochmal würfeln nimmt erst das zuletzt Gewürfelte heraus (unroll). `rng` für Tests.
+ */
+export function rollCraving(s: CravingState, opts: {
+  own?: readonly Choice[]; household?: Pick<Household, 'sidePrep' | 'customSides' | 'sideFood'>;
+  stock?: (name: string) => StockMark | undefined; rng?: () => number;
+} = {}): CravingState {
+  const { own = [], household, stock, rng = Math.random } = opts;
+  const start = unroll(s);
+  // was der letzte Wurf brachte, zählt diesmal wenig – sonst lag nach „Nochmal würfeln“ oft dasselbe da (Pesto zum Hähnchen)
+  const lastRoll = new Set(s.rolled?.picks ?? []);
+  const fresh = (id: string | undefined) => (id && (lastRoll.has(id) || id === s.rolled?.direction) ? 0.2 : 1);
+  let st = start;
+  if (!st.direction) {
+    const picked = allPicks(st);
+    const fitting = DIRECTIONS.filter((d) => picked.every((id) => fits(id, d, own)));
+    st = chooseDirection(st, weighted(fitting.length ? fitting : DIRECTIONS, (d) => fresh(d.id), rng).id, own);
+  }
+  // Position in optionsFor (Paare, eigene Rezepte vorn) + Vorrat: „bald“ am stärksten
+  const weight = (c: Choice, i: number) => fresh(c.id) * (1 / (1 + i / 2) + (c.stock === 'bald' ? 3 : c.stock === 'da' ? 1 : 0) + (c.ready ? 2 : 0));
+  for (const kind of STAGES) {
+    for (let n = 0; n < (kind === 'veg' ? 2 : 1) && !st.closed.includes(kind); n++) {
+      const options = optionsFor(st, kind, own, household, false, stock).filter((c) => !(st.picks[kind] ?? []).includes(c.id));
+      if (!options.length) break;
+      st = pick(st, kind, weighted(options, weight, rng).id, own);
+    }
+    st = closeStep(st, kind);
+  }
+  const before = new Set(allPicks(start));
+  return {
+    ...st,
+    rolled: {
+      picks: allPicks(st).filter((id) => !before.has(id)),
+      closed: st.closed.filter((k) => !start.closed.includes(k)),
+      ...(!start.direction && st.direction ? { direction: st.direction } : {}),
+    },
+  };
+}
+
 /** fürs Vergleichen: klein, ohne Umlaute und Satzzeichen („Hähnchen!“ → „haehnchen“) */
 const norm = (t: string) => t.toLowerCase().replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss').replace(/[^a-z0-9 ]/g, ' ');
 const wordsOf = (t: string) => norm(t).split(/\s+/).filter((w) => w.length >= 3);
@@ -462,13 +550,47 @@ export function cravingSteps(s: CravingState, own: readonly Choice[] = [], house
 }
 
 /**
- * Wie lange es ungefähr dauert: Das Längste läuft, nebenher schafft man etwa die Hälfte vom Rest – allein geht nicht
- * alles gleichzeitig (neun Bausteine waren sonst „in 8 Min. fertig“). Auf 5 Minuten aufgerundet; 0 = nichts zu tun.
+ * Läuft allein (Julia: „was wann starten“) – am Zubereitungstext erkannt, so gilt es auch für eigene Zubereitungen:
+ * köcheln, in Wasser kochen, garen, im Ofen, aufbacken, dämpfen, aufwärmen. Schneiden, braten, rühren brauchen dich.
  */
-export function cravingMinutes(steps: readonly { minutes: number }[]): number {
-  const all = steps.map((x) => x.minutes).sort((a, b) => b - a);
-  const total = (all[0] ?? 0) + all.slice(1).reduce((n, m) => n + m, 0) / 2;
-  return Math.ceil(total / 5) * 5;
+export const runsAlone = (text?: string): boolean => !!text && /k(ö|oe)cheln|kochen|garen|im ofen|aufbacken|d(ä|ae)mpfen|aufw(ä|ae)rmen/i.test(text);
+
+/** Kommt warm auf den Teller – braten, rösten, erwärmen, schmelzen: das macht man zum Schluss, nicht zuerst */
+const servedHot = (text?: string): boolean => !!text && /braten|r(ö|oe)sten|erw(ä|ae)rmen|erhitzen|schmelzen/i.test(text);
+
+/**
+ * Zeitleiste (Julia: „jetzt Hähnchen, nebenher Salsa, zum Schluss Tortillas“): Was allein läuft, startet so, dass es zum
+ * Schluss fertig ist; was deine Hände braucht, kommt nacheinander und endet ebenfalls zum Schluss – erst das Kalte
+ * (schneiden, rühren), dann das Heiße (braten, erwärmen), damit es warm auf den Teller kommt; je das Längste zuerst.
+ * So ist alles gleichzeitig fertig, ohne dass zwei Dinge auf einmal dich brauchen. Gesamt: das Längere von beidem.
+ * Was 0 Minuten braucht (drüberstreuen), kommt zum Schluss. Bei gleichem Start zuerst, was allein läuft – aufsetzen,
+ * dann loslegen.
+ */
+export function cravingTimeline<T extends { minutes: number; text?: string }>(steps: readonly T[]): { total: number; steps: (T & { start: number; alone: boolean })[] } {
+  const timed = steps.filter((s) => s.minutes > 0);
+  const alone = timed.filter((s) => runsAlone(s.text));
+  const hands = timed.filter((s) => !runsAlone(s.text))
+    .sort((a, b) => Number(servedHot(a.text)) - Number(servedHot(b.text)) || b.minutes - a.minutes);
+  const busy = hands.reduce((n, s) => n + s.minutes, 0);
+  const total = Math.max(busy, 0, ...alone.map((s) => s.minutes));
+  let at = total - busy;
+  const placed = [
+    ...alone.map((s) => ({ ...s, start: total - s.minutes, alone: true })),
+    ...hands.map((s) => { const x = { ...s, start: at, alone: false }; at += s.minutes; return x; }),
+  ].sort((a, b) => a.start - b.start || Number(b.alone) - Number(a.alone));
+  return { total, steps: [...placed, ...steps.filter((s) => s.minutes <= 0).map((s) => ({ ...s, start: total, alone: false }))] };
+}
+
+/** „Sofort“, „nach 3 Min.“, „zum Schluss“ – wann ein Schritt der Zeitleiste dran ist */
+export const startLabel = (s: { start: number; minutes: number }): string =>
+  s.minutes <= 0 ? 'zum Schluss' : s.start <= 0 ? 'sofort' : `nach ${s.start} Min.`;
+
+/**
+ * Wie lange es ungefähr dauert – nach der Zeitleiste (allein geht nicht alles gleichzeitig: neun Bausteine waren früher
+ * „in 8 Min. fertig“). Auf 5 Minuten aufgerundet; 0 = nichts zu tun.
+ */
+export function cravingMinutes(steps: readonly { minutes: number; text?: string }[]): number {
+  return Math.ceil(cravingTimeline(steps).total / 5) * 5;
 }
 
 /**
@@ -498,7 +620,8 @@ export function cravingContent(s: CravingState, opts: {
 }): RecipeContent {
   const { own = [], recipes = [], household, servings, newId } = opts;
   const ingredients: Ingredient[] = [];
-  const steps: { minutes: number; list: Step[] }[] = [];
+  // je Wahl eine Gruppe Schritte – mit ihrem Zubereitungstext, daran erkennt die Zeitleiste, was allein läuft
+  const steps: { minutes: number; text?: string; list: Step[] }[] = [];
   for (const c of cravingChoices(s, own, household)) {
     const recipe = c.recipeId ? recipes.find((r) => r.id === c.recipeId) : undefined;
     if (recipe && c.from) {
@@ -510,12 +633,13 @@ export function cravingContent(s: CravingState, opts: {
       const f = servings / (rc.servings || 1);
       for (const i of rc.ingredients.filter((x) => partOf(x) === part)) ingredients.push({ ...i, id: newId(), part, ...(i.amount != null ? { amount: Math.round(i.amount * f * 10) / 10 } : {}) });
       const partSteps = rc.steps.filter((st) => stepPart(st, rc) === part).map((st) => ({ id: newId(), text: st.text, part, ...(st.timerMinutes ? { timerMinutes: st.timerMinutes } : {}) }));
-      steps.push({ minutes: c.ready ? readyPrep(c.kind).minutes : c.prep?.minutes ?? 0, list: partSteps });
+      const ready = c.ready ? readyPrep(c.kind) : undefined;
+      steps.push({ minutes: ready ? ready.minutes : c.prep?.minutes ?? 0, text: ready?.text ?? c.prep?.text, list: partSteps });
     } else if (recipe && c.ready) {
       // ein ganzes Rezept, vorgekocht: verknüpfte Zutat – seine Portionen gehen beim Kochen aus der Speisekammer
       const prep = readyPrep(c.kind);
       ingredients.push({ id: newId(), name: c.name, amount: servings, unit: 'Portion', recipeId: recipe.id });
-      steps.push({ minutes: prep.minutes, list: [{ id: newId(), text: `${c.name} ${prep.text}`, ...(prep.minutes ? { timerMinutes: prep.minutes } : {}) }] });
+      steps.push({ minutes: prep.minutes, text: prep.text, list: [{ id: newId(), text: `${c.name} ${prep.text}`, ...(prep.minutes ? { timerMinutes: prep.minutes } : {}) }] });
     } else if (recipe) {
       ingredients.push({ id: newId(), name: c.name, amount: servings, unit: 'Portion', recipeId: recipe.id });
       const minutes = c.prep?.minutes ?? 0;
@@ -524,14 +648,19 @@ export function cravingContent(s: CravingState, opts: {
       const ing = sideIngredient(c.id, servings, household);
       if (ing) ingredients.push({ ...ing, id: newId() });
       const minutes = c.prep?.minutes ?? 0;
-      steps.push({ minutes, list: [{ id: newId(), text: c.prep?.text ? `${c.name}: ${c.prep.text}` : c.name, ...(minutes ? { timerMinutes: minutes } : {}) }] });
+      steps.push({ minutes, text: c.prep?.text, list: [{ id: newId(), text: c.prep?.text ? `${c.name}: ${c.prep.text}` : c.name, ...(minutes ? { timerMinutes: minutes } : {}) }] });
     }
   }
-  const ordered = [...steps].sort((a, b) => b.minutes - a.minutes);
+  // in der Reihenfolge der Zeitleiste, der erste Schritt jeder Gruppe sagt, wann (Julia: auch im Kochmodus) –
+  // „Sofort – Reis: …“, „Nach 5 Min. – Tofu: …“, „Zum Schluss – Sesam: …“
+  const timeline = cravingTimeline(steps);
+  const ordered = timeline.steps.flatMap((g) => g.list.map((st, i) => (i === 0 && st.text
+    ? { ...st, text: `${startLabel(g).replace(/^./, (ch) => ch.toUpperCase())} – ${st.text}` }
+    : st)));
   return {
     title: opts.title.trim() || cravingTitle(s, own), description: cravingText(s, own), servings,
-    prepMinutes: 0, cookMinutes: cravingMinutes(steps), difficulty: 1,
-    ingredients, steps: ordered.flatMap((x) => x.list).length ? ordered.flatMap((x) => x.list) : [{ id: newId(), text: '' }],
+    prepMinutes: 0, cookMinutes: Math.ceil(timeline.total / 5) * 5, difficulty: 1,
+    ingredients, steps: ordered.length ? ordered : [{ id: newId(), text: '' }],
     categories: [], tags: directionOf(s.direction) ? [directionOf(s.direction)!.name] : [], devices: [],
   };
 }

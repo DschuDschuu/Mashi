@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  MULTI, STAGES, choiceOf, closeStep, coveredBy, coversOf, currentStep, directionOf, optionsFor, pick, reopen, stockMarks, type Choice, type CravingState,
+  MULTI, STAGES, choiceOf, closeStep, coveredBy, coversOf, currentStep, directionOf, optionsFor, pick, reopen, type Choice, type CravingState,
 } from '../../domain/craving';
 import { SIDE_KINDS, customSideId, type SideKind } from '../../domain/sides';
 import { currentContent } from '../../domain/recipe';
-import { householdOf, setHousehold, useFoodTable, usePantry, usePlan, useProducts, useRecipes } from '../../data/store';
+import { householdOf, setHousehold, usePantry, usePlan, useProducts, useRecipes } from '../../data/store';
+import { useStockMarks } from '../cravingHooks';
 import { formatMinutes, portionCount } from '../format';
 import { toast } from '../toast';
 import { Icon } from './Icon';
@@ -178,13 +179,6 @@ export function StageOptions({ state, step, own, set, mini = false }: {
       </div>
     </>
   );
-}
-
-/** Vorrats-Punkte: was von den Bausteinen zu Hause ist oder bald weg muss (stockMarks) – einmal je Vorrat, nicht je Chip */
-function useStockMarks() {
-  const pantry = usePantry();
-  const table = useFoodTable();
-  return useMemo(() => stockMarks(pantry, table), [pantry, table]);
 }
 
 /** Lebensmittel-Namen, die es bei dir schon gibt: Meine Lebensmittel, Speisekammer (ohne Vorgekochtes), Rezeptzutaten */
