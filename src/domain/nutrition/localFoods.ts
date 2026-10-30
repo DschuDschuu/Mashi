@@ -72,7 +72,8 @@ const ROWS: Row[] = [
   ['huettenkaese', ['hüttenkäse', 'körniger frischkäse', 'cottage cheese'], 82, 11, 3.5, 2.3],
   ['frischkaese-light', ['light-frischkäse', 'frischkäse light', 'light frischkäse'], 150, 7.5, 4.6, 11, { portions: { EL: 20, TL: 7 } }],
   ['frischkaese', ['frischkäse', 'doppelrahmfrischkäse'], 240, 5.5, 3.5, 23, { portions: { EL: 20, TL: 7 } }],
-  ['cheddar', ['cheddar'], 403, 25, 1.3, 33],
+  // 1 Stück = eine Scheibe (Burger-Cheddar im Baukasten) – sonst fehlte das Gewicht und er zählte nicht mit
+  ['cheddar', ['cheddar'], 403, 25, 1.3, 33, { portions: { Stück: 20 } }],
   ['magermilch', ['milch 0,1 %', 'magermilch', 'entrahmte milch'], 35, 3.4, 4.9, 0.1, { density: 1.03 }],
   ['milch-fettarm', ['milch 1,5 %', 'fettarme milch', 'milch fettarm', 'teilentrahmte milch'], 47, 3.4, 4.9, 1.5, { density: 1.03 }],
   // Frisches Gemüse

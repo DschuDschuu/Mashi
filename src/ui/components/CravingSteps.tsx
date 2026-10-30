@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  MULTI, STAGES, choiceOf, closeStep, coveredBy, currentStep, directionOf, optionsFor, pick, reopen, stockMarks, type Choice, type CravingState,
+  MULTI, STAGES, choiceOf, closeStep, coveredBy, coversOf, currentStep, directionOf, optionsFor, pick, reopen, stockMarks, type Choice, type CravingState,
 } from '../../domain/craving';
 import { SIDE_KINDS, customSideId, type SideKind } from '../../domain/sides';
 import { currentContent } from '../../domain/recipe';
@@ -94,6 +94,9 @@ export function StageOptions({ state, step, own, set, mini = false }: {
   const fixed = options.filter((c) => !c.recipeId);
   const mine = options.filter((c) => c.recipeId);
   const chosen = state.picks[step] ?? [];
+  // „ohne Hack“ ausgeschlossen – in dieser Stufe sagen, dass es fehlt, damit man es zurückholen kann
+  const excluded = (state.without ?? []).flatMap((id) => choiceOf(id, own, hh) ?? []).filter((c) => coversOf(c).includes(step));
+  const excludedNames = excluded.map((c) => c.name).join(', ');
   const label = labelOf(step);
   const multi = MULTI.has(step);
   const choose = (id: string) => set(pick(state, step, id, own));
@@ -138,9 +141,11 @@ export function StageOptions({ state, step, own, set, mini = false }: {
           {fixed.some((c) => c.stock === 'bald') && <span><span className="stock-dot stock-dot--bald" aria-hidden="true" /> bald verbrauchen</span>}
         </p>
       )}
-      {dir && (
+      {(dir || excluded.length > 0) && (
         <button type="button" className="link small lust-steps__all" onClick={() => setAll(!all)}>
-          {all ? `nur, was zu ${dir.name} passt` : 'alle zeigen'}
+          {all
+            ? (dir ? `nur, was zu ${dir.name} passt` : `wieder ohne ${excludedNames}`)
+            : excluded.length ? `alle zeigen – auch ${excludedNames}` : 'alle zeigen'}
         </button>
       )}
       {/* deine Rezepte mit Bild (Julia: „eigene Rezepte haben ja Bilder“) – Vorgekochtes zuerst */}

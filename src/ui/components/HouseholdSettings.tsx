@@ -28,7 +28,7 @@ export function HouseholdSettings() {
     const step = piece ? 1 : s.grams < 50 ? 5 : 25;
     return (
     <div key={s.id} className="row-between">
-      <span>{s.name} <small className="muted">{piece ? 'Stück' : 'in g'}</small>
+      <span>{s.name} <small className="muted">{piece ? 'Stück' : 'in g'}{hh.sideFood?.[s.id] ? ` · als ${hh.sideFood[s.id]}` : ''}</small>
         {/* Zubereitung als Standard (Julia: „woher weiß ich, wie ich das zubereite?“) */}
         <button type="button" className="iconbtn iconbtn--sm" aria-label={`Zubereitung ${s.name}`} onClick={() => setPrepFor(s.id)}><Icon name="pencil" size={14} /></button>
         {/* eigene Bausteine (Julia: „Tomaten“) wieder rausnehmen – alte Abende damit behalten ihren Namen (steht in der id) */}

@@ -20,7 +20,7 @@ import { currentContent, currentVersion, newId, sameContent, withNewVersion } fr
 import { addChoiceFrom } from '../domain/choices';
 import { retireMix, sideContent } from '../domain/mix';
 import { staleTrials } from '../domain/craving';
-import { sideGrams, sidesOf } from '../domain/sides';
+import { foodOf, sideGrams, sidesOf } from '../domain/sides';
 import { cookingContent } from '../domain/homemade';
 import { recordSavings, type BonSavings } from '../domain/savings';
 import { addBon, bonFromImport, dropDayPrices, editBonLine, includeBonLine, sameBonOf, withdrawBonStock, dropUnsavedDay, type BonLine, type BonLinePatch } from '../domain/bons';
@@ -764,6 +764,14 @@ export function setSidePrep(sideId: string, prep: { text: string; minutes: numbe
   return () => apply(before);
 }
 
+/** Was du für einen Baustein kaufst (Household.sideFood) – leer: wieder Mashis Standard. Gibt „Rückgängig“ zurück. */
+export function setSideFood(sideId: string, food: string | undefined): () => void {
+  const hh = householdOf();
+  const { [sideId]: _old, ...rest } = hh.sideFood ?? {};
+  const sideFood = food?.trim() ? { ...rest, [sideId]: food.trim() } : rest;
+  return setHousehold({ ...hh, sideFood: Object.keys(sideFood).length ? sideFood : undefined });
+}
+
 export function setHomemade(id: string, ingredientId: string, on: boolean): () => void {
   const before = get(id).homemade;
   const apply = (list: string[] | undefined) => {
@@ -1167,7 +1175,7 @@ function deductFresh(p: Pantry, meal: WeekMeal, hh: Household): { pantry: Pantry
   const dish = r && r.id !== meal.baseId ? deductContent(p, cookingContent(r, recipes, [meal.baseId]), n) : { pantry: p, used: [], toCheck: [] };
   // alle Bausteine (Pasta, Hähnchen, Parmesan …) nacheinander
   return sidesOf(meal.side).reduce((acc, side) => {
-    const s = deductContent(acc.pantry, sideContent(side.name, sideGrams(side.id, hh), side.unit), n);
+    const s = deductContent(acc.pantry, sideContent(foodOf(side, hh), sideGrams(side.id, hh), side.unit), n);
     return { pantry: s.pantry, used: [...acc.used, ...s.used], toCheck: [...acc.toCheck, ...s.toCheck] };
   }, dish);
 }

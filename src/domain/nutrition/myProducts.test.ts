@@ -196,3 +196,41 @@ describe('Mehrfachpack „2 × 90 g“ (Julia: gibt es nur so, jede 90 g bleibt 
     for (const bad of [1, 0, 2.5, -3, '2', NaN]) expect(isValidProduct({ ...mozz, packageCount: bad })).toBe(false);
   });
 });
+
+describe('1 Stück wiegt (Julia: Gewichte selbst einstellen)', () => {
+  // erfundene Produkte
+  const piece = (name: string, amount: number): RecipeContent => ({
+    title: 't', description: '', servings: 1, prepMinutes: 0, cookMinutes: 0, difficulty: 1,
+    ingredients: [{ id: 'a', name, amount, unit: 'Stück' }], steps: [], categories: [], tags: [], devices: [],
+  });
+  const tortillas: MyProduct = {
+    id: 'p-tort', name: 'Weizentortillas (Test)', replaces: [], names: ['tortillas'], per100g: { kcal: 300, protein: 8, carbs: 50, fat: 7 },
+    packageAmount: 320, packageUnit: 'g', updatedAt: '2026-10-30T00:00:00Z',
+  };
+  const cheddar: MyProduct = {
+    id: 'p-ched', name: 'Cheddar Scheiben (Test)', replaces: ['cheddar'], per100g: { kcal: 400, protein: 25, carbs: 1, fat: 33 },
+    packageAmount: 150, packageUnit: 'g', updatedAt: '2026-10-30T00:00:00Z',
+  };
+  const grams = (p: MyProduct[], name: string, n: number) => computeNutrition(piece(name, n), withMyProducts(localFoodTable, p)).perServing?.kcal;
+
+  it('dein Stückgewicht zählt: 2 Tortillas à 40 g = 80 g – ohne wäre ein Stück die ganze Packung (320 g)', () => {
+    expect(grams([tortillas], 'Tortillas', 2)).toBeCloseTo(640 * 3); // ohne Angabe: 2 × 320 g
+    expect(grams([{ ...tortillas, pieceGrams: 40 }], 'Tortillas', 2)).toBeCloseTo(80 * 3);
+  });
+
+  it('geht auch vor dem Stückgewicht der Tabelle (Cheddar-Scheibe 25 statt 20 g) – ohne Angabe bleibt die Tabelle, nicht die Packung', () => {
+    expect(grams([cheddar], 'Cheddar', 1)).toBeCloseTo(20 * 4);
+    expect(grams([{ ...cheddar, pieceGrams: 25 }], 'Cheddar', 1)).toBeCloseTo(25 * 4);
+  });
+
+  it('mehrere Sorten: das Gewicht des Favoriten, sonst der ersten Sorte, die eins hat', () => {
+    const second = { ...cheddar, id: 'p-ched2', name: 'Cheddar Block (Test)' };
+    expect(grams([cheddar, { ...second, pieceGrams: 30 }], 'Cheddar', 1)).toBeCloseTo(30 * 4);
+    expect(grams([{ ...cheddar, pieceGrams: 25, favorite: true }, { ...second, pieceGrams: 30 }], 'Cheddar', 1)).toBeCloseTo(25 * 4);
+  });
+
+  it('nur positive Zahlen sind gültig', () => {
+    expect(isValidProduct({ ...cheddar, pieceGrams: 25 })).toBe(true);
+    for (const bad of [0, -5, '25', NaN]) expect(isValidProduct({ ...cheddar, pieceGrams: bad })).toBe(false);
+  });
+});

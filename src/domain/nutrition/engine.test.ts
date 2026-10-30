@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { RecipeContent } from '../types';
-import { computeNutrition } from './engine';
+import { computeNutrition, uncounted } from './engine';
 import { localFoodTable } from './localFoods';
 
 const content = (ingredients: RecipeContent['ingredients']): RecipeContent => ({
@@ -45,5 +45,18 @@ describe('Zu viele unbekannte Zutaten: das Bekannte trotzdem zeigen (Julia)', ()
 
   it('ist gar nichts bekannt: kein Mindestwert', () => {
     expect(computeNutrition(content([unknown('1'), unknown('2')]), localFoodTable).partial).toBeUndefined();
+  });
+});
+
+describe('Was nicht mitzählt (für „ab …“ – Julia: sagen, was fehlt)', () => {
+  it('unbekannt, ohne Menge, nicht umrechenbar – jedes nur einmal; Salz und Bekanntes nicht', () => {
+    const n = computeNutrition(content([
+      { id: 'a', name: 'Spaghetti', amount: 200, unit: 'g' },
+      { id: 'b', name: 'Zzqx-Testzutat', amount: 100, unit: 'g' },
+      { id: 'c', name: 'Zzqx-Testzutat', amount: 50, unit: 'g' },
+      { id: 'd', name: 'Spaghetti', unit: 'g' },
+      { id: 'e', name: 'Salz', amount: 1, unit: 'Prise' },
+    ]), localFoodTable);
+    expect(uncounted(n)).toEqual(['Zzqx-Testzutat', 'Spaghetti']);
   });
 });

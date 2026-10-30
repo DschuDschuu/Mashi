@@ -20,6 +20,11 @@ export interface Side {
   prep?: SidePrep;
   /** nicht mehr angeboten, aber für gespeicherte Abende noch bekannt (Wraps → Tortillas, Julia: „ich kauf immer die gleichen“) */
   retired?: boolean;
+  /**
+   * Was du dafür kaufst, wie es in der Lebensmitteltabelle heißt (Julia: „Guacamole“ über die Avocado) – für Nährwerte,
+   * Einkaufsliste, Abbuchen und Vorrats-Punkte. Fehlt: der Name. Im Teller und in „So geht's“ bleibt der Name.
+   */
+  food?: string;
 }
 
 /** Zubereitung eines Bausteins: kurzer Satz + Minuten (0 = nur drüber/dazu, kommt zum Schluss) */
@@ -57,16 +62,17 @@ export const SIDES: readonly Side[] = [
   { id: 'bohnen', name: 'Schwarze Bohnen', kind: 'protein', grams: 120, prep: { text: 'abspülen, mit Kreuzkümmel erhitzen', minutes: 5 } },
   { id: 'kichererbsen', name: 'Kichererbsen', kind: 'protein', grams: 120, prep: { text: 'abspülen und knusprig rösten', minutes: 15 } },
   { id: 'halloumi', name: 'Halloumi', kind: 'protein', grams: 75, prep: { text: 'in Scheiben goldbraun braten', minutes: 6 } },
-  { id: 'patty', name: 'Hack-Patty', kind: 'protein', grams: 150, prep: { text: 'aus Hack flach formen, je Seite 3–4 Min. braten', minutes: 8 } },
-  { id: 'tomatensauce', name: 'Tomatensauce', kind: 'sauce', grams: 125, prep: { text: 'passierte Tomaten mit Knoblauch einköcheln', minutes: 10 } },
+  { id: 'patty', name: 'Hack-Patty', kind: 'protein', grams: 150, food: 'Hackfleisch', prep: { text: 'aus Hack flach formen, je Seite 3–4 Min. braten', minutes: 8 } },
+  // Saucen über ihre Hauptzutat – so, wie „So geht's“ sie macht (Knoblauch, Limette, Salz fallen kaum ins Gewicht)
+  { id: 'tomatensauce', name: 'Tomatensauce', kind: 'sauce', grams: 125, food: 'Passierte Tomaten', prep: { text: 'passierte Tomaten mit Knoblauch einköcheln', minutes: 10 } },
   { id: 'pesto', name: 'Pesto', kind: 'sauce', grams: 30, prep: { text: 'unter die heißen Nudeln heben', minutes: 0 } },
-  { id: 'sahnesauce', name: 'Sahnesauce', kind: 'sauce', grams: 75, prep: { text: 'Sahne mit etwas Brühe einköcheln', minutes: 5 } },
-  { id: 'salsa', name: 'Tomatensalsa', kind: 'sauce', grams: 60, prep: { text: 'Tomaten und Zwiebel würfeln, mit Limette mischen', minutes: 5 } },
-  { id: 'guacamole', name: 'Guacamole', kind: 'sauce', grams: 60, prep: { text: 'Avocado zerdrücken, mit Limette und Salz abschmecken', minutes: 5 } },
+  { id: 'sahnesauce', name: 'Sahnesauce', kind: 'sauce', grams: 75, food: 'Sahne', prep: { text: 'Sahne mit etwas Brühe einköcheln', minutes: 5 } },
+  { id: 'salsa', name: 'Tomatensalsa', kind: 'sauce', grams: 60, food: 'Tomaten', prep: { text: 'Tomaten und Zwiebel würfeln, mit Limette mischen', minutes: 5 } },
+  { id: 'guacamole', name: 'Guacamole', kind: 'sauce', grams: 60, food: 'Avocado', prep: { text: 'Avocado zerdrücken, mit Limette und Salz abschmecken', minutes: 5 } },
   { id: 'schmand', name: 'Schmand', kind: 'sauce', grams: 40, prep: { text: 'glatt rühren', minutes: 0 } },
-  { id: 'joghurt', name: 'Joghurt-Dip', kind: 'sauce', grams: 50, prep: { text: 'Joghurt mit Knoblauch und Salz verrühren', minutes: 3 } },
+  { id: 'joghurt', name: 'Joghurt-Dip', kind: 'sauce', grams: 50, food: 'Joghurt', prep: { text: 'Joghurt mit Knoblauch und Salz verrühren', minutes: 3 } },
   { id: 'erdnuss', name: 'Erdnusssauce', kind: 'sauce', grams: 40, prep: { text: 'Erdnussmus mit Sojasauce, Limette und Wasser glatt rühren', minutes: 3 } },
-  { id: 'kokoscurry', name: 'Kokos-Currysauce', kind: 'sauce', grams: 150, prep: { text: 'Currypaste anrösten, Kokosmilch dazu, köcheln', minutes: 10 } },
+  { id: 'kokoscurry', name: 'Kokos-Currysauce', kind: 'sauce', grams: 150, food: 'Kokosmilch', prep: { text: 'Currypaste anrösten, Kokosmilch dazu, köcheln', minutes: 10 } },
   { id: 'burgersauce', name: 'Burgersauce', kind: 'sauce', grams: 30, prep: { text: 'Mayo, Ketchup und etwas Gurkenwasser verrühren', minutes: 2 } },
   { id: 'brokkoli', name: 'Brokkoli', kind: 'veg', grams: 150, prep: { text: 'in Röschen dämpfen', minutes: 5 } },
   { id: 'salat', name: 'Salat', kind: 'veg', grams: 50, prep: { text: 'waschen und anmachen', minutes: 5 } },
@@ -103,6 +109,10 @@ export function customSideId(kind: SideKind, name: string): string | undefined {
   const clean = name.replace(/[,+:]/g, ' ').replace(/\s+/g, ' ').trim();
   return clean ? `eigen:${kind}:${clean}` : undefined;
 }
+
+/** Was du für einen Baustein kaufst und abbuchst: deine Angabe (Household.sideFood), sonst Mashis (Side.food), sonst der Name */
+export const foodOf = (s: Pick<Side, 'id' | 'name' | 'food'>, household?: Pick<Household, 'sideFood'>): string =>
+  household?.sideFood?.[s.id]?.trim() || s.food || s.name;
 
 export const sideOf = (id: string | undefined): Side | undefined => {
   if (!id) return undefined;
@@ -170,7 +180,7 @@ export const sideGrams = (id: string, household?: Pick<Household, 'sides'>): num
   household?.sides?.[id] ?? sideOf(id)?.grams ?? 0;
 
 /** Ein Baustein als Zutat für so viele Portionen – Einkaufsliste und Vorrat rechnen damit wie mit jeder Zutat */
-export function sideIngredient(id: string, portions: number, household?: Pick<Household, 'sides'>): Ingredient | undefined {
+export function sideIngredient(id: string, portions: number, household?: Pick<Household, 'sides' | 'sideFood'>): Ingredient | undefined {
   const side = sideOf(id);
-  return side ? { id: `beilage:${id}`, name: side.name, amount: sideGrams(id, household) * portions, unit: side.unit ?? 'g' } : undefined;
+  return side ? { id: `beilage:${id}`, name: foodOf(side, household), amount: sideGrams(id, household) * portions, unit: side.unit ?? 'g' } : undefined;
 }

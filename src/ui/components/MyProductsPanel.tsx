@@ -75,6 +75,8 @@ export function ProductForm({ initial, onSave, onCancel, shared, afterName, name
   /** weitere Größen als Liste („1000, 1400“) */
   /** weitere Größen derselben Sorte – je eine Zeile (Julia: statt „1000; 1400“ in einem Feld) */
   const [moreSizes, setMoreSizes] = useState<string[]>((initial?.packageSizes ?? []).map((n) => toField(n)));
+  /** 1 Stück wiegt (Julia: Tortilla 40 g, Cheddar-Scheibe) – leer = Packung bzw. Tabelle */
+  const [piece, setPiece] = useState(toField(initial?.pieceGrams));
   const [shelf, setShelf] = useState(initial?.shelfDays ? toField(initial.shelfDays) : '');
   /** „Hält unbegrenzt – nicht schätzen“ (Julia) – gespeichert als FOREVER (0) */
   const [forever, setForever] = useState(initial?.shelfDays === FOREVER);
@@ -112,6 +114,8 @@ export function ProductForm({ initial, onSave, onCancel, shared, afterName, name
     if (typed.some((x) => !(parseNum(x)! > 0))) return setError('Weitere Größe bitte als Zahl, z. B. 1000 – oder die Zeile entfernen.');
     const sizes = typed.map((x) => parseNum(x)!).filter((n) => n !== amount);
     if (sizes.length && !amount) return setError('Für weitere Größen braucht Mashi zuerst die übliche Packungsgröße.');
+    const pieceGrams = parseNum(piece);
+    if (piece.trim() && !(pieceGrams! > 0)) return setError('„1 Stück wiegt“ bitte in Gramm, z. B. 40 – oder leer lassen.');
     const shelfDays = parseNum(shelf);
     if (!sortOnly && !forever && shelf.trim() && (!shelfDays || shelfDays > MAX_SHELF_DAYS || !Number.isInteger(shelfDays))) return setError(`Haltbarkeit bitte in ganzen Tagen (1 bis ${MAX_SHELF_DAYS}, also bis 10 Jahre).`);
     const ex = visibleExcludes(name, match);
@@ -132,6 +136,7 @@ export function ProductForm({ initial, onSave, onCancel, shared, afterName, name
       ...(amount && sizes.length ? { packageSizes: [...new Set(sizes)] } : {}),
       ...(amount && count ? { packageCount: count } : {}),
       ...(amount && price !== undefined ? { packagePrice: price } : {}),
+      ...(pieceGrams ? { pieceGrams } : {}),
       // Sorte: die Haltbarkeit kommt aus der Kachel (gemeinsam), siehe withShared
       ...(sortOnly
         ? (shared?.shelfDays !== undefined ? { shelfDays: shared.shelfDays } : {})
@@ -343,6 +348,14 @@ export function ProductForm({ initial, onSave, onCancel, shared, afterName, name
               <Icon name="plus" size={14} /> Weitere Größe
             </button>
           ) : null}
+          {/* Stückgewicht (Julia: „die Gewichte selbst einstellen“) – für „2 Tortillas“ im Rezept und im Baukasten */}
+          <label className="field"><span>1 Stück wiegt (optional)</span>
+            <span className="pantry-amount product-form__piece">
+              <input inputMode="decimal" value={piece} onChange={(e) => setPiece(e.target.value)} placeholder="z. B. 40" />
+              <span className="product-form__unit">g</span>
+            </span>
+            <small className="muted">Für Zutaten in Stück – 2 Tortillas, 1 Scheibe Cheddar. Leer: Mashi nimmt die Packung oder seinen Wert.</small>
+          </label>
           {/* Sorte: Haltbarkeit gilt für alle Sorten – steht in der Kachel */}
           {!sortOnly && (
             <>

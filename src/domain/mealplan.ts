@@ -112,6 +112,11 @@ export interface Household {
   customSides?: string[];
   /** eigene Standard-Zubereitung je Baustein (überschreibt Mashis Standard; je Grundlage geht's am Rezept: blockPrep) */
   sidePrep?: Record<string, { text: string; minutes: number }>;
+  /**
+   * was du für einen Baustein kaufst, wenn es nicht Mashis Standard ist (Julia: „Guacamole kaufe ich fertig“, Patty aus
+   * Hähnchenhack) – überschreibt Side.food für Nährwerte, Einkauf, Abbuchen und Vorrats-Punkte (sides.ts: foodOf)
+   */
+  sideFood?: Record<string, string>;
 }
 
 export const DEFAULT_HOUSEHOLD: Household = { portions: 1, lunchDays: [] };

@@ -7,7 +7,8 @@ import { localFoodTable } from './nutrition/localFoods';
 import { emptyPantry, type Pantry, type PantryItem } from './pantry';
 import { doneParts, followBlockParts } from './parts';
 import { withNewVersion } from './recipe';
-import { sideOf } from './sides';
+import { SIDES, foodOf, sideIngredient, sideOf } from './sides';
+import { computeNutrition } from './nutrition/engine';
 import type { Ingredient, Recipe, RecipeBlock, RecipeContent } from './types';
 
 // erfundene Rezepte – keine echten (das Repo ist öffentlich)
@@ -99,6 +100,18 @@ describe('understand – das Textfeld', () => {
     expect(t.picks.sauce).toBeUndefined();
     // auch eine Einzel-Stufe bleibt zu, obwohl die Richtung sonst offene Stufen wieder öffnet
     expect(understand('Bowl ohne Protein')!.closed).toContain('protein');
+  });
+
+  it('„ohne Hack“ blendet Hackfleisch und Hack-Patty aus – „alle zeigen“ holt sie zurück, wählen hebt den Ausschluss auf', () => {
+    const s = understand('Pasta ohne Hack')!;
+    expect(s.without).toEqual(expect.arrayContaining(['hack', 'patty']));
+    expect(optionsFor(s, 'protein').map((c) => c.id)).not.toContain('hack');
+    expect(optionsFor(s, 'protein', [], undefined, true).map((c) => c.id)).toContain('hack');
+    expect(pick(s, 'protein', 'hack').without).toEqual(['patty']);
+    // bleibt beim Richtungswechsel (chooseDirection baut den Stand neu)
+    expect(chooseDirection(s, 'taco').without).toEqual(s.without);
+    // nur bei deutlichem Treffer: „ohne Fleisch“ schließt kein Hackfleisch aus
+    expect(understand('Bowl ohne Fleisch')!.without).toBeUndefined();
   });
 });
 
@@ -312,6 +325,41 @@ describe('Vorrats-Punkte (Julia)', () => {
     const opts = optionsFor(s, 'veg', [], undefined, false, marks);
     expect(opts.map((c) => c.id)).toEqual(['tomaten', 'brokkoli', 'spinat', 'zucchini', 'paprika']);
     expect(opts.map((c) => c.stock)).toEqual(['bald', 'da', undefined, undefined, undefined]);
+  });
+});
+
+describe('Bausteine über ihr echtes Lebensmittel (Julia: Guacamole über die Avocado)', () => {
+  const nutritionStatus = (id: string) => {
+    const ing = sideIngredient(id, 1)!;
+    return computeNutrition({ ...content(''), ingredients: [{ ...ing, id: 'x' }] }, localFoodTable).items[0].status;
+  };
+
+  it('jeder Baustein mit food findet sein Lebensmittel in der Tabelle – auch der Burger-Cheddar (Stück = Scheibe)', () => {
+    for (const s of SIDES.filter((x) => x.food)) expect(nutritionStatus(s.id), s.name).not.toMatch(/unmatched|no-weight|no-amount/);
+    expect(nutritionStatus('cheddar')).not.toMatch(/unmatched|no-weight|no-amount/);
+  });
+
+  it('Einkauf und Abbuchen mit dem, was du kaufst – im Teller bleibt der Name', () => {
+    expect(sideIngredient('guacamole', 2)).toMatchObject({ name: 'Avocado', amount: 120, unit: 'g' });
+    expect(sideIngredient('patty', 1)).toMatchObject({ name: 'Hackfleisch', amount: 150 });
+    expect(sideIngredient('pasta', 1)).toMatchObject({ name: 'Pasta' });
+    expect(sideOf('guacamole')?.name).toBe('Guacamole');
+  });
+
+  it('„Kaufst du als“ (Julia: „Guacamole kaufe ich fertig“) geht vor Mashis Standard – leer: wieder der Standard', () => {
+    const hh = { sideFood: { guacamole: 'Guacamole fertig', patty: '  ' } };
+    expect(sideIngredient('guacamole', 1, hh)).toMatchObject({ name: 'Guacamole fertig', amount: 60 });
+    expect(sideIngredient('patty', 1, hh)?.name).toBe('Hackfleisch');
+    expect(foodOf(sideOf('schmand')!, hh)).toBe('Schmand');
+    // auch der Vorrats-Punkt schaut auf deine Angabe
+    const marks = (n: string) => (n === 'Guacamole fertig' ? 'da' as const : undefined);
+    expect(optionsFor(chooseDirection(EMPTY_CRAVING, 'taco'), 'sauce', [], hh, false, marks).find((c) => c.id === 'guacamole')?.stock).toBe('da');
+  });
+
+  it('Vorrats-Punkt über das Lebensmittel: Joghurt im Kühlschrank → Punkt am Joghurt-Dip', () => {
+    const marks = (n: string) => (n === 'Joghurt' ? 'da' as const : undefined);
+    const opts = optionsFor(chooseDirection(EMPTY_CRAVING, 'taco'), 'sauce', [], undefined, false, marks);
+    expect(opts.find((c) => c.id === 'joghurt')?.stock).toBe('da');
   });
 });
 

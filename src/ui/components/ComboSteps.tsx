@@ -1,14 +1,15 @@
 import { useState } from 'react';
-import { comboSteps, prepOf, sideOf, type ComboStep } from '../../domain/sides';
+import { comboSteps, foodOf, prepOf, sideOf, type ComboStep } from '../../domain/sides';
 import type { Household } from '../../domain/mealplan';
 import type { Recipe } from '../../domain/types';
 import { currentContent } from '../../domain/recipe';
 import { DAY_LONG, type CarbCarry } from '../../domain/week';
-import { setSidePrep } from '../../data/store';
+import { setSideFood, setSidePrep } from '../../data/store';
 import { useSheet } from '../useSheet';
 import { toast } from '../toast';
 import { Stepper } from './Controls';
 import { Icon } from './Icon';
+import { IngredientNames } from './IngredientNames';
 
 /**
  * „So geht's“ für einen Baukasten-Abend (Julia: „woher weiß ich, wie ich das zubereite?“) – das Längste zuerst, jeder
@@ -47,15 +48,27 @@ export function PrepSheet({ sideId, base, household, onClose }: { sideId: string
   const [text, setText] = useState(now?.text ?? '');
   const [minutes, setMinutes] = useState(now?.minutes ?? 5);
   const [onlyBase, setOnlyBase] = useState(!!here);
+  // was du dafür kaufst (Julia: „Guacamole kaufe ich fertig“) – leer: Mashis Standard (Guacamole → Avocado)
+  const standard = side ? foodOf(side) : '';
+  const [food, setFood] = useState(household.sideFood?.[sideId] ?? '');
   const baseTitle = base ? currentContent(base).title : '';
   const own = onlyBase ? !!here : !!household.sidePrep?.[sideId];
 
   const save = () => {
     const prep = text.trim() ? { text: text.trim(), minutes } : undefined;
-    const undos = [setSidePrep(sideId, prep, onlyBase && base ? base.id : undefined)];
-    // von „nur hier“ auf Standard gewechselt: die Abweichung bei der Grundlage fällt weg
-    if (!onlyBase && base && here) undos.push(setSidePrep(sideId, undefined, base.id));
-    toast(`${side?.name ?? 'Baustein'}: ${onlyBase ? `nur bei ${baseTitle}` : 'Standard'} gespeichert`, { label: 'Rückgängig', run: () => undos.reverse().forEach((u) => u()) });
+    // nur, was sich geändert hat – sonst machte schon „Kaufst du als“ die unveränderte Zubereitung zu deiner eigenen
+    const prepChanged = text.trim() !== (now?.text ?? '') || minutes !== (now?.minutes ?? 5) || onlyBase !== !!here;
+    const foodNow = food.trim() === standard ? '' : food.trim();
+    const foodChanged = foodNow !== (household.sideFood?.[sideId] ?? '');
+    const undos: (() => void)[] = [];
+    if (prepChanged) {
+      undos.push(setSidePrep(sideId, prep, onlyBase && base ? base.id : undefined));
+      // von „nur hier“ auf Standard gewechselt: die Abweichung bei der Grundlage fällt weg
+      if (!onlyBase && base && here) undos.push(setSidePrep(sideId, undefined, base.id));
+    }
+    if (foodChanged) undos.push(setSideFood(sideId, foodNow || undefined));
+    const said = [prepChanged && `${onlyBase ? `nur bei ${baseTitle}` : 'Standard'} gespeichert`, foodChanged && `kaufst du als ${foodNow || standard}`].filter(Boolean);
+    if (undos.length) toast(`${side?.name ?? 'Baustein'}: ${said.join(', ')}`, { label: 'Rückgängig', run: () => undos.reverse().forEach((u) => u()) });
     onClose();
   };
   const reset = () => {
@@ -79,6 +92,12 @@ export function PrepSheet({ sideId, base, household, onClose }: { sideId: string
             <input type="checkbox" checked={onlyBase} onChange={(e) => setOnlyBase(e.target.checked)} /> Nur bei {baseTitle} so
           </label>
         )}
+        {/* gilt überall, nicht nur bei dieser Grundlage – darum unter dem Haken */}
+        <label className="field">Kaufst du als
+          <input value={food} onChange={(e) => setFood(e.target.value)} placeholder={standard} list="ingredient-names" maxLength={60} />
+          <small className="muted">Für Einkauf, Vorrat und Nährwerte, überall – leer: {standard}</small>
+        </label>
+        <IngredientNames />
         <div className="variants__actions">
           {own && <button type="button" className="btn btn--ghost" onClick={reset}>Zurücksetzen</button>}
           <button type="button" className="btn btn--primary" onClick={save}>Speichern</button>

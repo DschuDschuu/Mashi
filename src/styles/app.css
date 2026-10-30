@@ -2089,6 +2089,7 @@ details.cost-line[open] > summary::after { transform: rotate(-90deg); }
 .product-form__size .pantry-amount input { flex: 1; width: auto; min-width: 0; }
 .product-form__size > .iconbtn { margin-bottom: 6px; }
 .product-form__unit { padding: 0 10px; color: var(--ink-3); font-size: var(--fs-sm); }
+.product-form__piece { align-items: center; } /* „g“ mittig neben „1 Stück wiegt“ */
 
 /* Preis-Seite: Legende statt Chips (Julia: weniger Platz) – Farbpunkt + Name, antippen blendet die Linie aus */
 .price-legend { display: flex; flex-wrap: wrap; gap: 2px 14px; margin-top: 6px; }
@@ -2370,8 +2371,10 @@ details.cost-line[open] > summary::after { transform: rotate(-90deg); }
 /* der Pinselstrich aus der Navigation hinter dem Feld, das dran ist */
 .plate__brush { position: absolute; left: -10px; top: 0; z-index: -1; width: calc(100% + 20px); height: 100%; fill: var(--nav-brush); }
 /* Live-Werte unter dem Teller (Julia): kcal · Eiweiß · Preis pro Portion – eine ruhige Zeile, auf 375 px darf sie umbrechen */
-.craving-values { display: flex; flex-wrap: wrap; justify-content: center; align-items: baseline; gap: 4px 14px; margin: 0; font-size: var(--fs-sm); color: var(--ink-2); }
+.craving-values { display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: var(--fs-sm); color: var(--ink-2); }
+.craving-values__line { display: flex; flex-wrap: wrap; justify-content: center; align-items: baseline; gap: 4px 14px; margin: 0; }
 .craving-values strong { color: var(--ink); font-variant-numeric: tabular-nums; }
+.craving-values__missing { margin: 0; text-align: center; }
 .plate-sheet { display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: var(--r-lg); background: var(--surface); box-shadow: var(--shadow); }
 .plate-sheet__title { margin: 0; font-size: var(--fs-md); }
 .combo-stepper__top { display: flex; justify-content: flex-end; }

@@ -123,3 +123,11 @@ function divide(n: Nutrients, by: number): Nutrients {
   for (const [k, v] of Object.entries(n) as [keyof Nutrients, number][]) out[k] = v / by;
   return out;
 }
+
+/**
+ * Was nicht mitzählt – unbekannt, ohne Menge oder nicht in Gramm umrechenbar (Julia: bei „ab …“ sagen, was fehlt, dann
+ * weiß man, was man unter „Meine Lebensmittel“ ergänzt). Salz & Co. („vernachlässigbar“) zählen bewusst nicht als fehlend.
+ */
+export function uncounted(n: Pick<NutritionResult, 'items'>): string[] {
+  return [...new Set(n.items.filter((i) => i.status === 'unmatched' || i.status === 'no-amount' || i.status === 'no-weight').map((i) => i.name))];
+}

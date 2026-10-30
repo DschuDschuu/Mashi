@@ -92,6 +92,16 @@ describe('Wochenplan: merge3', () => {
     expect(merge3Plan(week, week, { ...week, household: { portions: 2, lunchDays: [] } }).household).toEqual({ portions: 2, lunchDays: [] });
   });
 
+  it('„Kaufst du als“ je Baustein: Handy ändert Guacamole, Tablet das Patty – beides bleibt, nichts geht beim Abgleich verloren', () => {
+    const b2: MealPlan = { ...week, household: { portions: 1, lunchDays: [] } };
+    const handy: MealPlan = { ...b2, household: { ...b2.household!, sideFood: { guacamole: 'Guacamole fertig' } } };
+    const tablet: MealPlan = { ...b2, household: { ...b2.household!, sideFood: { patty: 'Hähnchenhack' } } };
+    expect(merge3Plan(b2, handy, tablet).household!.sideFood).toEqual({ guacamole: 'Guacamole fertig', patty: 'Hähnchenhack' });
+    // am Handy wieder geleert (Mashis Standard), am Tablet unverändert → leer
+    const cleared: MealPlan = { ...handy, household: { ...handy.household!, sideFood: undefined } };
+    expect(merge3Plan(handy, cleared, handy).household!.sideFood).toBeUndefined();
+  });
+
   it('Woche: beide legen ein Gericht auf denselben freien Abend – eines rückt weiter statt zu verschwinden', () => {
     const move = (id: string, day: number): MealPlan => ({ ...week, week: { ...week.week!, meals: week.week!.meals.map((m) => (m.id === id ? { ...m, day } : m)) } });
     const m = merge3Plan(week, move('m2', 4), move('m3', 4));

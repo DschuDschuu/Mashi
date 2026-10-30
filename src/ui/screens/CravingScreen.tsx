@@ -22,6 +22,7 @@ import { euro, formatMinutesShort } from '../format';
 import { toast } from '../toast';
 import { useRecipeCost } from '../useCosts';
 import { useNutrition } from '../useNutrition';
+import { uncounted } from '../../domain/nutrition/engine';
 
 /**
  * Deine Rezepte (und Teile) als Bausteine, mit dem, was davon vorgekocht im Kühlschrank steht – Portionen, die im
@@ -118,13 +119,24 @@ function LiveValues({ state, own }: { state: CravingState; own: Choice[] }) {
   const values = n.perServing ?? n.partial?.perServing;
   const about = (partial: boolean) => (partial ? 'ab' : 'ca.');
   if (!content.ingredients.length || (!values && !cost)) return null;
+  // bei „ab …“ sagen, was fehlt (Julia) – dann weißt du, was du unter „Meine Lebensmittel“ ergänzt; höchstens drei Namen
+  const few = (names: readonly string[]) => names.slice(0, 3).join(', ') + (names.length > 3 ? ' …' : '');
+  const noValues = values ? uncounted(n) : [];
+  const noPrice = cost?.missing ?? [];
   return (
-    <p className="craving-values" aria-live="polite">
-      {values && <span><strong>{about(!n.perServing)} {Math.round(values.kcal)}</strong> kcal</span>}
-      {values && <span><strong>{Math.round(values.protein)} g</strong> Eiweiß</span>}
-      {cost && <span><strong>{about(cost.missing.length > 0)} {euro(cost.perServing)}</strong></span>}
-      <small className="muted">pro Portion</small>
-    </p>
+    <div className="craving-values" aria-live="polite">
+      <p className="craving-values__line">
+        {values && <span><strong>{about(noValues.length > 0)} {Math.round(values.kcal)}</strong> kcal</span>}
+        {values && <span><strong>{Math.round(values.protein)} g</strong> Eiweiß</span>}
+        {cost && <span><strong>{about(noPrice.length > 0)} {euro(cost.perServing)}</strong></span>}
+        <small className="muted">pro Portion</small>
+      </p>
+      {(noValues.length > 0 || noPrice.length > 0) && (
+        <p className="small muted craving-values__missing">
+          {[noValues.length && `ohne Werte für ${few(noValues)}`, noPrice.length && `ohne Preis für ${few(noPrice)}`].filter(Boolean).join(' · ')}
+        </p>
+      )}
+    </div>
   );
 }
 

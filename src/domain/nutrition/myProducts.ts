@@ -43,6 +43,11 @@ export interface MyProduct {
   packageCount?: number;
   /** Preis je Packung in Euro (von Hand; Preise vom Kassenbon kommen automatisch) */
   packagePrice?: number;
+  /**
+   * 1 Stück wiegt so viele Gramm (Julia: Tortilla 40 g, eine Scheibe Cheddar) – für Zutaten in Stück. Geht vor der
+   * Packung („1 Stück = eine Packung“) und vor dem Stückgewicht der Tabelle.
+   */
+  pieceGrams?: number;
   /** Barcode (EAN), falls per Scan angelegt – erkennt das Produkt beim nächsten Scan wieder */
   ean?: string;
   /** hält ab Kauf so viele Tage (von dir) – leer = Mashi schätzt */
@@ -172,7 +177,8 @@ function asEntry(p: MyProduct, replaced?: FoodEntry): FoodEntry {
   // „1 Glas = Packung“ nur, wo es wirklich ein Glas ist (Pesto, Senf) oder die Tabelle es nicht kennt –
   // sonst hielte offener Joghurt „wie ein Glas“ 14 statt 3 Tage (siehe openedDaysOf)
   const glass = replaced && !replaced.portions?.Glas ? undefined : glassOf(p, replaced);
-  const piece = pieceOf(p, replaced);
+  // dein Stückgewicht zuerst – dann darf es auch das der Tabelle überschreiben (Cheddar-Scheibe 25 statt 20 g)
+  const piece = p.pieceGrams || pieceOf(p, replaced);
   return {
     ref: { provider: MY_PRODUCTS_PROVIDER, foodId: p.id },
     name: productLabel(p),
@@ -205,8 +211,11 @@ function asGroup(ps: MyProduct[], key: string, replaced?: FoodEntry): FoodEntry 
   const avg = known.length ? averageNutrients(known) : undefined;
   const values = favValues ?? avg;
   const { noValues: _n, ...entry } = asEntry(fav ?? ps[0], replaced);
+  // Stückgewicht vom Favoriten, sonst von der ersten Sorte, die eins hat – eine Tortilla wiegt bei jeder Marke ähnlich
+  const piece = fav?.pieceGrams || ps.find((p) => p.pieceGrams)?.pieceGrams;
   return {
     ...entry,
+    ...(piece ? { portions: { ...entry.portions, Stück: piece } } : {}),
     ref: { provider: MY_PRODUCTS_PROVIDER, foodId: `sorten:${key}` },
     name: replaced?.name ?? key.charAt(0).toLocaleUpperCase('de-DE') + key.slice(1),
     per100g: values ?? ZERO,
@@ -347,6 +356,7 @@ export function isValidProduct(v: unknown): v is MyProduct {
     && typeof p.updatedAt === 'string'
     && (p.packageAmount === undefined || isNum(p.packageAmount))
     && (p.packagePrice === undefined || isNum(p.packagePrice))
+    && (p.pieceGrams === undefined || (isNum(p.pieceGrams) && p.pieceGrams > 0))
     && (p.packageUnit === undefined || ['g', 'ml', 'Stück'].includes(p.packageUnit as string))
     && (p.packageSizes === undefined || (Array.isArray(p.packageSizes) && p.packageSizes.every(isNum)))
     && (p.packageCount === undefined || (isNum(p.packageCount) && Number.isInteger(p.packageCount) && p.packageCount >= 2))
