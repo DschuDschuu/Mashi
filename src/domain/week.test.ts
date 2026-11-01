@@ -5,7 +5,7 @@ import type { Week } from './mealplan';
 import type { Ingredient, Recipe } from './types';
 import { buildShoppingList, emptyPlan } from './mealplan';
 import { localFoodTable } from './nutrition/localFoods';
-import { backToFridge, defaultCookDay, freezePortions, unfreezePortions, resolveClashes, fridgeOf, potOf, potWeek, setCookDay, carbCarry, groupMeals, mixedBases, yieldChecks, swapCookDays, putPrepared, extrasOf, addBase, addToBase, byEffort, canLessPortions, choicesOf, fillEvenings, mealKey, putMeal, servingsOf, setMealPortions, stepPortions, mealTitle, mhdFinds, removeMeal, scheduleMeal, splitMealKey, weekSideNeeds, weekStarted, withCookDays } from './week';
+import { backToFridge, defaultCookDay, followOwnRename, freezePortions, unfreezePortions, resolveClashes, fridgeOf, potOf, potWeek, setCookDay, carbCarry, groupMeals, mixedBases, yieldChecks, swapCookDays, putPrepared, extrasOf, addBase, addToBase, byEffort, canLessPortions, choicesOf, fillEvenings, mealKey, putMeal, servingsOf, setMealPortions, stepPortions, mealTitle, mhdFinds, removeMeal, scheduleMeal, splitMealKey, weekSideNeeds, weekStarted, withCookDays } from './week';
 import type { PantryItem } from './pantry';
 import { baseIdOf, canSwap, weekItems, withoutBases, earlierCookDay, moveBase, setExtra, shiftFrom, sortCookDays, suggestWeek, swapSlots, toggleLunch, transformsOf, weekdayOf, weekOrder, weekView } from './week';
 
@@ -650,5 +650,28 @@ describe('Deine Rezepte als Baustein eines Abends (Julia: deine Guacamole auch i
     expect(needs(ready(1))).toEqual([['Spätzle', 250], ['Testjoghurt', 100]]);
     expect(needs(ready(2, true))).toEqual([['Spätzle', 250]]);
     expect(weekSideNeeds(w, all).map((i) => i.name)).toEqual(['Spätzle']); // Rezept gelöscht → fällt weg
+  });
+});
+
+describe('Umbenennen zieht mit (Julia: kein still fehlender Dip)', () => {
+  const version = (title: string, part: string) => ({ ...sideContent(title), servings: 2, ingredients: [
+    { id: 'd1', name: 'Testjoghurt', amount: 200, unit: 'g' as const, part },
+    { id: 'd2', name: 'Testbrot', amount: 100, unit: 'g' as const },
+  ] });
+  const dip = (title: string, part: string): Recipe => ({ ...recipe('dip', title), versions: [{ id: 'v', number: 1, createdAt: '', author: 'nutzer', content: version(title, part) }] });
+  const dipEntry = (part: string) => ownEntry({ recipeId: 'dip', kind: 'sauce', name: part, part });
+  const whole = ownEntry({ recipeId: 'dip', kind: 'protein', name: 'Testplatte' });
+  const w = suggestWeek([SO], [{ baseId: 'bolo', meals: [`bolo+reis,${dipEntry('Testdip')}`, `bolo+${whole}`, 'bolo+pasta'] }], newId);
+
+  it('Teil umbenannt (an den Zutaten erkannt): der Abend folgt; ein ganzes Rezept folgt dem Titel', () => {
+    const t = followOwnRename(w, dip('Testplatte', 'Testdip'), dip('Testplatte neu', 'Kräuterdip'));
+    expect(t.meals.map((m) => m.side)).toEqual([`reis,${dipEntry('Kräuterdip')}`, ownEntry({ recipeId: 'dip', kind: 'protein', name: 'Testplatte neu' }), 'pasta']);
+    expect(t.meals[2]).toBe(w.meals[2]); // nicht betroffen: unverändert
+  });
+
+  it('nichts umbenannt oder Rezept nicht verplant: dieselbe Woche (nichts zu speichern)', () => {
+    expect(followOwnRename(w, dip('Testplatte', 'Testdip'), dip('Testplatte', 'Testdip'))).toBe(w);
+    const other = { ...dip('Testplatte', 'Testdip'), id: 'anderes' };
+    expect(followOwnRename(w, other, { ...dip('X', 'Y'), id: 'anderes' })).toBe(w);
   });
 });

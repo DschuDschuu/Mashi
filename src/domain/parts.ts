@@ -111,6 +111,27 @@ export function extractPart(c: RecipeContent, part: string, base: { id: string; 
 }
 
 /**
+ * Umbenannte Teile zwischen zwei Fassungen: alter Name → neuer. Wiedererkannt an den Zutaten (die behalten ihre id über
+ * Versionen) – wohin die meisten gewandert sind. Gibt es einen Teil gar nicht mehr, steht er nicht drin.
+ */
+export function partMoves(before: Pick<RecipeContent, 'ingredients'>, after: Pick<RecipeContent, 'ingredients'>): Map<string, string> {
+  const now = new Set(partsOf(after));
+  const partNow = new Map(after.ingredients.map((i) => [i.id, partOf(i)]));
+  const out = new Map<string, string>();
+  for (const old of partsOf(before)) {
+    if (old === REST || now.has(old)) continue;
+    const moved = new Map<string, number>();
+    for (const i of before.ingredients) {
+      const p = partOf(i) === old ? partNow.get(i.id) : undefined;
+      if (p && p !== REST) moved.set(p, (moved.get(p) ?? 0) + 1);
+    }
+    const target = [...moved].sort((x, y) => y[1] - x[1])[0]?.[0];
+    if (target) out.set(old, target);
+  }
+  return out;
+}
+
+/**
  * Baustein-Markierungen (Recipe.blocks) folgen einem umbenannten Teil (Julia: „Salsa“ heißt jetzt „Tomatensalsa“):
  * Woran man den Teil wiedererkennt, sind seine Zutaten – die behalten ihre id über Versionen. Wohin die meisten
  * gewandert sind, dorthin zieht die Markierung. Gibt es den Teil gar nicht mehr, fällt sie weg.
@@ -118,15 +139,10 @@ export function extractPart(c: RecipeContent, part: string, base: { id: string; 
 export function followBlockParts(blocks: readonly RecipeBlock[] | undefined, before: Pick<RecipeContent, 'ingredients'>, after: Pick<RecipeContent, 'ingredients'>): RecipeBlock[] | undefined {
   if (!blocks?.length) return undefined;
   const now = new Set(partsOf(after));
-  const partNow = new Map(after.ingredients.map((i) => [i.id, partOf(i)]));
+  const moves = partMoves(before, after);
   const out = blocks.flatMap((b): RecipeBlock[] => {
     if (!b.part || now.has(b.part)) return [b];
-    const moved = new Map<string, number>();
-    for (const i of before.ingredients) {
-      const p = partOf(i) === b.part ? partNow.get(i.id) : undefined;
-      if (p && p !== REST) moved.set(p, (moved.get(p) ?? 0) + 1);
-    }
-    const target = [...moved].sort((x, y) => y[1] - x[1])[0]?.[0];
+    const target = moves.get(b.part);
     return target ? [{ ...b, part: target }] : [];
   });
   // zwei Teile zu einem zusammengelegt → nur eine Markierung behalten

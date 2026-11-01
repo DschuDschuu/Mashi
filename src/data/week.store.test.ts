@@ -3,13 +3,14 @@ import PouchDB from 'pouchdb-core';
 import memory from 'pouchdb-adapter-memory';
 import { describe, expect, it, vi } from 'vitest';
 import { PouchRecipeRepository, type RecipeDb } from './pouchRepository';
-import { addPantryItem, addToPlan, answerLeftover, clearPlan, cookBase, cookDay, cookParts, createRecipe, deleteRecipe, freezeFromFridge, makeBase, markCooked, scheduleRecipe, currentPantry, currentPlan, eatMeal, eatOutToday, initStore, setHousehold, setPrepInfo, setWeek, togglePlanCooked, unfreezeToFridge, whenSaved } from './store';
+import { addPantryItem, addToPlan, answerLeftover, clearPlan, cookBase, cookDay, cookParts, saveContent, createRecipe, deleteRecipe, freezeFromFridge, makeBase, markCooked, scheduleRecipe, currentPantry, currentPlan, eatMeal, eatOutToday, initStore, setHousehold, setPrepInfo, setWeek, togglePlanCooked, unfreezeToFridge, whenSaved } from './store';
 import { buildShoppingList } from '../domain/mealplan';
 import { shoppingList } from '../domain/restock';
 import { mealKey, putMeal, setExtra, suggestWeek } from '../domain/week';
 import { ownEntry } from '../domain/sides';
 import { foodTable } from '../services';
 import type { RecipeContent } from '../domain/types';
+import { currentContent } from '../domain/recipe';
 
 PouchDB.plugin(memory);
 
@@ -397,6 +398,36 @@ describe('Store: dein Rezept als Baustein eines Abends (Julia: deine Guacamole a
     expect(joghurt()).toBe(400);
     meal.undo();
     expect(joghurt()).toBe(500);
+  });
+
+  it('Teil im Rezept umbenannt: der Abend zieht mit, die Zutaten bleiben auf der Liste; Rückgängig zieht zurück', async () => {
+    const { repo, dip } = await setup('own-side-rename');
+    const before = currentContent((await repo.list()).find((r) => r.id === dip)!);
+    saveContent(dip, { ...before, ingredients: before.ingredients.map((i) => (i.part ? { ...i, part: 'Kräuterdip' } : i)) });
+    await whenSaved();
+    expect(currentPlan().week!.meals[0].side).toBe(ownEntry({ recipeId: dip, kind: 'sauce', name: 'Kräuterdip', part: 'Kräuterdip' }));
+    const list = shoppingList(currentPlan(), await repo.list(), foodTable, { ...currentPantry(), items: [] });
+    expect(list.find((x) => x.name === 'Testjoghurt')?.quantity).toBe('100 g');
+    saveContent(dip, before); // zurück zur alten Fassung
+    expect(currentPlan().week!.meals[0].side).toBe(ownEntry({ recipeId: dip, kind: 'sauce', name: 'Testdip', part: 'Testdip' }));
+  });
+
+  it('ganzes Rezept heute über seine Seite gekocht (2, 1 übrig): „Gegessen“ bucht nichts doppelt, der Rest bleibt für morgen', async () => {
+    await freshStore('own-side-cooked');
+    const bolo = createRecipe(content('Testbolo', [{ id: 'h', name: 'Hackfleisch', amount: 125, unit: 'g' }]), { source: 'selbst', status: 'kochbuch' });
+    const gn = createRecipe({ ...content('Testgnocchi', [{ id: 'k', name: 'Kartoffeln', amount: 500, unit: 'g' }]), servings: 2 }, { source: 'selbst', status: 'kochbuch' });
+    setHousehold({ portions: 1, lunchDays: [] });
+    setWeek(suggestWeek([6], [{ baseId: bolo, meals: [mealKey(bolo, ownEntry({ recipeId: gn, kind: 'carb', name: 'Testgnocchi' }))] }], () => 'b1'));
+    addPantryItem('Kartoffeln', 1000, 'g');
+    await whenSaved();
+    const kartoffeln = () => currentPantry().items.find((i) => i.name === 'Kartoffeln' && !i.recipeId)?.amount;
+    const rest = () => currentPantry().items.filter((i) => i.recipeId === gn).reduce((n, i) => n + (i.amount ?? 0), 0);
+    markCooked(gn, 2); // über die Rezeptseite, gleich für morgen mit
+    answerLeftover(1);
+    expect([kartoffeln(), rest()]).toEqual([500, 1]);
+    cookBase(bolo);
+    eatMeal('b1');
+    expect([kartoffeln(), rest()]).toEqual([500, 1]);
   });
 
   it('vorgekocht: nicht auf der Liste, beim Essen geht eine Portion Dip – die Zutaten bleiben', async () => {

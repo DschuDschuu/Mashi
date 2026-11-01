@@ -34,12 +34,15 @@ export function ComboSteps({ side, base, household, carry, portions = 1 }: { sid
     <>
       <ol className="combo-steps">
         {steps.map((s) => {
-          // dein Rezept: der Name führt hin – dort stehen die Schritte, geändert wird dort
+          // dein Rezept: der Name führt hin. Zu kochen → gleich in den Kochmodus, mit der Menge für heute und fürs
+          // Mitkochen (den Rest trägst du bei „Was ist übrig?“ ein – dann steht er morgen vorgekocht da); vorgekocht → zum Rezept
           const mine = s.source === 'rezept' && s.id ? ownOf(s.id) : undefined;
+          const cookFor = portions + (more && more.entry === s.id ? more.portions : 0);
+          const to = mine && (s.ready ? `/rezept/${mine.recipeId}` : `/rezept/${mine.recipeId}/kochen?p=${cookFor}`);
           return (
             <li key={s.id ?? 'base'}>
-              <span>{mine
-                ? <button type="button" className="combo-steps__recipe" onClick={() => navigate(`/rezept/${mine.recipeId}`)}>{s.name}</button>
+              <span>{mine && to
+                ? <button type="button" className="combo-steps__recipe" onClick={() => navigate(to)}>{s.name}</button>
                 : <b>{s.name}</b>} {s.text ?? <span className="muted">– noch keine Zubereitung</span>}{s.minutes > 0 ? <span className="muted"> · {s.minutes} Min.</span> : null}
                 {s.source === 'grundlage' && <span className="tag">nur hier</span>}</span>
               {s.id && !mine && <button type="button" className="iconbtn iconbtn--sm" aria-label={`Zubereitung ${s.name} ändern`} onClick={() => setEdit(s)}><Icon name="pencil" size={14} /></button>}

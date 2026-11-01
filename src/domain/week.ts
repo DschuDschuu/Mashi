@@ -4,7 +4,8 @@ import type { Pantry, PantryItem } from './pantry';
 import { currentContent } from './recipe';
 import { SPECIAL_DAYS } from './shelfLife';
 import { weekBaseIds, withoutBases } from './weekBases';
-import { comboText, ownSidesOf, sideIngredient, sidesOf, type OwnSide } from './sides';
+import { comboText, ownEntry, ownOf, ownSidesOf, sideIngredient, sidesOf, type OwnSide } from './sides';
+import { partMoves } from './parts';
 import { ownIngredients, readyPortions } from './craving';
 
 export { weekBaseIds, withoutBases };
@@ -632,6 +633,33 @@ export function yieldChecks(view: WeekView): Map<string, YieldCheck> {
     out.set(b.base.recipeId, { yields, planned: b.portions, left: Math.max(0, yields - b.portions) });
   }
   return out;
+}
+
+/**
+ * Deine Rezepte als Baustein folgen einer Umbenennung (sonst fehlten ihre Zutaten still auf der Einkaufsliste): benennt
+ * eine neue Fassung einen Teil um (parts.ts: partMoves – erkannt an seinen Zutaten), ziehen die Abende mit; bei einem
+ * ganzen Rezept der Titel. Nichts betroffen: dieselbe Woche zurück (der Store speichert dann nichts).
+ */
+export function followOwnRename(week: Week, before: Recipe, after: Recipe): Week {
+  if (!week.meals.some((m) => ownSidesOf(m.side).some((o) => o.recipeId === after.id))) return week;
+  const b = currentContent(before);
+  const a = currentContent(after);
+  const moves = partMoves(b, a);
+  if (!moves.size && b.title === a.title) return week;
+  const renamed = (e: string): string => {
+    const o = ownOf(e);
+    if (!o || o.recipeId !== after.id) return e;
+    const to = o.part ? moves.get(o.part) : a.title;
+    return to && to !== o.name ? ownEntry({ recipeId: o.recipeId, kind: o.kind, name: to, ...(o.part ? { part: to } : {}) }) : e;
+  };
+  let changed = false;
+  const meals = week.meals.map((m) => {
+    const side = m.side?.split(',').map(renamed).join(',');
+    if (side === m.side) return m;
+    changed = true;
+    return { ...m, side };
+  });
+  return changed ? { ...week, meals } : week;
 }
 
 /** `side`: der feste Baustein („pasta“) oder der Eintrag deines Rezepts („mein:carb:…“, sides.ts: ownEntry) */

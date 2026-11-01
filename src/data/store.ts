@@ -5,7 +5,7 @@ import { reverseKeyed, reverseList, reverseRecord } from '../domain/undo';
 import { EXTRA_PREFIX, RESTOCK_PREFIX, shoppingList, type RestockRule } from '../domain/restock';
 import { exclusiveStages, stageOf, withStage, type FoodStage } from '../domain/stage';
 import { DEFAULT_HOUSEHOLD, emptyPlan, keyOfName, normalizePlan, toggleCooked, type Household, type MealPlan, type Week, type WeekMeal, type Weekday } from '../domain/mealplan';
-import { freezePortions, removeMeal, scheduleMeal, servingsOf, setMealPortions, shiftFrom, unfreezePortions, weekBaseIds, weekdayOf, weekItems, weekView, withoutRecipe } from '../domain/week';
+import { followOwnRename, freezePortions, removeMeal, scheduleMeal, servingsOf, setMealPortions, shiftFrom, unfreezePortions, weekBaseIds, weekdayOf, weekItems, weekView, withoutRecipe } from '../domain/week';
 import { baseSupply, coveredShare, type BaseSupply } from '../domain/baseStock';
 import { mergeRecipes } from '../domain/merge';
 import { pantryFromBackup, unionProducts } from '../domain/syncMerge';
@@ -140,6 +140,11 @@ function commit(changed: Recipe, keepStamp = false) {
   const base = recipes.find((r) => r.id === next.id);
   recipes = base ? recipes.map((r) => (r.id === next.id ? next : r)) : [next, ...recipes];
   emit();
+  // dein Rezept als Baustein in der Woche: benennt diese Fassung einen Teil oder den Titel um, ziehen die Abende mit
+  if (base && plan.week) {
+    const week = followOwnRename(plan.week, base, next);
+    if (week !== plan.week) commitPlan({ ...plan, week });
+  }
   pending.set(next.id, (pending.get(next.id) ?? 0) + 1);
   // base = der Stand, den wir geändert haben – so wird eine Änderung vom anderen Gerät nicht überschrieben
   tracked(repo.save(next, base))
@@ -1182,8 +1187,12 @@ function deductFresh(p: Pantry, meal: WeekMeal, hh: Household): { pantry: Pantry
     const s = deductContent(acc.pantry, sideContent(foodOf(side, hh), sideGrams(side.id, hh), side.unit), n);
     return { pantry: s.pantry, used: [...acc.used, ...s.used], toCheck: [...acc.toCheck, ...s.toCheck] };
   }, dish);
-  // deine Rezepte (die Guacamole): erst, was vorgekocht dasteht – wie die Grundlage –, der Rest aus seinen Zutaten
+  // deine Rezepte (die Guacamole): erst, was vorgekocht dasteht – wie die Grundlage –, der Rest aus seinen Zutaten.
+  // Ein ganzes Rezept heute über seine Seite gekocht (die Gnocchi): Zutaten sind beim Kochen schon abgebucht, die heutige
+  // Portion gegessen – was übrig ist, gehört zu einem späteren Abend. Sonst bucht „Gegessen“ doppelt.
+  // (Ein Teil wird beim Kochen ganz als Vorgekocht abgelegt – den isst man wie gewohnt aus der Speisekammer.)
   return ownSidesOf(meal.side).reduce((acc, o) => {
+    if (!o.part && sameDay(recipes.find((x) => x.id === o.recipeId)?.lastCookedAt)) return acc;
     const ready = Math.min(n, readyPortions(acc.pantry.items, o.recipeId, o.part, true));
     const pantry = ready > 0 ? { ...acc.pantry, items: eatBase(acc.pantry.items, o.recipeId, ready, o.part) } : acc.pantry;
     const used = ready > 0 ? [...acc.used, o.name] : acc.used;
