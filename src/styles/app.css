@@ -1541,6 +1541,12 @@ p { margin: 0; }
 .homemade { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin: 10px 0 6px; }
 .homemade__name { font-weight: 600; min-width: 0; }
 .homemade__opts { display: flex; gap: 6px; }
+/* Zutaten tauschen (SwapPanel): eine Zeile je Tauschplatz, die Bausteine klappen darunter auf */
+.swaps { display: grid; gap: 2px; margin: 8px 0 6px; }
+.swap__row { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
+.swap__name { min-width: 0; overflow-wrap: anywhere; color: var(--ink-2); }
+.swap__name b { color: var(--ink); }
+.swap__opts { display: flex; flex-wrap: wrap; gap: 6px; padding: 4px 0 8px; }
 /* Vorkochen am Rezept (Julia): hält X Tage, einfrierbar, zum Mitnehmen – darunter „Daraus machen“ */
 .prep { display: grid; gap: 14px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
 /* Rezept: Vorkochen & Baukasten eingeklappt unter den Zutaten */

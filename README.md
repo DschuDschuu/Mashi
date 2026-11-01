@@ -23,7 +23,9 @@ Live: <https://dschudschuu.github.io/Mashi/> · installierbar als App (PWA), fun
   In der Liste darunter „Passt dazu aus deinem Kochbuch“. Ansicht umschaltbar: Teller (jede Stufe ein Feld, antippen öffnet sie) oder Liste
   (Stepper mit kleinem Karussell). Derselbe Baukasten steckt im Wochenplan (Grundlage schon gewählt, deine Bausteine stehen mit zur Wahl – vorgekocht aus dem Kühlschrank, sonst nach deinem Rezept; der Abend merkt sich die Richtung, Würze und Zubereitung lassen sich schon beim Zusammenstellen, im Fenster jedes Abends und auf der Heute-Karte umschalten, eine Grundlage als Sauce gart Gemüse oder Hähnchen mit)
 - **Kochbuch** mit Versionen: eigene Rezepte, Import aus Text oder Foto (Texterkennung im Browser),
-  KI-Ideen erst testen, Bewertung, „Zutaten vereinheitlichen“ (eine Schreibweise je Zutat)
+  KI-Ideen erst testen, Bewertung, „Zutaten vereinheitlichen“ (eine Schreibweise je Zutat); Zutaten, die ein Baustein
+  sind, lassen sich tauschen (Tofu statt Hähnchen, Quinoa statt Reis) – deine Schritte bleiben und nennen den neuen
+  Namen, mit Tipp zur Zubereitung; Menge, Einkauf, Nährwerte und Kochmodus rechnen mit, gemerkt bis du zurücktauschst
 - **Vorkoch-Woche**: eine oder zwei Grundlagen (Bolognese, Curry …) an wählbaren Kochtagen vorkochen, unter der Woche
   daraus verschiedene Abendessen (Verwandlungen wie Wraps oder Pasta, die nur unter ihrer Grundlage stehen). Mashi
   verteilt die Abende (nie vor den Kochtag, zu Altes einfrieren), plant auf Wunsch Mittagessen mit (Rest vom Vorabend,

@@ -21,6 +21,7 @@ import { addChoiceFrom } from '../domain/choices';
 import { retireMix, sideContent } from '../domain/mix';
 import { ownIngredients, readyPortions, staleTrials } from '../domain/craving';
 import { foodOf, ownSidesOf, sideGrams, sidesOf, styleOf, withStyle, type SideStyle } from '../domain/sides';
+import { swapFor } from '../domain/swaps';
 import { cookingContent } from '../domain/homemade';
 import { recordSavings, type BonSavings } from '../domain/savings';
 import { addBon, bonFromImport, dropDayPrices, editBonLine, includeBonLine, sameBonOf, withdrawBonStock, dropUnsavedDay, type BonLine, type BonLinePatch } from '../domain/bons';
@@ -847,6 +848,24 @@ export function setChoice(id: string, choice: string): () => void {
     commit(c ? { ...rest, choice: c } : rest);
   };
   apply(choice);
+  return () => apply(before);
+}
+
+/**
+ * Zutat tauschen (swaps.ts; Julia: Tofu statt Hähnchen, die Schritte bleiben) – ohne Baustein zurück zum Original.
+ * Name und Menge nach deinem Haushalt, gemerkt am Rezept wie die Variante. Gibt „Rückgängig“ zurück.
+ */
+export function setSwap(id: string, ingredientId: string, sideId?: string): () => void {
+  const before = get(id).swaps;
+  const swap = sideId ? swapFor(sideId, householdOf(plan)) : undefined;
+  const apply = (swaps: Recipe['swaps']) => {
+    const { swaps: _, ...rest } = get(id);
+    commit(swaps && Object.keys(swaps).length ? { ...rest, swaps } : rest);
+  };
+  const next = { ...(before ?? {}) };
+  if (swap) next[ingredientId] = swap;
+  else delete next[ingredientId];
+  apply(next);
   return () => apply(before);
 }
 

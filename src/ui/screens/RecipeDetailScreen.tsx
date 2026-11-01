@@ -28,6 +28,7 @@ import { PageIntro } from '../components/PageIntro';
 import { deviceIcon } from '../catalogIcons';
 import { NutritionDetails, NutritionTiles } from '../components/Nutrition';
 import { UnknownIngredients } from '../components/NewProduct';
+import { SwapPanel } from '../components/SwapPanel';
 import { RecipeImage } from '../components/RecipeImage';
 import { StepIngredients } from '../components/StepIngredients';
 import { StatusBadge } from '../components/StatusBadge';
@@ -261,6 +262,8 @@ const header = (
           </div>
         </div>
       ))}
+      {/* Tofu statt Hähnchen (Julia): tauschbare Zutaten – die Liste darunter zeigt schon den Tausch */}
+      {!recipe.archivedAt && <SwapPanel recipe={recipe} />}
       {/* mit Teilen (Julia: „Sauce“, „Salat“): je Teil eine Überschrift; „Frisch“ (ohne Teil) steht zuerst, ohne Überschrift */}
       {(parts.length ? parts : ['']).map((p) => {
         const list = parts.length ? ingredients.filter((i) => partOf(i) === p) : ingredients;

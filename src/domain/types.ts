@@ -11,6 +11,7 @@
  * keine KI) Nährwerte „hineinschreiben“.
  */
 import type { SideKind } from './sides';
+import type { IngredientSwap } from './swaps';
 
 /** Lebenszyklus eines Rezepts. Archivieren ist ein eigenes Flag (archivedAt). */
 export type RecipeStatus = 'ki_entwurf' | 'zum_testen' | 'bewaehrt' | 'kochbuch';
@@ -178,6 +179,11 @@ export interface Recipe {
   blockPrep?: Record<string, { text: string; minutes: number }>;
   /** gewählte Variante (RecipeContent.choices) – fehlt oder gibt es nicht mehr: die erste; wie homemade nicht versioniert */
   choice?: string;
+  /**
+   * getauschte Zutaten (Julia: Tofu statt Hähnchen, die Schritte bleiben) – Zutat-id → Baustein, siehe swaps.ts.
+   * Wie die Variante nicht versioniert: gilt, bis du zurücktauschst.
+   */
+  swaps?: Record<string, IngredientSwap>;
   /**
    * Vorkochen (Julia: am Wochenende eine Grundlage kochen, unter der Woche daraus verschiedene Abendessen):
    * wie lange es gekocht im Kühlschrank hält (Tage) – fehlt: shelfDays.prepared (Standard 3). Siehe week.ts.

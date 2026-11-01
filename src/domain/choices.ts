@@ -1,4 +1,5 @@
 import { currentContent } from './recipe';
+import { withSwaps } from './swaps';
 import type { Ingredient, Recipe, RecipeContent, Step } from './types';
 
 /**
@@ -35,15 +36,20 @@ export function forChoice(c: RecipeContent, choice: string | undefined): RecipeC
  */
 const memo = new WeakMap<RecipeContent, Map<string, RecipeContent>>();
 
-/** Das Rezept in der gewählten Variante – ohne Varianten genau die aktuelle Fassung */
+/**
+ * Das Rezept in der gewählten Variante und mit getauschten Zutaten (swaps.ts: Tofu statt Hähnchen) – ohne beides genau
+ * die aktuelle Fassung. Hier lesen Einkauf, Nährwerte, Kochmodus und Vorrat; deshalb gilt der Tausch überall.
+ */
 export function chosenContent(r: Recipe): RecipeContent {
   const c = currentContent(r);
   const choice = activeChoice(r);
-  if (!choice) return c;
+  const swaps = r.swaps && Object.keys(r.swaps).length ? r.swaps : undefined;
+  if (!choice && !swaps) return c;
+  const key = `${choice ?? ''}|${swaps ? JSON.stringify(swaps) : ''}`;
   let byChoice = memo.get(c);
   if (!byChoice) memo.set(c, (byChoice = new Map()));
-  let out = byChoice.get(choice);
-  if (!out) byChoice.set(choice, (out = forChoice(c, choice)));
+  let out = byChoice.get(key);
+  if (!out) byChoice.set(key, (out = withSwaps(forChoice(c, choice), swaps)));
   return out;
 }
 
