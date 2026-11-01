@@ -58,7 +58,7 @@ Live: <https://dschudschuu.github.io/Mashi/> · installierbar als App (PWA), fun
   **Rezept-Teile** (Sauce, Salat …): nur einen Teil kochen – er steht als Vorgekocht in der Speisekammer, Einkaufsliste
   und Rest richten sich danach (Teile auch aus „Für die Sauce:“ beim Import und von der KI)
 - **Abgleich** zwischen Geräten über eine eigene CouchDB (siehe `server/couchdb/ANLEITUNG.md`),
-  Sicherung als Datei (alles: Rezepte, Lebensmittel, Speisekammer, Plan), Einführung beim ersten Start, vier Farbthemen
+  Sicherung als Datei (alles: Rezepte, Lebensmittel, Speisekammer, Plan), geführte Tour je Seite beim ersten Besuch (kommt Neues dazu, zeigt sie einmal nur das Neue mit „Neu“), vier Farbthemen
 
 ## Loslegen
 

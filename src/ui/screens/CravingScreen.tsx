@@ -82,7 +82,7 @@ export function CravingScreen({ q }: { q: string }) {
   };
   return (
     <main className="screen">
-      <TopBar title={dir?.name ?? 'Worauf hast du Lust?'} backTo="/"
+      <TopBar title={dir?.name ?? 'Worauf hast du Lust?'} backTo="/" intro="lust"
         right={(
           <span className="craving-top">
             <ViewToggle view={view} onChange={setView} />

@@ -5,11 +5,16 @@ import { createPortal } from 'react-dom';
  * Geführte Tour pro Seite (Julia: „als Dialog, der mich durchführt und auf die Knöpfe zeigt“):
  * Beim ersten Besuch wird abgedunkelt, ein Knopf nach dem anderen hervorgehoben, daneben eine Sprechblase.
  * Kein „?“ in der Kopfleiste (Julia: macht es zu voll) – wieder zeigen geht über die Einstellungen. „Gesehen“ gilt je Gerät.
+ * Kommt Neues dazu (Julia: „neue Schritte, auch für mich“), bekommen die Schritte einen höheren Stand (`added`): Wer die
+ * Seite schon kennt, sieht einmal nur sie, mit „Neu“; wer neu ist, die ganze Tour.
  */
-export type IntroId = 'start' | 'kochbuch' | 'rezept' | 'plan' | 'woche' | 'einkauf' | 'speisekammer' | 'produkte' | 'kochen';
+export type IntroId = 'start' | 'kochbuch' | 'rezept' | 'plan' | 'woche' | 'einkauf' | 'speisekammer' | 'produkte' | 'kochen' | 'lust';
 
-/** Ziel als Selektor oder Suche; fehlt es gerade (leere Woche, noch nichts gewählt), steht die Blase mittig */
-type Step = { at?: string | (() => Element | null | undefined); title: string; text: string };
+/**
+ * Ziel als Selektor oder Suche; fehlt es gerade (leere Woche, noch nichts gewählt), steht die Blase mittig.
+ * `added`: Stand der Tour, mit dem der Schritt kam – fehlt: 1 (die erste Tour)
+ */
+type Step = { at?: string | (() => Element | null | undefined); title: string; text: string; added?: number };
 
 /** Knopf/Reiter anhand seines Texts – für Stellen ohne eigenes Merkmal */
 const byText = (sel: string, start: string) => () =>
@@ -20,6 +25,8 @@ const TOURS: Record<IntroId, Step[]> = {
     { title: 'Willkommen bei Mashi', text: 'Dein Kochbuch, das mitdenkt: Rezepte, Wochenplan, Einkauf und Vorrat an einem Ort. Ich zeig dir kurz, wo was ist.' },
     { at: '[aria-label="Hauptnavigation"]', title: 'Unten wechselst du die Bereiche', text: 'Start, Kochbuch, Speisekammer und Plan. Das Plus legt Neues an: Rezept, Kassenbon oder Vorrat.' },
     { at: '.home-head__settings', title: 'Einstellungen', text: 'Farbthema, Haushalt, Sicherung und Abgleich mit deinen Geräten.' },
+    { at: '.week-today', title: 'Heute aus der Woche', text: '„So geht’s“ mit Würze und Zubereitung zum Umschalten. „Gegessen“ merkt sich, wie du es gemacht hast – nächstes Mal ist das vorgewählt.', added: 2 },
+    { at: byText('main button', 'Lieber was anderes?'), title: 'Worauf hast du Lust?', text: 'Ein Gericht aus Bausteinen zusammenstellen – Tortilla, Bowl, Pasta … Stufe für Stufe, auch mit deinen eigenen Rezepten.', added: 2 },
     { title: 'Jede Seite erklärt sich selbst', text: 'Beim ersten Besuch zeigt dir jede Seite ihre Knöpfe. Noch mal ansehen: Einstellungen → „Alle Einführungen wieder zeigen“.' },
   ],
   kochbuch: [
@@ -31,6 +38,9 @@ const TOURS: Record<IntroId, Step[]> = {
   rezept: [
     { at: () => document.querySelector('main [aria-label="Mehr"]')?.parentElement, title: 'Portionen', text: 'Hier stellst du die Portionen ein – Mengen, Nährwerte und Kosten rechnen mit.' },
     { at: 'main .plan-chip', title: 'Zum Wochenplan', text: 'Plant das Gericht für einen Abend der Woche.' },
+    { at: 'main .swaps', title: 'Tauschen', text: 'Zutaten gegen andere derselben Stufe tauschen – Tofu statt Hähnchen, auch eine ganze Sauce gegen deine eigene. Deine Schritte bleiben und nennen den neuen Namen.', added: 2 },
+    { at: 'main .salad-add', title: 'Beilagensalat', text: 'Zu jedem Rezept ein Salat dazu: Gemüse, Dressing und Topping wählen – nur fürs nächste Kochen oder immer.', added: 2 },
+    { at: 'main .block-hints__cta', title: 'Bausteine gefunden', text: 'Teile, die Mashi als Baustein erkennt (eine Sauce, ein Dip), stehen nach deinem Ja im Baukasten.', added: 2 },
     { at: '[aria-label="Weitere Aktionen"]', title: 'Mehr Aktionen', text: 'Bearbeiten, „Grundlage daraus machen“ oder archivieren. Jede Änderung wird eine neue Version – die alte bleibt.' },
     { at: byText('main button', 'Kochmodus starten'), title: 'Los geht’s', text: 'Startet den Kochmodus: Schritt für Schritt mit Timer.' },
   ],
@@ -40,6 +50,7 @@ const TOURS: Record<IntroId, Step[]> = {
     { at: 'main .fridge__line .link', title: 'Kochtag ändern', text: '„gekocht am So“ antippen – die Abende rücken mit.' },
     { at: byText('main button', 'Woche planen'), title: 'Woche planen', text: 'Rezepte in den Topf legen – danach verteilst du sie hier.' },
     { at: 'main .meal--free', title: '„Was gibt’s?“', text: 'Einen freien Abend antippen: Mashi schlägt vor, was aus Grundlagen und Vorrat geht.' },
+    { title: 'Baukasten am Abend', text: 'Grundlage plus Bausteine (Pasta, Brokkoli …): Im Abend-Fenster steht „So geht’s“ mit Würze und Zubereitung. Gibt es dasselbe bald wieder, kochst du gleich mit.', added: 2 },
     { at: '[aria-label="Einkaufsliste"]', title: 'Einkaufsliste', text: 'Was noch fehlt, steht hier. Wie viel pro Abend gegessen wird, stellst du in den Einstellungen unter Haushalt ein.' },
   ],
   woche: [
@@ -60,9 +71,16 @@ const TOURS: Record<IntroId, Step[]> = {
     { title: 'Bald verbrauchen', text: 'Auf der Startseite siehst du, was weg muss – und welche Rezepte es aufbrauchen.' },
   ],
   produkte: [
+    { at: 'main .food-gaps', title: 'Fehlen Werte', text: 'Was in deinen Rezepten und Bausteinen noch keine Nährwerte oder kein Stückgewicht hat – hier gleich nachtragen. Mashi erfindet keine Zahlen.', added: 2 },
     { at: '[aria-label="Lebensmittel hinzufügen"]', title: 'Hinzufügen', text: 'Per Barcode, Open Food Facts oder abgetippt – gern mit Marke.' },
     { at: () => document.querySelector('main .tab')?.parentElement, title: 'Deine Listen', text: '„Nachkaufen“, „Immer im Haus“ und „Gewürze“ sammeln, was du oft brauchst.' },
     { title: 'Sorten', text: 'Mehrere Sorten einer Zutat: Der Favorit mit Stern wird zuerst genommen.' },
+  ],
+  lust: [
+    { title: 'Stufe für Stufe', text: 'Kohlenhydrat, Protein, Sauce, Gemüse, Topping – antippen, was du magst. Deine Rezepte und ihre Teile sind auch Bausteine. „Neu“ oben fängt von vorn an.', added: 2 },
+    { at: byText('main button', 'Würfeln'), title: 'Würfeln', text: 'Füllt, was noch offen ist. Nochmal würfeln tauscht nur das Gewürfelte.', added: 2 },
+    { at: 'main .craving-done__how', title: 'So geht’s', text: 'Das Längste zuerst, mit Würze und Zubereitung zum Umschalten. Mashi merkt sich, wie du es zuletzt gekocht hast.', added: 2 },
+    { at: 'main .craving-done__actions', title: 'Kochen, einplanen, behalten', text: 'Jetzt kochen, in die Woche legen oder gleich ins Kochbuch. Nach dem Kochen fragt die Startseite, wie es war.', added: 2 },
   ],
   kochen: [
     { at: '.cook__progress', title: 'Schritt für Schritt', text: 'Der Bildschirm bleibt an, solange du kochst.' },
@@ -72,13 +90,37 @@ const TOURS: Record<IntroId, Step[]> = {
   ],
 };
 
+/** früher: Liste der gesehenen Seiten (= Stand 1) – wird weiter geschrieben, falls ein Gerät noch die alte App hat */
 const KEY = 'mashi-intros-v1';
+/** je Seite der gesehene Stand der Tour */
+const STAND_KEY = 'mashi-intros-v2';
 
-function load(): Set<IntroId> {
+type Stands = Partial<Record<IntroId, number>>;
+
+/** Gesehene Stände – aus dem neuen Speicher, sonst aus der alten Liste (gesehen = Stand 1). Kaputtes zählt als ungesehen. */
+export function standsFrom(stands: string | null, old: string | null): Stands {
   try {
-    return new Set(JSON.parse(localStorage.getItem(KEY) ?? '[]') as IntroId[]);
+    const s = JSON.parse(stands ?? 'null') as unknown;
+    if (s && typeof s === 'object' && !Array.isArray(s)) return s as Stands;
+    const list = JSON.parse(old ?? '[]') as unknown;
+    return Array.isArray(list) ? Object.fromEntries(list.filter((x): x is IntroId => typeof x === 'string').map((id) => [id, 1])) : {};
   } catch {
-    return new Set(); // privater Modus / gesperrter Speicher → Tour zeigen
+    return {};
+  }
+}
+
+/** der höchste Stand einer Tour */
+export const standOf = (steps: readonly Pick<Step, 'added'>[]): number => Math.max(1, ...steps.map((x) => x.added ?? 1));
+
+/** Was diesmal gezeigt wird: noch nie gesehen → alles; schon gesehen → nur, was seither dazukam (leer: nichts) */
+export const stepsToShow = <S extends Pick<Step, 'added'>>(steps: readonly S[], stand: number | undefined): S[] =>
+  stand ? steps.filter((x) => (x.added ?? 1) > stand) : [...steps];
+
+function load(): Stands {
+  try {
+    return standsFrom(localStorage.getItem(STAND_KEY), localStorage.getItem(KEY));
+  } catch {
+    return {}; // privater Modus / gesperrter Speicher → Tour zeigen
   }
 }
 
@@ -93,7 +135,8 @@ function emit() {
 
 function save() {
   try {
-    localStorage.setItem(KEY, JSON.stringify([...seen]));
+    localStorage.setItem(STAND_KEY, JSON.stringify(seen));
+    localStorage.setItem(KEY, JSON.stringify(Object.keys(seen)));
   } catch {
     /* gilt dann nur bis zum Neuladen */
   }
@@ -104,14 +147,14 @@ function useIntros() {
 }
 
 function dismiss(id: IntroId) {
-  seen = new Set(seen).add(id);
+  seen = { ...seen, [id]: standOf(TOURS[id]) };
   save();
   emit();
 }
 
 /** Einstellungen → „Alle Einführungen wieder zeigen“ */
 export function resetIntros() {
-  seen = new Set();
+  seen = {};
   save();
   emit();
 }
@@ -122,11 +165,27 @@ export function PageIntro({ id }: { id: IntroId }) {
   // kurz warten: Die Seite soll erst stehen, sonst zeigt die Blase auf einen Knopf, der noch rutscht
   const [ready, setReady] = useState(false);
   useEffect(() => { const t = setTimeout(() => setReady(true), 350); return () => clearTimeout(t); }, []);
-  if (!ready || seen.has(id)) return null;
-  return createPortal(<Tour steps={TOURS[id]} onDone={() => dismiss(id)} />, document.body);
+  const steps = stepsToShow(TOURS[id], seen[id]);
+  if (!ready || !steps.length) return null;
+  // schon gesehen: nur das Neue, mit „Neu“ daran
+  return createPortal(<Tour steps={steps} fresh={!!seen[id]} onDone={() => dismiss(id)} />, document.body);
 }
 
-function Tour({ steps, onDone }: { steps: Step[]; onDone: () => void }) {
+/** Der Bereich, in dem man einen Knopf wirklich sieht: zwischen Kopfleiste und dem, was unten fest steht – außer der Knopf gehört selbst dazu */
+function visibleBand(el: Element): { top: number; bottom: number } {
+  let top = 0;
+  let bottom = document.documentElement.clientHeight;
+  for (const bar of document.querySelectorAll('.topbar, .bottom-cta, .nav')) {
+    if (bar.contains(el)) continue;
+    const r = bar.getBoundingClientRect();
+    if (!r.height) continue;
+    if (r.top <= 1) top = Math.max(top, r.bottom);
+    else bottom = Math.min(bottom, r.top);
+  }
+  return { top, bottom };
+}
+
+function Tour({ steps, fresh, onDone }: { steps: Step[]; fresh: boolean; onDone: () => void }) {
   const [i, setI] = useState(0);
   const [rect, setRect] = useState<DOMRect | null>(null);
   const next = useRef<HTMLButtonElement>(null);
@@ -137,9 +196,12 @@ function Tour({ steps, onDone }: { steps: Step[]; onDone: () => void }) {
     const at = step.at;
     const el = typeof at === 'string' ? document.querySelector(at) : at?.();
     if (!el) { setRect(null); return; }
-    // nur scrollen, wenn der Knopf nicht ganz zu sehen ist; ohne behavior: 'instant' – das kennen ältere Safaris nicht
+    // nur scrollen, wenn der Knopf nicht ganz zu sehen ist; ohne behavior: 'instant' – das kennen ältere Safaris nicht.
+    // „Zu sehen“ heißt: nicht unter der Kopfleiste und nicht unter dem, was unten fest steht (Kochmodus-Leiste,
+    // Navigation) – sonst leuchtete bei „Tauschen“ der Knopf „Kochmodus starten“ auf (Rundgang)
     const r = el.getBoundingClientRect();
-    if (r.top < 0 || r.bottom > document.documentElement.clientHeight) el.scrollIntoView({ block: 'center' });
+    const band = visibleBand(el);
+    if (r.top < band.top || r.bottom > band.bottom) el.scrollIntoView({ block: 'center' });
     const measure = () => setRect(el.getBoundingClientRect());
     measure();
     window.addEventListener('resize', measure);
@@ -180,8 +242,8 @@ function Tour({ steps, onDone }: { steps: Step[]; onDone: () => void }) {
       ) : <div className="tour__dim" style={{ inset: 0 }} />}
       <div className="tour__bubble" style={place} aria-live="polite">
         <div className="tour__head">
-          <strong>{step.title}</strong>
-          <span className="small muted">{i + 1} / {steps.length}</span>
+          <strong>{fresh && <><span className="tag tour__new">Neu</span>{' '}</>}{step.title}</strong>
+          {steps.length > 1 && <span className="small muted">{i + 1} / {steps.length}</span>}
         </div>
         <p>{step.text}</p>
         <div className="tour__actions">
