@@ -50,13 +50,21 @@ const MIX_WORD_ICONS: [RegExp, IconName][] = [
   [/kartoffel|pommes|püree|puree|rösti|wedges/, 'potato'],
   [/brot|brötchen|baguette|fladen|naan|ciabatta/, 'bread'],
   [/tomat|arrabbiata|bolognese|napoli|passata/, 'tomato'],
-  [/pesto|kräuter|basilikum|spinat|grün/, 'leaf'],
+  [/pesto|kräuter|basilikum|spinat|grün|koriander|petersilie|schnittlauch/, 'leaf'],
   [/curry|eintopf|chili|gulasch|ragout/, 'pot'],
   [/hähnchen|haehnchen|huhn|chicken|pute/, 'drumstick'],
+  [/tortilla|wrap|taco|fajita|burrito|quesadilla/, 'tortilla'],
+  // „gehackte Mandeln“ sind kein Hack
+  [/hack(?!t)|patty|frikadelle|bulette/, 'patty'],
+  [/tofu|tempeh/, 'tofu'],
+  [/linse|bohne|erbse|hummus|edamame/, 'legume'],
+  [/käse|kaese|parmesan|feta|halloumi|cheddar|mozzarella|gouda|pecorino|ricotta/, 'cheese'],
+  // „Ei“ nur als ganzes Wort – sonst wären Reis und Brei Spiegeleier
+  [/\bei\b|eier|spiegelei|rührei|ruehrei|omelett/, 'egg'],
 ];
 
 /** Was nichts erkennt, bekommt das Icon seiner Stufe – aber nur, wo es sicher passt: Kohlenhydrat, Protein und Topping
- *  bleiben dann ohne (ein Hähnchenschenkel beim Tofu wäre schlimmer als kein Icon) */
+ *  bleiben dann ohne (ein falsches Icon wäre schlimmer als keins; das Topping bekommt im Bild Streusel) */
 const MIX_KIND_ICONS: Partial<Record<SideKind, IconName>> = { sauce: 'ladle', veg: 'leaf' };
 
 export function mixIcon(title: string, kind: SideKind): IconName | undefined {
