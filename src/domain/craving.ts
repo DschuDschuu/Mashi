@@ -1014,12 +1014,19 @@ export type WeekStep = StyleStep & { source: ComboStep['source']; ready?: true }
  * Standard), zusammengeführt und gewürzt, deine Rezepte wie bisher (ownComboSteps), am Ende „Anrichten“. Richtung,
  * Würze und Wege stehen am Abend (sides.ts: styleOf); alte Abende ohne Richtung: ungewürzt, allgemein angerichtet.
  * `basePot: false` am Kochtag – da wird die Grundlage gerade erst gekocht, nicht aufgewärmt.
+ *
+ * `carry`: zweimal dasselbe Kohlenhydrat (week.ts: carbCarry, Tage schon als Text). `with` – heute gleich für diesen Tag
+ * mitkochen, `from` – von diesem Tag aufwärmen; das gilt VOR dem Zusammenführen (Rundgang: „Pasta mit Brokkoli“ verlor
+ * sonst den Hinweis, und am Folgetag hieß es „Pasta von Montag“ neben „in Salzwasser kochen“). Steht dein Rezept
+ * vorgekocht da (`ready`), bleibt es bei „aus dem Kühlschrank“ – fürs Mitkochen muss es für beide reichen.
  */
 export function weekCookSteps(side: string | undefined, base: Recipe, opts: {
   household?: Pick<Household, 'sidePrep' | 'sideFamily'>; recipes?: readonly Recipe[]; items?: readonly PantryItem[]; portions?: number;
-  more?: { entry: string; portions: number }; basePot?: boolean;
+  carry?: { entry: string; portions?: number; with?: string; from?: string }; basePot?: boolean;
 } = {}): WeekStep[] {
-  const { household, recipes = [], items = [], portions = 1, more, basePot = true } = opts;
+  const { household, recipes = [], items = [], portions = 1, carry, basePot = true } = opts;
+  const more = carry?.with !== undefined ? { entry: carry.entry, portions: carry.portions ?? 0 } : undefined;
+  const reheat = carry?.from !== undefined ? carry.entry : undefined;
   const style = styleOf(side);
   const b = baseChoice(base);
   const pot = basePot && coversOf(b).includes('sauce');
@@ -1027,7 +1034,8 @@ export function weekCookSteps(side: string | undefined, base: Recipe, opts: {
   const ctx: WayContext = {
     direction: style.direction,
     sauceSimmers: pot || fixed.some((x) => x.kind === 'sauce' && /k(ö|oe)cheln/i.test(prepOf(x.id, household, base)?.text ?? '')),
-    pastaBoils: fixed.some((x) => x.id === 'pasta'),
+    // Pasta von gestern kocht nicht – dann gart auch nichts „mit den Nudeln“
+    pastaBoils: fixed.some((x) => x.id === 'pasta' && x.id !== reheat),
     ...(household?.sideFamily ? { families: household.sideFamily } : {}),
   };
   const spice = spiceOf(style.spice, style.direction);
@@ -1051,7 +1059,23 @@ export function weekCookSteps(side: string | undefined, base: Recipe, opts: {
   const baseStep: WeekStep = { ids: ['grundlage'], kind: b.kind, name: b.name, text: 'aufwärmen', minutes: 5, source: 'standard', ...(pot ? { pot: true } : {}) };
   const names: Partial<Record<SideKind, string[]>> = { [b.kind]: [b.name] };
   for (const x of [...fixed, ...ownSidesOf(side)]) names[x.kind] = [...(names[x.kind] ?? []), x.name];
-  const serving = servingText(style.direction, names, spice);
-  const steps = composeSteps([baseStep, ...sides, ...own], spice).filter((st) => !(serving && st.fixed && st.minutes <= 0 && coveredByServing(st.text)));
+  // Nudeln von gestern oder vorgekocht aus dem Kühlschrank: beim Anrichten nichts „abgießen“ (Julia)
+  const carbs = [...sides, ...own].filter((s) => s.kind === 'carb');
+  const warm = carbs.length > 0 && carbs.every((s) => s.ids[0] === reheat || s.ready);
+  const serving = servingText(style.direction, names, spice, { warm });
+  const hint = carry?.with !== undefined ? `gleich für ${carry.with} mitkochen` : undefined;
+  const carriedName = carry && (sideOf(carry.entry)?.name ?? ownOf(carry.entry)?.name);
+  const carried = (s: WeekStep): WeekStep => {
+    if (!carry || s.ids[0] !== carry.entry || s.ready) return s;
+    // aufwärmen: keine Zubereitung zum Umschalten, deine Schritte braucht es dann nicht
+    if (carry.from !== undefined) return { ...s, text: `von ${carry.from} aufwärmen`, minutes: 3, steps: undefined, options: undefined, way: undefined };
+    return hint ? { ...s, text: s.steps ? hint : `${s.text ?? 'kochen'} – ${hint}` } : s;
+  };
+  const steps = composeSteps([baseStep, ...sides, ...own].map(carried), spice)
+    .filter((st) => !(serving && st.fixed && st.minutes <= 0 && coveredByServing(st.text)))
+    // ging der Hinweis beim Zusammenführen unter (aufs Blech: „im Ofen …“ wird gekürzt), steht er mit Namen dahinter
+    .map((st) => (hint && carriedName && st.ids.includes(carry!.entry) && !st.text?.includes(hint)
+      ? { ...st, text: `${st.text} – ${carriedName} ${hint}` }
+      : st));
   return serving ? [...steps, { ids: ['anrichten'], name: 'Anrichten', text: serving, minutes: 0, serving: true, source: 'standard' }] : steps;
 }

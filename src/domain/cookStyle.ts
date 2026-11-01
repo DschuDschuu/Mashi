@@ -339,7 +339,9 @@ export const coveredByServing = (text?: string): boolean => !!text && /^(frisch 
  * Der Abschluss je Richtung (Julia: jedes Gericht soll wie ein Rezept enden, nicht mit „Koriander: grob zupfen“) –
  * mit deinen Bausteinen gefüllt, zum Schluss der Handgriff der Würze. Weniger als zwei Bausteine: keiner.
  */
-export function servingText(direction: string | undefined, names: Partial<Record<SideKind, readonly string[]>>, spice?: Spice): string | undefined {
+export function servingText(direction: string | undefined, names: Partial<Record<SideKind, readonly string[]>>, spice?: Spice, opts: {
+  /** die Nudeln werden heute nicht gekocht (von gestern, vorgekocht) – dann gibt es nichts abzugießen (Julia) */ warm?: boolean;
+} = {}): string | undefined {
   if (Object.values(names).flat().length < 2) return undefined;
   const n = (k: SideKind) => andList(names[k] ?? []);
   const has = (k: SideKind) => !!names[k]?.length;
@@ -354,7 +356,9 @@ export function servingText(direction: string | undefined, names: Partial<Record
       t = `${n('carb') || 'Alles'} in Schalen verteilen${mains ? `, ${mains} nebeneinander darauflegen` : ''}${has('sauce') ? `, mit ${n('sauce')} beträufeln` : ''}${top('% darüberstreuen')}`;
       break;
     case 'pasta':
-      t = `${n('carb') || 'Nudeln'} abgießen${has('sauce') ? ` und mit ${n('sauce')} vermengen` : ''}${mains ? `, ${mains} unterheben` : ''}${top('mit % servieren')}`;
+      t = opts.warm
+        ? `${n('carb') || 'Nudeln'}${has('sauce') ? ` mit ${n('sauce')} vermengen${mains ? `, ${mains} unterheben` : ''}` : mains ? ` mit ${mains} mischen` : ' auf die Teller'}${top('mit % servieren')}`
+        : `${n('carb') || 'Nudeln'} abgießen${has('sauce') ? ` und mit ${n('sauce')} vermengen` : ''}${mains ? `, ${mains} unterheben` : ''}${top('mit % servieren')}`;
       break;
     case 'curry':
       t = `${has('carb') ? `${n('carb')} auf die Teller, ` : ''}das Curry${mains ? ` mit ${mains}` : ''} dazu${top('mit % bestreuen')}`;

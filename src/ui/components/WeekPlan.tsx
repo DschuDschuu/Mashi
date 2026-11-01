@@ -10,7 +10,7 @@ import { cookStart } from '../../domain/cookDay';
 import type { Recipe } from '../../domain/types';
 import { ComboStepper } from './ComboStepper';
 import { ComboSteps } from './ComboSteps';
-import { comboText } from '../../domain/sides';
+import { bareSide, comboText, distinctCombos } from '../../domain/sides';
 import { preparedPortions } from '../../domain/baseStock';
 import { specialDays } from '../../domain/shelfLife';
 import { freezeFromFridge, freezePantryItem, householdOf, setMealStyle, setPrepInfo, setWeek, unfreezeToFridge, useFoodTable, usePantry, usePlan, useRecipes } from '../../data/store';
@@ -340,14 +340,15 @@ function WhatSheet({ cook, slot, replace, from, view, recipes, fallback, stock, 
     if (age < 0 || (slot.lunch && age === 0 && !b.base.cooked) || !b.recipe) return [];
     return [{ b, frost: old, dishes: byEffort(transformsOf(b.base.recipeId, recipes)) }];
   });
-  const current = (recipeId: string, side?: string) => replace?.meal.recipeId === recipeId && replace.meal.side === side;
+  // gleiche Bausteine = dasselbe Gericht, auch mit anderer Würze (sides.ts: bareSide)
+  const current = (recipeId: string, side?: string) => replace?.meal.recipeId === recipeId && bareSide(replace.meal.side) === bareSide(side);
   const chip = (recipeId: string, baseId: string, text: string, side?: string) => (
     <button key={`${recipeId}+${side ?? ''}`} type="button" className={`chip${current(recipeId, side) ? ' is-on' : ''}`} onClick={() => onPut(recipeId, baseId, side)}>{text}</button>
   );
   const fromBase = from ? view.bases.find((b) => b.base.recipeId === from) : undefined;
   const heading = replace ? `${slotText(slot)}: statt ${mealText(replace)}` : fromBase ? `${slotText(slot)}: was wird aus der neuen Portion ${title(fromBase.recipe)}?` : `Was gibt's am ${slotText(slot)}?`;
   // nach „+“ am Kochtag: was diese Woche schon aus der Grundlage zusammengestellt ist, zuerst (Julia: nicht das gespeicherte Rezept raten)
-  const again = from ? [...new Map(eaten.filter((m) => m.meal.baseId === from).map((m) => [mealKey(m.meal.recipeId, m.meal.side), m] as const)).values()] : [];
+  const again = from ? [...new Map(eaten.filter((m) => m.meal.baseId === from).map((m) => [mealKey(m.meal.recipeId, bareSide(m.meal.side)), m] as const)).values()] : [];
   return (
     <div className="sheet-backdrop" onClick={onClose}>
       <div className="sheet" role="dialog" aria-modal="true" aria-label={heading} onClick={(e) => e.stopPropagation()} ref={ref}>
@@ -383,7 +384,7 @@ function WhatSheet({ cook, slot, replace, from, view, recipes, fallback, stock, 
             </p>
             <div className="chips" role="group" aria-label={`Aus ${title(b.recipe)}`}>
               {/* eigene Zusammenstellungen dieser Woche zuerst (Julia: „ich konnte nur das feste Rezept nehmen, nicht mein Baukasten-Gericht“) */}
-              {[...new Set(eaten.flatMap((x) => (x.meal.baseId === b.base.recipeId && x.meal.recipeId === b.base.recipeId && x.meal.side ? [x.meal.side] : [])))]
+              {distinctCombos(eaten.flatMap((x) => (x.meal.baseId === b.base.recipeId && x.meal.recipeId === b.base.recipeId && x.meal.side ? [x.meal.side] : [])), replace?.meal.baseId === b.base.recipeId ? replace.meal.side : undefined)
                 .map((side) => chip(b.base.recipeId, b.base.recipeId, `mit ${comboText(side)}`, side))}
               {dishes.length > 0 ? dishes.map((r) => chip(r.id, b.base.recipeId, title(r))) : chip(b.base.recipeId, b.base.recipeId, title(b.recipe))}
             </div>
@@ -588,8 +589,9 @@ function DishSheet({ m, view, recipes, asks, servings, onCook, cookNote, onPut, 
   const baseId = m.meal.baseId;
   const base = recipes.find((r) => r.id === baseId);
   const dishes = byEffort(transformsOf(baseId, recipes));
-  const combos = [...new Set(view.days.flatMap((x) => [x.lunch, x.meal]).flatMap((x) => (x?.meal.baseId === baseId && x.meal.recipeId === baseId && x.meal.side ? [x.meal.side] : [])))];
-  const on = (recipeId: string, side?: string) => m.meal.recipeId === recipeId && m.meal.side === side;
+  // je Bausteine ein Chip – mit anderer Würze ist es dasselbe Gericht (Rundgang: „mit Pasta & Brokkoli“ doppelt)
+  const combos = distinctCombos(view.days.flatMap((x) => [x.lunch, x.meal]).flatMap((x) => (x?.meal.baseId === baseId && x.meal.recipeId === baseId && x.meal.side ? [x.meal.side] : [])), m.meal.side);
+  const on = (recipeId: string, side?: string) => m.meal.recipeId === recipeId && bareSide(m.meal.side) === bareSide(side);
   const chip = (recipeId: string, text: string, side?: string) => (
     <button key={`${recipeId}+${side ?? ''}`} type="button" className={`chip${on(recipeId, side) ? ' is-on' : ''}`} aria-pressed={on(recipeId, side)} onClick={() => onPut(recipeId, side)}>{text}</button>
   );
@@ -623,8 +625,9 @@ function DishSheet({ m, view, recipes, asks, servings, onCook, cookNote, onPut, 
           <span>Portionen an diesem {slot.lunch ? 'Mittag' : 'Abend'}</span>
           <Stepper small value={servings} onChange={onPortions} label={`Portionen ${slotText(slot)}`} />
         </div>
-        {/* „So geht's“ schon vorher (Julia): Würze und Zubereitung für jeden Abend einstellen, nicht erst am Tag selbst */}
-        {base && m.meal.recipeId === baseId && m.meal.side && !m.meal.done && (
+        {/* „So geht's“ schon vorher (Julia): Würze und Zubereitung für jeden Abend einstellen, nicht erst am Tag selbst –
+            schon mitgekocht nicht mehr: da gibt es nur noch aufzuwärmen (und die Würze von dem Tag, an dem gekocht wurde) */}
+        {base && m.meal.recipeId === baseId && m.meal.side && !m.meal.done && !m.meal.freshCooked && (
           <section className="dish__how">
             <h3 className="small muted">So geht's</h3>
             <ComboSteps side={m.meal.side} base={base} household={hh} portions={servings} onStyle={(st) => setMealStyle(m.meal.id, st)} />

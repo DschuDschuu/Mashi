@@ -201,6 +201,28 @@ export function withStyle(side: string | undefined, style: Partial<SideStyle>): 
   ].join(',');
 }
 
+/**
+ * Nur die Bausteine eines Abends, ohne Kochstil. „Dasselbe Gericht?“ fragt nach den Bausteinen, nicht nach der Würze
+ * (Rundgang: seit der Stil im selben Feld steht, galt Pasta & Brokkoli „indisch“ und „mexikanisch“ als zwei Gerichte –
+ * kein Mitkochen, doppelte Chips).
+ */
+export const bareSide = (side: string | undefined): string | undefined => withStyle(side, {});
+
+/**
+ * Je Bausteine ein Abend, in der Reihenfolge der Woche (Rundgang: „mit Pasta & Brokkoli“ stand zweimal da, nur die
+ * Würze war anders). Es bleibt der erste – außer `keep` (der Abend, der gerade offen ist) hat dieselben Bausteine:
+ * dann seiner, damit ein Tipp auf den Chip seine Würze nicht gegen die eines anderen Abends tauscht.
+ */
+export function distinctCombos(sides: readonly string[], keep?: string): string[] {
+  const out = new Map<string, string>();
+  const mine = bareSide(keep);
+  for (const s of sides) {
+    const k = bareSide(s);
+    if (k && !out.has(k)) out.set(k, k === mine ? keep! : s);
+  }
+  return [...out.values()];
+}
+
 /** Bausteine lesbar: „Pasta, Hähnchenbrust & Parmesan“ – eigene mit ihrem Namen, in gespeicherter Reihenfolge */
 export function comboText(side: string | undefined): string {
   const names = (side ? side.split(',') : []).flatMap((e) => sideOf(e)?.name ?? ownOf(e)?.name ?? []);

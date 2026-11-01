@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { weekCookSteps, type WeekStep } from '../../domain/craving';
+import { weekCookSteps } from '../../domain/craving';
 import { NO_SPICE, SPICES, defaultSpice, type OwnStep } from '../../domain/cookStyle';
 import { foodOf, ownOf, prepOf, sideOf, styleOf, type SideStyle } from '../../domain/sides';
 import type { Household } from '../../domain/mealplan';
@@ -26,19 +26,16 @@ export function ComboSteps({ side, base, household, carry, portions = 1, onStyle
   const [edit, setEdit] = useState<string | null>(null);
   const recipes = useRecipes();
   const pantry = usePantry();
-  // zweimal Nudeln (auch deine Gnocchi): am ersten Abend mitkochen, am zweiten nur aufwärmen (3 Min.) – danach neu nach
-  // Dauer ordnen. Steht dein Rezept vorgekocht da, gibt es nichts mitzukochen – fürs Mitkochen muss es für beide reichen.
-  // Zusammengeführte Schritte (Pasta mit Brokkoli) bleiben, wie sie sind – „aufwärmen“ verlöre sonst den Brokkoli.
+  // zweimal Nudeln (auch deine Gnocchi): am ersten Abend mitkochen, am zweiten nur aufwärmen – das macht weekCookSteps
+  // vor dem Zusammenführen (auch „Pasta mit Brokkoli“ sagt es dann); hier nur nach Dauer ordnen
   const more = carry?.with !== undefined ? { entry: carry.side, portions: carry.portions ?? 0 } : undefined;
-  const steps = weekCookSteps(side, base, { household, recipes, items: pantry.items, portions, more })
-    .map((s): WeekStep => {
-      if (!carry || s.ids.length !== 1 || s.ids[0] !== carry.side || s.ready) return s;
-      // aufwärmen: deine Schritte braucht es dann nicht
-      if (carry.from !== undefined) return { ...s, text: `von ${DAY_LONG[carry.from]} aufwärmen`, minutes: 3, steps: undefined };
-      if (carry.with === undefined) return s;
-      const more = `gleich für ${DAY_LONG[carry.with]} mitkochen`;
-      return { ...s, text: s.steps ? more : `${s.text ?? 'kochen'} – ${more}` };
-    }).sort((a, b) => b.minutes - a.minutes);
+  const steps = weekCookSteps(side, base, {
+    household, recipes, items: pantry.items, portions,
+    ...(carry ? { carry: {
+      entry: carry.side, ...(more ? { portions: more.portions } : {}),
+      ...(carry.with !== undefined ? { with: DAY_LONG[carry.with] } : {}), ...(carry.from !== undefined ? { from: DAY_LONG[carry.from] } : {}),
+    } } : {}),
+  }).sort((a, b) => b.minutes - a.minutes);
   const style = styleOf(side);
   const spice = style.spice ?? defaultSpice(style.direction) ?? NO_SPICE;
   return (

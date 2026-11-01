@@ -2165,9 +2165,12 @@ details.cost-line[open] > summary::after { transform: rotate(-90deg); }
 .parts-ask__item { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 54px; padding: 10px 16px; border-radius: var(--r); background: var(--surface); border: 1.5px solid var(--line); color: var(--ink); text-align: left; }
 .parts-ask__item.is-on { border-color: var(--primary); background: var(--primary-soft); }
 .parts-ask__item strong { font-size: var(--fs-md); }
-.parts-ask__item small { margin-left: auto; color: var(--ink-3); font-size: var(--fs-sm); }
+.parts-ask__item small { margin-left: auto; color: var(--ink-3); font-size: var(--fs-sm); white-space: nowrap; }
 .parts-ask__box { width: 24px; height: 24px; flex: none; display: grid; place-items: center; border-radius: 7px; border: 1.5px solid var(--ink-3); color: var(--on-primary); }
 .parts-ask__item.is-on .parts-ask__box { background: var(--primary); border-color: var(--primary); }
+/* dort anders gewürzt – mitgekocht wird es wie heute (Julia) */
+.parts-ask__label { display: grid; gap: 2px; min-width: 0; }
+.parts-ask__note { font-size: var(--fs-sm); color: var(--ink-3); }
 .parts-ask__hint { display: flex; align-items: center; gap: 6px; margin: 6px 0 0; }
 .parts-ask__go { margin-top: 16px; }
 .parts-ask__today { gap: 12px; padding: 0 4px; }

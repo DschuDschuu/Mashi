@@ -105,6 +105,10 @@ describe('Kochstil: Anrichten je Richtung', () => {
     expect(servingText('burger', { carb: ['Burgerbrötchen'], protein: ['Hack-Patty'], sauce: ['Burgersauce'], veg: ['Salat', 'Tomaten'], topping: ['Cheddar'] }))
       .toBe('Burgerbrötchen belegen: unten Burgersauce, dann Salat und Tomaten, darauf Hack-Patty mit Cheddar, Deckel drauf');
     expect(servingText('pasta', { carb: ['Pasta'], sauce: ['Pesto'], topping: ['Parmesan'] })).toBe('Pasta abgießen und mit Pesto vermengen, mit Parmesan servieren');
+    // Nudeln von gestern (Julia: am Aufwärmtag nichts abgießen)
+    expect(servingText('pasta', { carb: ['Pasta'], sauce: ['Pesto'], veg: ['Brokkoli'], topping: ['Parmesan'] }, undefined, { warm: true })).toBe('Pasta mit Pesto vermengen, Brokkoli unterheben, mit Parmesan servieren');
+    expect(servingText('pasta', { carb: ['Pasta'], protein: ['Testhack'], veg: ['Brokkoli'] }, undefined, { warm: true })).toBe('Pasta mit Testhack und Brokkoli mischen');
+    expect(servingText('pasta', { carb: ['Pasta'], topping: ['Parmesan'] }, undefined, { warm: true })).toBe('Pasta auf die Teller, mit Parmesan servieren');
     expect(servingText(undefined, { carb: ['Reis'], topping: ['Sesam'] })).toBe('Alles auf die Teller verteilen, mit Sesam bestreuen');
     expect(servingText('bowl', { carb: ['Reis'] })).toBeUndefined(); // nur ein Baustein: nichts anzurichten
   });

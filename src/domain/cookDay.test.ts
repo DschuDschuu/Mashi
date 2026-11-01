@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { alongMeals, cookDayMeal, cookStart, freshFor, TODAY } from './cookDay';
+import { alongMeals, alongNote, cookDayMeal, cookStart, freshFor, TODAY } from './cookDay';
 import { weekItems, weekSideNeeds, weekView } from './week';
 import { sideContent } from './mix';
 import { ownEntry } from './sides';
+import { defaultSpice } from './cookStyle';
 import type { Week } from './mealplan';
 import type { Ingredient, Recipe, RecipeContent } from './types';
 
@@ -117,6 +118,25 @@ describe('Kochtag in einem Durchgang (Julia: „vorkochen und heute schon was da
     const combo: Week = { ...w, meals: w.meals.map((m) => ({ ...m, recipeId: 'bolo', side: 'pasta' })) };
     const lang = [{ ...bolo, keepsDays: 5 }, spag];
     expect(alongMeals(combo, combo.meals[0], lang).meals.map((m) => m.id)).toEqual(['c']);
+  });
+
+  it('andere Würze, gleiche Bausteine: trotzdem angeboten – mit Hinweis (Rundgang 8, Julia: „Anbieten, mit Hinweis“)', () => {
+    const indisch = 'pasta,brokkoli,richtung:pasta,wuerze:indisch';
+    const w: Week = {
+      cookDays: [SO], bases: [{ recipeId: 'bolo', day: SO }],
+      meals: [
+        { id: 'a', day: SO, recipeId: 'bolo', baseId: 'bolo', side: indisch },
+        { id: 'b', day: MO, recipeId: 'bolo', baseId: 'bolo', side: 'pasta,brokkoli,richtung:pasta,wuerze:mexikanisch' },
+        { id: 'c', day: DI, recipeId: 'bolo', baseId: 'bolo', side: 'pasta,parmesan,richtung:pasta,wuerze:indisch' }, // andere Bausteine
+      ],
+    };
+    expect(alongMeals(w, w.meals[0], all).meals.map((m) => m.id)).toEqual(['b']);
+    expect(alongNote(w.meals[1], w.meals[0])).toBe('geplant mexikanisch – wird wie heute');
+    expect(alongNote({ side: 'pasta,brokkoli,richtung:pasta,wuerze:ohne' }, w.meals[0])).toBe('geplant ungewürzt – wird wie heute');
+    expect(alongNote({ side: `${indisch},weg:brokkoli:gedaempft` }, w.meals[0])).toBe('geplant anders zubereitet – wird wie heute');
+    expect(alongNote({ side: indisch }, w.meals[0])).toBeUndefined();
+    // ohne gespeicherte Würze gilt die der Richtung – kommt aufs Gleiche: kein Hinweis
+    expect(alongNote({ side: 'pasta,brokkoli,richtung:pasta' }, { side: `pasta,brokkoli,richtung:pasta,wuerze:${defaultSpice('pasta')}` })).toBeUndefined();
   });
 
   it('schon Mitgekochtes kauft die Einkaufsliste nicht noch einmal – die Grundlage zählt weiter', () => {

@@ -12,7 +12,7 @@ import { basesFor, cookDay, cookParts, currentPlan, eatMeal, householdOf, markCo
 import { coveredShare } from '../../domain/baseStock';
 import { DAY_SHORT, mealTitle, servingsOf, setMealPortions, weekView } from '../../domain/week';
 import type { WeekMeal } from '../../domain/mealplan';
-import { alongMeals, cookDayMeal, freshFor, TODAY } from '../../domain/cookDay';
+import { alongMeals, alongNote, cookDayMeal, freshFor, TODAY } from '../../domain/cookDay';
 import { Stepper } from '../components/Controls';
 import { specialDays } from '../../domain/shelfLife';
 import { doneParts, forParts, partLabel, partsOf, preselectParts } from '../../domain/parts';
@@ -317,7 +317,7 @@ export function CookModeScreen({ id, servings: asked, variants, prep, mealId }: 
       {pre && (
         <PartsAskSheet parts={open} done={done} initial={pre.parts} onDone={startParts}
           today={fresh ? { title: todayTitle, portions: plannedN } : undefined} prep={prep ? { title: c.title, portionsFor: prepFor } : undefined}
-          along={along.map((m) => ({ id: m.id, label: slotLabel(m), portions: servingsOf(m, hh) }))} freshUntil={offer ? DAY_SHORT[offer.until] : ''}
+          along={along.map((m) => ({ id: m.id, label: slotLabel(m), portions: servingsOf(m, hh), note: eatNow && alongNote(m, eatNow) }))} freshUntil={offer ? DAY_SHORT[offer.until] : ''}
           hint={pre.fromLast ? 'Wie letztes Mal' : prep && pre.parts.length < open.length ? '„Frisch“ kochst du am Abend' : undefined} />
       )}
       {/* Julia: welche Teile heute – fertige (Vorgekocht) stehen mit Haken da; am Kochtag auch das Essen von heute */}
@@ -582,8 +582,8 @@ function PartsAskSheet({ parts, done, initial, hint, today, prep, along, freshUn
   today?: { title: string; portions: number };
   /** Vorkochen: so viele Portionen, wenn heute so viele mitessen (null = heute nicht) */
   prep?: { title: string; portionsFor: (eat: number | null) => number | undefined };
-  /** dasselbe Gericht, solange es frisch bleibt (Julia: frisch gleich mitkochen) – je Essen abwählbar */
-  along: { id: string; label: string; portions: number }[];
+  /** dasselbe Gericht, solange es frisch bleibt (Julia: frisch gleich mitkochen) – je Essen abwählbar; `note`: dort anders gewürzt (cookDay.ts: alongNote) */
+  along: { id: string; label: string; portions: number; note?: string }[];
   /** letzter Tag, an dem das Mitgekochte noch frisch ist („Sa“) */
   freshUntil: string;
   onDone: (heute: string[], confirmed: boolean, eat: number | null, skip: string[]) => void;
@@ -647,7 +647,7 @@ function PartsAskSheet({ parts, done, initial, hint, today, prep, along, freshUn
                 <button key={a.id} type="button" role="checkbox" aria-checked={on} className={`parts-ask__item${on ? ' is-on' : ''}`}
                   onClick={() => setSkip(on ? [...skip, a.id] : skip.filter((x) => x !== a.id))}>
                   <span className="parts-ask__box" aria-hidden="true">{on && <Icon name="check" size={16} />}</span>
-                  <strong>{a.label}</strong>
+                  <span className="parts-ask__label"><strong>{a.label}</strong>{a.note && <span className="parts-ask__note">{a.note}</span>}</span>
                   <small>+{a.portions} {a.portions === 1 ? 'Portion' : 'Portionen'}</small>
                 </button>
               );

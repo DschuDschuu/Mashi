@@ -892,6 +892,37 @@ describe('Kochstil im Wochenplan (weekCookSteps)', () => {
   });
 });
 
+describe('Zweimal Nudeln im zusammengeführten Schritt (Rundgang 2)', () => {
+  const bolo = recipe('bo', 'Testbolo', [{ kind: 'protein', also: ['sauce'], directions: ['pasta'] }]);
+  const side = 'pasta,brokkoli,richtung:pasta,weg:brokkoli:nudeln';
+
+  it('heute für Dienstag mitkochen: der Hinweis steht bei der Pasta, auch wenn der Brokkoli darin mitgart', () => {
+    const pasta = weekCookSteps(side, bolo, { carry: { entry: 'pasta', portions: 2, with: 'Dienstag' } }).find((s) => s.ids.includes('pasta'));
+    expect(pasta).toMatchObject({ ids: ['pasta', 'brokkoli'], text: 'in Salzwasser kochen – gleich für Dienstag mitkochen; die letzten 3 Min. die Brokkoli-Röschen mitkochen' });
+  });
+
+  it('von Montag aufwärmen: kein Nudeltopf – der Brokkoli gart anders, „mit den Nudeln“ steht nicht zur Wahl', () => {
+    const steps = weekCookSteps(side, bolo, { carry: { entry: 'pasta', from: 'Montag' } });
+    const pasta = steps.find((s) => s.ids.includes('pasta'))!;
+    expect(pasta).toMatchObject({ ids: ['pasta'], text: 'von Montag aufwärmen', minutes: 3 });
+    expect(pasta.options).toBeUndefined();
+    const brokkoli = steps.find((s) => s.ids.includes('brokkoli'))!;
+    expect(brokkoli.text).not.toMatch(/nudeln/i);
+    expect(brokkoli.options?.[0].ways.map((w) => w.id)).not.toContain('nudeln');
+    // beim Anrichten nichts abzugießen (Julia) – am Mitkoch-Tag schon
+    expect(steps.at(-1)?.text).toBe('Pasta mit Testbolo und Brokkoli mischen – mit etwas Olivenöl beträufeln');
+    expect(weekCookSteps(side, bolo, { carry: { entry: 'pasta', with: 'Dienstag' } }).at(-1)?.text).toMatch(/^Pasta abgießen/);
+  });
+
+  it('aufs Blech: der Hinweis ginge beim Kürzen verloren – er steht mit Namen dahinter; allein wie bisher', () => {
+    const blech = weekCookSteps('kartoffeln,brokkoli,richtung:ofen,weg:kartoffeln:ofen,weg:brokkoli:ofen', bolo, { carry: { entry: 'kartoffeln', with: 'Dienstag' } });
+    expect(blech.find((s) => s.ids.includes('kartoffeln'))?.text).toMatch(/dazu – Kartoffeln gleich für Dienstag mitkochen$/);
+    expect(weekCookSteps('reis,haehnchen', bolo, { carry: { entry: 'reis', with: 'Dienstag' } }).find((s) => s.ids[0] === 'reis')?.text)
+      .toBe('mit doppelter Menge Wasser köcheln – gleich für Dienstag mitkochen');
+    expect(weekCookSteps('reis,haehnchen', bolo, { carry: { entry: 'reis', from: 'Montag' } }).find((s) => s.ids[0] === 'reis')?.text).toBe('von Montag aufwärmen');
+  });
+});
+
 describe('Garfamilien im Baukasten (Julia: Zubereitungswege für alle Bausteine)', () => {
   it('Gnocchi zum Umschalten; dein Kürbis bekommt eine Zubereitung statt keiner; deine Wahl für Unbekanntes zählt', () => {
     const s: CravingState = { picks: { carb: ['gnocchi'], veg: ['eigen:veg:Kürbis', 'eigen:veg:Romanesco'] }, closed: [...STAGES] };

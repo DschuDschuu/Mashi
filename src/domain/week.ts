@@ -4,7 +4,7 @@ import type { Pantry, PantryItem } from './pantry';
 import { currentContent } from './recipe';
 import { SPECIAL_DAYS } from './shelfLife';
 import { weekBaseIds, withoutBases } from './weekBases';
-import { comboText, ownEntry, ownOf, ownSidesOf, sideIngredient, sidesOf, type OwnSide } from './sides';
+import { bareSide, comboText, ownEntry, ownOf, ownSidesOf, sideIngredient, sidesOf, type OwnSide } from './sides';
 import { partMoves } from './parts';
 import { ownIngredients, readyPortions } from './craving';
 
@@ -516,13 +516,14 @@ function replant(order: readonly Weekday[], own: readonly WeekMeal[], base: Pick
  * Gerichte einer Grundlage im Wechsel (Julia: „4 Portionen mit 2 Varianten im Wechsel geplant – besser hintereinander,
  * dann ist das Vorkochen der Extras leichter“): dieselben Tage, aber gleiche Abende (Gericht + Bausteine) nebeneinander,
  * in der Reihenfolge, in der sie zuerst vorkommen. Unverändert, wenn schon gruppiert oder etwas davon gegessen ist.
+ * Gleich heißt: gleiche Bausteine – die Würze darf abweichen, mitkochen lässt es sich trotzdem (cookDay.ts: alongMeals).
  */
 export function groupMeals(week: Week, baseId: string): Week {
   const order = weekOrder(week);
   // nur die Abende – Mittage bleiben, wo Julia sie hingelegt hat
   const own = week.meals.filter((m) => m.baseId === baseId && !m.lunch).sort((a, b) => order.indexOf(a.day) - order.indexOf(b.day));
   if (own.length < 3 || own.some((m) => m.done)) return week;
-  const key = (m: WeekMeal) => mealKey(m.recipeId, m.side);
+  const key = (m: WeekMeal) => mealKey(m.recipeId, bareSide(m.side));
   const firsts = [...new Set(own.map(key))];
   const grouped = firsts.flatMap((k) => own.filter((m) => key(m) === k));
   if (grouped.every((m, i) => m === own[i])) return week;
@@ -692,6 +693,7 @@ export function choicesOf(week: Week): WeekChoice[] {
   const order = weekOrder(week);
   return week.bases.map((b) => ({
     baseId: b.recipeId,
+    // mit Kochstil – beim Neuverteilen reist die Würze mit (anders als beim Vergleichen, sides.ts: bareSide)
     meals: week.meals.filter((m) => m.baseId === b.recipeId && !m.lunch).sort((x, y) => order.indexOf(x.day) - order.indexOf(y.day)).map((m) => mealKey(m.recipeId, m.side)),
   }));
 }

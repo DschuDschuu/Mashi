@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { sideContent } from './mix';
-import { comboOf, comboSteps, customSideId, ownEntry, prepOf, sideOf, sidesOfKind, styleOf, withStyle } from './sides';
+import { bareSide, comboOf, comboSteps, customSideId, distinctCombos, ownEntry, prepOf, sideOf, sidesOfKind, styleOf, withStyle } from './sides';
 import type { Week } from './mealplan';
 import type { Ingredient, Recipe } from './types';
 import { buildShoppingList, emptyPlan } from './mealplan';
@@ -689,5 +689,29 @@ describe('Kochstil am Abend (Julia: die abwechslungsreichen Schritte auch im Woc
     expect(withStyle(side, { direction: 'pasta', spice: 'ohne', ways: {} })).toBe('pasta,brokkoli,richtung:pasta,wuerze:ohne');
     expect(withStyle('pasta', { direction: 'Pasta!', ways: { 'x y': 'z' } })).toBe('pasta');
     expect(withStyle(undefined, { direction: 'pasta', ways: {} })).toBeUndefined();
+  });
+
+  const indisch = 'pasta,brokkoli,richtung:pasta,wuerze:indisch';
+  const mex = 'pasta,brokkoli,richtung:pasta,wuerze:mexikanisch';
+
+  it('dasselbe Gericht? Nur die Bausteine zählen (Rundgang 3: „mit Pasta & Brokkoli“ zweimal als Chip)', () => {
+    expect(bareSide(indisch)).toBe('pasta,brokkoli');
+    expect(bareSide(mex)).toBe(bareSide(indisch));
+    expect(bareSide(undefined)).toBeUndefined();
+    expect(distinctCombos([indisch, 'reis,haehnchen', mex])).toEqual([indisch, 'reis,haehnchen']);
+    // der offene Abend behält seine Würze – ein Tipp auf seinen Chip ändert nichts
+    expect(distinctCombos([indisch, 'reis,haehnchen', mex], mex)).toEqual([mex, 'reis,haehnchen']);
+    expect(distinctCombos([indisch], 'reis')).toEqual([indisch]);
+  });
+
+  it('groupMeals: gleiche Bausteine, andere Würze – kommen trotzdem nebeneinander, jeder mit seiner Würze', () => {
+    const m = (id: string, day: number, recipeId: string, side?: string) => ({ id, day: day as Week['cookDays'][number], recipeId, baseId: 'bolo', ...(side ? { side } : {}) });
+    const w: Week = { cookDays: [SO], bases: [{ recipeId: 'bolo', day: SO }], meals: [m('a', SO, 'bolo', indisch), m('b', MO, 'spag'), m('c', DI, 'bolo', mex), m('d', MI, 'spag')] };
+    expect(mixedBases(w)).toEqual(['bolo']);
+    const g = groupMeals(w, 'bolo');
+    expect(g.meals.map((x) => `${x.id}:${x.day}`)).toEqual([`a:${SO}`, `b:${DI}`, `c:${MO}`, `d:${MI}`]);
+    expect(g.meals.find((x) => x.id === 'c')?.side).toBe(mex);
+    // beim Neuverteilen reist die Würze mit
+    expect(choicesOf(w)[0].meals).toEqual([`bolo+${indisch}`, 'spag', `bolo+${mex}`, 'spag']);
   });
 });

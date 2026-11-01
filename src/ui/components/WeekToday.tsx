@@ -112,8 +112,8 @@ export function WeekToday({ week }: { week: Week }) {
                     .sort((a, b) => STAGES.indexOf(a.kind) - STAGES.indexOf(b.kind)).map((x) => x.text).join(', ')} dazu`
                     : 'Nur aufwärmen'}
               </p>
-              {/* Baukasten-Abend: so geht's (Julia) – das Längste zuerst */}
-              {meal.meal.recipeId === meal.meal.baseId && (sides.length > 0 || own.length > 0) && meal.recipe && <ComboSteps side={meal.meal.side!} base={meal.recipe} household={hh} carry={carry} portions={servingsOf(meal.meal, hh)} onStyle={(st) => setMealStyle(meal.meal.id, st)} />}
+              {/* Baukasten-Abend: so geht's (Julia) – das Längste zuerst; schon mitgekocht: nur aufwärmen, keine Schritte */}
+              {meal.meal.recipeId === meal.meal.baseId && !meal.meal.freshCooked && (sides.length > 0 || own.length > 0) && meal.recipe && <ComboSteps side={meal.meal.side!} base={meal.recipe} household={hh} carry={carry} portions={servingsOf(meal.meal, hh)} onStyle={(st) => setMealStyle(meal.meal.id, st)} />}
               <div className="week-today__actions">
                 {/* am Kochtag, noch nicht vorgekocht: Vorkochen und das Essen in einem Durchgang (Julia) */}
                 {go

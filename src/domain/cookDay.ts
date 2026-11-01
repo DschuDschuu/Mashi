@@ -1,12 +1,12 @@
 import { ownIngredients, ownMinutes, readyPortions, readyPrep, weekCookSteps } from './craving';
-import type { StyleStep } from './cookStyle';
+import { spiceOf, type StyleStep } from './cookStyle';
 import { cookingContent } from './homemade';
 import type { Household, Week, WeekMeal, Weekday } from './mealplan';
 import { scaleIngredients } from './scaling';
 import type { PantryItem } from './pantry';
 import { stepPart } from './parts';
 import { currentContent } from './recipe';
-import { comboSteps, ownSidesOf, sideIngredient, sidesOf } from './sides';
+import { bareSide, comboSteps, ownSidesOf, sideIngredient, sidesOf, styleOf } from './sides';
 import type { Ingredient, Recipe, RecipeContent, Step } from './types';
 import { FRESH_DAYS, keepsOf, servingsOf, slotIndex, slotOf, weekOrder, type MealView, type WeekView } from './week';
 
@@ -56,7 +56,8 @@ export function freshDaysOf(meal: Pick<WeekMeal, 'recipeId' | 'baseId'>, recipes
 /**
  * Dasselbe Gericht in den nächsten Tagen: der Kochmodus bietet an, das Frische dafür gleich mitzukochen. Mittags und
  * abends, solange es frisch bleibt (freshDaysOf, `until` = letzter frischer Tag), noch offen, gleiches Gericht mit
- * gleichen Bausteinen – in der Reihenfolge der Woche.
+ * gleichen Bausteinen – in der Reihenfolge der Woche. Würze und Zubereitung zählen nicht (Julia: trotzdem anbieten,
+ * mit Hinweis – mitgekocht wird es wie heute, siehe alongNote).
  */
 export function alongMeals(week: Week, meal: WeekMeal, recipes: readonly Recipe[], keepsFallback?: number): { meals: WeekMeal[]; until: Weekday } {
   const order = weekOrder(week);
@@ -66,10 +67,23 @@ export function alongMeals(week: Week, meal: WeekMeal, recipes: readonly Recipe[
   const meals = week.meals
     .filter((m) => {
       const later = slotIndex(order, slotOf(m)) - at;
-      return later > 0 && order.indexOf(m.day) - from <= days && !m.done && !m.freshCooked && m.recipeId === meal.recipeId && m.baseId === meal.baseId && m.side === meal.side;
+      return later > 0 && order.indexOf(m.day) - from <= days && !m.done && !m.freshCooked && m.recipeId === meal.recipeId && m.baseId === meal.baseId && bareSide(m.side) === bareSide(meal.side);
     })
     .sort((a, b) => slotIndex(order, slotOf(a)) - slotIndex(order, slotOf(b)));
   return { meals, until: order[Math.min(order.length - 1, from + days)] };
+}
+
+/**
+ * Mitkochen, obwohl dort anders geplant (Julia: „Anbieten, mit Hinweis“): was dort anders gewesen wäre – mitgekocht
+ * gibt es das von heute. Die Würze zuerst, die schmeckt man; undefined, wenn gleich geplant.
+ */
+export function alongNote(meal: Pick<WeekMeal, 'side'>, today: Pick<WeekMeal, 'side'>): string | undefined {
+  const a = styleOf(meal.side);
+  const b = styleOf(today.side);
+  const spice = spiceOf(a.spice, a.direction);
+  if (spice?.id !== spiceOf(b.spice, b.direction)?.id) return `geplant ${spice?.name ?? 'ungewürzt'} – wird wie heute`;
+  const ways = (s: typeof a) => Object.entries(s.ways).sort(([x], [y]) => x.localeCompare(y)).join(';');
+  return a.direction !== b.direction || ways(a) !== ways(b) ? 'geplant anders zubereitet – wird wie heute' : undefined;
 }
 
 /** vor jeder id – damit sich Frisches und Grundlage nicht mischen (Mengen „nur dieses Mal“ hängen an der id) */
