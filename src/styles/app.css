@@ -2271,6 +2271,12 @@ details.cost-line[open] > summary::after { transform: rotate(-90deg); }
 .craving-done__title { margin: 0; font-size: 1.2rem; }
 .craving-done p { margin: 0; }
 .craving-done__how { margin: 6px 0 0; font-weight: 700; }
+/* Würze und Zubereitung (cookStyle.ts) – kleine Chips, umbrechend, damit auf 375 px nichts aus der Karte ragt */
+.craving-spice { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.craving-spice > .small { margin-right: 2px; }
+.craving-ways { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 6px; }
+/* der Name eigene Zeile darüber – sonst brach in der schmalen Spalte ein einzelner Chip allein um */
+.craving-ways > .small { flex-basis: 100%; }
 .craving-done__steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; font-size: var(--fs-md); }
 /* Zeitleiste (Julia): links wann, rechts was – statt Nummern */
 .craving-timeline { list-style: none; padding-left: 0; gap: 8px; }

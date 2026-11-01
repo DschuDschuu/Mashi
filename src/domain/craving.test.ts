@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   DIRECTIONS, EMPTY_CRAVING, STAGES, chooseDirection, closeStep, cookbookMatches, cravingCooking, cravingMinutes, cravingPartsFrom, cravingSteps, cravingText, cravingTitle, currentStep,
   baseCraving, coveredBy, halfOf, ownComboSteps, plateImage, cravingCombo, cravingContent, directionOf, guessKind, matchingRecipes, optionsFor, pick, recipeChoiceId, recipeChoices, reopen, rollCraving, runsAlone, staleTrials, startLabel, stockMarks, understand, variantTargets, withoutGone, cravingTimeline,
-  type StockMark,
+  type CravingState, type StockMark,
 } from './craving';
 import { localFoodTable } from './nutrition/localFoods';
 import { emptyPantry, type Pantry, type PantryItem } from './pantry';
@@ -259,9 +259,11 @@ describe('Aus dem Gericht ein Rezept machen', () => {
       { name: 'Reis', amount: 150, unit: 'g' }, { name: 'Tofu', amount: 200, unit: 'g' },
     ]);
     // Zeitleiste: Reis köchelt allein (sofort), Tofu braucht dich 10 Min. und endet mit dem Reis (nach 5 Min.)
-    expect(c.steps.map((st) => st.timerMinutes)).toEqual([15, 10]);
+    expect(c.steps.map((st) => st.timerMinutes)).toEqual([15, 10, undefined]);
     expect(c.steps[0].text).toMatch(/^Sofort – Reis: /);
     expect(c.steps[1].text).toMatch(/^Nach 5 Min\. – Tofu: /);
+    // zum Schluss anrichten wie eine Bowl (cookStyle.ts) – kein Timer
+    expect(c.steps[2].text).toMatch(/^Zum Schluss – Anrichten: Reis in Schalen verteilen, Tofu nebeneinander darauflegen/);
     expect(c.tags).toEqual(['Bowl']);
     // der Reis läuft allein, der Tofu passt hinein → 15
     expect(c.cookMinutes).toBe(15);
@@ -782,5 +784,58 @@ describe('Deine Rezepte als Baustein im Wochenplan (Julia: deine Guacamole auch 
     expect(ownComboSteps(side, [dips], items, 1, { entry, portions: 1 })[0]).toMatchObject({ ready: true });
     expect(ownComboSteps(side, [dips], items, 1, { entry, portions: 2 })[0]).toMatchObject({ text: 'nach deinem Rezept' });
     expect(ownComboSteps(side, [dips], items, 1, { entry, portions: 2 })[0].ready).toBeUndefined();
+  });
+});
+
+describe('Kochstil im Baukasten (Julia: mehr Abwechslung in den Schritten)', () => {
+  const seeded = (seed: number) => () => {
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  const allClosed = (s: CravingState) => STAGES.reduce((acc, k) => closeStep(acc, k), s);
+  const taco = allClosed(pick(pick(pick(chooseDirection(EMPTY_CRAVING, 'taco'), 'carb', 'tortillas'), 'protein', 'haehnchen'), 'veg', 'paprika'));
+  const textOf = (s: CravingState, id: string, hh?: Parameters<typeof cravingSteps>[2]) => cravingSteps(s, [], hh).find((x) => x.ids.includes(id))!.text;
+
+  it('Würz-Chip: gewählt geht vor, „ohne“ würzt nicht', () => {
+    expect(textOf(taco, 'haehnchen')).toContain('mit Kreuzkümmel');
+    expect(textOf({ ...taco, spice: 'indisch' }, 'haehnchen')).toContain('mit Garam Masala');
+    expect(textOf({ ...taco, spice: 'ohne' }, 'haehnchen')).not.toContain('würzen');
+    // „Anrichten“ endet mit dem Handgriff der Würze
+    expect(cravingSteps(taco).at(-1)).toMatchObject({ id: 'anrichten', text: expect.stringMatching(/– Limettenspalten dazu$/) });
+  });
+
+  it('Zubereitung umschalten: roh kommt nicht in die Pfanne; die Chips stehen am Schritt', () => {
+    const steps = cravingSteps(taco);
+    expect(steps.find((x) => x.ids.includes('paprika'))!.ids).toEqual(['haehnchen', 'paprika']); // eine Pfanne
+    expect(steps.find((x) => x.ids.includes('paprika'))!.options?.find((o) => o.id === 'paprika')).toMatchObject({ chosen: 'pfanne' });
+    const roh = cravingSteps({ ...taco, ways: { paprika: 'roh' } });
+    expect(roh.find((x) => x.ids.includes('paprika'))).toMatchObject({ ids: ['paprika'], text: 'in feine Streifen schneiden' });
+  });
+
+  it('dein Standard aus den Einstellungen geht vor den Vorschlag der Richtung – als Chip „deine“', () => {
+    const ofen = allClosed(pick(chooseDirection(EMPTY_CRAVING, 'ofen'), 'veg', 'brokkoli'));
+    const hh = { sidePrep: { brokkoli: { text: 'in Röschen kurz blanchieren', minutes: 4 } } };
+    expect(textOf(ofen, 'brokkoli')).toContain('im Ofen rösten');
+    const mine = cravingSteps(ofen, [], hh).find((x) => x.ids.includes('brokkoli'))!;
+    expect(mine.text).toBe('in Röschen kurz blanchieren');
+    expect(mine.options?.[0]).toMatchObject({ chosen: 'eigen', ways: expect.arrayContaining([expect.objectContaining({ id: 'eigen', label: 'deine' })]) });
+    expect(textOf({ ...ofen, ways: { brokkoli: 'gedaempft' } }, 'brokkoli', hh)).toBe('in Röschen dämpfen');
+  });
+
+  it('Würfel: würfelt Würze und Zubereitung mit, deine Wahl bleibt; „Nochmal“ nimmt nur Gewürfeltes heraus', () => {
+    const rolled = rollCraving(chooseDirection(EMPTY_CRAVING, 'ofen'), { rng: seeded(7) });
+    expect(rolled.spice).toBeTruthy();
+    expect(rolled.rolled?.spice).toBe(rolled.spice);
+    const mine = rollCraving({ ...chooseDirection(EMPTY_CRAVING, 'ofen'), spice: 'mexikanisch', ways: { brokkoli: 'gedaempft' } }, { rng: seeded(7) });
+    expect(mine.spice).toBe('mexikanisch');
+    expect(mine.ways?.brokkoli).toBe('gedaempft');
+    expect(mine.rolled?.spice).toBeUndefined();
+    // über viele Würfe kommen verschiedene Würzen und Zubereitungen vor – die der Richtung am häufigsten
+    const spices = Array.from({ length: 60 }, (_, i) => rollCraving(chooseDirection(EMPTY_CRAVING, 'taco'), { rng: seeded(i + 1) }).spice);
+    expect(new Set(spices).size).toBeGreaterThan(2);
+    const count = (id: string) => spices.filter((x) => x === id).length;
+    expect(count('mexikanisch')).toBeGreaterThan(count('indisch'));
   });
 });

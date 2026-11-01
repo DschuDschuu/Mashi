@@ -4,6 +4,7 @@ import {
   currentStep, directionOf, matchingRecipes, plateImage, startLabel, understand, type Choice, type CravingState,
 } from '../../domain/craving';
 import { randomHue } from '../../services/images/imageProvider';
+import { NO_SPICE, SPICES, defaultSpice } from '../../domain/cookStyle';
 import type { Recipe } from '../../domain/types';
 import { keyOfName } from '../../domain/mealplan';
 import { currentContent, newId, totalMinutes } from '../../domain/recipe';
@@ -99,7 +100,7 @@ export function CravingScreen({ q }: { q: string }) {
         </div>
       )} />
       {/* neue Wahl (auch ein neuer Wurf) = neuer Vorschlag für Name und Portionen */}
-      {!currentStep(state) && <Finished key={JSON.stringify(state.picks)} q={q} state={state} own={own} />}
+      {!currentStep(state) && <Finished key={JSON.stringify(state.picks)} q={q} state={state} own={own} set={set} />}
       {/* im Teller nicht (Julia: dort gehören nur die eigenen Rezepte der Stufe hin – die stehen im Karussell) */}
       {view === 'list' && <Inspiration state={state} own={own} />}
     </main>
@@ -185,7 +186,7 @@ function RecipeLinks({ list }: { list: Recipe[] }) {
  * jetzt kochen, in den Wochenplan oder gleich als Rezept speichern. Kochen und Plan legen ein Probiergericht an
  * (Recipe.trial): ein echtes Rezept, aber erst nach „Wie war's?“ auf der Startseite im Kochbuch (Julia: erst testen).
  */
-function Finished({ q, state, own }: { q: string; state: CravingState; own: Choice[] }) {
+function Finished({ q, state, own, set }: { q: string; state: CravingState; own: Choice[]; set: (s: CravingState) => void }) {
   const hh = householdOf(usePlan());
   const recipes = useRecipes();
   const [title, setTitle] = useState(() => cravingTitle(state, own));
@@ -196,9 +197,11 @@ function Finished({ q, state, own }: { q: string; state: CravingState; own: Choi
   const timeline = cravingTimeline(steps);
   const text = cravingText(state, own);
   const total = cravingMinutes(steps);
+  const spice = state.spice ?? defaultSpice(state.direction) ?? NO_SPICE;
 
   const ensure = (trial: boolean): string => {
-    const key = JSON.stringify([state.picks, title.trim(), servings]);
+    // andere Würze oder Zubereitung = andere Schritte → ein neues Gericht
+    const key = JSON.stringify([state.picks, state.spice, state.ways, title.trim(), servings]);
     const known = made.current?.key === key && recipes.find((r) => r.id === made.current!.id);
     if (known) {
       if (!trial && known.trial) keepTrial(known.id);
@@ -248,13 +251,31 @@ function Finished({ q, state, own }: { q: string; state: CravingState; own: Choi
       {steps.length > 0 && (
         <>
           <h3 className="small muted craving-done__how">So geht's{total ? ` · in etwa ${mins(total)} fertig` : ''}</h3>
+          {/* Würze (Julia: mehr Abwechslung) – die der Richtung ist vorgewählt, „ohne“ würzt nicht */}
+          <div className="craving-spice" role="group" aria-label="Würze">
+            <span className="small muted">Würze</span>
+            {[...SPICES, { id: NO_SPICE, name: 'ohne' }].map((x) => (
+              <button key={x.id} type="button" className={`chip chip--xs${spice === x.id ? ' is-on' : ''}`} aria-pressed={spice === x.id}
+                onClick={() => set({ ...state, spice: x.id })}>{x.name}</button>
+            ))}
+          </div>
           {/* als Zeitleiste (Julia): wann du was anfängst, damit alles zusammen fertig ist */}
           <ol className="craving-done__steps craving-timeline">
             {timeline.steps.map((s) => (
               <li key={s.id}>
                 <span className="craving-timeline__at">{startLabel(s)}</span>
                 <span><strong>{s.name}</strong>{s.text ? ` ${s.text}` : ''}{s.minutes ? ` · ${mins(s.minutes)}` : ''}
-                  {s.alone && <span className="muted"> · läuft allein</span>}</span>
+                  {s.alone && <span className="muted"> · läuft allein</span>}
+                  {/* anders zubereiten (Brokkoli gedämpft, geröstet …) – auch in der gemeinsamen Pfanne je Baustein */}
+                  {s.options?.map((o) => (
+                    <span key={o.id} className="craving-ways" role="group" aria-label={`Zubereitung ${o.name}`}>
+                      {s.options!.length > 1 && <span className="small muted">{o.name}</span>}
+                      {o.ways.map((w) => (
+                        <button key={w.id} type="button" className={`chip chip--xs${o.chosen === w.id ? ' is-on' : ''}`} aria-pressed={o.chosen === w.id}
+                          onClick={() => set({ ...state, ways: { ...state.ways, [o.id]: w.id } })}>{w.label}</button>
+                      ))}
+                    </span>
+                  ))}</span>
               </li>
             ))}
           </ol>

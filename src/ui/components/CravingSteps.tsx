@@ -100,6 +100,9 @@ export function StageOptions({ state, step, own, set, mini = false }: {
   const excludedNames = excluded.map((c) => c.name).join(', ');
   const label = labelOf(step);
   const multi = MULTI.has(step);
+  // für „Fertig – Rest weglassen“: was schon auf dem Teller liegt (auch „steckt in“) und was noch offen ist
+  const done = STAGES.filter((k) => (state.picks[k] ?? []).length > 0 || !!coveredBy(state, k, own));
+  const open = STAGES.filter((k) => !state.closed.includes(k));
   const choose = (id: string) => set(pick(state, step, id, own));
 
   const addOwn = () => {
@@ -176,6 +179,13 @@ export function StageOptions({ state, step, own, set, mini = false }: {
               Ohne {label} weiter
             </button>
           )}
+        {/* schnell fertig (Julia: „Pasta mit Pesto, fertig“) – sobald zwei Stufen gefüllt sind, schließt das alles Offene;
+            Gewähltes bleibt */}
+        {done.length >= 2 && open.length >= 2 && (
+          <button type="button" className="btn btn--ghost btn--sm" onClick={() => set(open.reduce((acc, k) => closeStep(acc, k), state))}>
+            Fertig – Rest weglassen
+          </button>
+        )}
       </div>
     </>
   );

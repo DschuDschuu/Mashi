@@ -16,7 +16,7 @@ Live: <https://dschudschuu.github.io/Mashi/> · installierbar als App (PWA), fun
   (füllt, was offen ist, bevorzugt, was bald weg muss) – Mashi baut das Gericht Stufe für Stufe (Kohlenhydrat,
   Protein, Sauce, Gemüse, Topping) und schlägt vor, was dazu passt; eigene Rezepte oder einzelne Teile davon lassen
   sich als Baustein markieren – auch für mehrere Stufen (Bolognese = Protein und Sauce) oder statt eines festen Bausteins
-  (deine Guacamole), mit „Passt gut zu“ (Bolognese → Spätzle, Parmesan); Vorgekochtes steht vorn. Am Ende eine Zeitleiste (was allein läuft, startet so,
+  (deine Guacamole), mit „Passt gut zu“ (Bolognese → Spätzle, Parmesan); Vorgekochtes steht vorn; „Fertig – Rest weglassen“, sobald zwei Stufen gefüllt sind. Kochstil: Würze je Richtung (umschaltbar, auch „ohne“), Zubereitung je Baustein wählbar (Brokkoli gedämpft, geröstet, mit den Nudeln …), Zusammenführen (eine Pfanne, ein Blech, in der Sauce), zum Schluss „Anrichten“ – der Würfel würfelt Würze und Zubereitung mit. Am Ende eine Zeitleiste (was allein läuft, startet so,
   dass alles zusammen fertig ist; erst Kaltes, dann Heißes – auch im Kochmodus), dann: jetzt kochen, in den Wochenplan
   oder als Rezept speichern (als Bild der Teller, wie du ihn gebaut hast) – nach dem Kochen fragt die Startseite „Wie war's?“, erst dann kommt es ins Kochbuch
   (als eigenes Rezept oder als umschaltbare Variante eines bestehenden, z. B. „Original | mit Spätzle“).

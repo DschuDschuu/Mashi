@@ -7,6 +7,7 @@ import { currentContent, totalMinutes } from './recipe';
 import { searchRecipes } from './recipeSearch';
 import { cookingContent } from './homemade';
 import { SIDE_KINDS, SIDES, comboOf, foodOf, ownEntry, ownSidesOf, prepOf, sideIngredient, sideOf, sidesOfKind, type ComboStep, type SideKind, type SidePrep } from './sides';
+import { OWN_WAY, SPICES, composeSteps, coveredByServing, defaultSpice, servingText, spiceOf, wayOf, waysOf, type StyleStep, type WayContext } from './cookStyle';
 import type { Ingredient, Recipe, RecipeContent, RecipeImage, Step } from './types';
 
 /**
@@ -121,8 +122,12 @@ export interface CravingState {
   closed: SideKind[];
   /** Ausgeschlossenes aus dem Textfeld („Pasta ohne Hack“) – steht nicht zur Wahl, bis „alle zeigen“ oder du es doch wählst */
   without?: string[];
+  /** Würze (cookStyle.ts: SPICES, „ohne“) – fehlt: die der Richtung */
+  spice?: string;
+  /** Zubereitung je Baustein (cookStyle.ts: WAYS) – fehlt: dein Standard bzw. der Vorschlag der Richtung */
+  ways?: Record<string, string>;
   /** was der letzte Wurf gesetzt hat (rollCraving) – „Nochmal würfeln“ tauscht nur das, deine eigene Wahl bleibt */
-  rolled?: { picks: string[]; closed: SideKind[]; direction?: string };
+  rolled?: { picks: string[]; closed: SideKind[]; direction?: string; spice?: string; ways?: Record<string, string> };
 }
 
 export const EMPTY_CRAVING: CravingState = { picks: {}, closed: [] };
@@ -424,8 +429,14 @@ function unroll(s: CravingState): CravingState {
     if (left.length) picks[k] = left;
   }
   const back: CravingState = { ...rest, picks, closed: s.closed.filter((k) => !rolled.closed.includes(k)) };
-  // die gewürfelte Richtung nur, wenn du sie nicht inzwischen selbst gewechselt hast
+  // die gewürfelte Richtung nur, wenn du sie nicht inzwischen selbst gewechselt hast – Würze und Zubereitung genauso
   if (rolled.direction && back.direction === rolled.direction) delete back.direction;
+  if (rolled.spice && back.spice === rolled.spice) delete back.spice;
+  if (rolled.ways && back.ways) {
+    const kept = Object.entries(back.ways).filter(([id, way]) => rolled.ways![id] !== way);
+    if (kept.length) back.ways = Object.fromEntries(kept);
+    else delete back.ways;
+  }
   return back;
 }
 
@@ -461,13 +472,30 @@ export function rollCraving(s: CravingState, opts: {
     }
     st = closeStep(st, kind);
   }
+  // Würze und Zubereitung würfeln mit (cookStyle.ts) – was du selbst gewählt hast, bleibt, dein Standard aus den
+  // Einstellungen auch. Die Würze der Richtung und der Vorschlag der Richtung kommen am häufigsten, damit es passt.
+  const spice = st.spice ? undefined : weighted(SPICES, (x) => (x.id === defaultSpice(st.direction) ? 3 : 1) * (x.id === s.rolled?.spice ? 0.2 : 1), rng).id;
+  const choices = cravingChoices(st, own, household);
+  const ctx = wayContext(st, choices);
+  const ways: Record<string, string> = {};
+  for (const c of choices.filter((x) => isFixed(x) && !st.ways?.[x.id] && !household?.sidePrep?.[x.id])) {
+    const options = waysOf(c.id, ctx);
+    if (options.length < 2) continue;
+    const proposed = wayOf(c.id, ctx);
+    ways[c.id] = weighted(options, (w) => (w.id === proposed?.id ? 2 : 1) * (w.id === s.rolled?.ways?.[c.id] ? 0.2 : 1), rng).id;
+  }
+  const rolledWays = Object.keys(ways).length ? ways : undefined;
   const before = new Set(allPicks(start));
   return {
     ...st,
+    ...(spice ? { spice } : {}),
+    ...(rolledWays ? { ways: { ...st.ways, ...rolledWays } } : {}),
     rolled: {
       picks: allPicks(st).filter((id) => !before.has(id)),
       closed: st.closed.filter((k) => !start.closed.includes(k)),
       ...(!start.direction && st.direction ? { direction: st.direction } : {}),
+      ...(spice ? { spice } : {}),
+      ...(rolledWays ? { ways: rolledWays } : {}),
     },
   };
 }
@@ -581,14 +609,54 @@ export const readyPrep = (kind: SideKind): SidePrep =>
     : kind === 'sauce' ? { text: 'aus dem Kühlschrank, bei Bedarf erwärmen', minutes: 3 }
       : { text: 'aus dem Kühlschrank aufwärmen', minutes: 5 };
 
+const isFixed = (c: Choice) => !c.recipeId && !!sideOf(c.id);
+
+/** Woran eine Zubereitung hängt (cookStyle.ts: waysOf) – eine köchelnde Sauce, Pasta im Salzwasser */
+function wayContext(s: CravingState, choices: readonly Choice[]): WayContext {
+  return {
+    direction: s.direction,
+    sauceSimmers: choices.some((c) => c.kind === 'sauce' && isFixed(c) && !c.ready && /k(ö|oe)cheln/i.test(c.prep?.text ?? '')),
+    pastaBoils: choices.some((c) => c.id === 'pasta'),
+  };
+}
+
+/**
+ * Die Schritte mit Kochstil (cookStyle.ts; Julia: „die Kochschritte sind pro Baustein immer sehr identisch“):
+ * Zubereitung je Baustein – deine Wahl am Gericht, dein Standard aus den Einstellungen, der Vorschlag der Richtung –,
+ * zusammengeführt (Pfanne, Blech, Sauce, Nudeln) und gewürzt, am Ende „Anrichten“. Dieselben für „So geht's“ und das
+ * Rezept. Deine Rezepte und Vorgekochtes bleiben, wie sie sind.
+ */
+export function cookSteps(s: CravingState, own: readonly Choice[] = [], household?: Pick<Household, 'sidePrep'>): StyleStep[] {
+  const choices = cravingChoices(s, own, household);
+  const ctx = wayContext(s, choices);
+  const spice = spiceOf(s.spice, s.direction);
+  const base = choices.map((c): StyleStep => {
+    if (c.ready) return { ids: [c.id], kind: c.kind, name: c.name, ...readyPrep(c.kind) };
+    if (!isFixed(c)) return { ids: [c.id], kind: c.kind, name: c.name, text: c.prep?.text, minutes: c.prep?.minutes ?? 0 };
+    const mine = household?.sidePrep?.[c.id];
+    const way = wayOf(c.id, ctx, s.ways?.[c.id], !!mine);
+    const ways = [...(mine ? [{ id: OWN_WAY, label: 'deine', ...mine }] : []), ...waysOf(c.id, ctx)];
+    const prep = way ?? c.prep;
+    return {
+      ids: [c.id], kind: c.kind, name: c.name, text: prep?.text, minutes: prep?.minutes ?? 0, fixed: true,
+      ...(way ? { way } : {}),
+      ...(ways.length > 1 ? { options: [{ id: c.id, name: c.name, ways, chosen: way?.id ?? OWN_WAY }] } : {}),
+    };
+  });
+  const names: Partial<Record<SideKind, string[]>> = {};
+  for (const c of choices) names[c.kind] = [...(names[c.kind] ?? []), c.name];
+  const serving = servingText(s.direction, names, spice);
+  // „drüberstreuen“ und Pesto unter die Nudeln stehen dann im Anrichten – kein eigener Schritt mehr
+  const steps = composeSteps(base, spice).filter((st) => !(serving && st.fixed && st.minutes <= 0 && coveredByServing(st.text)));
+  return serving ? [...steps, { ids: ['anrichten'], name: 'Anrichten', text: serving, minutes: 0, serving: true }] : steps;
+}
+
 /**
  * „So geht's“: das Längste zuerst, damit alles gleichzeitig fertig ist (wie comboSteps beim Baukasten-Abend).
- * Vorgekochtes kommt nur aus dem Kühlschrank (readyPrep).
+ * Vorgekochtes kommt nur aus dem Kühlschrank (readyPrep). Zusammengeführte Schritte haben eine id aus allen Bausteinen.
  */
-export function cravingSteps(s: CravingState, own: readonly Choice[] = [], household?: Pick<Household, 'sidePrep'>): { id: string; name: string; text?: string; minutes: number }[] {
-  return cravingChoices(s, own, household)
-    .map((c) => ({ id: c.id, name: c.name, ...(c.ready ? readyPrep(c.kind) : { text: c.prep?.text, minutes: c.prep?.minutes ?? 0 }) }))
-    .sort((a, b) => b.minutes - a.minutes);
+export function cravingSteps(s: CravingState, own: readonly Choice[] = [], household?: Pick<Household, 'sidePrep'>): (StyleStep & { id: string })[] {
+  return cookSteps(s, own, household).map((st) => ({ ...st, id: st.ids.join('+') })).sort((a, b) => b.minutes - a.minutes);
 }
 
 /**
@@ -686,11 +754,14 @@ export function cravingContent(s: CravingState, opts: {
       const minutes = c.prep?.minutes ?? 0;
       steps.push({ minutes, list: [{ id: newId(), text: `${c.name} nach deinem Rezept zubereiten`, ...(minutes ? { timerMinutes: minutes } : {}) }] });
     } else {
+      // fester Baustein: nur die Zutat hier – seine Schritte kommen mit Kochstil aus cookSteps (unten)
       const ing = sideIngredient(c.id, servings, household);
       if (ing) ingredients.push({ ...ing, id: newId() });
-      const minutes = c.prep?.minutes ?? 0;
-      steps.push({ minutes, text: c.prep?.text, list: [{ id: newId(), text: c.prep?.text ? `${c.name}: ${c.prep.text}` : c.name, ...(minutes ? { timerMinutes: minutes } : {}) }] });
     }
+  }
+  // feste Bausteine zusammengeführt und gewürzt, am Ende „Anrichten“ – dasselbe wie in „So geht's“
+  for (const st of cookSteps(s, own, household).filter((x) => x.fixed || x.serving)) {
+    steps.push({ minutes: st.minutes, text: st.text, list: [{ id: newId(), text: st.text ? `${st.name}: ${st.text}` : st.name, ...(st.minutes ? { timerMinutes: st.minutes } : {}) }] });
   }
   // in der Reihenfolge der Zeitleiste, der erste Schritt jeder Gruppe sagt, wann (Julia: auch im Kochmodus) –
   // „Sofort – Reis: …“, „Nach 5 Min. – Tofu: …“, „Zum Schluss – Sesam: …“

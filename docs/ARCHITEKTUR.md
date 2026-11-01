@@ -21,6 +21,8 @@ mashi/
 │  │  ├─ craving.ts           „Worauf hast du Lust?“: Richtungen (Tortilla, Bowl …), was zusammenpasst, Textfeld verstehen,
 │  │  │                       Rezepte/Teile als Bausteine (auch für mehrere Stufen), aus dem Gericht ein Rezept
 │  │  │                       (Probiergericht), „Passt dazu“, Grundlage als Start für den Baukasten im Wochenplan
+│  │  ├─ cookStyle.ts         Kochstil im Baukasten: Würze je Richtung, Zubereitungen je Baustein, Zusammenführen
+│  │  │                       (Pfanne, Blech, Sauce, Nudeln), „Anrichten“ – nur Regeln und Texte, keine Mengen
 │  │  ├─ weekBases.ts         Grundlage-Zutat einer Verwandlung nicht einkaufen (für Einkauf und Vorrat)
 │  │  ├─ pantry.ts            Speisekammer: Vorrat, Bon-Import, beim Kochen abziehen, Verplantes
 │  │  ├─ packs.ts             Packungen: anbrechen, „ganze Packung?“, Größe nachtragen, zusammenlegen
