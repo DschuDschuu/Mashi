@@ -9,10 +9,11 @@ import type { Household, Week, Weekday } from '../../domain/mealplan';
 import { cookStart } from '../../domain/cookDay';
 import type { Recipe } from '../../domain/types';
 import { ComboStepper } from './ComboStepper';
+import { ComboSteps } from './ComboSteps';
 import { comboText } from '../../domain/sides';
 import { preparedPortions } from '../../domain/baseStock';
 import { specialDays } from '../../domain/shelfLife';
-import { freezeFromFridge, freezePantryItem, householdOf, setPrepInfo, setWeek, unfreezeToFridge, useFoodTable, usePantry, usePlan, useRecipes } from '../../data/store';
+import { freezeFromFridge, freezePantryItem, householdOf, setMealStyle, setPrepInfo, setWeek, unfreezeToFridge, useFoodTable, usePantry, usePlan, useRecipes } from '../../data/store';
 import { navigate } from '../../router';
 import { toast } from '../toast';
 import { useSheet } from '../useSheet';
@@ -583,6 +584,7 @@ function DishSheet({ m, view, recipes, asks, servings, onCook, cookNote, onPut, 
   onPut: (recipeId: string, side?: string) => void; onPortions: (v: number) => void; onSwap: () => void; onBack: () => void; onFreeze: () => void; onClose: () => void;
 }) {
   const ref = useSheet(onClose);
+  const hh = householdOf(usePlan());
   const baseId = m.meal.baseId;
   const base = recipes.find((r) => r.id === baseId);
   const dishes = byEffort(transformsOf(baseId, recipes));
@@ -621,6 +623,13 @@ function DishSheet({ m, view, recipes, asks, servings, onCook, cookNote, onPut, 
           <span>Portionen an diesem {slot.lunch ? 'Mittag' : 'Abend'}</span>
           <Stepper small value={servings} onChange={onPortions} label={`Portionen ${slotText(slot)}`} />
         </div>
+        {/* „So geht's“ schon vorher (Julia): Würze und Zubereitung für jeden Abend einstellen, nicht erst am Tag selbst */}
+        {base && m.meal.recipeId === baseId && m.meal.side && !m.meal.done && (
+          <section className="dish__how">
+            <h3 className="small muted">So geht's</h3>
+            <ComboSteps side={m.meal.side} base={base} household={hh} portions={servings} onStyle={(st) => setMealStyle(m.meal.id, st)} />
+          </section>
+        )}
         {onCook && <button type="button" className="btn btn--primary btn--block dish__cook" onClick={onCook}><Icon name="play" size={18} /> Kochmodus starten</button>}
         {cookNote && <p className="small muted dish__cooknote">{cookNote}</p>}
         <div className="row-gap dish__actions">

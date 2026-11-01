@@ -1,9 +1,11 @@
 import { useMemo, useState } from 'react';
-import { baseCraving, cravingCombo } from '../../domain/craving';
-import { comboText, withStyle } from '../../domain/sides';
+import { baseCraving, cravingCombo, currentStep } from '../../domain/craving';
+import { comboText, sidesOf, withStyle } from '../../domain/sides';
 import type { Recipe } from '../../domain/types';
 import { ask } from '../confirm';
+import { householdOf, usePlan } from '../../data/store';
 import { useOwnChoices } from '../cravingHooks';
+import { ComboSteps } from './ComboSteps';
 import { CravingBuilder, useCravingView, ViewToggle } from './CravingBuilder';
 import { Icon } from './Icon';
 
@@ -17,6 +19,7 @@ import { Icon } from './Icon';
 export function ComboStepper({ base, onAdd, label = 'Zusammenstellen', lunch = false }: { base: Recipe; onAdd: (side: string | undefined) => void; label?: string; lunch?: boolean }) {
   const start = useMemo(() => baseCraving(base), [base]);
   const mine = useOwnChoices();
+  const hh = householdOf(usePlan());
   const own = useMemo(() => [...start.own, ...mine.filter((c) => c.recipeId !== base.id)], [start.own, mine, base.id]);
   const [open, setOpen] = useState(false);
   const [state, setState] = useState(start.state);
@@ -38,13 +41,24 @@ export function ComboStepper({ base, onAdd, label = 'Zusammenstellen', lunch = f
     );
   }
   const combo = cravingCombo(state, own, base.id);
+  // der Kochstil reist mit (sides.ts: withStyle): Richtung, und was du hier schon an Würze und Zubereitung wählst –
+  // nur für Bausteine, die noch auf dem Teller liegen
+  const onPlate = new Set(sidesOf(combo).map((x) => x.id));
+  const side = withStyle(combo, { direction: state.direction, spice: state.spice, ways: Object.fromEntries(Object.entries(state.ways ?? {}).filter(([id]) => onPlate.has(id))) });
   return (
     <div className="combo-stepper">
       <div className="combo-stepper__top"><ViewToggle view={view} onChange={setView} /></div>
       <CravingBuilder view={view} state={state} set={setState} own={own} small />
+      {/* fertig zusammengestellt: „So geht's“ wie am Abend – Würze und Zubereitung gleich hier einstellen (Julia) */}
+      {side && !currentStep(state) && (
+        <section className="combo-stepper__how">
+          <h3 className="small muted">So geht's</h3>
+          <ComboSteps side={side} base={base} household={hh}
+            onStyle={(st) => setState({ ...state, ...(st.spice ? { spice: st.spice } : {}), ...(st.ways ? { ways: { ...state.ways, ...st.ways } } : {}) })} />
+        </section>
+      )}
       <div className="row-gap">
-        {/* die Richtung reist mit (sides.ts: withStyle) – daraus Würze, Zubereitung und Anrichten im „So geht's“ des Abends */}
-        <button type="button" className="btn btn--primary btn--sm" onClick={() => { onAdd(withStyle(combo, { direction: state.direction })); close(); }}>
+        <button type="button" className="btn btn--primary btn--sm" onClick={() => { onAdd(side); close(); }}>
           <Icon name="plus" size={14} /> Für diesen {lunch ? 'Mittag' : 'Abend'}{combo ? ` · mit ${comboText(combo)}` : ' · pur'}
         </button>
         <button type="button" className="btn btn--ghost btn--sm" onClick={cancel}>Abbrechen</button>

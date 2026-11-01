@@ -63,6 +63,8 @@ export function ComboSteps({ side, base, household, carry, portions = 1, onStyle
                 ? <button type="button" className="combo-steps__recipe" onClick={() => navigate(to)}>{s.name}</button>
                 : <b>{s.name}</b>} {s.text ?? <span className="muted">– noch keine Zubereitung</span>}{s.minutes > 0 ? <span className="muted"> · {s.minutes} Min.</span> : null}
                 {s.source === 'grundlage' && <span className="tag">nur hier</span>}
+                {/* Stift direkt am Text – unter den Chips stand er sonst allein in einer Zeile */}
+                {s.fixed && s.ids.length === 1 && <button type="button" className="iconbtn iconbtn--sm" aria-label={`Zubereitung ${s.name} ändern`} onClick={() => setEdit(s.ids[0])}><Icon name="pencil" size={14} /></button>}
                 {/* anders zubereiten – auch in der gemeinsamen Pfanne je Baustein */}
                 {onStyle && s.options?.map((o) => (
                   <span key={o.id} className="craving-ways" role="group" aria-label={`Zubereitung ${o.name}`}>
@@ -73,7 +75,6 @@ export function ComboSteps({ side, base, household, carry, portions = 1, onStyle
                     ))}
                   </span>
                 ))}</span>
-              {s.fixed && s.ids.length === 1 && <button type="button" className="iconbtn iconbtn--sm" aria-label={`Zubereitung ${s.name} ändern`} onClick={() => setEdit(s.ids[0])}><Icon name="pencil" size={14} /></button>}
             </li>
           );
         })}
