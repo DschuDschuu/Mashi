@@ -3,7 +3,7 @@ import PouchDB from 'pouchdb-core';
 import memory from 'pouchdb-adapter-memory';
 import { describe, expect, it, vi } from 'vitest';
 import { PouchRecipeRepository, type RecipeDb } from './pouchRepository';
-import { addPantryItem, addToPlan, answerLeftover, clearPlan, cookBase, cookDay, cookParts, saveContent, setMealStyle, createRecipe, deleteRecipe, freezeFromFridge, makeBase, markCooked, scheduleRecipe, currentPantry, currentPlan, eatMeal, eatOutToday, initStore, setHousehold, setPrepInfo, setWeek, togglePlanCooked, unfreezeToFridge, whenSaved } from './store';
+import { addPantryItem, addToPlan, answerLeftover, clearPlan, cookBase, cookDay, cookParts, saveContent, setMealStyle, createRecipe, deleteRecipe, freezeFromFridge, makeBase, markCooked, scheduleRecipe, currentPantry, currentPlan, eatMeal, eatOutToday, initStore, setHousehold, setPrepInfo, setWeek, togglePlanCooked, uncookRecipe, unfreezeToFridge, whenSaved } from './store';
 import { buildShoppingList } from '../domain/mealplan';
 import { shoppingList } from '../domain/restock';
 import { mealKey, putMeal, setExtra, suggestWeek } from '../domain/week';
@@ -272,6 +272,44 @@ describe('Store: Vorkoch-Woche (Julia: Bolo am Sonntag, unter der Woche Nudeln u
     expect(currentPlan().household?.lastWays).toMatchObject({ 'pasta:brokkoli': 'gedaempft' });
     meal.undo();
     expect(currentPlan().household?.lastWays).toBeUndefined();
+  });
+
+  it('wie letztes Mal: ein mitgekochter Abend lernt nichts – gekocht wurde er wie am ersten Tag (Rundgang)', async () => {
+    await freshStore('last-ways-along');
+    const bolo = createRecipe({ ...content('Testbolo', [{ id: 'h', name: 'Hackfleisch', amount: 100, unit: 'g' }]), servings: 1 }, { source: 'selbst', status: 'kochbuch' });
+    setHousehold({ portions: 1, lunchDays: [] });
+    let n = 0;
+    setWeek(suggestWeek([6], [{ baseId: bolo, meals: [mealKey(bolo, 'pasta,brokkoli,richtung:pasta,weg:brokkoli:gedaempft'), mealKey(bolo, 'pasta,brokkoli,richtung:pasta,weg:brokkoli:nudeln')] }], () => `m${++n}`));
+    cookBase(bolo);
+    const [first, second] = currentPlan().week!.meals.map((m) => m.id);
+    eatMeal(first, [second]); // heute gedämpft – und gleich für morgen mitgekocht
+    expect(currentPlan().household?.lastWays).toMatchObject({ 'pasta:brokkoli': 'gedaempft' });
+    eatMeal(second); // geplant war „mit den Nudeln“, gekocht wurde aber schon gestern
+    expect(currentPlan().household?.lastWays).toMatchObject({ 'pasta:brokkoli': 'gedaempft' });
+  });
+
+  it('wie letztes Mal: im Plan abgehakt → gemerkt, mit Rückgängig; Haken zurückgenommen → wieder vergessen (Rundgang)', async () => {
+    await freshStore('last-ways-plan');
+    setHousehold({ portions: 1, lunchDays: [] });
+    const id = createRecipe(content('Testteller', [{ id: 'r', name: 'Reis', amount: 100, unit: 'g' }]), { source: 'selbst', status: 'zum_testen', style: { direction: 'bowl', ways: { brokkoli: 'ofen' } } });
+    addToPlan(id, 1);
+    const ticked = togglePlanCooked(id)!;
+    expect(currentPlan().household?.lastWays).toEqual({ 'bowl:brokkoli': 'ofen' });
+    ticked.undo!();
+    expect(currentPlan().household?.lastWays).toBeUndefined();
+    togglePlanCooked(id);
+    togglePlanCooked(id); // Haken wieder weg
+    expect(currentPlan().household?.lastWays).toBeUndefined();
+  });
+
+  it('wie letztes Mal: „Heute gekocht“ zurückgenommen → wieder vergessen (Rundgang)', async () => {
+    await freshStore('last-ways-uncook');
+    setHousehold({ portions: 1, lunchDays: [], lastWays: { 'pasta:brokkoli': 'nudeln' } });
+    const id = createRecipe(content('Testteller', [{ id: 'r', name: 'Reis', amount: 100, unit: 'g' }]), { source: 'selbst', status: 'zum_testen', style: { direction: 'bowl', ways: { brokkoli: 'ofen' } } });
+    markCooked(id, 1);
+    expect(currentPlan().household?.lastWays).toEqual({ 'pasta:brokkoli': 'nudeln', 'bowl:brokkoli': 'ofen' });
+    uncookRecipe(id);
+    expect(currentPlan().household?.lastWays).toEqual({ 'pasta:brokkoli': 'nudeln' });
   });
 
   it('wie letztes Mal: Gericht von der Lust-Seite gekocht → seine Zubereitung gemerkt (Recipe.style); „Rückgängig“ zurück', async () => {

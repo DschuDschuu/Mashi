@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SPICES, WAYS, chosenWays, composeSteps, coveredByServing, learnWays, learnedFor, servingText, spiceOf, wayOf, waysOf, type StyleStep, guessFamily, needsFamily, familyOf, type WayContext } from './cookStyle';
+import { SPICES, WAYS, chosenWays, composeSteps, coveredByServing, forgetWays, learnWays, learnedFor, servingText, spiceOf, wayOf, waysOf, type StyleStep, guessFamily, needsFamily, familyOf, type WayContext } from './cookStyle';
 import { sideOf } from './sides';
 
 const step = (id: string, kind: StyleStep['kind'], name: string, text: string, minutes: number, extra: Partial<StyleStep> = {}): StyleStep =>
@@ -55,6 +55,13 @@ describe('Kochstil: Würze und Zubereitung (Julia: „die Kochschritte sind pro 
     // aus den Schritten – auch aus der gemeinsamen Pfanne; deine eigene Zubereitung nicht, die gilt ohnehin
     expect(chosenWays([{ options: [{ id: 'brokkoli', name: 'Brokkoli', ways: [], chosen: 'ofen' }, { id: 'paprika', name: 'Paprika', ways: [], chosen: 'eigen' }] }, {}]))
       .toEqual({ brokkoli: 'ofen' });
+  });
+
+  it('doch nicht gekocht: vergessen, was dieses Gericht gemerkt hat – nur, wo seither nichts anderes gemerkt ist', () => {
+    const last = { 'bowl:brokkoli': 'ofen', 'bowl:paprika': 'pfanne', 'pasta:brokkoli': 'nudeln' };
+    expect(forgetWays(last, 'bowl', { brokkoli: 'ofen', paprika: 'ofen' })).toEqual({ 'bowl:paprika': 'pfanne', 'pasta:brokkoli': 'nudeln' });
+    expect(forgetWays(last, 'bowl', { brokkoli: 'gedaempft' })).toBe(last); // nichts davon gemerkt → dasselbe Objekt
+    expect(forgetWays({ 'bowl:brokkoli': 'ofen' }, 'bowl', { brokkoli: 'ofen' })).toBeUndefined();
   });
 });
 

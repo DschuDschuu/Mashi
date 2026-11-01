@@ -11,7 +11,7 @@ import { weekBaseIds } from '../../domain/weekBases';
 import { activeChoice } from '../../domain/choices';
 import { asCooked, formatAmount } from '../../domain/scaling';
 import { baseSupply, type BaseSupply } from '../../domain/baseStock';
-import { doneParts, partLabel } from '../../domain/parts';
+import { doneParts, donePartsOf, partLabel } from '../../domain/parts';
 import { pickFor } from '../../domain/nutrition/variants';
 import type { Recipe } from '../../domain/types';
 import { preparedOf } from '../../domain/prepared';
@@ -481,7 +481,8 @@ function ThawPill({ needs, recipeId, title, servings }: { needs: ThawNeed[]; rec
 
 /** Teile, die schon fertig in der Speisekammer stehen (Julia: „Sauce gestern gekocht“) – „Sauce fertig“ */
 function DonePartsLine({ recipeId }: { recipeId: string }) {
-  const done = doneParts(usePantry().items, recipeId, useRecipe(recipeId)?.partsFrom);
+  const r = useRecipe(recipeId);
+  const done = r ? donePartsOf(usePantry().items, r) : doneParts(usePantry().items, recipeId);
   if (!done.length) return null;
   return <span className="small plan-done-parts"><Icon name="check" size={13} /> {done.map(partLabel).join(', ')} fertig</span>;
 }

@@ -155,13 +155,20 @@ export function merge3Plan(base: MealPlan, ours: MealPlan, theirs: MealPlan): Me
  */
 function merge3Meal(b: WeekMeal | undefined, o: WeekMeal | undefined, t: WeekMeal | undefined): WeekMeal | undefined {
   if (!b || !o || !t) return o ?? t;
-  const keys = [...new Set([b, o, t].flatMap((m) => Object.keys(m)))].filter((k) => k !== 'side') as (keyof WeekMeal)[];
+  // Gericht, Grundlage und Bausteine sind EINE Wahl (week.ts: putMeal setzt sie zusammen) – hat ein Gerät das Gericht
+  // gewechselt, gilt seine Wahl ganz (Rundgang: sonst „Wraps“ aus der Chili-Grundlage); unseres, wenn beide
+  const DISH = ['recipeId', 'baseId', 'side'] as const;
+  const dish = (m: WeekMeal) => [m.recipeId, m.baseId];
+  const pick = !same(dish(b), dish(o)) ? o : !same(dish(b), dish(t)) ? t : undefined;
+  const keys = [...new Set([b, o, t].flatMap((m) => Object.keys(m)))].filter((k) => !(DISH as readonly string[]).includes(k)) as (keyof WeekMeal)[];
   const meal = Object.fromEntries(keys.flatMap((k) => {
     const v = merge3Value(b[k], o[k], t[k]);
     return v === undefined ? [] : [[k, v]];
   })) as unknown as WeekMeal;
-  const side = merge3Side(b.side, o.side, t.side);
-  return side ? { ...meal, side } : meal;
+  // dasselbe Gericht an beiden Geräten: Bausteine als Ganzes, Kochstil je Eintrag
+  const side = pick ? pick.side : merge3Side(b.side, o.side, t.side);
+  const { recipeId, baseId } = pick ?? b;
+  return { ...meal, recipeId, baseId, ...(side ? { side } : {}) };
 }
 
 /**

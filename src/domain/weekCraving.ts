@@ -156,7 +156,8 @@ export function weekCookSteps(side: string | undefined, base: Recipe, opts: {
   const steps = composeSteps([baseStep, ...sides, ...own].map(carried), spice)
     .filter((st) => !(serving && st.fixed && st.minutes <= 0 && coveredByServing(st.text)))
     // ging der Hinweis beim Zusammenführen unter (aufs Blech: „im Ofen …“ wird gekürzt), steht er mit Namen dahinter
-    .map((st) => (hint && carriedName && st.ids.includes(carry!.entry) && !st.text?.includes(hint)
+    // – nicht bei dem, was schon fertig dasteht (Rundgang: „aus dem Kühlschrank … gleich mitkochen“)
+    .map((st) => (hint && carriedName && !st.ready && st.ids.includes(carry!.entry) && !st.text?.includes(hint)
       ? { ...st, text: `${st.text} – ${carriedName} ${hint}` }
       : st));
   return serving ? [...steps, { ids: ['anrichten'], name: 'Anrichten', text: serving, minutes: 0, serving: true, source: 'standard' }] : steps;

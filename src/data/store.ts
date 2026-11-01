@@ -20,10 +20,10 @@ import { currentContent, currentVersion, newId, sameContent, withNewVersion } fr
 import { addChoiceFrom } from '../domain/choices';
 import { retireMix, sideContent } from '../domain/mix';
 import { ownIngredients, readyPortions, staleTrials } from '../domain/craving';
-import { chosenWays, learnWays } from '../domain/cookStyle';
+import { chosenWays, forgetWays, learnWays } from '../domain/cookStyle';
 import { weekCookSteps } from '../domain/weekCraving';
 import type { PartSwap } from '../domain/partSwaps';
-import { foodOf, ownSidesOf, sideGrams, sidesOf, styleOf, withStyle, type SideStyle } from '../domain/sides';
+import { foodOf, ownSidesOf, sideGrams, sideOf, sidesOf, styleOf, withStyle, type SideStyle } from '../domain/sides';
 import { swapFor } from '../domain/swaps';
 import type { SideSalad } from '../domain/sideSalad';
 import { cookingContent } from '../domain/homemade';
@@ -31,7 +31,7 @@ import { recordSavings, type BonSavings } from '../domain/savings';
 import { addBon, bonFromImport, dropDayPrices, editBonLine, includeBonLine, sameBonOf, withdrawBonStock, dropUnsavedDay, type BonLine, type BonLinePatch } from '../domain/bons';
 import type { PriceEntry } from '../domain/cost';
 import { assignPrices, moveSort } from '../domain/sortRefs';
-import { doneParts, extractPart, extractToBase, forParts, partLabel, partOf, partsOf, REST, remainingContent } from '../domain/parts';
+import { donePartsOf, extractPart, extractToBase, forParts, partLabel, partOf, partsOf, REST, remainingContent } from '../domain/parts';
 import { withCategory, type FoodCategory } from '../domain/categories';
 import { relinkOldImport, renameFood, syncProductNames } from '../domain/renameFood';
 import { specialDays, type ShelfDays } from '../domain/shelfLife';
@@ -525,6 +525,16 @@ export function markCooked(id: string, servings?: number, amounts: Record<string
  * (Household.lastWays, cookStyle.ts: learnWays). Gibt das Zurücknehmen fürs „Rückgängig“ des Kochens zurück – nichts
  * Neues gelernt: undefined. Zurück geht nur das Gemerkte, nicht, was du inzwischen am Haushalt geändert hast.
  */
+/** Doch nicht gekocht: das von diesem Gericht Gemerkte wieder vergessen (cookStyle.ts: forgetWays) */
+function forget(r: Recipe): void {
+  if (!r.style) return;
+  const hh = householdOf();
+  const next = forgetWays(hh.lastWays, r.style.direction, r.style.ways);
+  if (next === hh.lastWays) return;
+  const { lastWays: _l, ...rest } = hh;
+  commitPlan(withWeek(plan, plan.week, next ? { ...rest, lastWays: next } : rest));
+}
+
 function learn(direction: string | undefined, ways: Readonly<Record<string, string>>): (() => void) | undefined {
   const hh = householdOf();
   const next = learnWays(hh.lastWays, direction, ways);
@@ -551,6 +561,7 @@ export function uncookRecipe(id: string): CookedResult | null {
   dropLeftover(id);
   const taken = pantry.cookLog?.[id];
   if (taken?.length) putBack(id, taken);
+  forget(r); // „wie letztes Mal“ zählt nur, was gekocht wurde
   commit(unstampCooked(r, { lastCookedAt: r.previousCookedAt }));
   return { used: [], toCheck: [], restored: [...new Set((taken ?? []).filter((t) => !t.created).map((t) => t.item.name))] };
 }
@@ -573,7 +584,7 @@ function consume(r: Recipe, servings: number, amounts: Record<string, number> = 
   if (!pantry.items.length) return { used: [], toCheck: [] };
   const before = pantry;
   // schon fertige Teile (die Sauce von gestern): nur noch der Rest – und die gelagerte Sauce ist jetzt verbraucht
-  const done = doneParts(pantry.items, r.id, r.partsFrom);
+  const done = donePartsOf(pantry.items, r);
   // Grundlagen: aus der Vorkoch-Woche kommen sie aus dem Vorgekochten (eatMeal), sonst deckt Vorgekochtes seinen Teil –
   // dann gehen dessen Portionen aus der Speisekammer, nicht die Zutaten der Grundlage (baseStock.ts)
   const { without, supply } = basesFor(r, servings);
@@ -600,7 +611,7 @@ export function cookParts(id: string, parts: readonly string[], servings?: numbe
   const r = get(id);
   const c = cookingContent(r, recipes);
   const all = partsOf(c);
-  const done = doneParts(pantry.items, id, r.partsFrom);
+  const done = donePartsOf(pantry.items, r);
   if (!all.length || all.every((p) => parts.includes(p) || done.includes(p))) return { ...markCooked(id, servings, amounts, variants), stored: [] };
   const planned = plan.items.find((i) => i.recipeId === id);
   const cookedServings = servings ?? planned?.servings ?? c.servings;
@@ -941,8 +952,11 @@ export function setSwap(id: string, ingredientId: string, sideId?: string): () =
  * Einen ganzen Teil tauschen (Julia: „Sauce als Teil tauschen“, partSwaps.ts) – ohne `swap` wieder das Original.
  * Gilt fürs Rezept, bis du zurücktauschst. Gibt „Rückgängig“ zurück.
  */
-export function setPartSwap(id: string, part: string, swap?: PartSwap): () => void {
+export function setPartSwap(id: string, part: string, to?: PartSwap): () => void {
   const before = get(id).partSwaps;
+  // Mashis Baustein: deine Menge und was du kaufst gleich mitmerken – wie beim Zutaten-Tausch (swapFor)
+  const side = to?.side ? sideOf(to.side) : undefined;
+  const swap = to && side ? { ...to, grams: sideGrams(side.id, householdOf()), food: foodOf(side, householdOf()) } : to;
   const apply = (partSwaps: Recipe['partSwaps']) => {
     const { partSwaps: _, ...rest } = get(id);
     commit(partSwaps && Object.keys(partSwaps).length ? { ...rest, partSwaps } : rest);
@@ -1288,8 +1302,9 @@ export function eatMeal(mealId: string, alongIds: readonly string[] = []): WeekR
     ...week,
     meals: week.meals.map((m) => (m.id === mealId ? { ...m, done: true } : along.includes(m) ? { ...m, freshCooked: true as const } : m)),
   }));
-  // Baukasten-Abend gegessen: seine Zubereitungen (wie in „So geht's“) als „wie letztes Mal“ merken (Julia)
-  const unlearn = r && meal.recipeId === meal.baseId && meal.side
+  // Baukasten-Abend gegessen: seine Zubereitungen (wie in „So geht's“) als „wie letztes Mal“ merken (Julia) – nicht,
+  // wenn er schon mitgekocht war: dann wurde er wie am Tag davor gekocht, und das ist schon gemerkt (Rundgang)
+  const unlearn = r && meal.recipeId === meal.baseId && meal.side && !meal.freshCooked
     ? learn(styleOf(meal.side).direction, chosenWays(weekCookSteps(meal.side, r, { household: hh, recipes, items: before.pantry.items, portions: n })))
     : undefined;
   const undo = weekUndo(before, after);
@@ -1540,6 +1555,7 @@ export function togglePlanCooked(recipeId: string): CookedResult | null {
     // am selben Tag zurückgenommen → „zuletzt gekocht“ wieder wie vorher
     const cur = get(recipeId);
     if (sameDay(cur.lastCookedAt)) commit(unstampCooked(cur, { lastCookedAt: cur.previousCookedAt }));
+    forget(cur); // „wie letztes Mal“ zählt nur, was gekocht wurde
     // Haken zurückgenommen → was „Gekocht“ genommen hatte, kommt zurück
     const taken = pantry.cookLog?.[recipeId];
     if (!taken?.length) return null;
@@ -1550,6 +1566,8 @@ export function togglePlanCooked(recipeId: string): CookedResult | null {
   }
   const r = get(recipeId);
   commit(stampCooked(r));
+  // aus dem Baukasten: wie beim Kochmodus seine Zubereitungen als „wie letztes Mal“ merken (Rundgang)
+  const unlearn = r.style ? learn(r.style.direction, r.style.ways) : undefined;
   const item = next.items.find((i) => i.recipeId === recipeId)!;
   const result = consume(r, item.servings, item.amounts ?? {}, true, item.variants);
   askLeftover(r, item.servings, true, item.amounts ?? {}, item.variants);
@@ -1557,6 +1575,7 @@ export function togglePlanCooked(recipeId: string): CookedResult | null {
     ...result,
     undo: () => {
       result.undo?.();
+      unlearn?.();
       dropLeftover(recipeId);
       if (plan.cooked.includes(recipeId)) commitPlan({ ...plan, cooked: plan.cooked.filter((x) => x !== recipeId) });
       commit(unstampCooked(get(recipeId), r));

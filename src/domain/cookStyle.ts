@@ -265,6 +265,19 @@ export function learnWays<T extends Readonly<Record<string, string>> | undefined
   return { ...lastWays, ...Object.fromEntries(fresh.map(([id, w]) => [learnKey(direction, id), w])) };
 }
 
+/**
+ * Doch nicht gekocht (Haken zurückgenommen, „Heute gekocht“ zurück): vergessen, was dieses Gericht gemerkt hatte – nur,
+ * wo seither nichts anderes gemerkt ist. Das Davor kennt dann niemand mehr: es gilt wieder der Vorschlag der Richtung.
+ * Nichts zu vergessen → dasselbe Objekt; nichts mehr übrig → undefined.
+ */
+export function forgetWays<T extends Readonly<Record<string, string>> | undefined>(lastWays: T, direction: string | undefined, ways: Readonly<Record<string, string>>): T | Record<string, string> | undefined {
+  const gone = new Set(Object.entries(ways).map(([id, w]) => [learnKey(direction, id), w]).filter(([k, w]) => lastWays?.[k] === w).map(([k]) => k));
+  if (!gone.size) return lastWays;
+  const all: Readonly<Record<string, string>> = lastWays ?? {};
+  const next = Object.fromEntries(Object.entries(all).filter(([k]) => !gone.has(k)));
+  return Object.keys(next).length ? next : undefined;
+}
+
 /** Zubereitung zum Umschalten (Chips in „So geht's“) – je Baustein mit mehreren Wegen */
 export interface WayOption { id: string; name: string; ways: readonly SideWay[]; chosen: string }
 

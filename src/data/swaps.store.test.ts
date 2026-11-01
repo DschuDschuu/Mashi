@@ -3,7 +3,7 @@ import PouchDB from 'pouchdb-core';
 import memory from 'pouchdb-adapter-memory';
 import { describe, expect, it } from 'vitest';
 import { PouchRecipeRepository, type RecipeDb } from './pouchRepository';
-import { addToPlan, createRecipe, currentPantry, householdOf, initStore, setHousehold, setPartSwap, setSwap, whenSaved } from './store';
+import { addToPlan, cookParts, createRecipe, currentPantry, householdOf, initStore, markCooked, setHousehold, setPartSwap, setSwap, whenSaved } from './store';
 import { buildShoppingList } from '../domain/mealplan';
 import { sideContent } from '../domain/mix';
 import { foodTable } from '../services';
@@ -66,7 +66,8 @@ describe('Store: Zutat tauschen (Julia: Tofu statt Hähnchen)', () => {
     const id = pfanne();
     const saved = async () => { await whenSaved(); return (await repo.list()).find((r) => r.id === id); };
     const undo = setPartSwap(id, 'Erdnuss-Sauce', { side: 'joghurt', name: 'Joghurt-Dip' });
-    expect((await saved())?.partSwaps).toEqual({ 'Erdnuss-Sauce': { side: 'joghurt', name: 'Joghurt-Dip' } });
+    // mit Menge und Einkaufsname aus den Einstellungen (hier Mashis Standard) – wie beim Zutaten-Tausch
+    expect((await saved())?.partSwaps).toEqual({ 'Erdnuss-Sauce': { side: 'joghurt', name: 'Joghurt-Dip', grams: 50, food: 'Joghurt' } });
     undo();
     expect(await saved()).not.toHaveProperty('partSwaps');
     setPartSwap(id, 'Erdnuss-Sauce', { side: 'joghurt', name: 'Joghurt-Dip' });
@@ -74,5 +75,30 @@ describe('Store: Zutat tauschen (Julia: Tofu statt Hähnchen)', () => {
     expect(await saved()).not.toHaveProperty('partSwaps');
     back();
     expect((await saved())?.partSwaps?.['Erdnuss-Sauce']?.name).toBe('Joghurt-Dip');
+  });
+
+  it('Dip vorgekocht, im Gericht gegen Mashis Salsa getauscht: Kochen lässt den Dip stehen; deine Salsa-Menge ist gemerkt (Rundgang)', async () => {
+    const repo = await freshStore('part-swap-done');
+    const hh = householdOf(await repo.loadPlan());
+    setHousehold({ ...hh, sides: { ...hh.sides, salsa: 80 }, sideFood: { ...hh.sideFood, salsa: 'Salsa fertig' } });
+    const platte = createRecipe({
+      ...sideContent('Testplatte'), servings: 4,
+      ingredients: [{ id: 'j', name: 'Joghurt', amount: 400, unit: 'g', part: 'Testdip' }, { id: 'b', name: 'Brot', amount: 400, unit: 'g' }],
+      steps: [{ id: 's', text: 'Joghurt verrühren.' }, { id: 't', text: 'Brot rösten.' }],
+    }, { source: 'selbst', status: 'kochbuch' });
+    cookParts(platte, ['Testdip'], 4); // Dip auf Vorrat
+    const dip = () => currentPantry().items.filter((i) => i.part === 'Testdip').reduce((n, i) => n + (i.amount ?? 0), 0);
+    const stored = dip();
+    expect(stored).toBeGreaterThan(0);
+    const taco = createRecipe({
+      ...sideContent('Testtaco'), servings: 2,
+      ingredients: [{ id: 'd', name: 'Joghurt', amount: 200, unit: 'g', part: 'Testdip' }, { id: 't', name: 'Tortillas', amount: 4, unit: 'Stück' }],
+      steps: [{ id: 's', text: 'Joghurt verrühren.' }, { id: 'u', text: 'Tortillas füllen.' }],
+    }, { source: 'selbst', status: 'kochbuch', partsFrom: { Testdip: platte } });
+    setPartSwap(taco, 'Testdip', { side: 'salsa', name: 'Tomatensalsa' });
+    await whenSaved();
+    expect((await repo.list()).find((r) => r.id === taco)?.partSwaps?.Testdip).toEqual({ side: 'salsa', name: 'Tomatensalsa', grams: 80, food: 'Salsa fertig' });
+    markCooked(taco, 2);
+    expect(dip()).toBe(stored); // der Dip gehört nicht mehr zum Gericht
   });
 });

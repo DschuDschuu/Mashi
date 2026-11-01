@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { cookingContent } from './homemade';
 import { sideContent } from './mix';
-import { FINISH, partLabel, stepPart } from './parts';
+import { FINISH, REST, donePartsOf, partLabel, stepPart } from './parts';
 import { withPartSwaps } from './partSwaps';
 import type { Ingredient, Recipe, RecipeContent } from './types';
 
@@ -80,6 +80,46 @@ describe('Sauce als ganzen Teil tauschen (Julia: Erdnuss-Sauce der Bowl gegen de
     };
     expect(withPartSwaps(c, { Sauce: { recipeId: 'teri', name: 'Teriyaki-Sauce' } }, [teriyaki]).steps[1].text)
       .toBe('Mit der Teriyaki-Sauce, Sojasauce und Erdnuss-Sauce servieren.');
+  });
+
+  it('deine Sauce mit Varianten: nur die gewählte, mit ihrem Zutaten-Tausch (Rundgang: sonst Parmesan UND Hefeflocken)', () => {
+    const pesto = recipe('pe', {
+      ...sideContent('Testpesto'), servings: 2,
+      ingredients: [ing('b', 'Basilikum', 30, 'g'), { ...ing('p', 'Parmesan', 30, 'g'), choice: 'klassisch' }, { ...ing('f', 'Hefeflocken', 10, 'g'), choice: 'vegan' }],
+      steps: [{ id: 'x', text: 'Alles pürieren.' }],
+      choices: ['klassisch', 'vegan'],
+    });
+    const c = withPartSwaps(bowl, { [SAUCE]: { recipeId: 'pe', name: 'Testpesto' } }, [{ ...pesto, choice: 'vegan' }]);
+    expect(c.ingredients.filter((i) => i.part === 'Testpesto').map((i) => i.name)).toEqual(['Basilikum', 'Hefeflocken']);
+  });
+
+  it('übrige Schritte behalten ihren Teil und ihre Zutaten von vorher (Rundgang: „Zum Schluss“ rutschte nach „Frisch“, Sojasauce sprang)', () => {
+    const c: RecipeContent = {
+      ...bowl,
+      ingredients: [ing('h', 'Hähnchenbrust', 250, 'g'), ing('so', 'Sojasauce', 2, 'EL'), ing('e', 'Erdnussbutter', 3, 'EL', SAUCE), ing('n', 'Nudeln', 200, 'g')],
+      steps: [
+        { id: 'a', text: 'Hähnchenbrust mit Sojasauce marinieren.' },
+        { id: 'b', text: 'Erdnussbutter glatt rühren.' },
+        { id: 'c', text: 'Nudeln mit der Erdnuss-Sauce mischen.', ingredientIds: ['n', 'e'] },
+      ],
+    };
+    const label = (cc: RecipeContent, id: string) => partLabel(stepPart(cc.steps.find((s) => s.id === id)!, cc));
+    expect([label(c, 'a'), label(c, 'c')]).toEqual([partLabel(REST), partLabel(FINISH)]);
+    const swapped = withPartSwaps(c, { [SAUCE]: { recipeId: 'teri', name: 'Teriyaki-Sauce' } }, [teriyaki]); // bringt eine zweite Sojasauce mit
+    expect([label(swapped, 'a'), label(swapped, 'c')]).toEqual([partLabel(REST), partLabel(FINISH)]);
+    expect(swapped.steps.find((s) => s.id === 'a')?.ingredientIds).toEqual(['h', 'so']); // die eigene, nicht die der Sauce
+  });
+
+  it('Mashis Sauce mit deinen Einstellungen – Menge und „Kaufst du als“, gemerkt beim Tauschen wie beim Zutaten-Tausch', () => {
+    const c = withPartSwaps(bowl, { [SAUCE]: { side: 'guacamole', name: 'Guacamole', grams: 80, food: 'Guacamole fertig' } }, []);
+    expect(c.ingredients.find((i) => i.part === 'Guacamole')).toMatchObject({ name: 'Guacamole fertig', amount: 160, unit: 'g' });
+  });
+
+  it('weggetauschter Teil ist nicht mehr „fertig“ – sonst würde der vorgekochte Dip trotzdem verbraucht (Rundgang)', () => {
+    const items = [{ recipeId: 'platte', part: 'Testdip', amount: 4 }, { recipeId: 'b', part: 'Knuspriges Hähnchen', amount: 2 }];
+    const r = { id: 'b', partsFrom: { Testdip: 'platte' } };
+    expect(donePartsOf(items, r)).toEqual(['Testdip', 'Knuspriges Hähnchen']);
+    expect(donePartsOf(items, { ...r, partSwaps: { Testdip: { side: 'salsa', name: 'Tomatensalsa' } } })).toEqual(['Knuspriges Hähnchen']);
   });
 
   it('verknüpft (Julia: „immer aktuell“): auf der Rezeptseite und beim Kochen – und änderst du die Sauce, ändert es sich mit', () => {

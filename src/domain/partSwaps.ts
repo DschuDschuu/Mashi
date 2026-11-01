@@ -1,7 +1,10 @@
+import { activeChoice, forChoice } from './choices';
 import { partOf, partsOf, REST, stepPart } from './parts';
 import { currentContent } from './recipe';
 import { scaleIngredients } from './scaling';
-import { sideIngredient, sideOf } from './sides';
+import { foodOf, sideGrams, sideOf } from './sides';
+import { stepIngredients } from './stepIngredients';
+import { withSwaps } from './swaps';
 import type { Ingredient, Recipe, RecipeContent, Step } from './types';
 
 /**
@@ -15,6 +18,12 @@ export interface PartSwap {
   part?: string;
   /** Mashis Baustein („pesto“) statt eines deiner Rezepte */
   side?: string;
+  /**
+   * beim Baustein: deine Menge pro Portion und was du kaufst („Guacamole fertig“), gemerkt beim Tauschen – wie beim
+   * Zutaten-Tausch (Rundgang: sonst galten Mashis Standards statt deiner Einstellungen)
+   */
+  grams?: number;
+  food?: string;
   /** so heißt der Teil danach – Überschrift, und so nennen ihn die übrigen Schritte */
   name: string;
 }
@@ -26,9 +35,8 @@ const PRE = 'tausch:';
 function replacement(swap: PartSwap, servings: number, recipes: readonly Recipe[]): { ingredients: Ingredient[]; steps: Step[] } | undefined {
   if (swap.side) {
     const side = sideOf(swap.side);
-    const ing = side && sideIngredient(swap.side, servings);
-    if (!side || !ing) return undefined;
-    const i: Ingredient = { ...ing, id: `${PRE}${swap.side}`, part: swap.name };
+    if (!side) return undefined;
+    const i: Ingredient = { id: `${PRE}${swap.side}`, name: swap.food ?? foodOf(side), amount: (swap.grams ?? sideGrams(swap.side)) * servings, unit: side.unit ?? 'g', part: swap.name };
     const prep = side.prep;
     return {
       ingredients: [i],
@@ -37,7 +45,8 @@ function replacement(swap: PartSwap, servings: number, recipes: readonly Recipe[
   }
   const src = recipes.find((r) => r.id === swap.recipeId);
   if (!src) return undefined;
-  const c = currentContent(src);
+  // so, wie du die Sauce kochst: die gewählte Variante und ihr Zutaten-Tausch (Rundgang: sonst Parmesan UND Hefeflocken)
+  const c = withSwaps(forChoice(currentContent(src), activeChoice(src)), src.swaps);
   if (swap.part && !partsOf(c).includes(swap.part)) return undefined;
   const pre = `${PRE}${src.id}:`;
   const mine = scaleIngredients({ ...c, ingredients: c.ingredients.filter((i) => !swap.part || partOf(i) === swap.part) }, servings);
@@ -72,9 +81,12 @@ export function withPartSwaps(c: RecipeContent, swaps: Readonly<Record<string, P
     const before = out;
     const isGone = (st: Step) => stepPart(st, before) === part;
     const word = wordOf(part);
+    // die übrigen Schritte behalten, wozu sie gehörten und welche Zutaten sie nannten – mit dem neuen Teil (und z. B.
+    // einer zweiten Sojasauce darin) rät Mashi sonst neu (Rundgang: „Zum Schluss“ rutschte nach „Frisch“); wie beim
+    // Beilagensalat (sideSalad.ts)
     const kept = (st: Step): Step => ({
-      ...st, text: st.text.replace(word, swap.name),
-      ...(st.ingredientIds ? { ingredientIds: st.ingredientIds.filter((x) => !gone.has(x)) } : {}),
+      ...st, text: st.text.replace(word, swap.name), part: stepPart(st, before),
+      ingredientIds: stepIngredients(st, before.ingredients).map((i) => i.id).filter((x) => !gone.has(x)),
     });
     const sAt = out.steps.findIndex(isGone);
     const steps = sAt < 0

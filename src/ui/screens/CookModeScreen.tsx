@@ -15,7 +15,7 @@ import type { WeekMeal } from '../../domain/mealplan';
 import { alongMeals, alongNote, cookDayMeal, freshFor, TODAY } from '../../domain/cookDay';
 import { Stepper } from '../components/Controls';
 import { specialDays } from '../../domain/shelfLife';
-import { doneParts, forParts, partLabel, partsOf, preselectParts } from '../../domain/parts';
+import { donePartsOf, forParts, partLabel, partsOf, preselectParts } from '../../domain/parts';
 import { lastParts, rememberParts, type CookHow } from '../cookPartsMemory';
 import { goBack, navigate } from '../../router';
 import { Icon } from '../components/Icon';
@@ -102,7 +102,7 @@ export function CookModeScreen({ id, servings: asked, variants, prep, mealId }: 
   const [chosen, setChosen] = useState<string[] | null>(null);
   /** Dialog „Was kochst du heute?“ beim Start – einmal je Besuch, solange noch mindestens zwei Teile offen sind (Julia: Mashi erkennt Vorgekochtes selbst) */
   const [askParts, setAskParts] = useState(true);
-  const done = useMemo(() => (recipe ? doneParts(pantry.items, recipe.id, recipe.partsFrom) : []), [recipe, pantry.items]);
+  const done = useMemo(() => (recipe ? donePartsOf(pantry.items, recipe) : []), [recipe, pantry.items]);
   const today = useMemo(() => {
     if (!full) return [];
     return chosen ?? partsOf(full).filter((p) => !done.includes(p));

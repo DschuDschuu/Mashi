@@ -129,6 +129,21 @@ describe('Wochenplan: merge3', () => {
     expect(m1(merge3Plan(b2, at(undefined), handy))).toEqual({ id: 'm1', day: 6, baseId: 'bolo', recipeId: 'spag' });
   });
 
+  it('anderes Gericht gewählt: Gericht, Grundlage und Bausteine bleiben zusammen (Rundgang: „Wraps aus der Chili“)', () => {
+    const at = (meal: object): MealPlan => ({ ...week, week: { ...week.week!, meals: week.week!.meals.map((m) => (m.id === 'm1' ? { id: m.id, day: m.day, ...meal } as typeof m : m)) } });
+    const m1 = (p: MealPlan) => p.week!.meals.find((x) => x.id === 'm1');
+    const b2 = at({ recipeId: 'spag', baseId: 'bolo' });
+    // beide tauschen den Abend: unseres ganz – nicht „Wraps“ aus der Chili-Grundlage
+    expect(m1(merge3Plan(b2, at({ recipeId: 'wraps', baseId: 'bolo' }), at({ recipeId: 'chilireis', baseId: 'chili' })))).toMatchObject({ recipeId: 'wraps', baseId: 'bolo' });
+    expect(m1(merge3Plan(b2, at({ recipeId: 'chilireis', baseId: 'chili' }), at({ recipeId: 'wraps', baseId: 'bolo' })))).toMatchObject({ recipeId: 'chilireis', baseId: 'chili' });
+    // hier ein Gericht statt Bausteinen, dort andere Bausteine: das Gericht – ohne Bausteine daran
+    const combo = at({ recipeId: 'bolo', baseId: 'bolo', side: 'pasta,brokkoli' });
+    expect(m1(merge3Plan(combo, at({ recipeId: 'wraps', baseId: 'bolo' }), at({ recipeId: 'bolo', baseId: 'bolo', side: 'pasta,zucchini' })))).toEqual({ id: 'm1', day: 6, recipeId: 'wraps', baseId: 'bolo' });
+    // das andere Gerät hat das Gericht getauscht, wir nur die Portionen: deren Gericht, unsere Portionen
+    expect(m1(merge3Plan(combo, at({ recipeId: 'bolo', baseId: 'bolo', side: 'pasta,brokkoli', portions: 3 }), at({ recipeId: 'chilireis', baseId: 'chili' }))))
+      .toEqual({ id: 'm1', day: 6, recipeId: 'chilireis', baseId: 'chili', portions: 3 });
+  });
+
   it('Wie letztes Mal je Richtung und Baustein: Handy kocht Brokkoli, Tablet Paprika – beides gemerkt', () => {
     const b2: MealPlan = { ...week, household: { portions: 1, lunchDays: [], lastWays: { 'pasta:brokkoli': 'nudeln' } } };
     const handy: MealPlan = { ...b2, household: { ...b2.household!, lastWays: { 'pasta:brokkoli': 'gedaempft' } } };

@@ -1,5 +1,5 @@
 import { stepIngredients } from './stepIngredients';
-import type { Ingredient, RecipeBlock, RecipeContent, Step } from './types';
+import type { Ingredient, Recipe, RecipeBlock, RecipeContent, Step } from './types';
 
 /**
  * Rezept-Teile (Julia: „Sauce gestern gekocht, Nudeln und Fleisch mache ich heute frisch“): Zutaten und Schritte
@@ -75,6 +75,14 @@ export function doneParts(
   const own = (i: { recipeId?: string; part?: string }) => i.recipeId === recipeId || (!!i.part && Object.hasOwn(from, i.part) && from[i.part] === i.recipeId);
   return [...new Set(items.filter((i) => i.part && own(i) && (i.amount === undefined || i.amount > 0)).map((i) => i.part!))];
 }
+
+/**
+ * Fertige Teile eines Rezepts – ohne die weggetauschten (Recipe.partSwaps, Rundgang: die Salsa ersetzt den Dip, trotzdem
+ * wurde der vorgekochte Dip beim Kochen verbraucht und stand als „fertig“ da). Gibt es die Quelle des Tauschs nicht mehr,
+ * gilt der Teil vorsichtshalber als nicht fertig – dann wird eher gekocht als etwas Falsches verbraucht.
+ */
+export const donePartsOf = (items: Parameters<typeof doneParts>[0], r: Pick<Recipe, 'id' | 'partsFrom' | 'partSwaps'>): string[] =>
+  doneParts(items, r.id, r.partsFrom).filter((p) => !r.partSwaps?.[p]);
 
 /** vorübergehender Teil für „Grundlage daraus machen“ – kann kein echter Teilname sein */
 const AS_BASE = '\u0000grundlage';

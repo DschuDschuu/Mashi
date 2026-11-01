@@ -941,6 +941,15 @@ describe('Zweimal Nudeln im zusammengeführten Schritt (Rundgang 2)', () => {
       .toBe('mit doppelter Menge Wasser köcheln – gleich für Dienstag mitkochen');
     expect(weekCookSteps('reis,haehnchen', bolo, { carry: { entry: 'reis', from: 'Montag' } }).find((s) => s.ids[0] === 'reis')?.text).toBe('von Montag aufwärmen');
   });
+
+  it('dein Rezept steht schon für beide Tage im Kühlschrank: „aus dem Kühlschrank“ – ohne Mitkoch-Hinweis (Rundgang)', () => {
+    const gnocchi = recipe('gn', 'Testgnocchi', [{ kind: 'carb', directions: [] }]);
+    const entry = ownEntry({ recipeId: 'gn', kind: 'carb', name: 'Testgnocchi' });
+    const items: PantryItem[] = [{ id: 'p', name: 'Testgnocchi', amount: 4, unit: 'Stück', addedAt: '', recipeId: 'gn' }];
+    const step = weekCookSteps(`${entry},brokkoli`, bolo, { recipes: [gnocchi], items, portions: 2, carry: { entry, portions: 2, with: 'Dienstag' } }).find((x) => x.ids.includes(entry))!;
+    expect(step.ready).toBe(true);
+    expect(step.text).not.toMatch(/mitkochen/);
+  });
 });
 
 describe('Garfamilien im Baukasten (Julia: Zubereitungswege für alle Bausteine)', () => {
