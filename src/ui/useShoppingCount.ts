@@ -15,7 +15,7 @@ export function useMissing(): ShoppingItem[] {
   const table = useFoodTable();
   return useMemo(() => {
     // mit den Beilagen der Vorkoch-Woche – wie die Einkaufsliste (restock.ts: shoppingList)
-    return buildShoppingList(plan, recipes, table, pantry, weekSideNeeds(plan.week, recipes, plan.household)).filter(open(plan));
+    return buildShoppingList(plan, recipes, table, pantry, weekSideNeeds(plan.week, recipes, plan.household, pantry)).filter(open(plan));
   }, [plan, recipes, table, pantry]);
 }
 

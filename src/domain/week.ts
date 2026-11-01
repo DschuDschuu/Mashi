@@ -1,10 +1,11 @@
 import { DEFAULT_HOUSEHOLD, keyOfName, type Household, type Week, type WeekBase, type WeekMeal, type Weekday } from './mealplan';
 import type { FoodTable } from './nutrition/types';
-import type { PantryItem } from './pantry';
+import type { Pantry, PantryItem } from './pantry';
 import { currentContent } from './recipe';
 import { SPECIAL_DAYS } from './shelfLife';
 import { weekBaseIds, withoutBases } from './weekBases';
-import { comboText, sideIngredient, sidesOf } from './sides';
+import { comboText, ownSidesOf, sideIngredient, sidesOf, type OwnSide } from './sides';
+import { ownIngredients, readyPortions } from './craving';
 
 export { weekBaseIds, withoutBases };
 import type { Ingredient, Recipe } from './types';
@@ -588,15 +589,26 @@ export function weekItems(week: Week, recipes: readonly Recipe[], household: Hou
  * Beilagen der offenen Mittage und Abende (Julia: „Bolognese mit Spätzle“) als Zutaten für die Einkaufsliste – je
  * Beilage zusammengezählt, mit den Portionen des Essens. Gegessenes und schon Mitgekochtes zählt nicht mehr.
  */
-export function weekSideNeeds(week: Week | undefined, _recipes: readonly Recipe[], household: Household = DEFAULT_HOUSEHOLD): Ingredient[] {
+export function weekSideNeeds(week: Week | undefined, recipes: readonly Recipe[], household: Household = DEFAULT_HOUSEHOLD, pantry?: Pick<Pantry, 'items'>): Ingredient[] {
   if (!week?.meals.some((m) => m.side && !m.done && !m.freshCooked)) return [];
   const portions = new Map<string, number>();
+  const own = new Map<string, { o: OwnSide; n: number }>();
   for (const m of week.meals) {
     if (!m.side || m.done || m.freshCooked) continue;
     // je Baustein zusammengezählt (Pasta an zwei Abenden mit verschiedenem Protein = eine Pasta-Zeile)
     for (const s of sidesOf(m.side)) portions.set(s.id, (portions.get(s.id) ?? 0) + servingsOf(m, household));
+    for (const o of ownSidesOf(m.side)) {
+      const key = `${o.recipeId}:${o.part ?? ''}`;
+      own.set(key, { o, n: (own.get(key)?.n ?? 0) + servingsOf(m, household) });
+    }
   }
-  return [...portions].flatMap(([id, n]) => sideIngredient(id, n, household) ?? []);
+  // deine Rezepte: was vorgekocht dasteht, kaufst du nicht – nur für die fehlenden Portionen die Zutaten
+  const mine = [...own.values()].flatMap(({ o, n }) => {
+    const r = recipes.find((x) => x.id === o.recipeId);
+    const missing = n - readyPortions(pantry?.items ?? [], o.recipeId, o.part, true);
+    return r && missing > 0 ? ownIngredients(r, o.part, missing, recipes) : [];
+  });
+  return [...[...portions].flatMap(([id, n]) => sideIngredient(id, n, household) ?? []), ...mine];
 }
 
 export interface YieldCheck {
@@ -622,6 +634,7 @@ export function yieldChecks(view: WeekView): Map<string, YieldCheck> {
   return out;
 }
 
+/** `side`: der feste Baustein („pasta“) oder der Eintrag deines Rezepts („mein:carb:…“, sides.ts: ownEntry) */
 export type CarbCarry ={ side: string; with?: Weekday; portions?: number; from?: Weekday };
 
 /**
@@ -631,7 +644,10 @@ export type CarbCarry ={ side: string; with?: Weekday; portions?: number; from?:
  */
 export function carbCarry(view: WeekView, household: Household): Map<Weekday, CarbCarry> {
   const out = new Map<Weekday, CarbCarry>();
-  const carbOf = (d: DayView) => (d.meal && !d.meal.meal.done && d.meal.meal.recipeId === d.meal.meal.baseId ? sidesOf(d.meal.meal.side).find((s) => s.kind === 'carb')?.id : undefined);
+  // auch dein Rezept als Kohlenhydrat (Julia: die selbstgemachten Gnocchi) – erkannt am gespeicherten Eintrag
+  const carbOf = (d: DayView) => (d.meal && !d.meal.meal.done && d.meal.meal.recipeId === d.meal.meal.baseId
+    ? sidesOf(d.meal.meal.side).find((s) => s.kind === 'carb')?.id ?? ownSidesOf(d.meal.meal.side).find((o) => o.kind === 'carb')?.entry
+    : undefined);
   view.days.forEach((d, i) => {
     const carb = carbOf(d);
     if (!carb || out.has(d.day)) return;

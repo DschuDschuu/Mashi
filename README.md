@@ -21,7 +21,7 @@ Live: <https://dschudschuu.github.io/Mashi/> · installierbar als App (PWA), fun
   oder als Rezept speichern (als Bild der Teller, wie du ihn gebaut hast) – nach dem Kochen fragt die Startseite „Wie war's?“, erst dann kommt es ins Kochbuch
   (als eigenes Rezept oder als umschaltbare Variante eines bestehenden, z. B. „Original | mit Spätzle“).
   In der Liste darunter „Passt dazu aus deinem Kochbuch“. Ansicht umschaltbar: Teller (jede Stufe ein Feld, antippen öffnet sie) oder Liste
-  (Stepper mit kleinem Karussell). Derselbe Baukasten steckt im Wochenplan (Grundlage schon gewählt)
+  (Stepper mit kleinem Karussell). Derselbe Baukasten steckt im Wochenplan (Grundlage schon gewählt, deine Bausteine stehen mit zur Wahl – vorgekocht aus dem Kühlschrank, sonst nach deinem Rezept)
 - **Kochbuch** mit Versionen: eigene Rezepte, Import aus Text oder Foto (Texterkennung im Browser),
   KI-Ideen erst testen, Bewertung, „Zutaten vereinheitlichen“ (eine Schreibweise je Zutat)
 - **Vorkoch-Woche**: eine oder zwei Grundlagen (Bolognese, Curry …) an wählbaren Kochtagen vorkochen, unter der Woche

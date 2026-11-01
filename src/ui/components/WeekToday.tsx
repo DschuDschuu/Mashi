@@ -1,7 +1,8 @@
 import { currentContent } from '../../domain/recipe';
 import { DAY_LONG, carbCarry, mealTitle, servingsOf, weekdayOf, weekView, type MealView } from '../../domain/week';
 import { cookStart } from '../../domain/cookDay';
-import { sideGrams, sidesOf } from '../../domain/sides';
+import { readyPortions, STAGES } from '../../domain/craving';
+import { ownSidesOf, sideGrams, sidesOf } from '../../domain/sides';
 import { ComboSteps } from './ComboSteps';
 import { formatAmount } from '../../domain/scaling';
 import type { Week } from '../../domain/mealplan';
@@ -37,6 +38,8 @@ export function WeekToday({ week }: { week: Week }) {
   const go = meal && (cookStart(view, meal, hh)
     ?? (meal.meal.recipeId !== meal.meal.baseId && !meal.meal.freshCooked ? { prep: false as const, recipeId: meal.meal.recipeId, mealId: meal.meal.id, portions: servingsOf(meal.meal, hh) } : undefined));
   const sides = sidesOf(meal?.meal.side);
+  // deine Rezepte als Baustein (die Guacamole): vorgekocht aus dem Kühlschrank, sonst nach deinem Rezept
+  const own = ownSidesOf(meal?.meal.side);
   const carry = carbCarry(view, hh).get(today);
   const lunch = d?.lunch;
   // nächster Kochtag mit noch Ungekochtem – auch über das Wochenende hinweg (die Woche hat keine Daten, nur Tage)
@@ -92,16 +95,25 @@ export function WeekToday({ week }: { week: Week }) {
               <p className="small muted">
                 {meal.meal.freshCooked ? 'Schon mitgekocht – nur aufwärmen'
                   : meal.meal.recipeId !== meal.meal.baseId ? `${title(recipes.find((r) => r.id === meal.meal.baseId))} aus dem ${meal.frost ? 'Gefrierfach' : 'Kühlschrank'} + frisch dazu`
-                  : sides.length ? `Aufwärmen · ${sides.map((x) => {
+                  : sides.length || own.length ? `Aufwärmen · ${[...sides.map((x) => {
                     // zweimal Nudeln: heute gleich mitkochen bzw. von gestern aufwärmen (week.ts: carbCarry)
-                    if (carry?.side === x.id && carry.from !== undefined) return `${x.name} von ${DAY_LONG[carry.from]}`;
+                    if (carry?.side === x.id && carry.from !== undefined) return { kind: x.kind, text: `${x.name} von ${DAY_LONG[carry.from]}` };
                     const n = servingsOf(meal.meal, hh) + (carry?.side === x.id ? carry.portions ?? 0 : 0);
-                    return `${formatAmount(sideGrams(x.id, hh) * n)} ${x.unit === 'Stück' ? '×' : 'g'} ${x.name}${carry?.side === x.id && carry.with !== undefined ? ` (mit für ${DAY_LONG[carry.with]})` : ''}`;
-                  }).join(', ')} dazu`
+                    return { kind: x.kind, text: `${formatAmount(sideGrams(x.id, hh) * n)} ${x.unit === 'Stück' ? '×' : 'g'} ${x.name}${carry?.side === x.id && carry.with !== undefined ? ` (mit für ${DAY_LONG[carry.with]})` : ''}` };
+                  }), ...own.map((o) => {
+                    // dein Rezept: vorgekocht aus dem Kühlschrank (fürs Mitkochen muss es für beide reichen), sonst wie die Nudeln
+                    const carried = carry?.side === o.entry ? carry : undefined;
+                    const need = servingsOf(meal.meal, hh) + (carried?.with !== undefined ? carried.portions ?? 0 : 0);
+                    if (readyPortions(pantry.items, o.recipeId, o.part, true) >= need) return { kind: o.kind, text: `${o.name} aus dem Kühlschrank` };
+                    if (carried?.from !== undefined) return { kind: o.kind, text: `${o.name} von ${DAY_LONG[carried.from]}` };
+                    return { kind: o.kind, text: `${o.name} nach deinem Rezept${carried?.with !== undefined ? ` (mit für ${DAY_LONG[carried.with]})` : ''}` };
+                  })]
+                    // in Stufen-Reihenfolge wie im Titel – erst das Kohlenhydrat, auch wenn es dein Rezept ist
+                    .sort((a, b) => STAGES.indexOf(a.kind) - STAGES.indexOf(b.kind)).map((x) => x.text).join(', ')} dazu`
                     : 'Nur aufwärmen'}
               </p>
               {/* Baukasten-Abend: so geht's (Julia) – das Längste zuerst */}
-              {meal.meal.recipeId === meal.meal.baseId && sides.length > 0 && meal.recipe && <ComboSteps side={meal.meal.side!} base={meal.recipe} household={hh} carry={carry} />}
+              {meal.meal.recipeId === meal.meal.baseId && (sides.length > 0 || own.length > 0) && meal.recipe && <ComboSteps side={meal.meal.side!} base={meal.recipe} household={hh} carry={carry} portions={servingsOf(meal.meal, hh)} />}
               <div className="week-today__actions">
                 {/* am Kochtag, noch nicht vorgekocht: Vorkochen und das Essen in einem Durchgang (Julia) */}
                 {go

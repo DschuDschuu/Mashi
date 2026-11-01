@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
   DIRECTIONS, EMPTY_CRAVING, STAGES, chooseDirection, closeStep, cookbookMatches, cravingCooking, cravingMinutes, cravingPartsFrom, cravingSteps, cravingText, cravingTitle, currentStep,
-  baseCraving, coveredBy, halfOf, plateImage, cravingCombo, cravingContent, directionOf, guessKind, matchingRecipes, optionsFor, pick, recipeChoiceId, recipeChoices, reopen, rollCraving, runsAlone, staleTrials, startLabel, stockMarks, understand, variantTargets, withoutGone, cravingTimeline,
+  baseCraving, coveredBy, halfOf, ownComboSteps, plateImage, cravingCombo, cravingContent, directionOf, guessKind, matchingRecipes, optionsFor, pick, recipeChoiceId, recipeChoices, reopen, rollCraving, runsAlone, staleTrials, startLabel, stockMarks, understand, variantTargets, withoutGone, cravingTimeline,
   type StockMark,
 } from './craving';
 import { localFoodTable } from './nutrition/localFoods';
 import { emptyPantry, type Pantry, type PantryItem } from './pantry';
 import { doneParts, followBlockParts } from './parts';
 import { withNewVersion } from './recipe';
-import { SIDES, foodOf, sideIngredient, sideOf } from './sides';
+import { SIDES, comboText, foodOf, ownEntry, ownOf, ownSidesOf, sideIngredient, sideOf, sidesOf } from './sides';
 import { computeNutrition } from './nutrition/engine';
 import type { Ingredient, Recipe, RecipeBlock, RecipeContent } from './types';
 
@@ -745,5 +745,42 @@ describe('Teller als Bild (Julia)', () => {
     const s = { picks: { protein: ['hack'], sauce: ['rezept:bo'] }, closed: [] };
     expect(halfOf(s, own)).toBeUndefined();
     expect(plateImage(s, own, 40)).toEqual({ kind: 'plate', hue: 40, fields: { protein: ['Hackfleisch'], sauce: ['Testbolo'] } });
+  });
+});
+
+describe('Deine Rezepte als Baustein im Wochenplan (Julia: deine Guacamole auch dort)', () => {
+  const own = recipeChoices([streifen, dips]);
+  const s = { picks: { carb: ['tortillas'], protein: ['rezept:r1'], sauce: ['rezept:r2:Testdip'], topping: ['koriander'] }, closed: [] };
+
+  it('gespeicherte Form: feste wie bisher, deine in Stufen-Reihenfolge dazu – die Grundlage selbst nicht', () => {
+    const combo = cravingCombo(s, own, 'grundlage')!;
+    expect(combo).toBe('tortillas,mein:protein:r1:Knusprige%20Teststreifen,mein:sauce:r2:Testdip:teil,koriander');
+    expect(comboText(combo)).toBe('Tortillas, Knusprige Teststreifen, Testdip & Koriander');
+    expect(cravingCombo(s)).toBe('tortillas,koriander'); // ohne deine Rezepte dieselbe Form wie bisher
+    expect(cravingCombo(s, own, 'r1')).toBe('tortillas,mein:sauce:r2:Testdip:teil,koriander');
+  });
+
+  it('Komma, Plus und Doppelpunkt im Namen trennen nichts – alte Leser sehen nur die festen', () => {
+    const name = 'Dip: scharf, mit Chili+Limette';
+    const entry = ownEntry({ recipeId: 'r9', kind: 'sauce', name, part: name });
+    const side = `reis,${entry}`;
+    expect(ownSidesOf(side)).toEqual([{ entry, recipeId: 'r9', kind: 'sauce', name, part: name }]);
+    expect(sidesOf(side).map((x) => x.id)).toEqual(['reis']);
+    expect(comboText(side)).toBe(`Reis & ${name}`);
+    expect(ownOf('mein:sauce:r9:%E0%A4%A')).toBeUndefined(); // kaputt kodiert: weglassen statt abstürzen
+  });
+
+  it('So geht’s: genug vorgekocht → aus dem Kühlschrank, sonst nach deinem Rezept; gelöschtes Rezept fällt weg', () => {
+    const side = cravingCombo({ picks: { sauce: ['rezept:r2:Testdip'] }, closed: [] }, own)!;
+    expect(ownComboSteps(side, [dips], [], 1)).toMatchObject([{ name: 'Testdip', text: 'nach deinem Rezept', source: 'rezept' }]);
+    const items: PantryItem[] = [{ id: 'p', name: 'Testdip', amount: 2, unit: 'Stück', addedAt: '', recipeId: 'r2', part: 'Testdip' }];
+    expect(ownComboSteps(side, [dips], items, 2)[0].text).toBe('aus dem Kühlschrank, bei Bedarf erwärmen');
+    expect(ownComboSteps(side, [dips], items, 3)[0].text).toBe('nach deinem Rezept'); // reicht nicht für alle
+    expect(ownComboSteps(side, [], items, 1)).toEqual([]);
+    // gleich für morgen mitkochen: vorgekocht zählt nur, wenn es für beide reicht
+    const entry = ownSidesOf(side)[0].entry;
+    expect(ownComboSteps(side, [dips], items, 1, { entry, portions: 1 })[0]).toMatchObject({ ready: true });
+    expect(ownComboSteps(side, [dips], items, 1, { entry, portions: 2 })[0]).toMatchObject({ text: 'nach deinem Rezept' });
+    expect(ownComboSteps(side, [dips], items, 1, { entry, portions: 2 })[0].ready).toBeUndefined();
   });
 });

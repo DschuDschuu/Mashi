@@ -19,8 +19,8 @@ import { addPrepared, eatPrepared } from '../domain/prepared';
 import { currentContent, currentVersion, newId, sameContent, withNewVersion } from '../domain/recipe';
 import { addChoiceFrom } from '../domain/choices';
 import { retireMix, sideContent } from '../domain/mix';
-import { staleTrials } from '../domain/craving';
-import { foodOf, sideGrams, sidesOf } from '../domain/sides';
+import { ownIngredients, readyPortions, staleTrials } from '../domain/craving';
+import { foodOf, ownSidesOf, sideGrams, sidesOf } from '../domain/sides';
 import { cookingContent } from '../domain/homemade';
 import { recordSavings, type BonSavings } from '../domain/savings';
 import { addBon, bonFromImport, dropDayPrices, editBonLine, includeBonLine, sameBonOf, withdrawBonStock, dropUnsavedDay, type BonLine, type BonLinePatch } from '../domain/bons';
@@ -1178,10 +1178,21 @@ function deductFresh(p: Pantry, meal: WeekMeal, hh: Household): { pantry: Pantry
   const r = recipes.find((x) => x.id === meal.recipeId);
   const dish = r && r.id !== meal.baseId ? deductContent(p, cookingContent(r, recipes, [meal.baseId]), n) : { pantry: p, used: [], toCheck: [] };
   // alle Bausteine (Pasta, Hähnchen, Parmesan …) nacheinander
-  return sidesOf(meal.side).reduce((acc, side) => {
+  const fixed = sidesOf(meal.side).reduce((acc, side) => {
     const s = deductContent(acc.pantry, sideContent(foodOf(side, hh), sideGrams(side.id, hh), side.unit), n);
     return { pantry: s.pantry, used: [...acc.used, ...s.used], toCheck: [...acc.toCheck, ...s.toCheck] };
   }, dish);
+  // deine Rezepte (die Guacamole): erst, was vorgekocht dasteht – wie die Grundlage –, der Rest aus seinen Zutaten
+  return ownSidesOf(meal.side).reduce((acc, o) => {
+    const ready = Math.min(n, readyPortions(acc.pantry.items, o.recipeId, o.part, true));
+    const pantry = ready > 0 ? { ...acc.pantry, items: eatBase(acc.pantry.items, o.recipeId, ready, o.part) } : acc.pantry;
+    const used = ready > 0 ? [...acc.used, o.name] : acc.used;
+    const r = recipes.find((x) => x.id === o.recipeId);
+    if (!r || ready >= n) return { ...acc, pantry, used };
+    const ings = ownIngredients(r, o.part, n - ready, recipes);
+    const s = deductContent(pantry, { ...currentContent(r), servings: n - ready, ingredients: ings }, n - ready);
+    return { pantry: s.pantry, used: [...used, ...s.used], toCheck: [...acc.toCheck, ...s.toCheck] };
+  }, fixed);
 }
 
 /**

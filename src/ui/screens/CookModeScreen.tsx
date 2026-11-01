@@ -65,7 +65,8 @@ export function CookModeScreen({ id, servings: asked, variants, prep, mealId }: 
   // aus dieser Grundlage kommt frisch dazu – mit den Portionen aus dem Wochenplan, beim Start änderbar
   const hh = householdOf(plan);
   const todayMeal = prep && plan.week ? cookDayMeal(plan.week, id) : undefined;
-  const fresh = useMemo(() => (todayMeal ? freshFor(todayMeal, recipes, hh) : undefined), [todayMeal, recipes, hh]);
+  // Vorrat vom Start (nicht in den Abhängigkeiten): sonst wechselte deine Guacamole mitten im Kochen auf „aus dem Kühlschrank“
+  const fresh = useMemo(() => (todayMeal ? freshFor(todayMeal, recipes, hh, pantry.items) : undefined), [todayMeal, recipes, hh]);
   /** Portionen für heute – undefined: wie im Plan, null: heute nicht mitkochen */
   const [todayN, setTodayN] = useState<number | null>();
   const plannedN = todayMeal ? servingsOf(todayMeal, hh) : 0;

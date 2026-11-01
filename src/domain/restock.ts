@@ -156,7 +156,7 @@ let last: { args: unknown[]; list: ShoppingItem[] } | undefined;
 export function shoppingList(plan: MealPlan, recipes: Recipe[], table: FoodTable, pantry: Pantry, products: readonly MyProduct[] = []): ShoppingItem[] {
   const args = [plan, recipes, table, pantry, products];
   if (last && last.args.every((a, i) => a === args[i])) return last.list;
-  const base = buildShoppingList(plan, recipes, table, pantry, weekSideNeeds(plan.week, recipes, plan.household));
+  const base = buildShoppingList(plan, recipes, table, pantry, weekSideNeeds(plan.week, recipes, plan.household, pantry));
   const withNeeds = pantry.restock?.length ? withRestock(base, restockNeeds(pantry, table, products, pantryAfterPlan(pantry, plan, recipes, table))) : base;
   const list = plan.extra?.length ? withExtras(withNeeds, plan.extra, table) : withNeeds;
   last = { args, list };

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { sideContent } from './mix';
-import { comboOf, comboSteps, customSideId, prepOf, sideOf, sidesOfKind } from './sides';
+import { comboOf, comboSteps, customSideId, ownEntry, prepOf, sideOf, sidesOfKind } from './sides';
 import type { Week } from './mealplan';
 import type { Ingredient, Recipe } from './types';
 import { buildShoppingList, emptyPlan } from './mealplan';
@@ -373,6 +373,19 @@ it('carbCarry: zweimal Pasta höchstens 2 Tage auseinander → einmal kochen; pa
   expect(c.has(SA)).toBe(false);
 });
 
+it('carbCarry: auch dein Rezept als Kohlenhydrat (Julia: die selbstgemachten Gnocchi) – erkannt am Eintrag', () => {
+  const hh = { portions: 1, lunchDays: [] };
+  const gnocchi = ownEntry({ recipeId: 'gn', kind: 'carb', name: 'Testgnocchi' });
+  const meal = (id: string, day: number, side: string) => ({ id, day: day as Week['cookDays'][number], recipeId: 'chili', baseId: 'chili', side });
+  const w: Week = { cookDays: [SO], bases: [{ recipeId: 'chili', day: SO, extra: 0 }], meals: [
+    meal('a', SO, `${gnocchi},brokkoli`), meal('b', MO, `${gnocchi},paprika`), meal('c', DI, 'pasta'),
+  ] };
+  const c = carbCarry(weekView(w, all, hh), hh);
+  expect(c.get(SO)).toEqual({ side: gnocchi, with: MO, portions: 1 });
+  expect(c.get(MO)).toEqual({ side: gnocchi, from: SO });
+  expect(c.has(DI)).toBe(false); // Pasta ist etwas anderes
+});
+
 it('swapCookDays: Sonntag ↔ Mittwoch – Grundlagen tauschen, Abende rücken ab dem neuen Kochtag nach', () => {
   const w = example(); // Bolo So (So, Mo, Di), Chili Mi (Mi, Do)
   const t = swapCookDays(w, SO, MI);
@@ -611,5 +624,31 @@ describe('Mittage beim Neu-Verteilen (Julia: „der Mittag wie der Abend“)', (
     const spaet = withCookDays(w, [DI], newId, hh1);
     expect(spaet.meals.some((m) => m.lunch)).toBe(false);
     expect(spaet.bases.find((b) => b.recipeId === 'bolo')!.extra).toBe(1);
+  });
+});
+
+describe('Deine Rezepte als Baustein eines Abends (Julia: deine Guacamole auch im Wochenplan)', () => {
+  const dip: Recipe = {
+    ...recipe('dip', 'Testplatte'),
+    versions: [{ id: 'v', number: 1, createdAt: '', author: 'nutzer', content: { ...sideContent('Testplatte'), servings: 2, ingredients: [
+      { id: 'd1', name: 'Testjoghurt', amount: 200, unit: 'g', part: 'Testdip' },
+      { id: 'd2', name: 'Testbrot', amount: 100, unit: 'g' },
+    ] } }],
+  };
+  const entry = ownEntry({ recipeId: 'dip', kind: 'sauce', name: 'Testdip', part: 'Testdip' });
+  const w = suggestWeek([SO], [{ baseId: 'bolo', meals: [`bolo+spaetzle,${entry}`, `bolo+${entry}`] }], newId);
+  const ready = (amount: number, frozen = false): PantryItem[] => [{ id: 'p', name: 'Testdip', amount, unit: 'Stück', addedAt: '', recipeId: 'dip', part: 'Testdip', ...(frozen ? { frozenAt: '2026-10-01' } : {}) }];
+
+  it('Abend und Titel: der Eintrag übersteht mealKey, der Name steht im Titel', () => {
+    expect(w.meals.map((m) => m.side)).toEqual([`spaetzle,${entry}`, entry]);
+    expect(mealTitle(w.meals[0], bolo)).toBe(`${bolo.versions[0].content.title} mit Spätzle & Testdip`);
+  });
+
+  it('Einkauf: die Zutaten des Teils für die Portionen, die nicht vorgekocht dastehen – Eingefrorenes zählt mit', () => {
+    const needs = (items: PantryItem[] = []) => weekSideNeeds(w, [...all, dip], undefined, { items }).map((i) => [i.name, i.amount]);
+    expect(needs()).toEqual([['Spätzle', 250], ['Testjoghurt', 200]]); // zwei Abende à 1 Portion, nur der Dip-Teil
+    expect(needs(ready(1))).toEqual([['Spätzle', 250], ['Testjoghurt', 100]]);
+    expect(needs(ready(2, true))).toEqual([['Spätzle', 250]]);
+    expect(weekSideNeeds(w, all).map((i) => i.name)).toEqual(['Spätzle']); // Rezept gelöscht → fällt weg
   });
 });

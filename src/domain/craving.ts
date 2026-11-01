@@ -1,12 +1,12 @@
 import { basicsKeys, keyOfName, type Household } from './mealplan';
 import type { FoodTable } from './nutrition/types';
-import type { Pantry } from './pantry';
+import type { Pantry, PantryItem } from './pantry';
 import { useUpKeys } from './shelfLife';
 import { partOf, partsOf, stepPart } from './parts';
 import { currentContent, totalMinutes } from './recipe';
 import { searchRecipes } from './recipeSearch';
 import { cookingContent } from './homemade';
-import { SIDE_KINDS, SIDES, comboOf, foodOf, prepOf, sideIngredient, sideOf, sidesOfKind, type SideKind, type SidePrep } from './sides';
+import { SIDE_KINDS, SIDES, comboOf, foodOf, ownEntry, ownSidesOf, prepOf, sideIngredient, sideOf, sidesOfKind, type ComboStep, type SideKind, type SidePrep } from './sides';
 import type { Ingredient, Recipe, RecipeContent, RecipeImage, Step } from './types';
 
 /**
@@ -188,6 +188,27 @@ export function stockMarks(pantry: Pantry, table: FoodTable, now = new Date()): 
 /** ids für Rezepte als Baustein – „rezept:<id>“ bzw. „rezept:<id>:<Teil>“ */
 export const recipeChoiceId = (recipeId: string, part?: string) => (part ? `rezept:${recipeId}:${part}` : `rezept:${recipeId}`);
 
+/** Portionen eines Rezepts (oder Teils), die vorgekocht in der Speisekammer stehen – eingefrorene nur auf Wunsch */
+export const readyPortions = (items: readonly PantryItem[], recipeId: string, part?: string, frozenToo = false): number => items
+  .filter((it) => it.recipeId === recipeId && (it.part || undefined) === part && (frozenToo || !it.frozenAt))
+  .reduce((n, it) => n + (it.amount ?? 0), 0);
+
+/** wie lange ein eigener Baustein dauert – ein Teil: nur seine Schritte mit Uhr (das ganze Rezept dauert länger als die Sauce darin) */
+export const ownMinutes = (c: RecipeContent, part?: string): number =>
+  part ? c.steps.filter((st) => stepPart(st, c) === part).reduce((n, st) => n + (st.timerMinutes ?? 0), 0) : totalMinutes(c);
+
+/**
+ * Zutaten eines eigenen Bausteins für so viele Portionen: ein Teil („Testdip“) seine Zutaten, ein ganzes Rezept so, wie
+ * es gekocht wird (verknüpfte Rezepte aufgelöst; was dann noch verknüpft ist, ist Vorgekochtes, keine Zutat zum Kaufen).
+ */
+export function ownIngredients(recipe: Recipe, part: string | undefined, servings: number, all: readonly Recipe[] = []): Ingredient[] {
+  const rc = part ? currentContent(recipe) : cookingContent(recipe, all);
+  const f = servings / (rc.servings || 1);
+  return rc.ingredients
+    .filter((x) => (part ? partOf(x) === part : !x.recipeId))
+    .map((i) => ({ ...i, ...(part ? { part } : {}), ...(i.amount != null ? { amount: Math.round(i.amount * f * 10) / 10 } : {}) }));
+}
+
 /**
  * Deine Rezepte als Wahl (Julia: „wenn ich ein Rezept als Beilage tagge, soll es im Baum auftauchen“) – nur, was als
  * Baustein markiert ist. Steht davon etwas vorgekocht im Kühlschrank, zählt Mashi die Portionen mit – ohne die, die
@@ -199,12 +220,9 @@ export function recipeChoices(recipes: readonly Recipe[], pantry?: Pick<Pantry, 
     const parts = partsOf(c);
     return r.blocks!.flatMap((b): Choice[] => {
       if (b.part && !parts.includes(b.part)) return []; // Teil gibt es (noch) nicht – nichts anbieten
-      const fresh = (pantry?.items ?? [])
-        .filter((it) => it.recipeId === r.id && (it.part ?? undefined) === b.part && !it.frozenAt)
-        .reduce((n, it) => n + (it.amount ?? 0), 0);
+      const fresh = readyPortions(pantry?.items ?? [], r.id, b.part);
       const ready = b.part ? fresh : Math.max(0, fresh - (reserved?.get(r.id) ?? 0));
-      // ein Teil: nur seine Schritte mit Uhr zählen – das ganze Rezept dauert länger als die Sauce darin
-      const minutes = b.part ? c.steps.filter((st) => stepPart(st, c) === b.part).reduce((n, st) => n + (st.timerMinutes ?? 0), 0) : totalMinutes(c);
+      const minutes = ownMinutes(c, b.part);
       return [{
         id: recipeChoiceId(r.id, b.part), name: b.part ?? c.title, kind: b.kind, recipeId: r.id, directions: [...new Set(b.directions.map(normDirection))],
         ...(r.image ? { image: r.image } : {}),
@@ -558,7 +576,7 @@ export function cravingTitle(s: CravingState, own: readonly Choice[] = []): stri
  * Was mit Vorgekochtem zu tun ist: Warmes aufwärmen, Gemüse und Toppings nur herausnehmen – einen Dip oder Salat
  * „wärmt“ man nicht auf. Eine Stelle für „So geht's“ und das Rezept daraus, damit beide dasselbe sagen.
  */
-const readyPrep = (kind: SideKind): SidePrep =>
+export const readyPrep = (kind: SideKind): SidePrep =>
   kind === 'veg' || kind === 'topping' ? { text: 'aus dem Kühlschrank nehmen', minutes: 0 }
     : kind === 'sauce' ? { text: 'aus dem Kühlschrank, bei Bedarf erwärmen', minutes: 3 }
       : { text: 'aus dem Kühlschrank aufwärmen', minutes: 5 };
@@ -654,8 +672,7 @@ export function cravingContent(s: CravingState, opts: {
       // nicht auf der Einkaufsliste, beim Kochen übersprungen und aus der Speisekammer gegessen. Sonst kochst du ihn mit.
       const rc = currentContent(recipe);
       const part = c.name;
-      const f = servings / (rc.servings || 1);
-      for (const i of rc.ingredients.filter((x) => partOf(x) === part)) ingredients.push({ ...i, id: newId(), part, ...(i.amount != null ? { amount: Math.round(i.amount * f * 10) / 10 } : {}) });
+      for (const i of ownIngredients(recipe, part, servings)) ingredients.push({ ...i, id: newId() });
       const partSteps = rc.steps.filter((st) => stepPart(st, rc) === part).map((st) => ({ id: newId(), text: st.text, part, ...(st.timerMinutes ? { timerMinutes: st.timerMinutes } : {}) }));
       const ready = c.ready ? readyPrep(c.kind) : undefined;
       steps.push({ minutes: ready ? ready.minutes : c.prep?.minutes ?? 0, text: ready?.text ?? c.prep?.text, list: partSteps });
@@ -825,5 +842,34 @@ export function baseCraving(r: Recipe): { state: CravingState; own: Choice[] } {
   return { state: base.directions?.length === 1 ? chooseDirection(s, base.directions[0], own) : s, own };
 }
 
-/** Die festen Bausteine in der gespeicherten Form des Baukastens („pasta,parmesan“) – die Grundlage selbst steht am Abend */
-export const cravingCombo = (s: CravingState): string | undefined => comboOf(allPicks(s));
+/**
+ * Die Bausteine in der gespeicherten Form des Baukastens („pasta,parmesan“) – die Grundlage selbst steht am Abend.
+ * Mit `own` auch deine Rezepte (Julia: deine Guacamole im Wochenplan, sides.ts: ownEntry), in Stufen-Reihenfolge wie
+ * die festen; ohne eigene ist die Form dieselbe wie bisher (gleiche Abende bleiben gleich, mealKey).
+ */
+export function cravingCombo(s: CravingState, own: readonly Choice[] = [], baseId?: string): string | undefined {
+  const mine = allPicks(s).flatMap((id) => {
+    const c = sideOf(id) ? undefined : own.find((o) => o.id === id);
+    return c?.recipeId && c.recipeId !== baseId ? [{ kind: c.kind, entry: ownEntry({ recipeId: c.recipeId, kind: c.kind, name: c.name, ...(c.from ? { part: c.name } : {}) }) }] : [];
+  });
+  const fixed = (comboOf(allPicks(s)) ?? '').split(',').filter(Boolean).map((id) => ({ kind: sideOf(id)!.kind, entry: id }));
+  const list = [...fixed, ...mine].sort((a, b) => STAGES.indexOf(a.kind) - STAGES.indexOf(b.kind)).map((x) => x.entry);
+  return list.length ? [...new Set(list)].join(',') : undefined;
+}
+
+/**
+ * „So geht's“ für deine Rezepte an einem Abend der Woche: steht genug vorgekocht da, nur aus dem Kühlschrank (readyPrep,
+ * `ready` – dann gibt es auch nichts mitzukochen), sonst „nach deinem Rezept“ mit seiner Dauer. Ohne Stift – geändert
+ * wird am Rezept. `more`: zusätzliche Portionen für einen Eintrag (gleich für morgen mitkochen, week.ts: carbCarry).
+ */
+export function ownComboSteps(side: string | undefined, recipes: readonly Recipe[], items: readonly PantryItem[], portions: number, more?: { entry: string; portions: number }): ComboStep[] {
+  return ownSidesOf(side).flatMap((o): ComboStep[] => {
+    const r = recipes.find((x) => x.id === o.recipeId);
+    if (!r) return [];
+    if (readyPortions(items, o.recipeId, o.part, true) >= portions + (more?.entry === o.entry ? more.portions : 0)) {
+      const p = readyPrep(o.kind);
+      return [{ id: o.entry, name: o.name, text: p.text, minutes: p.minutes, source: 'rezept', ready: true }];
+    }
+    return [{ id: o.entry, name: o.name, text: 'nach deinem Rezept', minutes: ownMinutes(currentContent(r), o.part), source: 'rezept' }];
+  });
+}

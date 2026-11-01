@@ -3,10 +3,11 @@ import PouchDB from 'pouchdb-core';
 import memory from 'pouchdb-adapter-memory';
 import { describe, expect, it, vi } from 'vitest';
 import { PouchRecipeRepository, type RecipeDb } from './pouchRepository';
-import { addPantryItem, addToPlan, answerLeftover, clearPlan, cookBase, cookDay, createRecipe, deleteRecipe, freezeFromFridge, makeBase, markCooked, scheduleRecipe, currentPantry, currentPlan, eatMeal, eatOutToday, initStore, setHousehold, setPrepInfo, setWeek, togglePlanCooked, unfreezeToFridge, whenSaved } from './store';
+import { addPantryItem, addToPlan, answerLeftover, clearPlan, cookBase, cookDay, cookParts, createRecipe, deleteRecipe, freezeFromFridge, makeBase, markCooked, scheduleRecipe, currentPantry, currentPlan, eatMeal, eatOutToday, initStore, setHousehold, setPrepInfo, setWeek, togglePlanCooked, unfreezeToFridge, whenSaved } from './store';
 import { buildShoppingList } from '../domain/mealplan';
 import { shoppingList } from '../domain/restock';
 import { mealKey, putMeal, setExtra, suggestWeek } from '../domain/week';
+import { ownEntry } from '../domain/sides';
 import { foodTable } from '../services';
 import type { RecipeContent } from '../domain/types';
 
@@ -365,5 +366,49 @@ describe('Store: gelöschtes Rezept verlässt die Woche (Julia: „Heute Abend: 
     undo();
     expect(ids().sort()).toEqual([probe, salat].sort());
     expect(currentPlan().week!.bases.some((b) => b.recipeId === probe)).toBe(true);
+  });
+});
+
+describe('Store: dein Rezept als Baustein eines Abends (Julia: deine Guacamole auch im Wochenplan)', () => {
+  const setup = async (name: string) => {
+    const repo = await freshStore(name);
+    const bolo = createRecipe(content('Testbolo', [{ id: 'h', name: 'Hackfleisch', amount: 125, unit: 'g' }]), { source: 'selbst', status: 'kochbuch' });
+    const dip = createRecipe({ ...content('Testplatte', [
+      { id: 'd1', name: 'Testjoghurt', amount: 200, unit: 'g', part: 'Testdip' },
+      { id: 'd2', name: 'Testbrot', amount: 100, unit: 'g' },
+    ]), servings: 2 }, { source: 'selbst', status: 'kochbuch' });
+    setHousehold({ portions: 1, lunchDays: [] });
+    const side = ownEntry({ recipeId: dip, kind: 'sauce', name: 'Testdip', part: 'Testdip' });
+    setWeek(suggestWeek([6], [{ baseId: bolo, meals: [mealKey(bolo, side)] }], () => 'b1'));
+    addPantryItem('Testjoghurt', 500, 'g');
+    await whenSaved();
+    const joghurt = () => currentPantry().items.find((i) => i.name === 'Testjoghurt' && !i.recipeId)?.amount;
+    const dipReady = () => currentPantry().items.filter((i) => i.recipeId === dip).reduce((n, i) => n + (i.amount ?? 0), 0);
+    return { repo, bolo, dip, joghurt, dipReady };
+  };
+
+  it('nicht vorgekocht: Zutaten des Teils auf der Liste, beim Essen aus der Speisekammer; „Rückgängig“ legt sie zurück', async () => {
+    const { repo, bolo, joghurt } = await setup('own-side');
+    const list = shoppingList(currentPlan(), await repo.list(), foodTable, { ...currentPantry(), items: [] });
+    expect(list.find((x) => x.name === 'Testjoghurt')?.quantity).toBe('100 g'); // eine Portion von zwei
+    expect(list.some((x) => x.name === 'Testbrot')).toBe(false); // nur der Dip-Teil
+    cookBase(bolo);
+    const meal = eatMeal('b1')!;
+    expect(joghurt()).toBe(400);
+    meal.undo();
+    expect(joghurt()).toBe(500);
+  });
+
+  it('vorgekocht: nicht auf der Liste, beim Essen geht eine Portion Dip – die Zutaten bleiben', async () => {
+    const { repo, bolo, dip, joghurt, dipReady } = await setup('own-side-ready');
+    cookParts(dip, ['Testdip'], 2);
+    expect([joghurt(), dipReady()]).toEqual([300, 2]);
+    const list = shoppingList(currentPlan(), await repo.list(), foodTable, currentPantry());
+    expect(list.some((x) => x.name === 'Testjoghurt')).toBe(false);
+    cookBase(bolo);
+    const meal = eatMeal('b1')!;
+    expect([joghurt(), dipReady()]).toEqual([300, 1]);
+    meal.undo();
+    expect(dipReady()).toBe(2);
   });
 });

@@ -138,9 +138,35 @@ export const comboOf = (ids: readonly string[]): string | undefined => {
   return list.length ? list.map((s) => s.id).join(',') : undefined;
 };
 
-/** Bausteine lesbar: „Pasta, Hähnchenbrust & Parmesan“ */
+/**
+ * Deine Rezepte als Baustein eines Abends (Julia: eigene Bausteine auch im Wochenplan): im selben Feld wie die festen,
+ * als „mein:<Stufe>:<Rezept-id>:<Name>“, ein Teil (die Guacamole aus „Tacos“) mit „:teil“ dahinter. Der Name steht mit
+ * drin, damit Titel wie „Chili mit Reis & Guacamole“ ohne die Rezepte auskommen (wie „eigen:veg:Tomaten“) – kodiert,
+ * weil Komma, Plus und Doppelpunkt in der gespeicherten Form trennen (sidesOf, mealKey). Alte App-Fassungen überspringen
+ * solche Einträge einfach (sideOf kennt sie nicht).
+ */
+export interface OwnSide { entry: string; recipeId: string; kind: SideKind; name: string; part?: string }
+
+export const ownEntry = (o: { recipeId: string; kind: SideKind; name: string; part?: string }): string =>
+  `mein:${o.kind}:${o.recipeId}:${encodeURIComponent(o.name)}${o.part ? ':teil' : ''}`;
+
+export function ownOf(entry: string): OwnSide | undefined {
+  const m = /^mein:(carb|protein|sauce|veg|topping):([^:,+]+):([^:,+]+)(:teil)?$/.exec(entry);
+  if (!m) return undefined;
+  try {
+    const name = decodeURIComponent(m[3]);
+    return { entry, recipeId: m[2], kind: m[1] as SideKind, name, ...(m[4] ? { part: name } : {}) };
+  } catch {
+    return undefined; // kaputt kodiert – lieber weglassen als abstürzen
+  }
+}
+
+/** die eigenen Bausteine eines Abends */
+export const ownSidesOf = (side: string | undefined): OwnSide[] => (side ? side.split(',').flatMap((e) => ownOf(e) ?? []) : []);
+
+/** Bausteine lesbar: „Pasta, Hähnchenbrust & Parmesan“ – eigene mit ihrem Namen, in gespeicherter Reihenfolge */
 export function comboText(side: string | undefined): string {
-  const names = sidesOf(side).map((s) => s.name);
+  const names = (side ? side.split(',') : []).flatMap((e) => sideOf(e)?.name ?? ownOf(e)?.name ?? []);
   return names.length > 1 ? `${names.slice(0, -1).join(', ')} & ${names.at(-1)}` : names[0] ?? '';
 }
 
@@ -158,8 +184,10 @@ export interface ComboStep {
   name: string;
   text?: string;
   minutes: number;
-  /** woher der Text kommt – zum Bearbeiten */
-  source: 'grundlage' | 'standard' | 'eigen';
+  /** woher der Text kommt – zum Bearbeiten; „rezept“: dein Rezept als Baustein, die Schritte stehen dort */
+  source: 'grundlage' | 'standard' | 'eigen' | 'rezept';
+  /** dein Rezept steht vorgekocht da – nichts zu kochen, also auch nichts mitzukochen */
+  ready?: true;
 }
 
 /**

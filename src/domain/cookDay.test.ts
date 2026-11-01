@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { alongMeals, cookDayMeal, cookStart, freshFor, TODAY } from './cookDay';
 import { weekItems, weekSideNeeds, weekView } from './week';
 import { sideContent } from './mix';
+import { ownEntry } from './sides';
 import type { Week } from './mealplan';
 import type { Ingredient, Recipe, RecipeContent } from './types';
 
@@ -128,5 +129,31 @@ describe('Kochtag in einem Durchgang (Julia: „vorkochen und heute schon was da
     };
     expect(weekItems(w, all, hh)).toEqual([{ recipeId: 'bolo', servings: 6, fromWeek: true }, { recipeId: 'spag', servings: 2, fromWeek: true }]);
     expect(weekSideNeeds(w, all, hh)).toEqual([]);
+  });
+});
+
+describe('Kochtag: dein Rezept als Baustein (Julia: deine Guacamole auch im Wochenplan)', () => {
+  const dip = recipe('dip', 'Testplatte', {
+    servings: 2,
+    ingredients: [ing('d1', 'Testjoghurt', 200, { part: 'Testdip' }), ing('d2', 'Testbrot', 100)],
+    steps: [{ id: 'ds', text: 'Testjoghurt verrühren.', ingredientIds: ['d1'], timerMinutes: 20 }, { id: 'db', text: 'Testbrot schneiden.', ingredientIds: ['d2'] }],
+  });
+  const meal = { id: 'a', day: SO, recipeId: 'bolo', baseId: 'bolo', side: `pasta,${ownEntry({ recipeId: 'dip', kind: 'sauce', name: 'Testdip', part: 'Testdip' })}` };
+
+  it('nicht vorgekocht: Zutaten des Teils für eine Portion und seine Schritte, der erste mit Namen', () => {
+    const f = freshFor(meal, [...all, dip], hh)!;
+    expect(f.ingredients.filter((i) => i.id.includes('mein:')).map((i) => [i.id, i.name, i.amount])).toEqual([[`${TODAY}mein:dip:d1`, 'Testjoghurt', 100]]);
+    const steps = f.steps.filter((s) => s.id.includes('mein:'));
+    expect(steps.map((s) => s.text)).toEqual(['Testdip: Testjoghurt verrühren.']);
+    expect(steps[0].ingredientIds).toEqual([`${TODAY}mein:dip:d1`]);
+    // das Längste zuerst: 20 Min. Dip vor der Pasta
+    expect(f.steps.map((s) => s.text.split(':')[0])).toEqual(['Testdip', 'Pasta']);
+  });
+
+  it('genug vorgekocht (2 Portionen für 2): nur aus dem Kühlschrank, nichts zu kochen', () => {
+    const items = [{ id: 'p', name: 'Testdip', amount: 2, unit: 'Stück' as const, addedAt: '', recipeId: 'dip', part: 'Testdip' }];
+    const f = freshFor(meal, [...all, dip], hh, items)!;
+    expect(f.ingredients.some((i) => i.name === 'Testjoghurt')).toBe(false);
+    expect(f.steps.filter((s) => s.id.includes('mein:')).map((s) => s.text)).toEqual(['Testdip: aus dem Kühlschrank, bei Bedarf erwärmen']);
   });
 });

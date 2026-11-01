@@ -1,8 +1,12 @@
+import { ownIngredients, ownMinutes, readyPortions, readyPrep } from './craving';
 import { cookingContent } from './homemade';
 import type { Household, Week, WeekMeal, Weekday } from './mealplan';
 import { scaleIngredients } from './scaling';
-import { comboSteps, sideIngredient } from './sides';
-import type { Recipe, RecipeContent, Step } from './types';
+import type { PantryItem } from './pantry';
+import { stepPart } from './parts';
+import { currentContent } from './recipe';
+import { comboSteps, ownSidesOf, sideIngredient } from './sides';
+import type { Ingredient, Recipe, RecipeContent, Step } from './types';
 import { FRESH_DAYS, keepsOf, servingsOf, slotIndex, slotOf, weekOrder, type MealView, type WeekView } from './week';
 
 /**
@@ -75,20 +79,40 @@ export const TODAY = 'heute:';
  * und die Bausteine (Reis, Parmesan) mit ihrer Zubereitung – das Längste zuerst. Nichts frisch (nur die Grundlage
  * selbst): undefined, dann gibt es auch nichts zu fragen.
  */
-export function freshFor(meal: WeekMeal, recipes: readonly Recipe[], household: Household): RecipeContent | undefined {
+export function freshFor(meal: WeekMeal, recipes: readonly Recipe[], household: Household, items: readonly PantryItem[] = []): RecipeContent | undefined {
   const dish = meal.recipeId !== meal.baseId ? recipes.find((r) => r.id === meal.recipeId) : undefined;
   const own = dish ? cookingContent(dish, recipes, [meal.baseId]) : undefined;
   // Zubereitung wie im Wochenplan (ComboSteps) – auch die nur für diese Grundlage
   const sides = comboSteps(meal.side, '', household, recipes.find((r) => r.id === meal.baseId)).filter((s) => s.id);
+  // deine Rezepte als Baustein (die Guacamole): steht genug vorgekocht da, nur „aus dem Kühlschrank“ – sonst seine
+  // Zutaten (für eine Portion) und Schritte, der erste mit dem Namen davor
+  const mine = ownSidesOf(meal.side).flatMap((o): { ingredients: Ingredient[]; steps: Step[]; minutes: number }[] => {
+    const r = recipes.find((x) => x.id === o.recipeId);
+    if (!r) return [];
+    const pre = `mein:${o.recipeId}:`;
+    if (readyPortions(items, o.recipeId, o.part, true) >= servingsOf(meal, household)) {
+      const p = readyPrep(o.kind);
+      return [{ ingredients: [], minutes: p.minutes, steps: [{ id: `${pre}fertig`, text: `${o.name}: ${p.text}`, ...(p.minutes ? { timerMinutes: p.minutes } : {}) }] }];
+    }
+    const c = o.part ? currentContent(r) : cookingContent(r, recipes);
+    const steps = c.steps.filter((st) => st.text.trim() && (!o.part || stepPart(st, c) === o.part)).map((st, k): Step => ({
+      ...st, id: pre + st.id, text: k === 0 ? `${o.name}: ${st.text}` : st.text,
+      ...(st.ingredientIds ? { ingredientIds: st.ingredientIds.map((x) => pre + x) } : {}),
+    }));
+    return [{ ingredients: ownIngredients(r, o.part, 1, recipes).map((i) => ({ ...i, id: pre + i.id })), steps, minutes: ownMinutes(c, o.part) }];
+  });
   const ingredients = [
     ...(own ? scaleIngredients(own, 1) : []),
     ...sides.flatMap((s) => sideIngredient(s.id!, 1, household) ?? []),
+    ...mine.flatMap((m) => m.ingredients),
   ];
-  if (!ingredients.length) return undefined;
-  const steps: Step[] = [
-    ...(own?.steps ?? []).filter((s) => s.text.trim()),
-    ...sides.map((s): Step => ({ id: `beilage:${s.id}`, text: `${s.name}: ${s.text ?? 'zubereiten'}`, ingredientIds: [`beilage:${s.id}`], ...(s.minutes > 0 ? { timerMinutes: s.minutes } : {}) })),
-  ];
+  if (!ingredients.length && !mine.length) return undefined;
+  // Bausteine – feste und deine – das Längste zuerst (die Gnocchi vor dem Parmesan)
+  const groups = [
+    ...sides.map((s) => ({ minutes: s.minutes, steps: [{ id: `beilage:${s.id}`, text: `${s.name}: ${s.text ?? 'zubereiten'}`, ingredientIds: [`beilage:${s.id}`], ...(s.minutes > 0 ? { timerMinutes: s.minutes } : {}) }] })),
+    ...mine,
+  ].sort((a, b) => b.minutes - a.minutes);
+  const steps: Step[] = [...(own?.steps ?? []).filter((s) => s.text.trim()), ...groups.flatMap((g) => g.steps)];
   return {
     ...(own ?? { title: '', description: '', prepMinutes: 0, cookMinutes: 0, difficulty: 1, categories: [], tags: [], devices: [] }),
     servings: 1,

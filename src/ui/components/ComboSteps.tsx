@@ -1,10 +1,12 @@
 import { useState } from 'react';
-import { comboSteps, foodOf, prepOf, sideOf, type ComboStep } from '../../domain/sides';
+import { ownComboSteps } from '../../domain/craving';
+import { comboSteps, foodOf, ownOf, prepOf, sideOf, type ComboStep } from '../../domain/sides';
 import type { Household } from '../../domain/mealplan';
 import type { Recipe } from '../../domain/types';
 import { currentContent } from '../../domain/recipe';
 import { DAY_LONG, type CarbCarry } from '../../domain/week';
-import { setSideFood, setSidePrep } from '../../data/store';
+import { setSideFood, setSidePrep, usePantry, useRecipes } from '../../data/store';
+import { navigate } from '../../router';
 import { useSheet } from '../useSheet';
 import { toast } from '../toast';
 import { Stepper } from './Controls';
@@ -15,24 +17,35 @@ import { IngredientNames } from './IngredientNames';
  * „So geht's“ für einen Baukasten-Abend (Julia: „woher weiß ich, wie ich das zubereite?“) – das Längste zuerst, jeder
  * Baustein mit Stift zum Ändern: als Standard oder nur bei dieser Grundlage.
  */
-export function ComboSteps({ side, base, household, carry }: { side: string; base: Recipe; household: Household; carry?: CarbCarry }) {
+export function ComboSteps({ side, base, household, carry, portions = 1 }: { side: string; base: Recipe; household: Household; carry?: CarbCarry; portions?: number }) {
   const [edit, setEdit] = useState<ComboStep | null>(null);
-  // zweimal Nudeln: am ersten Abend mitkochen, am zweiten nur aufwärmen (3 Min.) – danach neu nach Dauer ordnen
-  const steps = comboSteps(side, currentContent(base).title, household, base).map((s): ComboStep => {
-    if (!carry || s.id !== carry.side) return s;
-    if (carry.from !== undefined) return { ...s, text: `von ${DAY_LONG[carry.from]} aufwärmen`, minutes: 3 };
-    return carry.with !== undefined ? { ...s, text: `${s.text ?? 'kochen'} – gleich für ${DAY_LONG[carry.with]} mitkochen` } : s;
-  }).sort((a, b) => b.minutes - a.minutes);
+  const recipes = useRecipes();
+  const pantry = usePantry();
+  // zweimal Nudeln (auch deine Gnocchi): am ersten Abend mitkochen, am zweiten nur aufwärmen (3 Min.) – danach neu nach
+  // Dauer ordnen. Steht dein Rezept vorgekocht da, gibt es nichts mitzukochen – fürs Mitkochen muss es für beide reichen.
+  const more = carry?.with !== undefined ? { entry: carry.side, portions: carry.portions ?? 0 } : undefined;
+  const steps = [...comboSteps(side, currentContent(base).title, household, base), ...ownComboSteps(side, recipes, pantry.items, portions, more)]
+    .map((s): ComboStep => {
+      if (!carry || s.id !== carry.side || s.ready) return s;
+      if (carry.from !== undefined) return { ...s, text: `von ${DAY_LONG[carry.from]} aufwärmen`, minutes: 3 };
+      return carry.with !== undefined ? { ...s, text: `${s.text ?? 'kochen'} – gleich für ${DAY_LONG[carry.with]} mitkochen` } : s;
+    }).sort((a, b) => b.minutes - a.minutes);
   return (
     <>
       <ol className="combo-steps">
-        {steps.map((s) => (
-          <li key={s.id ?? 'base'}>
-            <span><b>{s.name}</b> {s.text ?? <span className="muted">– noch keine Zubereitung</span>}{s.minutes > 0 ? <span className="muted"> · {s.minutes} Min.</span> : null}
-              {s.source === 'grundlage' && <span className="tag">nur hier</span>}</span>
-            {s.id && <button type="button" className="iconbtn iconbtn--sm" aria-label={`Zubereitung ${s.name} ändern`} onClick={() => setEdit(s)}><Icon name="pencil" size={14} /></button>}
-          </li>
-        ))}
+        {steps.map((s) => {
+          // dein Rezept: der Name führt hin – dort stehen die Schritte, geändert wird dort
+          const mine = s.source === 'rezept' && s.id ? ownOf(s.id) : undefined;
+          return (
+            <li key={s.id ?? 'base'}>
+              <span>{mine
+                ? <button type="button" className="combo-steps__recipe" onClick={() => navigate(`/rezept/${mine.recipeId}`)}>{s.name}</button>
+                : <b>{s.name}</b>} {s.text ?? <span className="muted">– noch keine Zubereitung</span>}{s.minutes > 0 ? <span className="muted"> · {s.minutes} Min.</span> : null}
+                {s.source === 'grundlage' && <span className="tag">nur hier</span>}</span>
+              {s.id && !mine && <button type="button" className="iconbtn iconbtn--sm" aria-label={`Zubereitung ${s.name} ändern`} onClick={() => setEdit(s)}><Icon name="pencil" size={14} /></button>}
+            </li>
+          );
+        })}
       </ol>
       {edit?.id && <PrepSheet sideId={edit.id} base={base} household={household} onClose={() => setEdit(null)} />}
     </>

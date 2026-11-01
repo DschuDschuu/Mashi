@@ -3,6 +3,7 @@ import { baseCraving, cravingCombo } from '../../domain/craving';
 import { comboText } from '../../domain/sides';
 import type { Recipe } from '../../domain/types';
 import { ask } from '../confirm';
+import { useOwnChoices } from '../cravingHooks';
 import { CravingBuilder, useCravingView, ViewToggle } from './CravingBuilder';
 import { Icon } from './Icon';
 
@@ -10,11 +11,13 @@ import { Icon } from './Icon';
  * Baukasten im Wochenplan als Teller oder Stepper (Julia: „den neuen Baukasten auch im Wochenplan“ – statt der Chips-Reihen): die
  * Grundlage ist schon gewählt und füllt ihre Stufen (Bolognese: Protein und Sauce), den Rest geht man durch. `onAdd`
  * bekommt wie früher die gespeicherte Form der Bausteine („pasta,parmesan“) oder undefined für die Grundlage pur.
- * Eigene Rezepte stehen hier nicht zur Wahl – ein Abend der Woche ist die Grundlage plus feste Bausteine.
+ * Deine Rezepte als Bausteine stehen mit zur Wahl (Julia: deine Guacamole auch hier) – nur nicht die Grundlage selbst.
  * `lunch`: für einen Mittag – dann heißt der Knopf auch so.
  */
 export function ComboStepper({ base, onAdd, label = 'Zusammenstellen', lunch = false }: { base: Recipe; onAdd: (side: string | undefined) => void; label?: string; lunch?: boolean }) {
   const start = useMemo(() => baseCraving(base), [base]);
+  const mine = useOwnChoices();
+  const own = useMemo(() => [...start.own, ...mine.filter((c) => c.recipeId !== base.id)], [start.own, mine, base.id]);
   const [open, setOpen] = useState(false);
   const [state, setState] = useState(start.state);
   // Teller oder Liste – dieselbe gemerkte Wahl wie auf der Lust-Seite (Julia)
@@ -34,11 +37,11 @@ export function ComboStepper({ base, onAdd, label = 'Zusammenstellen', lunch = f
       </button>
     );
   }
-  const combo = cravingCombo(state);
+  const combo = cravingCombo(state, own, base.id);
   return (
     <div className="combo-stepper">
       <div className="combo-stepper__top"><ViewToggle view={view} onChange={setView} /></div>
-      <CravingBuilder view={view} state={state} set={setState} own={start.own} small />
+      <CravingBuilder view={view} state={state} set={setState} own={own} small />
       <div className="row-gap">
         <button type="button" className="btn btn--primary btn--sm" onClick={() => { onAdd(combo); close(); }}>
           <Icon name="plus" size={14} /> Für diesen {lunch ? 'Mittag' : 'Abend'}{combo ? ` · mit ${comboText(combo)}` : ' · pur'}

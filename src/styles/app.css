@@ -2174,6 +2174,8 @@ details.cost-line[open] > summary::after { transform: rotate(-90deg); }
 .combo-steps li { position: relative; }
 .combo-steps li::marker { color: var(--ink-3); }
 .combo-steps li { display: list-item; }
+/* dein Rezept als Baustein: der Name ist ein Link dorthin (die Schritte stehen im Rezept) */
+.combo-steps__recipe { font: inherit; font-weight: 700; color: var(--primary-text); text-decoration: underline; text-underline-offset: 2px; padding: 0; }
 .combo-steps li > span + .iconbtn { vertical-align: middle; margin-left: 2px; width: 28px; height: 28px; }
 /* Kochzeile in der Tagesliste (Julia: Kochtage im Wochenplan, Vorkochen klein) */
 .cookstrip { display: grid; gap: 6px; padding: 8px 10px; border-radius: var(--r-sm); background: var(--primary-soft); color: var(--ink); }
