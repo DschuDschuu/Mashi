@@ -24,8 +24,13 @@ Live: <https://dschudschuu.github.io/Mashi/> · installierbar als App (PWA), fun
   (Stepper mit kleinem Karussell). Derselbe Baukasten steckt im Wochenplan (Grundlage schon gewählt, deine Bausteine stehen mit zur Wahl – vorgekocht aus dem Kühlschrank, sonst nach deinem Rezept; der Abend merkt sich die Richtung, Würze und Zubereitung lassen sich schon beim Zusammenstellen, im Fenster jedes Abends und auf der Heute-Karte umschalten, eine Grundlage als Sauce gart Gemüse oder Hähnchen mit)
 - **Kochbuch** mit Versionen: eigene Rezepte, Import aus Text oder Foto (Texterkennung im Browser),
   KI-Ideen erst testen, Bewertung, „Zutaten vereinheitlichen“ (eine Schreibweise je Zutat); Zutaten, die ein Baustein
-  sind, lassen sich tauschen (Tofu statt Hähnchen, Quinoa statt Reis) – deine Schritte bleiben und nennen den neuen
-  Namen, mit Tipp zur Zubereitung; Menge, Einkauf, Nährwerte und Kochmodus rechnen mit, gemerkt bis du zurücktauschst
+  sind, lassen sich tauschen – jede Stufe in sich (Tofu statt Hähnchen, Quinoa statt Reis, Zucchini statt Brokkoli,
+  Feta statt Parmesan; Gemüse gegart nur gegen Gargemüse, roh nur gegen Rohes – je nachdem, wie dein Rezept es nutzt;
+  Milchprodukte untereinander wie Frischkäse statt Schmand; Milchprodukte, Toppings und Saucen behalten die Menge aus
+  deinem Rezept; Dosentomaten und Ei nicht) – deine Schritte bleiben und nennen den neuen Namen, mit Tipp
+  zur Zubereitung passend zum Schritt (Ofen bleibt Ofen); eine Ampel sagt, wenn ein Schritt anders gart, als der neue
+  Baustein es kann („kurz anschauen“); Menge, Einkauf, Nährwerte und Kochmodus rechnen mit, gemerkt bis du zurücktauschst; „+ Beilagensalat“ zu jedem
+  Rezept (Gemüse, Dressing – Balsamico ohne Öl vorgewählt –, Topping wählen) – nur fürs nächste Kochen oder „immer dazu"
 - **Vorkoch-Woche**: eine oder zwei Grundlagen (Bolognese, Curry …) an wählbaren Kochtagen vorkochen, unter der Woche
   daraus verschiedene Abendessen (Verwandlungen wie Wraps oder Pasta, die nur unter ihrer Grundlage stehen). Mashi
   verteilt die Abende (nie vor den Kochtag, zu Altes einfrieren), plant auf Wunsch Mittagessen mit (Rest vom Vorabend,

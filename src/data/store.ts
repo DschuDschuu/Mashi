@@ -22,6 +22,7 @@ import { retireMix, sideContent } from '../domain/mix';
 import { ownIngredients, readyPortions, staleTrials } from '../domain/craving';
 import { foodOf, ownSidesOf, sideGrams, sidesOf, styleOf, withStyle, type SideStyle } from '../domain/sides';
 import { swapFor } from '../domain/swaps';
+import type { SideSalad } from '../domain/sideSalad';
 import { cookingContent } from '../domain/homemade';
 import { recordSavings, type BonSavings } from '../domain/savings';
 import { addBon, bonFromImport, dropDayPrices, editBonLine, includeBonLine, sameBonOf, withdrawBonStock, dropUnsavedDay, type BonLine, type BonLinePatch } from '../domain/bons';
@@ -862,6 +863,17 @@ export function setChoice(id: string, choice: string): () => void {
     commit(c ? { ...rest, choice: c } : rest);
   };
   apply(choice);
+  return () => apply(before);
+}
+
+/** Beilagensalat setzen oder wegnehmen (sideSalad.ts) – gibt „Rückgängig“ zurück */
+export function setSalad(id: string, salad: SideSalad | undefined): () => void {
+  const before = get(id).salad;
+  const apply = (next: SideSalad | undefined) => {
+    const { salad: _, ...rest } = get(id);
+    commit(next ? { ...rest, salad: next } : rest);
+  };
+  apply(salad);
   return () => apply(before);
 }
 

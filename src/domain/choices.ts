@@ -1,4 +1,5 @@
 import { currentContent } from './recipe';
+import { activeSalad, withSalad } from './sideSalad';
 import { withSwaps } from './swaps';
 import type { Ingredient, Recipe, RecipeContent, Step } from './types';
 
@@ -44,12 +45,14 @@ export function chosenContent(r: Recipe): RecipeContent {
   const c = currentContent(r);
   const choice = activeChoice(r);
   const swaps = r.swaps && Object.keys(r.swaps).length ? r.swaps : undefined;
-  if (!choice && !swaps) return c;
-  const key = `${choice ?? ''}|${swaps ? JSON.stringify(swaps) : ''}`;
+  // der Beilagensalat nur, solange er gilt (nur fürs nächste Kochen – oder immer dazu)
+  const salad = activeSalad(r);
+  if (!choice && !swaps && !salad) return c;
+  const key = `${choice ?? ''}|${swaps ? JSON.stringify(swaps) : ''}|${salad ? JSON.stringify(salad) : ''}`;
   let byChoice = memo.get(c);
   if (!byChoice) memo.set(c, (byChoice = new Map()));
   let out = byChoice.get(key);
-  if (!out) byChoice.set(key, (out = withSwaps(forChoice(c, choice), swaps)));
+  if (!out) byChoice.set(key, (out = withSalad(withSwaps(forChoice(c, choice), swaps), salad)));
   return out;
 }
 

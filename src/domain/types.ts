@@ -11,6 +11,7 @@
  * keine KI) Nährwerte „hineinschreiben“.
  */
 import type { SideKind } from './sides';
+import type { SideSalad } from './sideSalad';
 import type { IngredientSwap } from './swaps';
 
 /** Lebenszyklus eines Rezepts. Archivieren ist ein eigenes Flag (archivedAt). */
@@ -184,6 +185,11 @@ export interface Recipe {
    * Wie die Variante nicht versioniert: gilt, bis du zurücktauschst.
    */
   swaps?: Record<string, IngredientSwap>;
+  /**
+   * Beilagensalat (Julia: zu jedem Rezept, Zutaten selbst gewählt) – nur fürs nächste Kochen, außer „immer dazu“; siehe
+   * sideSalad.ts. Wie die Tauschplätze nicht versioniert.
+   */
+  salad?: SideSalad;
   /**
    * Vorkochen (Julia: am Wochenende eine Grundlage kochen, unter der Woche daraus verschiedene Abendessen):
    * wie lange es gekocht im Kühlschrank hält (Tage) – fehlt: shelfDays.prepared (Standard 3). Siehe week.ts.

@@ -14,8 +14,11 @@ Recipe  (Hülle – ändert sich selten)
 ├─ homemade?     Zutat-IDs, die gerade selbst gemacht statt gekauft werden (nicht versioniert, siehe domain/homemade.ts)
 ├─ blockPrep?    Zubereitung von Baukasten-Bausteinen nur bei dieser Grundlage {baustein-id: {text, minutes}} (nicht versioniert, siehe domain/sides.ts)
 ├─ choice?       gewählte Variante (fehlt oder gibt es nicht mehr: die erste; nicht versioniert, siehe domain/choices.ts)
-├─ swaps?        getauschte Zutaten {zutat-id: { side (Baustein-id), name (wie im Laden), grams (pro Portion), unit? (Stück) }} –
-│                Tofu statt Hähnchen, die Schritte bleiben und nennen den neuen Namen (nicht versioniert, siehe domain/swaps.ts)
+├─ swaps?        getauschte Zutaten {zutat-id: { side (Baustein-id oder „zutat:frischkaese“ aus einer Austauschgruppe), name (wie im
+│                Laden), grams? (pro Portion), unit? (Stück), same? (Menge der Zutat behalten – Milchprodukte, Toppings, Saucen) }} – Tofu statt
+│                Hähnchen, die Schritte bleiben und nennen den neuen Namen (nicht versioniert, siehe domain/swaps.ts)
+├─ salad?        Beilagensalat { items[{ side, name, grams (pro Portion) }], dressing?, topping?, keep? (immer dazu), at (ISO) } –
+│                ohne keep nur, bis das Rezept danach gekocht ist (lastCookedAt > at); nicht versioniert, siehe domain/sideSalad.ts
 ├─ keepsDays?, freezable?, togo?  Vorkochen: hält gekocht X Tage (sonst shelfDays.prepared), einfrierbar, zum Mitnehmen (nicht versioniert, siehe domain/week.ts)
 ├─ fromBase?    Verwandlung dieser Grundlage (steht nur unter ihr, nicht im Kochbuch-Raster; ihre Zutat mit recipeId zeigt auf die Grundlage, Einheit `Portion`)
 ├─ blocks?       als Baustein in „Worauf hast du Lust?“: [{ part? (Teil – fehlt: ganzes Rezept), kind (carb|protein|sauce|veg|topping),

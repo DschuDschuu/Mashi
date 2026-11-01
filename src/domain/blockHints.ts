@@ -54,7 +54,7 @@ const NOT_MEALS: ReadonlySet<string> = new Set(['dessert', 'backen', 'getraenke'
 const WHOLE_MEALS: ReadonlySet<string> = new Set(['hauptgericht', 'suppe', 'salat-bowl']);
 
 /** Welche Stufen die Zutaten zeigen (Kohlenhydrat, Protein) – verknüpfte Rezepte zählen nicht */
-const kindsIn = (names: readonly string[]): Set<SideKind> => new Set(names.flatMap((n) => sideOfIngredient(n)?.kind ?? []));
+const kindsIn = (names: readonly string[]): Set<SideKind> => new Set(names.flatMap((n) => sideOfIngredient(n, [], ['carb', 'protein'])?.kind ?? []));
 
 /** Vorschlag für einen Teil oder ein ganzes Rezept – undefined: nicht sicher */
 function hintFor(r: Recipe, part: string | undefined, name: string, ingredients: readonly string[]): BlockHint | undefined {

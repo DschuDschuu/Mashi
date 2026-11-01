@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { chosenContent } from './choices';
 import { sideContent } from './mix';
-import { sideOfIngredient, swapFor, swapSlots, withSwaps } from './swaps';
-import type { Recipe, RecipeContent } from './types';
+import { sideOfIngredient, swapChecks, swapFor, swapSlots, swapTargetOfIngredient, withSwaps } from './swaps';
+import type { Ingredient, Recipe, RecipeContent } from './types';
 
 // erfundenes Rezept – keine echten (das Repo ist öffentlich)
+const ing = (id: string, name: string): Ingredient => ({ id, name, amount: 100, unit: 'g' });
 const content = (): RecipeContent => ({
   ...sideContent('Testpfanne'), servings: 2,
   ingredients: [
@@ -37,13 +38,39 @@ describe('Zutaten als Baustein erkennen (Julia: Tofu statt Hähnchen)', () => {
     expect(sideOfIngredient('Rinderhack')?.id).toBe('hack');
   });
 
-  it('nur Kohlenhydrat und Protein – kein Treffer mitten im Wort', () => {
-    expect(sideOfIngredient('gehackte Tomaten')).toBeUndefined();
+  it('kein Treffer mitten im Wort', () => {
     expect(sideOfIngredient('Kartoffelstärke')).toBeUndefined();
     expect(sideOfIngredient('Reisessig')).toBeUndefined();
-    expect(sideOfIngredient('Zwiebel')).toBeUndefined();
-    expect(sideOfIngredient('Parmesan')).toBeUndefined(); // ein Topping
-    expect(sideOfIngredient('grüne Bohnen')).toBeUndefined(); // Gemüse, nicht die schwarzen
+    expect(sideOfIngredient('Paprikapulver')).toBeUndefined();
+    expect(sideOfIngredient('Sesamöl')).toBeUndefined();
+    expect(sideOfIngredient('Zwiebel')).toBeUndefined(); // würzt nur – kein Baustein
+    expect(sideOfIngredient('grüne Bohnen')).toBeUndefined(); // nicht die schwarzen
+  });
+
+  it('jede Stufe (Julia: „alles innerhalb jeder Stufe“): Gemüse, Sauce, Topping', () => {
+    expect(sideOfIngredient('Kirschtomaten')?.id).toBe('tomaten');
+    expect(sideOfIngredient('Möhren')?.id).toBe('karotten');
+    expect(sideOfIngredient('Salatgurke')?.id).toBe('gurke');
+    expect(sideOfIngredient('rote Zwiebel')?.id).toBe('zwiebeln');
+    expect(sideOfIngredient('Basilikumpesto')?.id).toBe('pesto');
+    expect(sideOfIngredient('Erdnuss-Sauce')?.id).toBe('erdnuss');
+    expect(sideOfIngredient('Parmesan')?.id).toBe('parmesan');
+    expect(sideOfIngredient('Koriander')?.id).toBe('koriander');
+  });
+
+  it('Schutzregeln: Dosentomaten, Schmand, Ei, gemahlener Koriander tauschen nicht', () => {
+    expect(sideOfIngredient('Passierte Tomaten')).toBeUndefined();
+    expect(sideOfIngredient('gehackte Tomaten (Dose)')).toBeUndefined();
+    expect(sideOfIngredient('getrocknete Tomaten')).toBeUndefined();
+    expect(sideOfIngredient('Schmand')).toBeUndefined();
+    expect(sideOfIngredient('Ei')).toBeUndefined();
+    expect(sideOfIngredient('Koriander, gemahlen')).toBeUndefined();
+    expect(sideOfIngredient('Kräuter der Provence')).toBeUndefined();
+  });
+
+  it('nur bestimmte Stufen, wenn gefragt (Baustein-Vorschläge: Kohlenhydrat und Protein)', () => {
+    expect(sideOfIngredient('Paprika', [], ['carb', 'protein'])).toBeUndefined();
+    expect(sideOfIngredient('Hackfleisch', [], ['carb', 'protein'])?.id).toBe('hack');
   });
 
   it('eigene Bausteine zählen mit', () => {
@@ -59,6 +86,15 @@ describe('Tauschplätze', () => {
     expect(protein).toContain('tofu');
     expect(protein).not.toContain('haehnchen');
     expect(slots[0].options.some((o) => o.kind !== 'carb')).toBe(false);
+  });
+
+  it('was schon im Rezept liegt, steht nicht zur Wahl – getauscht zählt der neue Baustein', () => {
+    const c: RecipeContent = { ...content(), ingredients: [ing('p', 'Paprika'), ing('a', 'Avocado'), ing('z', 'Zucchini')], steps: [] };
+    const opts = (swaps = {}) => swapSlots(c, swaps)[0].options.map((o) => o.id);
+    expect(opts()).not.toContain('avocado');
+    expect(opts()).not.toContain('zucchini');
+    expect(opts({ z: swapFor('brokkoli')! })).toContain('zucchini'); // Zucchini ist jetzt Brokkoli – also wieder frei
+    expect(opts({ z: swapFor('brokkoli')! })).not.toContain('brokkoli');
   });
 
   it('der aktuelle Tausch steht am Platz', () => {
@@ -105,6 +141,104 @@ describe('Rezept mit Tausch – die Schritte bleiben', () => {
     // ausdrücklich zugeordnete Zutaten zählen auch: mit der Zwiebel bleibt der Timer
     const fixed: RecipeContent = { ...content(), steps: [{ id: 'x', text: 'Hähnchen ruhen lassen.', timerMinutes: 5, ingredientIds: ['h', 'z'] }] };
     expect(withSwaps(fixed, { h: tofu }).steps[0].timerMinutes).toBe(5);
+  });
+
+  it('Gemüse tauscht nur gegen Gemüse – Topping nur gegen Topping', () => {
+    const c: RecipeContent = { ...content(), ingredients: [ing('b', 'Brokkoli'), ing('pm', 'Parmesan'), ing('t', 'Passierte Tomaten')], steps: [] };
+    const slots = swapSlots(c);
+    expect(slots.map((x) => x.ingredient.id)).toEqual(['b', 'pm']); // Dosentomaten nicht
+    expect(slots[0].options.every((o) => o.kind === 'veg')).toBe(true);
+    expect(slots[1].options.map((o) => o.id)).toContain('feta');
+    expect(slots[1].options.some((o) => o.id === 'ei')).toBe(true); // als Ziel geht Ei – nur die Zutat Ei tauscht nicht
+  });
+
+  it('die Zubereitung passend zum Schritt: Ofen bleibt Ofen – Tipp und Timer nach ihr (Julia: „das Rezept checkt das“)', () => {
+    const veg: RecipeContent = { ...content(), ingredients: [ing('b', 'Brokkoli')], steps: [
+      { id: 'v1', text: 'Brokkoli im Ofen rösten.', timerMinutes: 25 },
+    ] };
+    const z = withSwaps(veg, { b: swapFor('zucchini')! });
+    expect(z.steps[0].text).toBe('Zucchini im Ofen rösten. (Tipp: Zucchini in Stücken im Ofen rösten, 20 Min.)');
+    expect(z.steps[0].timerMinutes).toBe(20); // nicht der Standard „anbraten, 6 Min.“
+    expect(swapChecks(veg, { b: swapFor('zucchini')! })).toEqual({});
+  });
+
+  it('passt die Garart nicht: gelb mit dem Schritt zum Anschauen – dein Timer bleibt', () => {
+    const veg: RecipeContent = { ...content(), ingredients: [ing('b', 'Brokkoli')], steps: [
+      { id: 'v1', text: 'Brokkoli 5 Min. dämpfen.', timerMinutes: 5 },
+      { id: 'v2', text: 'Brokkoli abtropfen lassen.' },
+    ] };
+    const swap = { b: swapFor('gurke')! };
+    expect(swapChecks(veg, swap)).toEqual({ b: ['Gurke 5 Min. dämpfen.'] }); // „abtropfen“ gart nicht – nichts zu prüfen
+    expect(withSwaps(veg, swap).steps[0].timerMinutes).toBe(5);
+    const carb: RecipeContent = { ...content(), ingredients: [ing('k', 'Kartoffeln')], steps: [{ id: 'k1', text: 'Kartoffeln in Salzwasser kochen.', timerMinutes: 20 }] };
+    expect(swapChecks(carb, { k: swapFor('schupfnudeln')! })).toEqual({ k: ['Schupfnudeln in Salzwasser kochen.'] });
+    expect(swapChecks(carb, { k: swapFor('pasta')! })).toEqual({});
+    expect(withSwaps(carb, { k: swapFor('pasta')! }).steps[0].timerMinutes).toBe(10);
+  });
+
+  it('Gemüse gegart oder roh (Julia: „Brokkoli mit Salat ergibt keinen Sinn“) – was beides kann, nach deinem Rezept', () => {
+    const ids = (c: RecipeContent) => swapSlots(c)[0].options.map((o) => o.id);
+    const gebraten: RecipeContent = { ...content(), ingredients: [ing('p', 'Paprika')], steps: [{ id: 'x', text: 'Paprika in Streifen anbraten.' }] };
+    expect(ids(gebraten)).toEqual(expect.arrayContaining(['brokkoli', 'zucchini', 'karotten']));
+    expect(ids(gebraten)).not.toEqual(expect.arrayContaining(['salat']));
+    expect(ids(gebraten).some((id) => ['salat', 'gurke', 'avocado'].includes(id))).toBe(false);
+    const roh: RecipeContent = { ...content(), ingredients: [ing('p', 'Paprika')], steps: [{ id: 'x', text: 'Paprika in feine Streifen schneiden.' }] };
+    expect(ids(roh)).toEqual(expect.arrayContaining(['gurke', 'salat', 'karotten']));
+    expect(ids(roh).some((id) => ['brokkoli', 'zucchini'].includes(id))).toBe(false);
+    // ohne Schritt, der es nennt: was mit ihm eine Art teilt – Brokkoli nie mit Salat
+    const brokkoli: RecipeContent = { ...content(), ingredients: [ing('b', 'Brokkoli')], steps: [] };
+    expect(ids(brokkoli)).toContain('zucchini');
+    expect(ids(brokkoli).some((id) => ['salat', 'gurke', 'avocado'].includes(id))).toBe(false);
+    const salat: RecipeContent = { ...content(), ingredients: [ing('s', 'Salat')], steps: [] };
+    expect(ids(salat)).toContain('gurke');
+    expect(ids(salat).some((id) => ['brokkoli', 'zucchini'].includes(id))).toBe(false);
+  });
+
+  it('Milchprodukte (Julia: Schmand ↔ Frischkäse, Joghurt, Milch): erkannt, untereinander tauschbar – Kokosmilch nicht', () => {
+    expect(swapTargetOfIngredient('Schmand')?.id).toBe('zutat:schmand');
+    expect(swapTargetOfIngredient('Doppelrahmfrischkäse')?.id).toBe('zutat:frischkaese');
+    expect(swapTargetOfIngredient('griechischer Joghurt')?.id).toBe('zutat:joghurt');
+    expect(swapTargetOfIngredient('saure Sahne')?.id).toBe('zutat:sauresahne');
+    expect(swapTargetOfIngredient('Sahnesauce')?.id).toBe('sahnesauce'); // die Sauce bleibt Sauce
+    expect(swapTargetOfIngredient('Joghurt-Dip')?.id).toBe('joghurt');
+    expect(swapTargetOfIngredient('Kokosmilch')).toBeUndefined();
+    expect(sideOfIngredient('Schmand')).toBeUndefined(); // als Baustein (Sauce) weiter nicht
+    const c: RecipeContent = { ...content(), ingredients: [ing('s', 'Schmand'), ing('h', 'Hähnchenbrust')], steps: [] };
+    const opts = swapSlots(c)[0].options.map((o) => o.id);
+    expect(opts).toEqual(expect.arrayContaining(['zutat:frischkaese', 'zutat:joghurt', 'zutat:milch', 'zutat:sahne']));
+    expect(opts.every((id) => id.startsWith('zutat:'))).toBe(true);
+  });
+
+  it('Milchprodukte: deine Menge bleibt, flüssig ↔ fest wechselt g und ml; kein Tipp, keine Ampel', () => {
+    const c: RecipeContent = { ...content(), ingredients: [{ id: 's', name: 'Schmand', amount: 200, unit: 'g' }, { id: 'm', name: 'Sahne', amount: 100, unit: 'ml' }, { id: 'e', name: 'Joghurt', amount: 2, unit: 'EL' }], steps: [
+      { id: 'x', text: 'Den Schmand unterrühren und kurz köcheln lassen.', timerMinutes: 3 },
+    ] };
+    expect(swapFor('zutat:milch')).toEqual({ side: 'zutat:milch', name: 'Milch', same: true });
+    const out = withSwaps(c, { s: swapFor('zutat:milch')!, m: swapFor('zutat:frischkaese')!, e: swapFor('zutat:schmand')! });
+    expect(out.ingredients).toMatchObject([
+      { name: 'Milch', amount: 200, unit: 'ml' }, { name: 'Frischkäse', amount: 100, unit: 'g' }, { name: 'Schmand', amount: 2, unit: 'EL' },
+    ]);
+    expect(out.steps[0]).toMatchObject({ text: 'Milch unterrühren und kurz köcheln lassen.', timerMinutes: 3 });
+    expect(swapChecks(c, { s: swapFor('zutat:milch')! })).toEqual({});
+  });
+
+  it('Toppings und Saucen behalten die Menge deines Rezepts (Julia: nicht 160 g Feta statt 50 g Parmesan)', () => {
+    expect(swapFor('feta')).toEqual({ side: 'feta', name: 'Feta', same: true });
+    expect(swapFor('feta', { sideFood: { feta: 'Hirtenkäse' } })).toEqual({ side: 'feta', name: 'Hirtenkäse', same: true });
+    const c: RecipeContent = { ...content(), servings: 4, ingredients: [
+      { id: 'p', name: 'Parmesan', amount: 50, unit: 'g' }, { id: 'k', name: 'Kokos-Currysauce', amount: 200, unit: 'ml' }, { id: 'h', name: 'Hackfleisch', amount: 500, unit: 'g' },
+    ], steps: [] };
+    const out = withSwaps(c, { p: swapFor('feta')!, k: swapFor('erdnuss')!, h: swapFor('tofu')! });
+    expect(out.ingredients).toMatchObject([
+      { name: 'Feta', amount: 50, unit: 'g' }, { name: 'Erdnusssauce', amount: 200, unit: 'ml' },
+      { name: 'Tofu', amount: 400, unit: 'g' }, // Protein: weiter die Baustein-Menge (100 g × 4)
+    ]);
+  });
+
+  it('zwei Tausche im selben Schritt: ein Tipp für beide', () => {
+    const c: RecipeContent = { ...content(), ingredients: [ing('h', 'Hackfleisch'), ing('k', 'Karotten')], steps: [{ id: 'x', text: 'Karotten anschwitzen, Hack krümelig braten.' }] };
+    expect(withSwaps(c, { h: swapFor('tofu')!, k: swapFor('zucchini')! }).steps[0].text)
+      .toBe('Zucchini anschwitzen, Tofu krümelig braten. (Tipp: Tofu würfeln und knusprig braten, 10 Min.; Zucchini in Scheiben anbraten, 6 Min.)');
   });
 
   it('zwei Tausche zugleich', () => {

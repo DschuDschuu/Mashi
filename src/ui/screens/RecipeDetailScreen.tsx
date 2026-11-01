@@ -28,6 +28,8 @@ import { PageIntro } from '../components/PageIntro';
 import { deviceIcon } from '../catalogIcons';
 import { NutritionDetails, NutritionTiles } from '../components/Nutrition';
 import { UnknownIngredients } from '../components/NewProduct';
+import { isSaladIngredient } from '../../domain/sideSalad';
+import { SaladPanel } from '../components/SaladPanel';
 import { SwapPanel } from '../components/SwapPanel';
 import { RecipeImage } from '../components/RecipeImage';
 import { StepIngredients } from '../components/StepIngredients';
@@ -247,6 +249,17 @@ const header = (
     </>
   );
 
+  // Beilagensalat (sideSalad.ts) für sich – nicht zwischen deinen Zutaten
+  const mainIngredients = ingredients.filter((i) => !isSaladIngredient(i));
+  const saladIngredients = ingredients.filter(isSaladIngredient);
+  const ingredientRow = (i: (typeof ingredients)[number]) => (
+    <li key={i.id} className={i.optional ? 'is-optional' : ''}>
+      <span className="ingredients__qty">{formatQuantity(i)}</span>
+      <span className="ingredients__name">{i.name}{i.optional && <em> (optional)</em>}{i.note && <span className="muted">, {i.note}</span>}</span>
+      {stock && <IngredientStock status={stock.get(i.id)} soon={soon.has(i.id)} />}
+    </li>
+  );
+
   const ingredientsPanel = (
     <>
       <div className="row-between">
@@ -271,25 +284,26 @@ const header = (
       ))}
       {/* Tofu statt Hähnchen (Julia): tauschbare Zutaten – die Liste darunter zeigt schon den Tausch */}
       {!recipe.archivedAt && <SwapPanel recipe={recipe} />}
+      {/* Beilagensalat (Julia) – wie die Tauschplätze am Rezept, standardmäßig nur fürs nächste Kochen */}
+      {!recipe.archivedAt && <SaladPanel recipe={recipe} />}
       {/* mit Teilen (Julia: „Sauce“, „Salat“): je Teil eine Überschrift; „Frisch“ (ohne Teil) steht zuerst, ohne Überschrift */}
       {(parts.length ? parts : ['']).map((p) => {
-        const list = parts.length ? ingredients.filter((i) => partOf(i) === p) : ingredients;
+        const list = parts.length ? mainIngredients.filter((i) => partOf(i) === p) : mainIngredients;
         if (!list.length) return null;
         return (
           <div key={p || 'alle'} className="ingredients__part">
             {p !== REST && parts.length > 0 && <h3 className="ingredients__parthead">{partLabel(p)}{doneNow.includes(p) && <span className="small muted"> · fertig in der Speisekammer</span>}</h3>}
-            <ul className={`ingredients${stock ? ' has-stock' : ''}`}>
-              {list.map((i) => (
-                <li key={i.id} className={i.optional ? 'is-optional' : ''}>
-                  <span className="ingredients__qty">{formatQuantity(i)}</span>
-                  <span className="ingredients__name">{i.name}{i.optional && <em> (optional)</em>}{i.note && <span className="muted">, {i.note}</span>}</span>
-                  {stock && <IngredientStock status={stock.get(i.id)} soon={soon.has(i.id)} />}
-                </li>
-              ))}
-            </ul>
+            <ul className={`ingredients${stock ? ' has-stock' : ''}`}>{list.map((i) => ingredientRow(i))}</ul>
           </div>
         );
       })}
+      {/* der Beilagensalat als eigene Gruppe am Ende – „, Beilagensalat“ an jeder Zeile sagt die Überschrift schon */}
+      {saladIngredients.length > 0 && (
+        <div className="ingredients__part">
+          <h3 className="ingredients__parthead">Beilagensalat</h3>
+          <ul className={`ingredients${stock ? ' has-stock' : ''}`}>{saladIngredients.map((i) => ingredientRow({ ...i, note: undefined }))}</ul>
+        </div>
+      )}
     </>
   );
 
