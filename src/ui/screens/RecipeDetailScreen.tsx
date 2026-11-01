@@ -43,6 +43,7 @@ import { useSwipe } from '../useSwipe';
 import { useSlide } from '../useSlide';
 import { RenamePanel } from '../components/RenamePanel';
 import { FromBaseLink, PrepPanel } from '../components/PrepPanel';
+import { BlockHints } from '../components/BlockHints';
 import { BlockPanel } from '../components/BlockPanel';
 import { amountsText, useMorePrompt } from '../components/UseMoreSheet';
 import { useVariantPrompt } from '../components/VariantSheet';
@@ -238,7 +239,13 @@ const header = (
     </>
   );
   // Vorkochen & Baukasten: selten gebraucht – eingeklappt unter den Zutaten statt davor (UX-Rundgang: Zutaten erst nach ~1100 px)
-  const prepFold = !recipe.archivedAt && !recipe.trial && recipe.status !== 'ki_entwurf' && <PrepFold recipe={recipe} recipes={recipes} />;
+  const prepFold = !recipe.archivedAt && !recipe.trial && recipe.status !== 'ki_entwurf' && (
+    <>
+      {/* Mashi hat hier Bausteine gefunden (Julia: Weg B) – direkt über dem Ort, an dem man sie sonst von Hand markiert */}
+      <BlockHints recipes={[recipe]} />
+      <PrepFold recipe={recipe} recipes={recipes} />
+    </>
+  );
 
   const ingredientsPanel = (
     <>

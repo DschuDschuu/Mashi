@@ -827,6 +827,20 @@ export function setBlocks(id: string, blocks: RecipeBlock[] | undefined): () => 
 }
 
 /**
+ * Vorschlag ablehnen (blockHints.ts): der Teil – „“ fürs ganze Rezept – kommt auf die Liste, nach der Mashi nicht mehr
+ * fragt. Gibt „Rückgängig“ zurück.
+ */
+export function skipBlockHint(id: string, part: string | undefined): () => void {
+  const before = get(id).notBlocks;
+  const apply = (list: string[] | undefined) => {
+    const { notBlocks: _, ...rest } = get(id);
+    commit(list?.length ? { ...rest, notBlocks: list } : rest);
+  };
+  apply([...new Set([...(before ?? []), part ?? ''])]);
+  return () => apply(before);
+}
+
+/**
  * „Passt gut zu“ am Rezept (Julia: „in den Grundrezepten notieren, zu was sie passen“) – Baustein-ids, leer = nichts.
  * Nicht versioniert wie blocks. Gibt „Rückgängig“ zurück.
  */

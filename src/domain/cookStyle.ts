@@ -1,4 +1,5 @@
 import type { SideKind } from './sides';
+import type { Step } from './types';
 
 /**
  * Kochstil im Baukasten (Julia: „die Kochschritte sind pro Baustein immer sehr identisch und haben nicht so die
@@ -157,7 +158,14 @@ export interface StyleStep {
   serving?: boolean;
   /** ein Topf, in dem anderes mitgaren kann – die Grundlage im Wochenplan, wenn sie eine Sauce ist (Bolognese) */
   pot?: boolean;
+  /** dein Rezept als Baustein (Julia: „meine Kochschritte bleiben“): seine Schritte statt „nach deinem Rezept“ – craving.ts: ownSteps */
+  steps?: readonly OwnStep[];
+  /** nur Teile: aus welchem Rezept („Joghurt-Dip“ aus „Ofengemüse vom Blech“) */
+  from?: string;
 }
+
+/** Ein Schritt aus deinem Rezept, wie er unter dem Baustein steht */
+export type OwnStep = Pick<Step, 'text' | 'timerMinutes'>;
 
 const simmers = (t?: string) => !!t && /k(ö|oe)cheln/i.test(t);
 const inOven = (t?: string) => !!t && /im ofen/i.test(t);

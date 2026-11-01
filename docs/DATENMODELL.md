@@ -23,6 +23,7 @@ Recipe  (Hülle – ändert sich selten)
 │                replaces? (fester Baustein, den er ersetzt – meine Guacamole statt der festen; nur in „Worauf hast du Lust?“),
 │                directions[] (taco = Tortilla, bowl … – leer: überall; altes „wrap“ zählt als taco) }] (nicht versioniert; benennt eine neue Version einen Teil um,
 │                zieht die Markierung mit – parts.ts: followBlockParts; siehe domain/craving.ts)
+├─ notBlocks?    abgelehnte Baustein-Vorschläge: Teilnamen, „“ fürs ganze Rezept – Mashi fragt nicht mehr (nicht versioniert, siehe domain/blockHints.ts)
 ├─ pairs?       „Passt gut zu“: Baustein-ids (Bolognese → spaetzle, parmesan) – stehen im Stepper vorn, sobald das Rezept
 │                gewählt ist, auch im Baukasten des Wochenplans (nicht versioniert)
 ├─ partsFrom?   Teile aus einem anderen Rezept: Teilname → dessen id (der Dip aus „Knusprige Hähnchenstreifen“ im Baukasten-

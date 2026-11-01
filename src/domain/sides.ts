@@ -1,5 +1,5 @@
 import type { Household } from './mealplan';
-import type { Ingredient } from './types';
+import type { Ingredient, Step } from './types';
 
 /**
  * Baukasten für die Vorkoch-Woche (Julia: „+ Kohlenhydrat, + Protein, + Beilage, + Topping“): Bausteine, die frisch zur
@@ -222,6 +222,10 @@ export interface ComboStep {
   source: 'grundlage' | 'standard' | 'eigen' | 'rezept';
   /** dein Rezept steht vorgekocht da – nichts zu kochen, also auch nichts mitzukochen */
   ready?: true;
+  /** dein Rezept: seine Schritte (craving.ts: ownSteps) – fehlen sie, steht „nach deinem Rezept“ im Text */
+  steps?: readonly Pick<Step, 'text' | 'timerMinutes'>[];
+  /** nur Teile: aus welchem Rezept */
+  from?: string;
 }
 
 /**

@@ -1709,6 +1709,10 @@ p { margin: 0; }
 .renames__list label { display: flex; align-items: center; gap: 10px; }
 .renames__list input { accent-color: var(--primary); width: 18px; height: 18px; }
 .renames__list s { color: var(--ink-3); }
+/* Bausteine gefunden (BlockHints) – wie „Zutaten vereinheitlichen“, die Knöpfe rechts, auf 375 px darunter */
+.block-hints__cta { margin: 8px auto 12px; }
+.block-hints__what { flex: 1 1 12rem; min-width: 0; overflow-wrap: anywhere; }
+.block-hints__actions { display: flex; align-items: center; gap: 14px; margin-left: auto; }
 .foods-panel .panel > .favchip { align-self: flex-start; }
 
 /* Nährwerte je Zutat – immer offen, mit Anteil-Balken */
@@ -2288,6 +2292,11 @@ details.cost-line[open] > summary::after { transform: rotate(-90deg); }
 .craving-timeline { list-style: none; padding-left: 0; gap: 8px; }
 .craving-timeline > li { display: grid; grid-template-columns: 5.6rem 1fr; gap: 10px; align-items: baseline; }
 .craving-timeline__at { font-size: var(--fs-sm); font-weight: 700; color: var(--primary-text); white-space: nowrap; }
+/* deine Schritte unter deinem Rezept als Baustein (OwnSteps) – Lust-Seite und Wochenplan */
+.craving-timeline > li > div { min-width: 0; overflow-wrap: break-word; }
+.own-steps { margin: 4px 0 2px; padding-left: 18px; display: grid; gap: 2px; font-size: var(--fs-sm); color: var(--ink-2); list-style: decimal; }
+.own-steps li { display: list-item; overflow-wrap: break-word; }
+.own-steps li::marker { color: var(--ink-3); }
 .lust-steps__ready { display: inline-flex; align-items: center; gap: 4px; color: var(--primary-press); font-weight: 700; }
 /* „Auch als Baustein“ am Rezept – unter dem Vorkoch-Bereich, gleiche Trennlinie */
 .blocks__title { display: inline-flex; align-items: center; gap: 8px; margin: 0; }

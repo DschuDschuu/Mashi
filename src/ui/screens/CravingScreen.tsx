@@ -15,6 +15,7 @@ import { Stepper } from '../components/Controls';
 import { CravingAsk } from '../components/CravingAsk';
 import { CravingBuilder, useCravingView, ViewToggle } from '../components/CravingBuilder';
 import { mins } from '../components/CravingSteps';
+import { OwnSteps } from '../components/ComboSteps';
 import { SURPRISE, clearCraving, loadCraving, rememberPlate, saveCraving } from '../cravingMemory';
 import { ask } from '../confirm';
 import { Icon } from '../components/Icon';
@@ -264,8 +265,11 @@ function Finished({ q, state, own, set }: { q: string; state: CravingState; own:
             {timeline.steps.map((s) => (
               <li key={s.id}>
                 <span className="craving-timeline__at">{startLabel(s)}</span>
-                <span><strong>{s.name}</strong>{s.text ? ` ${s.text}` : ''}{s.minutes ? ` · ${mins(s.minutes)}` : ''}
+                <div><strong>{s.name}</strong>{s.text ? ` ${s.text}` : ''}{s.minutes ? ` · ${mins(s.minutes)}` : ''}
                   {s.alone && <span className="muted"> · läuft allein</span>}
+                  {s.from && <span className="muted"> · aus „{s.from}“</span>}
+                  {/* dein Rezept: deine Schritte statt „nach deinem Rezept“ (Weg B) */}
+                  {s.steps && <OwnSteps steps={s.steps} />}
                   {/* anders zubereiten (Brokkoli gedämpft, geröstet …) – auch in der gemeinsamen Pfanne je Baustein */}
                   {s.options?.map((o) => (
                     <span key={o.id} className="craving-ways" role="group" aria-label={`Zubereitung ${o.name}`}>
@@ -275,7 +279,7 @@ function Finished({ q, state, own, set }: { q: string; state: CravingState; own:
                           onClick={() => set({ ...state, ways: { ...state.ways, [o.id]: w.id } })}>{w.label}</button>
                       ))}
                     </span>
-                  ))}</span>
+                  ))}</div>
               </li>
             ))}
           </ol>

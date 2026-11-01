@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { weekCookSteps, type WeekStep } from '../../domain/craving';
-import { NO_SPICE, SPICES, defaultSpice } from '../../domain/cookStyle';
+import { NO_SPICE, SPICES, defaultSpice, type OwnStep } from '../../domain/cookStyle';
 import { foodOf, ownOf, prepOf, sideOf, styleOf, type SideStyle } from '../../domain/sides';
 import type { Household } from '../../domain/mealplan';
 import type { Recipe } from '../../domain/types';
@@ -33,8 +33,11 @@ export function ComboSteps({ side, base, household, carry, portions = 1, onStyle
   const steps = weekCookSteps(side, base, { household, recipes, items: pantry.items, portions, more })
     .map((s): WeekStep => {
       if (!carry || s.ids.length !== 1 || s.ids[0] !== carry.side || s.ready) return s;
-      if (carry.from !== undefined) return { ...s, text: `von ${DAY_LONG[carry.from]} aufwärmen`, minutes: 3 };
-      return carry.with !== undefined ? { ...s, text: `${s.text ?? 'kochen'} – gleich für ${DAY_LONG[carry.with]} mitkochen` } : s;
+      // aufwärmen: deine Schritte braucht es dann nicht
+      if (carry.from !== undefined) return { ...s, text: `von ${DAY_LONG[carry.from]} aufwärmen`, minutes: 3, steps: undefined };
+      if (carry.with === undefined) return s;
+      const more = `gleich für ${DAY_LONG[carry.with]} mitkochen`;
+      return { ...s, text: s.steps ? more : `${s.text ?? 'kochen'} – ${more}` };
     }).sort((a, b) => b.minutes - a.minutes);
   const style = styleOf(side);
   const spice = style.spice ?? defaultSpice(style.direction) ?? NO_SPICE;
@@ -61,7 +64,8 @@ export function ComboSteps({ side, base, household, carry, portions = 1, onStyle
             <li key={s.ids.join('+')}>
               <span>{mine && to
                 ? <button type="button" className="combo-steps__recipe" onClick={() => navigate(to)}>{s.name}</button>
-                : <b>{s.name}</b>} {s.text ?? <span className="muted">– noch keine Zubereitung</span>}{s.minutes > 0 ? <span className="muted"> · {s.minutes} Min.</span> : null}
+                : <b>{s.name}</b>} {s.text ?? (s.steps ? null : <span className="muted">– noch keine Zubereitung</span>)}{s.minutes > 0 ? <span className="muted"> · {s.minutes} Min.</span> : null}
+                {s.from && <span className="muted"> · aus „{s.from}“</span>}
                 {s.source === 'grundlage' && <span className="tag">nur hier</span>}
                 {/* Stift direkt am Text – unter den Chips stand er sonst allein in einer Zeile */}
                 {s.fixed && s.ids.length === 1 && <button type="button" className="iconbtn iconbtn--sm" aria-label={`Zubereitung ${s.name} ändern`} onClick={() => setEdit(s.ids[0])}><Icon name="pencil" size={14} /></button>}
@@ -75,12 +79,27 @@ export function ComboSteps({ side, base, household, carry, portions = 1, onStyle
                     ))}
                   </span>
                 ))}</span>
+              {s.steps && <OwnSteps steps={s.steps} />}
             </li>
           );
         })}
       </ol>
       {edit && <PrepSheet sideId={edit} base={base} household={household} onClose={() => setEdit(null)} />}
     </>
+  );
+}
+
+/**
+ * Deine Schritte unter deinem Rezept als Baustein (Julia: „die Kochschritte bleiben“ – Weg B) – statt „nach deinem
+ * Rezept“, eingerückt unter seinem Namen. Dieselbe Liste in „So geht's“ auf der Lust-Seite und im Wochenplan.
+ */
+export function OwnSteps({ steps }: { steps: readonly OwnStep[] }) {
+  return (
+    <ol className="own-steps">
+      {steps.map((st, i) => (
+        <li key={i}>{st.text}{st.timerMinutes ? <span className="muted"> · {st.timerMinutes}&nbsp;Min.</span> : null}</li>
+      ))}
+    </ol>
   );
 }
 

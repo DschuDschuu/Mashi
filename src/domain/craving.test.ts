@@ -1,15 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import {
   DIRECTIONS, EMPTY_CRAVING, STAGES, chooseDirection, closeStep, cookbookMatches, cravingCooking, cravingMinutes, cravingPartsFrom, cravingSteps, cravingText, cravingTitle, currentStep,
-  baseCraving, coveredBy, halfOf, ownComboSteps, plateImage, weekCookSteps, cravingCombo, cravingContent, directionOf, guessKind, matchingRecipes, optionsFor, pick, recipeChoiceId, recipeChoices, reopen, rollCraving, runsAlone, staleTrials, startLabel, stockMarks, understand, variantTargets, withoutGone, cravingTimeline,
+  baseCraving, coveredBy, halfOf, ownComboSteps, ownSteps, plateImage, weekCookSteps, cravingCombo, cravingContent, directionOf, guessKind, matchingRecipes, optionsFor, pick, recipeChoiceId, recipeChoices, reopen, rollCraving, runsAlone, staleTrials, startLabel, stockMarks, understand, variantTargets, withoutGone, cravingTimeline,
   type CravingState, type StockMark,
 } from './craving';
 import { localFoodTable } from './nutrition/localFoods';
 import { emptyPantry, type Pantry, type PantryItem } from './pantry';
-import { doneParts, followBlockParts } from './parts';
+import { FINISH, doneParts, followBlockParts } from './parts';
 import { withNewVersion } from './recipe';
 import { SIDES, comboText, foodOf, ownEntry, ownOf, ownSidesOf, sideIngredient, sideOf, sidesOf } from './sides';
 import { computeNutrition } from './nutrition/engine';
+import { swapFor } from './swaps';
 import type { Ingredient, Recipe, RecipeBlock, RecipeContent } from './types';
 
 // erfundene Rezepte – keine echten (das Repo ist öffentlich)
@@ -871,5 +872,107 @@ describe('Kochstil im Wochenplan (weekCookSteps)', () => {
     expect(brokkoli).toMatchObject({ text: 'in Röschen blanchieren', source: 'grundlage' });
     expect(brokkoli.options?.[0]).toMatchObject({ chosen: 'eigen' });
     expect(weekCookSteps('brokkoli,richtung:ofen,weg:brokkoli:ofen', own)[1].text).toContain('im Ofen rösten');
+  });
+});
+
+describe('Deine Schritte in der Zeitleiste (Julia: Weg B – „die Kochschritte bleiben“)', () => {
+  // erfunden: eine Bowl mit zwei Teilen als Bausteine, ein Ofengemüse als ganzes Rezept
+  const bowlContent: RecipeContent = {
+    ...content('Testbowl'),
+    ingredients: [
+      ing('h', 'Hähnchenbrust', 'Knuspriges Hähnchen'), ing('st', 'Speisestärke', 'Knuspriges Hähnchen'),
+      ing('e', 'Erdnussbutter', 'Sauce'), ing('so', 'Sojasauce', 'Sauce'), ing('r', 'Reis'),
+    ],
+    steps: [
+      { id: 's1', text: 'Hähnchenbrust in Speisestärke wenden.' },
+      { id: 's2', text: 'Hähnchenbrust knusprig braten.', timerMinutes: 8 },
+      { id: 's3', text: 'Erdnussbutter mit Sojasauce glatt rühren.' },
+      { id: 's4', text: 'Reis kochen.', timerMinutes: 15 },
+      { id: 's5', text: 'Alles in Schalen anrichten.', part: FINISH },
+      { id: 's6', text: '  ' },
+    ],
+  };
+  const bowl: Recipe = {
+    ...recipe('tb', 'Testbowl', [{ part: 'Knuspriges Hähnchen', kind: 'protein', directions: [] }, { part: 'Sauce', kind: 'sauce', directions: [] }]),
+    versions: [{ id: 'v', number: 1, createdAt: '', author: 'nutzer', content: bowlContent }],
+  };
+  const ofen: Recipe = {
+    ...recipe('tg', 'Testofengemüse', [{ kind: 'veg', directions: [] }], [ing('k', 'Kürbis')]),
+    versions: [{ id: 'v', number: 1, createdAt: '', author: 'nutzer', content: { ...content('Testofengemüse', [ing('k', 'Kürbis')]), steps: [
+      { id: 'o1', text: 'Kürbis würfeln.' }, { id: 'o2', text: 'Kürbis im Ofen rösten.', timerMinutes: 25 },
+    ] } }],
+  };
+  const all = [bowl, ofen];
+  const own = recipeChoices(all);
+  const s: CravingState = {
+    picks: { carb: ['reis'], protein: ['rezept:tb:Knuspriges Hähnchen'], sauce: ['rezept:tb:Sauce'], veg: ['rezept:tg'] },
+    closed: [...STAGES],
+  };
+
+  it('ein Teil: nur seine Schritte – ohne „Zum Schluss“ und leere; ein ganzes Rezept: alle', () => {
+    expect(ownSteps(bowl, 'Knuspriges Hähnchen')).toEqual([
+      { text: 'Hähnchenbrust in Speisestärke wenden.' }, { text: 'Hähnchenbrust knusprig braten.', timerMinutes: 8 },
+    ]);
+    expect(ownSteps(bowl, 'Sauce')).toEqual([{ text: 'Erdnussbutter mit Sojasauce glatt rühren.' }]);
+    expect(ownSteps(ofen, undefined).map((x) => x.text)).toEqual(['Kürbis würfeln.', 'Kürbis im Ofen rösten.']);
+  });
+
+  it('ganzes Rezept: so, wie es gekocht wird – getauscht steht Tofu drin, wie auf der Einkaufsliste', () => {
+    const swapped = { ...bowl, swaps: { h: swapFor('tofu')! } };
+    expect(ownSteps(swapped, undefined)[1].text).toMatch(/^Tofu knusprig braten\./);
+  });
+
+  it('„So geht’s“: deine Schritte statt „nach deinem Rezept“, bei Teilen mit Herkunft', () => {
+    const steps = cravingSteps(s, own);
+    const chicken = steps.find((x) => x.name === 'Knuspriges Hähnchen')!;
+    expect(chicken).toMatchObject({ from: 'Testbowl', minutes: 8 });
+    expect(chicken.text).toBeUndefined();
+    expect(chicken.steps?.map((x) => x.text)).toEqual(['Hähnchenbrust in Speisestärke wenden.', 'Hähnchenbrust knusprig braten.']);
+    expect(steps.find((x) => x.name === 'Testofengemüse')).toMatchObject({ steps: [{ text: 'Kürbis würfeln.' }, { text: 'Kürbis im Ofen rösten.', timerMinutes: 25 }] });
+    expect(steps.find((x) => x.name === 'Testofengemüse')?.from).toBeUndefined();
+    expect(steps.some((x) => x.text === 'nach deinem Rezept')).toBe(false);
+  });
+
+  it('Zeitleiste: an deinen Schritten erkannt – der Ofen läuft allein, das Hähnchen braucht dich', () => {
+    const t = cravingTimeline(cravingSteps(s, own));
+    const at = (name: string) => t.steps.find((x) => x.name === name)!;
+    expect(t.total).toBe(25);
+    expect(at('Testofengemüse')).toMatchObject({ alone: true, start: 0 });
+    expect(at('Reis')).toMatchObject({ alone: true, start: 10 });
+    expect(at('Knuspriges Hähnchen')).toMatchObject({ alone: false, start: 17 });
+    expect(startLabel(at('Sauce'))).toBe('zum Schluss');
+  });
+
+  it('allein nur, wenn jeder deiner Schritte mit Uhr allein läuft; ein Text geht vor', () => {
+    const one = (x: { minutes: number; text?: string; steps?: { text: string; timerMinutes?: number }[] }) => cravingTimeline([x]).steps[0].alone;
+    expect(one({ minutes: 15, steps: [{ text: 'Reis waschen.' }, { text: 'Reis köcheln.', timerMinutes: 15 }] })).toBe(true);
+    expect(one({ minutes: 25, steps: [{ text: 'Kartoffeln kochen.', timerMinutes: 20 }, { text: 'In der Pfanne braten.', timerMinutes: 5 }] })).toBe(false);
+    expect(one({ minutes: 5, steps: [{ text: 'Kürbis würfeln.' }] })).toBe(false); // ohne Uhr: deine Hände
+    expect(one({ minutes: 5, text: 'aus dem Kühlschrank aufwärmen', steps: [{ text: 'braten', timerMinutes: 5 }] })).toBe(true);
+  });
+
+  it('das gespeicherte Gericht ordnet genauso – Kochmodus und „So geht’s“ sagen dasselbe', () => {
+    let n = 0;
+    const c = cravingContent(s, { own, recipes: all, servings: 2, title: '', newId: () => `x${++n}` });
+    const texts = c.steps.map((x) => x.text);
+    expect(texts[0]).toBe('Sofort – Testofengemüse nach deinem Rezept zubereiten');
+    expect(texts[1]).toMatch(/^Nach 10 Min\. – Reis: /);
+    expect(texts[2]).toBe('Nach 17 Min. – Hähnchenbrust in Speisestärke wenden.');
+    expect(texts[3]).toBe('Hähnchenbrust knusprig braten.');
+    expect(texts).toContain('Zum Schluss – Erdnussbutter mit Sojasauce glatt rühren.');
+    expect(texts.some((x) => x.includes('Alles in Schalen anrichten'))).toBe(false); // „Zum Schluss“ der Bowl: Mashis Anrichten
+  });
+
+  it('Wochenplan: deine Schritte am Abend; vorgekocht nur aus dem Kühlschrank; ohne Schritte wie bisher', () => {
+    const side = cravingCombo(s, own)!;
+    const week = ownComboSteps(side, all, [], 2);
+    expect(week.find((x) => x.name === 'Knuspriges Hähnchen')).toMatchObject({ from: 'Testbowl', steps: [{ text: 'Hähnchenbrust in Speisestärke wenden.' }, { timerMinutes: 8 }] });
+    expect(week.find((x) => x.name === 'Knuspriges Hähnchen')?.text).toBeUndefined();
+    const items: PantryItem[] = [{ id: 'p', name: 'Sauce', amount: 2, unit: 'Stück', addedAt: '', recipeId: 'tb', part: 'Sauce' }];
+    const ready = ownComboSteps(side, all, items, 2).find((x) => x.name === 'Sauce')!;
+    expect(ready).toMatchObject({ ready: true, text: 'aus dem Kühlschrank, bei Bedarf erwärmen' });
+    expect(ready.steps).toBeUndefined();
+    const base = recipe('gl', 'Testgrundlage');
+    expect(weekCookSteps(side, base, { recipes: all, portions: 2 }).find((x) => x.name === 'Testofengemüse')?.steps).toHaveLength(2);
   });
 });

@@ -7,7 +7,7 @@ import { currentContent, totalMinutes } from './recipe';
 import { searchRecipes } from './recipeSearch';
 import { cookingContent } from './homemade';
 import { SIDE_KINDS, SIDES, comboOf, foodOf, ownEntry, ownOf, ownSidesOf, prepOf, sideIngredient, sideOf, sidesOf, sidesOfKind, styleOf, type ComboStep, type SideKind, type SidePrep } from './sides';
-import { OWN_WAY, SPICES, composeSteps, coveredByServing, defaultSpice, servingText, spiceOf, wayOf, waysOf, type StyleStep, type WayContext } from './cookStyle';
+import { OWN_WAY, SPICES, composeSteps, coveredByServing, defaultSpice, servingText, spiceOf, wayOf, waysOf, type OwnStep, type StyleStep, type WayContext } from './cookStyle';
 import type { Ingredient, Recipe, RecipeContent, RecipeImage, Step } from './types';
 
 /**
@@ -167,6 +167,8 @@ export interface Choice {
   replaces?: string;
   /** nur feste und eigene Bausteine: zu Hause bzw. läuft bald ab – der Vorrats-Punkt am Chip (stockMarks) */
   stock?: StockMark;
+  /** nur Rezepte: deine Schritte (ownSteps) – in „So geht's“ statt „nach deinem Rezept“ */
+  steps?: readonly OwnStep[];
 }
 
 /** Vorrats-Punkt: zu Hause – oder läuft bald ab, dann gehört es erst recht auf den Teller */
@@ -215,6 +217,17 @@ export function ownIngredients(recipe: Recipe, part: string | undefined, serving
 }
 
 /**
+ * Deine Schritte für einen eigenen Baustein (Julia: „die Kochschritte bleiben“ – Weg B): ein Teil nur seine Schritte
+ * (das „Zum Schluss“ des Rezepts nicht – das Anrichten macht Mashi), ein ganzes Rezept alle, so wie es gekocht wird.
+ * Aus derselben Fassung wie ownIngredients – sonst stünde in den Schritten Tofu und auf der Einkaufsliste Hähnchen.
+ */
+export function ownSteps(recipe: Recipe, part: string | undefined, all: readonly Recipe[] = []): OwnStep[] {
+  const rc = part ? currentContent(recipe) : cookingContent(recipe, all);
+  return rc.steps.filter((st) => st.text.trim() && (!part || stepPart(st, rc) === part))
+    .map((st) => ({ text: st.text, ...(st.timerMinutes ? { timerMinutes: st.timerMinutes } : {}) }));
+}
+
+/**
  * Deine Rezepte als Wahl (Julia: „wenn ich ein Rezept als Beilage tagge, soll es im Baum auftauchen“) – nur, was als
  * Baustein markiert ist. Steht davon etwas vorgekocht im Kühlschrank, zählt Mashi die Portionen mit – ohne die, die
  * im Wochenplan schon für einen Abend verplant sind (`reserved`, je Grundlage).
@@ -228,12 +241,13 @@ export function recipeChoices(recipes: readonly Recipe[], pantry?: Pick<Pantry, 
       const fresh = readyPortions(pantry?.items ?? [], r.id, b.part);
       const ready = b.part ? fresh : Math.max(0, fresh - (reserved?.get(r.id) ?? 0));
       const minutes = ownMinutes(c, b.part);
+      const steps = ownSteps(r, b.part, recipes);
       return [{
         id: recipeChoiceId(r.id, b.part), name: b.part ?? c.title, kind: b.kind, recipeId: r.id, directions: [...new Set(b.directions.map(normDirection))],
         ...(r.image ? { image: r.image } : {}),
         prep: { text: 'nach deinem Rezept', minutes }, ...(ready > 0 ? { ready } : {}), ...(b.part ? { from: c.title } : {}),
         ...(b.also?.length ? { also: b.also } : {}), ...(r.pairs?.length ? { pairs: r.pairs } : {}),
-        ...(b.replaces ? { replaces: b.replaces } : {}),
+        ...(b.replaces ? { replaces: b.replaces } : {}), ...(steps.length ? { steps } : {}),
       }];
     });
   });
@@ -632,7 +646,13 @@ export function cookSteps(s: CravingState, own: readonly Choice[] = [], househol
   const spice = spiceOf(s.spice, s.direction);
   const base = choices.map((c): StyleStep => {
     if (c.ready) return { ids: [c.id], kind: c.kind, name: c.name, ...readyPrep(c.kind) };
-    if (!isFixed(c)) return { ids: [c.id], kind: c.kind, name: c.name, text: c.prep?.text, minutes: c.prep?.minutes ?? 0 };
+    // dein Rezept: deine Schritte (Weg B) – ohne zugeordnete Schritte wie bisher „nach deinem Rezept“
+    if (!isFixed(c)) {
+      return {
+        ids: [c.id], kind: c.kind, name: c.name, minutes: c.prep?.minutes ?? 0,
+        ...(c.steps?.length ? { steps: c.steps } : { text: c.prep?.text }), ...(c.from ? { from: c.from } : {}),
+      };
+    }
     const mine = household?.sidePrep?.[c.id];
     const way = wayOf(c.id, ctx, s.ways?.[c.id], !!mine);
     const ways = [...(mine ? [{ id: OWN_WAY, label: 'deine', ...mine }] : []), ...waysOf(c.id, ctx)];
@@ -668,6 +688,21 @@ export const runsAlone = (text?: string): boolean => !!text && /k(ö|oe)cheln|ko
 /** Kommt warm auf den Teller – braten, rösten, erwärmen, schmelzen: das macht man zum Schluss, nicht zuerst */
 const servedHot = (text?: string): boolean => !!text && /braten|r(ö|oe)sten|erw(ä|ae)rmen|erhitzen|schmelzen/i.test(text);
 
+/** Ein Eintrag der Zeitleiste – mit Zubereitungstext oder (dein Rezept, ohne Text) mit deinen Schritten */
+type Timed = { minutes: number; text?: string; steps?: readonly OwnStep[] };
+const isOwn = (s: Timed) => s.text === undefined && !!s.steps?.length;
+/**
+ * Deine Schritte laufen nur allein, wenn jeder mit Uhr allein läuft („Reis waschen, 15 Min. köcheln“) – „Kartoffeln
+ * kochen, dann braten“ braucht deine Hände. Lieber nacheinander als zwei Pfannen zugleich.
+ */
+const aloneOf = (s: Timed): boolean => {
+  if (!isOwn(s)) return runsAlone(s.text);
+  const timed = s.steps!.filter((x) => x.timerMinutes);
+  return timed.length > 0 && timed.every((x) => runsAlone(x.text));
+};
+/** warm auf den Teller: wenn einer deiner Schritte brät oder röstet */
+const hotOf = (s: Timed): boolean => (isOwn(s) ? s.steps!.some((x) => servedHot(x.text)) : servedHot(s.text));
+
 /**
  * Zeitleiste (Julia: „jetzt Hähnchen, nebenher Salsa, zum Schluss Tortillas“): Was allein läuft, startet so, dass es zum
  * Schluss fertig ist; was deine Hände braucht, kommt nacheinander und endet ebenfalls zum Schluss – erst das Kalte
@@ -676,11 +711,11 @@ const servedHot = (text?: string): boolean => !!text && /braten|r(ö|oe)sten|erw
  * Was 0 Minuten braucht (drüberstreuen), kommt zum Schluss. Bei gleichem Start zuerst, was allein läuft – aufsetzen,
  * dann loslegen.
  */
-export function cravingTimeline<T extends { minutes: number; text?: string }>(steps: readonly T[]): { total: number; steps: (T & { start: number; alone: boolean })[] } {
+export function cravingTimeline<T extends Timed>(steps: readonly T[]): { total: number; steps: (T & { start: number; alone: boolean })[] } {
   const timed = steps.filter((s) => s.minutes > 0);
-  const alone = timed.filter((s) => runsAlone(s.text));
-  const hands = timed.filter((s) => !runsAlone(s.text))
-    .sort((a, b) => Number(servedHot(a.text)) - Number(servedHot(b.text)) || b.minutes - a.minutes);
+  const alone = timed.filter(aloneOf);
+  const hands = timed.filter((s) => !aloneOf(s))
+    .sort((a, b) => Number(hotOf(a)) - Number(hotOf(b)) || b.minutes - a.minutes);
   const busy = hands.reduce((n, s) => n + s.minutes, 0);
   const total = Math.max(busy, 0, ...alone.map((s) => s.minutes));
   let at = total - busy;
@@ -731,19 +766,20 @@ export function cravingContent(s: CravingState, opts: {
   const { own = [], recipes = [], household, servings, newId } = opts;
   const ingredients: Ingredient[] = [];
   // je Wahl eine Gruppe Schritte – mit ihrem Zubereitungstext, daran erkennt die Zeitleiste, was allein läuft
-  const steps: { minutes: number; text?: string; list: Step[] }[] = [];
+  const steps: { minutes: number; text?: string; steps?: readonly OwnStep[]; list: Step[] }[] = [];
   for (const c of cravingChoices(s, own, household)) {
     const recipe = c.recipeId ? recipes.find((r) => r.id === c.recipeId) : undefined;
     if (recipe && c.from) {
       // ein Teil („Testdip“): Zutaten und Schritte übernehmen, auf die Portionen umgerechnet. Das Gericht merkt sich, woher
       // er stammt (cravingPartsFrom → Recipe.partsFrom): Steht er dort vorgekocht, ist er fertig (parts.ts: doneParts) –
       // nicht auf der Einkaufsliste, beim Kochen übersprungen und aus der Speisekammer gegessen. Sonst kochst du ihn mit.
-      const rc = currentContent(recipe);
       const part = c.name;
       for (const i of ownIngredients(recipe, part, servings)) ingredients.push({ ...i, id: newId() });
-      const partSteps = rc.steps.filter((st) => stepPart(st, rc) === part).map((st) => ({ id: newId(), text: st.text, part, ...(st.timerMinutes ? { timerMinutes: st.timerMinutes } : {}) }));
+      // dieselben Schritte wie in „So geht's“ (ownSteps) – und eingeordnet wie dort: an ihnen, ob sie allein laufen
+      const mine = ownSteps(recipe, part);
+      const partSteps = mine.map((st) => ({ id: newId(), ...st, part }));
       const ready = c.ready ? readyPrep(c.kind) : undefined;
-      steps.push({ minutes: ready ? ready.minutes : c.prep?.minutes ?? 0, text: ready?.text ?? c.prep?.text, list: partSteps });
+      steps.push({ minutes: ready ? ready.minutes : c.prep?.minutes ?? 0, ...(ready ? { text: ready.text } : mine.length ? { steps: mine } : { text: c.prep?.text }), list: partSteps });
     } else if (recipe && c.ready) {
       // ein ganzes Rezept, vorgekocht: verknüpfte Zutat – seine Portionen gehen beim Kochen aus der Speisekammer
       const prep = readyPrep(c.kind);
@@ -752,7 +788,8 @@ export function cravingContent(s: CravingState, opts: {
     } else if (recipe) {
       ingredients.push({ id: newId(), name: c.name, amount: servings, unit: 'Portion', recipeId: recipe.id });
       const minutes = c.prep?.minutes ?? 0;
-      steps.push({ minutes, list: [{ id: newId(), text: `${c.name} nach deinem Rezept zubereiten`, ...(minutes ? { timerMinutes: minutes } : {}) }] });
+      // eingeordnet an deinen Schritten wie in „So geht's“ – sonst stünde es im Kochmodus an anderer Stelle
+      steps.push({ minutes, ...(c.steps?.length ? { steps: c.steps } : {}), list: [{ id: newId(), text: `${c.name} nach deinem Rezept zubereiten`, ...(minutes ? { timerMinutes: minutes } : {}) }] });
     } else {
       // fester Baustein: nur die Zutat hier – seine Schritte kommen mit Kochstil aus cookSteps (unten)
       const ing = sideIngredient(c.id, servings, household);
@@ -941,7 +978,12 @@ export function ownComboSteps(side: string | undefined, recipes: readonly Recipe
       const p = readyPrep(o.kind);
       return [{ id: o.entry, name: o.name, text: p.text, minutes: p.minutes, source: 'rezept', ready: true }];
     }
-    return [{ id: o.entry, name: o.name, text: 'nach deinem Rezept', minutes: ownMinutes(currentContent(r), o.part), source: 'rezept' }];
+    // deine Schritte (Weg B) – ohne zugeordnete Schritte wie bisher „nach deinem Rezept“
+    const steps = ownSteps(r, o.part, recipes);
+    return [{
+      id: o.entry, name: o.name, minutes: ownMinutes(currentContent(r), o.part), source: 'rezept',
+      ...(steps.length ? { steps } : { text: 'nach deinem Rezept' }), ...(o.part ? { from: currentContent(r).title } : {}),
+    }];
   });
 }
 
@@ -984,7 +1026,10 @@ export function weekCookSteps(side: string | undefined, base: Recipe, opts: {
     };
   });
   const own = ownComboSteps(side, recipes, items, portions, more)
-    .map((s): WeekStep => ({ ids: [s.id!], kind: ownOf(s.id!)?.kind, name: s.name, text: s.text, minutes: s.minutes, source: 'rezept', ...(s.ready ? { ready: true as const } : {}) }));
+    .map((s): WeekStep => ({
+      ids: [s.id!], kind: ownOf(s.id!)?.kind, name: s.name, text: s.text, minutes: s.minutes, source: 'rezept',
+      ...(s.ready ? { ready: true as const } : {}), ...(s.steps ? { steps: s.steps } : {}), ...(s.from ? { from: s.from } : {}),
+    }));
   const baseStep: WeekStep = { ids: ['grundlage'], kind: b.kind, name: b.name, text: 'aufwärmen', minutes: 5, source: 'standard', ...(pot ? { pot: true } : {}) };
   const names: Partial<Record<SideKind, string[]>> = { [b.kind]: [b.name] };
   for (const x of [...fixed, ...ownSidesOf(side)]) names[x.kind] = [...(names[x.kind] ?? []), x.name];

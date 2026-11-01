@@ -206,6 +206,11 @@ export interface Recipe {
    */
   blocks?: RecipeBlock[];
   /**
+   * Vorschläge, die du abgelehnt hast (blockHints.ts): Teilnamen, „“ fürs ganze Rezept – Mashi fragt dann nicht mehr.
+   * Nicht versioniert wie blocks.
+   */
+  notBlocks?: string[];
+  /**
    * Was besonders gut dazu passt (Julia: „in den Grundrezepten notieren, zu was sie passen“): Baustein-ids aus sides.ts,
    * z. B. Bolognese → Spätzle, Parmesan. Im Stepper – auch im Wochenplan – stehen die vorn. Nicht versioniert wie blocks.
    */

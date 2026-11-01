@@ -10,6 +10,7 @@ import { Icon } from '../components/Icon';
 import { PageIntro } from '../components/PageIntro';
 import { deviceIcon } from '../catalogIcons';
 import { RecipeCard } from '../components/RecipeCard';
+import { BlockHints } from '../components/BlockHints';
 import { recipeCount } from '../format';
 import { recipeNutrition } from '../useNutrition';
 
@@ -75,6 +76,8 @@ export function CookbookScreen({ route }: { route: Route }) {
         </span>
       </header>
       <PageIntro id="kochbuch" />
+      {/* Bausteine in deinen Rezepten (Julia: Weg B) – einmal durchgehen, danach nur, wenn ein neues Rezept etwas hat */}
+      <BlockHints recipes={recipes} all />
 
       <div className="search-row">
         <label className="search">
