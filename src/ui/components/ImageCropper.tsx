@@ -170,7 +170,7 @@ export function ImageCropper({ src, initial, onDone, onCancel, aspect = CARD_ASP
         <h2 className="sheet__title">Ausschnitt wählen</h2>
         {failed ? <p className="error" role="alert">Dieses Bild lässt sich nicht öffnen. Versuch ein anderes (JPEG oder PNG).</p> : (
           <>
-            <div ref={frame} className="cropper__frame" style={{ aspectRatio: String(aspect) }} tabIndex={0}
+            <div ref={frame} className="cropper__frame" style={{ aspectRatio: String(aspect) }} tabIndex={0} data-nodrag
               aria-label="Bild verschieben: Pfeiltasten; zoomen: Plus und Minus"
               onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp} onWheel={onWheel} onKeyDown={onKey}>
               {img && frameW > 0 && (

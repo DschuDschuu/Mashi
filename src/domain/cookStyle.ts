@@ -1,4 +1,4 @@
-import type { SideKind } from './sides';
+import { sideOf, type SideKind } from './sides';
 import type { Step } from './types';
 
 /**
@@ -115,15 +115,113 @@ export const WAYS: Readonly<Record<string, readonly SideWay[]>> = {
   ],
 };
 
+/**
+ * Wie ein Schritt gart (Julia: „das Rezept checkt das“) – Ofen vor Pfanne vor Dämpfen vor Kochen („anbraten und in der
+ * Sauce fertig garen“ ist Pfanne). Ohne Garart (abgießen, schneiden) gibt es nichts zu prüfen.
+ */
+export const METHODS: readonly (readonly [string, RegExp])[] = [
+  ['ofen', /ofen|blech|backen/i],
+  ['pfanne', /brat|pfanne|anr(ö|oe)st|zusammenfallen/i],
+  ['dampf', /d(ä|ae)mpf/i],
+  ['wasser', /koch|k(ö|oe)chel|garen|blanchier|salzwasser/i],
+];
+export const methodOf = (text: string): string | undefined => METHODS.find(([, re]) => re.test(text))?.[0];
+
+/**
+ * Garfamilien (Julia: Zubereitungswege für alle Bausteine, „möglichst pflegeleicht“ – die Idee aus „Mashi – neuer Chat 3“):
+ * Bausteine ohne eigene Wege (WAYS) bekommen die ihrer Familie – Gnocchi knusprig, Süßkartoffel gedämpft, deine eigenen
+ * (Kürbis) auch. Mashis Standard des Bausteins (sides.ts: prep) steht vorn und ersetzt den Weg seiner Garart.
+ */
+export type Family = 'fest' | 'zart' | 'gar' | 'zeit' | 'roh';
+
+export const FAMILIES: readonly { id: Family; label: string }[] = [
+  { id: 'fest', label: 'fest' }, { id: 'zart', label: 'zart & schnell' }, { id: 'gar', label: 'schon gar' },
+  { id: 'zeit', label: 'braucht Zeit' }, { id: 'roh', label: 'roh gut' },
+];
+
+function familyWays(family: Family, name: string): SideWay[] {
+  switch (family) {
+    case 'fest': return [
+      { id: 'ofen', label: 'geröstet', text: 'in Stücke schneiden, mit Öl im Ofen rösten', minutes: 25, for: ['ofen'] },
+      { id: 'pfanne', label: 'gebraten', text: 'in Stücke schneiden und in der Pfanne braten', minutes: 12 },
+      { id: 'gedaempft', label: 'gedämpft', text: 'in Stücke schneiden und dämpfen', minutes: 12 },
+    ];
+    case 'zart': return [
+      { id: 'pfanne', label: 'gebraten', text: 'in Stücke schneiden und kurz braten', minutes: 6 },
+      { id: 'ofen', label: 'im Ofen', text: 'in Stücken kurz im Ofen rösten', minutes: 15, for: ['ofen'] },
+      { id: 'sauce', label: 'in der Sauce', text: 'in Stücken in der Sauce garen', minutes: 8, into: 'sauce', joined: `${name} 8 Min. darin garen` },
+    ];
+    case 'gar': return [
+      { id: 'pfanne', label: 'knusprig', text: 'in der Pfanne knusprig braten', minutes: 8 },
+      { id: 'sauce', label: 'in der Sauce', text: 'in der Sauce erwärmen', minutes: 5, into: 'sauce', joined: `${name} darin erwärmen` },
+      { id: 'ofen', label: 'im Ofen', text: 'mit Öl im Ofen knusprig backen', minutes: 15, for: ['ofen'] },
+    ];
+    case 'zeit': return [
+      { id: 'koecheln', label: 'gekocht', text: 'in Wasser weich köcheln', minutes: 20 },
+      { id: 'sauce', label: 'in der Sauce', text: 'in der Sauce weich garen', minutes: 20, into: 'sauce', joined: `${name} darin weich garen` },
+    ];
+    case 'roh': return [
+      { id: 'roh', label: 'roh', text: 'klein schneiden', minutes: 2 },
+      { id: 'pfanne', label: 'angebraten', text: 'kurz anbraten', minutes: 4 },
+      { id: 'ofen', label: 'geröstet', text: 'im Ofen rösten', minutes: 15, for: ['ofen'] },
+    ];
+  }
+}
+
+/** Chip für Mashis Standard, wenn keiner der Familie zu seiner Garart passt */
+const METHOD_LABEL: Readonly<Record<string, string>> = { ofen: 'geröstet', pfanne: 'gebraten', dampf: 'gedämpft', wasser: 'gekocht' };
+
+/**
+ * Familie eines eigenen Bausteins am Namen raten (Julia: „Mashi rät, wenn es nicht kennt, fragen“) – was nicht hier
+ * steht, fragt die Oberfläche nach. „grüne Bohnen“ sind frisch, Kichererbsen aus der Dose schon gar.
+ */
+const FAMILY_WORDS: readonly (readonly [Family, RegExp])[] = [
+  ['zart', /gr(ü|ue)ne bohne|brechbohne|buschbohne/],
+  ['roh', /radieschen|rucola|feldsalat|sprossen|oliven/],
+  ['gar', /gnocchi|tortellini|ravioli|maultasche|kichererbse|bohne|falafel/],
+  ['zeit', /linse|graupe|gulasch/],
+  ['zart', /pilz|champignon|aubergine|spargel|lauch|porree|erbse|zuckerschote|fr(ü|ue)hlingszwiebel|mangold|pak ?choi|garnele|lachs|fisch|pute|steak|tempeh|seitan/],
+  ['fest', /k(ü|ue)rbis|blumenkohl|rosenkohl|rote bete|sellerie|pastinake|kohlrabi|kohl|m(ö|oe)hre|r(ü|ue)be|fenchel|topinambur/],
+];
+export const guessFamily = (name: string): Family | undefined => FAMILY_WORDS.find(([, re]) => re.test(name.toLowerCase()))?.[0];
+
+/** nur, was gegart wird, hat eine Familie – Saucen und Toppings nicht */
+const COOKED: ReadonlySet<SideKind> = new Set(['carb', 'protein', 'veg']);
+
+/** Die Familie eines Bausteins: deine Wahl (Household.sideFamily) → Mashis (Side.family) → bei eigenen geraten */
+export const familyOf = (side: { id: string; name: string; kind: SideKind; family?: Family }, families?: Readonly<Record<string, Family>>): Family | undefined =>
+  families?.[side.id] ?? side.family ?? (side.id.startsWith('eigen:') && COOKED.has(side.kind) ? guessFamily(side.name) : undefined);
+
+/** braucht ein eigener Baustein eine Antwort? gegart, aber weder gewählt noch erkannt */
+export const needsFamily = (side: { id: string; name: string; kind: SideKind }, families?: Readonly<Record<string, Family>>): boolean =>
+  side.id.startsWith('eigen:') && COOKED.has(side.kind) && !familyOf(side, families);
+
+/** die Wege der Familie – mit Mashis Standard des Bausteins vorn, an der Stelle seiner Garart */
+function familyWaysOf(sideId: string, families?: Readonly<Record<string, Family>>): SideWay[] {
+  const side = sideOf(sideId);
+  const family = side && familyOf(side, families);
+  if (!side || !family) return [];
+  const ways = familyWays(family, side.name);
+  const std = side.prep;
+  if (!std) return ways;
+  const m = methodOf(std.text);
+  const i = ways.findIndex((w) => !w.into && (m ? methodOf(w.text) === m : w.id === 'roh'));
+  const first: SideWay = { ...(i >= 0 ? ways[i] : { id: 'standard', label: (m && METHOD_LABEL[m]) || 'Standard' }), text: std.text, minutes: std.minutes };
+  return [first, ...ways.filter((_, k) => k !== i)];
+}
+
 /** dein Standard aus den Einstellungen als Chip – er geht vor Mashis Vorschlag */
 export const OWN_WAY = 'eigen';
 
-/** Woran eine Zubereitung hängt: eine Sauce, die köchelt („in der Sauce“), Pasta im Salzwasser („mit den Nudeln“) */
-export interface WayContext { direction?: string; sauceSimmers: boolean; pastaBoils: boolean }
+/**
+ * Woran eine Zubereitung hängt: eine Sauce, die köchelt („in der Sauce“), Pasta im Salzwasser („mit den Nudeln“) – und
+ * deine Garfamilien (Household.sideFamily)
+ */
+export interface WayContext { direction?: string; sauceSimmers: boolean; pastaBoils: boolean; families?: Readonly<Record<string, Family>> }
 
 /** die Wege, die bei diesem Gericht gehen – „in der Sauce“ nur, wenn eine köchelt */
 export const waysOf = (sideId: string, ctx: WayContext): SideWay[] =>
-  (WAYS[sideId] ?? []).filter((w) => (w.into === 'sauce' ? ctx.sauceSimmers : w.into === 'carb' ? ctx.pastaBoils : true));
+  (WAYS[sideId] ?? familyWaysOf(sideId, ctx.families)).filter((w) => (w.into === 'sauce' ? ctx.sauceSimmers : w.into === 'carb' ? ctx.pastaBoils : true));
 
 /**
  * Die Zubereitung eines Bausteins: deine Wahl am Gericht → dein Standard aus den Einstellungen (undefined – dann gilt

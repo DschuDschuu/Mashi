@@ -75,7 +75,7 @@ export function PriceLines({ series, unit, label }: { series: PriceSeries[]; uni
   return (
     <svg className="price-chart" viewBox={`0 0 ${W} ${H}`} role="img"
       aria-label={`${label}: Preisverlauf ${series.map((s) => `${s.label} zuletzt ${money(s.points[s.points.length - 1])}`).join(', ')}`}
-      onPointerMove={onMove} onPointerDown={onMove} onPointerLeave={(e) => e.pointerType === 'mouse' && setActive(null)}>
+      data-nodrag onPointerMove={onMove} onPointerDown={onMove} onPointerLeave={(e) => e.pointerType === 'mouse' && setActive(null)}>
       {[hi - pad, lo + pad].map((v, i) => (
         <g key={i}>
           <line x1={PAD.left} x2={W - PAD.right} y1={PAD.top + (1 - (v - lo) / (hi - lo)) * (H - PAD.top - PAD.bottom)} y2={PAD.top + (1 - (v - lo) / (hi - lo)) * (H - PAD.top - PAD.bottom)} className="price-chart__grid" />

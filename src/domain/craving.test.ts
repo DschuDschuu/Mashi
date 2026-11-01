@@ -892,6 +892,19 @@ describe('Kochstil im Wochenplan (weekCookSteps)', () => {
   });
 });
 
+describe('Garfamilien im Baukasten (Julia: Zubereitungswege für alle Bausteine)', () => {
+  it('Gnocchi zum Umschalten; dein Kürbis bekommt eine Zubereitung statt keiner; deine Wahl für Unbekanntes zählt', () => {
+    const s: CravingState = { picks: { carb: ['gnocchi'], veg: ['eigen:veg:Kürbis', 'eigen:veg:Romanesco'] }, closed: [...STAGES] };
+    const steps = cravingSteps(s); // eigene Bausteine erkennt Mashi an der id – dafür braucht es den Haushalt nicht
+    const at = (name: string) => steps.find((x) => x.name === name || x.ids.some((id) => id.endsWith(name)));
+    expect(at('Gnocchi')?.options?.[0].ways.map((w) => w.label)).toEqual(['gekocht', 'knusprig', 'im Ofen']);
+    expect(at('Kürbis')).toMatchObject({ text: 'in Stücke schneiden, mit Öl im Ofen rösten', minutes: 25 });
+    expect(at('Romanesco')?.text).toBeUndefined(); // Mashi kennt ihn nicht – die Oberfläche fragt
+    const asked = cravingSteps(s, [], { sideFamily: { 'eigen:veg:Romanesco': 'zart' } });
+    expect(asked.find((x) => x.ids.includes('eigen:veg:Romanesco'))?.text).toBe('in Stücke schneiden und kurz braten');
+  });
+});
+
 describe('Deine Schritte in der Zeitleiste (Julia: Weg B – „die Kochschritte bleiben“)', () => {
   // erfunden: eine Bowl mit zwei Teilen als Bausteine, ein Ofengemüse als ganzes Rezept
   const bowlContent: RecipeContent = {

@@ -462,7 +462,7 @@ function unroll(s: CravingState): CravingState {
  * Nochmal würfeln nimmt erst das zuletzt Gewürfelte heraus (unroll). `rng` für Tests.
  */
 export function rollCraving(s: CravingState, opts: {
-  own?: readonly Choice[]; household?: Pick<Household, 'sidePrep' | 'customSides' | 'sideFood'>;
+  own?: readonly Choice[]; household?: Pick<Household, 'sidePrep' | 'customSides' | 'sideFood' | 'sideFamily'>;
   stock?: (name: string) => StockMark | undefined; rng?: () => number;
 } = {}): CravingState {
   const { own = [], household, stock, rng = Math.random } = opts;
@@ -490,7 +490,7 @@ export function rollCraving(s: CravingState, opts: {
   // Einstellungen auch. Die Würze der Richtung und der Vorschlag der Richtung kommen am häufigsten, damit es passt.
   const spice = st.spice ? undefined : weighted(SPICES, (x) => (x.id === defaultSpice(st.direction) ? 3 : 1) * (x.id === s.rolled?.spice ? 0.2 : 1), rng).id;
   const choices = cravingChoices(st, own, household);
-  const ctx = wayContext(st, choices);
+  const ctx = wayContext(st, choices, household);
   const ways: Record<string, string> = {};
   for (const c of choices.filter((x) => isFixed(x) && !st.ways?.[x.id] && !household?.sidePrep?.[x.id])) {
     const options = waysOf(c.id, ctx);
@@ -626,11 +626,13 @@ export const readyPrep = (kind: SideKind): SidePrep =>
 const isFixed = (c: Choice) => !c.recipeId && !!sideOf(c.id);
 
 /** Woran eine Zubereitung hängt (cookStyle.ts: waysOf) – eine köchelnde Sauce, Pasta im Salzwasser */
-function wayContext(s: CravingState, choices: readonly Choice[]): WayContext {
+function wayContext(s: CravingState, choices: readonly Choice[], household?: Pick<Household, 'sideFamily'>): WayContext {
   return {
     direction: s.direction,
     sauceSimmers: choices.some((c) => c.kind === 'sauce' && isFixed(c) && !c.ready && /k(ö|oe)cheln/i.test(c.prep?.text ?? '')),
     pastaBoils: choices.some((c) => c.id === 'pasta'),
+    // Garfamilien deiner eigenen Bausteine (cookStyle.ts) – Kürbis geröstet, gebraten oder gedämpft
+    ...(household?.sideFamily ? { families: household.sideFamily } : {}),
   };
 }
 
@@ -640,9 +642,9 @@ function wayContext(s: CravingState, choices: readonly Choice[]): WayContext {
  * zusammengeführt (Pfanne, Blech, Sauce, Nudeln) und gewürzt, am Ende „Anrichten“. Dieselben für „So geht's“ und das
  * Rezept. Deine Rezepte und Vorgekochtes bleiben, wie sie sind.
  */
-export function cookSteps(s: CravingState, own: readonly Choice[] = [], household?: Pick<Household, 'sidePrep'>): StyleStep[] {
+export function cookSteps(s: CravingState, own: readonly Choice[] = [], household?: Pick<Household, 'sidePrep' | 'sideFamily'>): StyleStep[] {
   const choices = cravingChoices(s, own, household);
-  const ctx = wayContext(s, choices);
+  const ctx = wayContext(s, choices, household);
   const spice = spiceOf(s.spice, s.direction);
   const base = choices.map((c): StyleStep => {
     if (c.ready) return { ids: [c.id], kind: c.kind, name: c.name, ...readyPrep(c.kind) };
@@ -675,7 +677,7 @@ export function cookSteps(s: CravingState, own: readonly Choice[] = [], househol
  * „So geht's“: das Längste zuerst, damit alles gleichzeitig fertig ist (wie comboSteps beim Baukasten-Abend).
  * Vorgekochtes kommt nur aus dem Kühlschrank (readyPrep). Zusammengeführte Schritte haben eine id aus allen Bausteinen.
  */
-export function cravingSteps(s: CravingState, own: readonly Choice[] = [], household?: Pick<Household, 'sidePrep'>): (StyleStep & { id: string })[] {
+export function cravingSteps(s: CravingState, own: readonly Choice[] = [], household?: Pick<Household, 'sidePrep' | 'sideFamily'>): (StyleStep & { id: string })[] {
   return cookSteps(s, own, household).map((st) => ({ ...st, id: st.ids.join('+') })).sort((a, b) => b.minutes - a.minutes);
 }
 
@@ -1014,7 +1016,7 @@ export type WeekStep = StyleStep & { source: ComboStep['source']; ready?: true }
  * `basePot: false` am Kochtag – da wird die Grundlage gerade erst gekocht, nicht aufgewärmt.
  */
 export function weekCookSteps(side: string | undefined, base: Recipe, opts: {
-  household?: Pick<Household, 'sidePrep'>; recipes?: readonly Recipe[]; items?: readonly PantryItem[]; portions?: number;
+  household?: Pick<Household, 'sidePrep' | 'sideFamily'>; recipes?: readonly Recipe[]; items?: readonly PantryItem[]; portions?: number;
   more?: { entry: string; portions: number }; basePot?: boolean;
 } = {}): WeekStep[] {
   const { household, recipes = [], items = [], portions = 1, more, basePot = true } = opts;
@@ -1026,6 +1028,7 @@ export function weekCookSteps(side: string | undefined, base: Recipe, opts: {
     direction: style.direction,
     sauceSimmers: pot || fixed.some((x) => x.kind === 'sauce' && /k(ö|oe)cheln/i.test(prepOf(x.id, household, base)?.text ?? '')),
     pastaBoils: fixed.some((x) => x.id === 'pasta'),
+    ...(household?.sideFamily ? { families: household.sideFamily } : {}),
   };
   const spice = spiceOf(style.spice, style.direction);
   const sides = fixed.map((x): WeekStep => {

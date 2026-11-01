@@ -1,3 +1,4 @@
+import type { Family } from './cookStyle';
 import type { FoodEntry, FoodKind, FoodTable } from './nutrition/types';
 import { matchIngredient, spiceName, zeroOf } from './nutrition/noNutrition';
 import { doneParts, remainingContent } from './parts';
@@ -117,6 +118,8 @@ export interface Household {
    * Hähnchenhack) – überschreibt Side.food für Nährwerte, Einkauf, Abbuchen und Vorrats-Punkte (sides.ts: foodOf)
    */
   sideFood?: Record<string, string>;
+  /** Garfamilie deiner eigenen Bausteine, wo Mashi sie nicht am Namen erkennt (Julia: „wenn es nicht kennt, fragen“) – cookStyle.ts */
+  sideFamily?: Record<string, Family>;
 }
 
 export const DEFAULT_HOUSEHOLD: Household = { portions: 1, lunchDays: [] };

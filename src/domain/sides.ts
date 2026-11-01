@@ -1,4 +1,5 @@
 import type { Household } from './mealplan';
+import type { Family } from './cookStyle';
 import type { Ingredient, Step } from './types';
 
 /**
@@ -25,6 +26,8 @@ export interface Side {
    * Einkaufsliste, Abbuchen und Vorrats-Punkte. Fehlt: der Name. Im Teller und in „So geht's“ bleibt der Name.
    */
   food?: string;
+  /** Garfamilie (cookStyle.ts) – nur, wo es keine eigenen Wege (WAYS) gibt: bringt die Zubereitungen zum Umschalten */
+  family?: Family;
 }
 
 /** Zubereitung eines Bausteins: kurzer Satz + Minuten (0 = nur drüber/dazu, kommt zum Schluss) */
@@ -45,21 +48,21 @@ export const SIDE_KINDS: readonly { kind: SideKind; label: string }[] = [
 export const SIDES: readonly Side[] = [
   { id: 'pasta', name: 'Pasta', kind: 'carb', grams: 100, prep: { text: 'in Salzwasser kochen', minutes: 10 } },
   { id: 'reis', name: 'Reis', kind: 'carb', grams: 75, prep: { text: 'mit doppelter Menge Wasser köcheln', minutes: 15 } },
-  { id: 'schupfnudeln', name: 'Schupfnudeln', kind: 'carb', grams: 250, prep: { text: 'in der Pfanne goldbraun braten', minutes: 8 } },
-  { id: 'spaetzle', name: 'Spätzle', kind: 'carb', grams: 250, prep: { text: 'in der Pfanne erhitzen', minutes: 5 } },
-  { id: 'gnocchi', name: 'Gnocchi', kind: 'carb', grams: 250, prep: { text: 'in Salzwasser garen, bis sie oben schwimmen', minutes: 4 } },
+  { id: 'schupfnudeln', name: 'Schupfnudeln', kind: 'carb', grams: 250, prep: { text: 'in der Pfanne goldbraun braten', minutes: 8 }, family: 'gar' },
+  { id: 'spaetzle', name: 'Spätzle', kind: 'carb', grams: 250, prep: { text: 'in der Pfanne erhitzen', minutes: 5 }, family: 'gar' },
+  { id: 'gnocchi', name: 'Gnocchi', kind: 'carb', grams: 250, prep: { text: 'in Salzwasser garen, bis sie oben schwimmen', minutes: 4 }, family: 'gar' },
   { id: 'kartoffeln', name: 'Kartoffeln', kind: 'carb', grams: 300, prep: { text: 'in Salzwasser kochen', minutes: 20 } },
   { id: 'buns', name: 'Burgerbrötchen', kind: 'carb', grams: 1, unit: 'Stück', prep: { text: 'aufschneiden und kurz anrösten', minutes: 2 } },
   { id: 'tortillas', name: 'Tortillas', kind: 'carb', grams: 2, unit: 'Stück', prep: { text: 'in der Pfanne kurz erwärmen', minutes: 2 } },
   { id: 'wraps', name: 'Wraps', kind: 'carb', grams: 1, unit: 'Stück', prep: { text: 'in der Pfanne kurz erwärmen', minutes: 2 }, retired: true },
   { id: 'naan', name: 'Naan', kind: 'carb', grams: 1, unit: 'Stück', prep: { text: 'im Ofen aufbacken', minutes: 5 } },
   { id: 'quinoa', name: 'Quinoa', kind: 'carb', grams: 60, prep: { text: 'mit doppelter Menge Wasser köcheln', minutes: 15 } },
-  { id: 'suesskartoffel', name: 'Süßkartoffel', kind: 'carb', grams: 250, prep: { text: 'würfeln und im Ofen rösten', minutes: 25 } },
+  { id: 'suesskartoffel', name: 'Süßkartoffel', kind: 'carb', grams: 250, prep: { text: 'würfeln und im Ofen rösten', minutes: 25 }, family: 'fest' },
   { id: 'haehnchen', name: 'Hähnchenbrust', kind: 'protein', grams: 125, prep: { text: 'in Streifen schneiden und braten', minutes: 8 } },
   { id: 'hack', name: 'Hackfleisch', kind: 'protein', grams: 125, prep: { text: 'krümelig anbraten', minutes: 8 } },
   { id: 'tofu', name: 'Tofu', kind: 'protein', grams: 100, prep: { text: 'würfeln und knusprig braten', minutes: 10 } },
-  { id: 'linsen', name: 'Linsen', kind: 'protein', grams: 60, prep: { text: 'in Wasser weich kochen', minutes: 20 } },
-  { id: 'bohnen', name: 'Schwarze Bohnen', kind: 'protein', grams: 120, prep: { text: 'abspülen, mit Kreuzkümmel erhitzen', minutes: 5 } },
+  { id: 'linsen', name: 'Linsen', kind: 'protein', grams: 60, prep: { text: 'in Wasser weich kochen', minutes: 20 }, family: 'zeit' },
+  { id: 'bohnen', name: 'Schwarze Bohnen', kind: 'protein', grams: 120, prep: { text: 'abspülen, mit Kreuzkümmel erhitzen', minutes: 5 }, family: 'gar' },
   { id: 'kichererbsen', name: 'Kichererbsen', kind: 'protein', grams: 120, prep: { text: 'abspülen und knusprig rösten', minutes: 15 } },
   { id: 'halloumi', name: 'Halloumi', kind: 'protein', grams: 75, prep: { text: 'in Scheiben goldbraun braten', minutes: 6 } },
   { id: 'patty', name: 'Hack-Patty', kind: 'protein', grams: 150, food: 'Hackfleisch', prep: { text: 'aus Hack flach formen, je Seite 3–4 Min. braten', minutes: 8 } },
@@ -80,8 +83,8 @@ export const SIDES: readonly Side[] = [
   { id: 'zucchini', name: 'Zucchini', kind: 'veg', grams: 150, prep: { text: 'in Scheiben anbraten', minutes: 6 } },
   { id: 'spinat', name: 'Spinat', kind: 'veg', grams: 100, prep: { text: 'kurz zusammenfallen lassen', minutes: 2 } },
   { id: 'mais', name: 'Mais', kind: 'veg', grams: 75, prep: { text: 'abtropfen lassen, kurz anrösten', minutes: 3 } },
-  { id: 'tomaten', name: 'Tomaten', kind: 'veg', grams: 100, prep: { text: 'würfeln', minutes: 2 } },
-  { id: 'zwiebeln', name: 'Rote Zwiebeln', kind: 'veg', grams: 30, prep: { text: 'in feine Ringe schneiden', minutes: 2 } },
+  { id: 'tomaten', name: 'Tomaten', kind: 'veg', grams: 100, prep: { text: 'würfeln', minutes: 2 }, family: 'roh' },
+  { id: 'zwiebeln', name: 'Rote Zwiebeln', kind: 'veg', grams: 30, prep: { text: 'in feine Ringe schneiden', minutes: 2 }, family: 'roh' },
   { id: 'avocado', name: 'Avocado', kind: 'veg', grams: 75, prep: { text: 'in Scheiben schneiden', minutes: 2 } },
   { id: 'gurke', name: 'Gurke', kind: 'veg', grams: 75, prep: { text: 'in Scheiben schneiden', minutes: 2 } },
   { id: 'karotten', name: 'Karotten', kind: 'veg', grams: 100, prep: { text: 'raspeln oder in Stifte schneiden', minutes: 3 } },

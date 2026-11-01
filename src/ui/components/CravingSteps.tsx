@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   MULTI, STAGES, choiceOf, closeStep, coveredBy, coversOf, currentStep, directionOf, optionsFor, pick, reopen, type Choice, type CravingState,
 } from '../../domain/craving';
-import { SIDE_KINDS, customSideId, type SideKind } from '../../domain/sides';
+import { FAMILIES, needsFamily, type Family } from '../../domain/cookStyle';
+import { SIDE_KINDS, customSideId, sideOf, type SideKind } from '../../domain/sides';
 import { currentContent } from '../../domain/recipe';
 import { householdOf, setHousehold, usePantry, usePlan, useProducts, useRecipes } from '../../data/store';
 import { useStockMarks } from '../cravingHooks';
@@ -88,6 +89,11 @@ export function StageOptions({ state, step, own, set, mini = false }: {
   const stock = useStockMarks();
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState('');
+  // eigener Baustein, dessen Garfamilie Mashi nicht am Namen erkennt (Julia: „wenn es nicht kennt, fragen“)
+  const [askFamily, setAskFamily] = useState<string | null>(null);
+  // in die Mitte holen – unten am Rand läge der Toast „… als Baustein“ über den Knöpfen
+  const askRef = useRef<HTMLDivElement>(null);
+  useEffect(() => { askRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' }); }, [askFamily]);
   // kam eine Richtung vom Chip („Bowl“), zeigt Mashi nur Passendes – „alle zeigen“ hebt das für diese Stufe auf
   const [all, setAll] = useState(false);
   const dir = directionOf(state.direction);
@@ -114,6 +120,13 @@ export function StageOptions({ state, step, own, set, mini = false }: {
       toast(`„${name.trim()}“ als Baustein`, { label: 'Rückgängig', run: setHousehold({ ...hh, customSides: [...(hh.customSides ?? []), id] }) });
     }
     if (!chosen.includes(id)) choose(id);
+    const side = sideOf(id);
+    if (side && needsFamily(side, hh.sideFamily)) setAskFamily(id);
+  };
+  const setFamily = (id: string, family: Family) => {
+    const label = FAMILIES.find((f) => f.id === family)?.label;
+    toast(`${sideOf(id)?.name}: ${label}`, { label: 'Rückgängig', run: setHousehold({ ...hh, sideFamily: { ...(hh.sideFamily ?? {}), [id]: family } }) });
+    setAskFamily(null);
   };
 
   return (
@@ -138,6 +151,16 @@ export function StageOptions({ state, step, own, set, mini = false }: {
           )
           : <button type="button" className="chip combo__own" onClick={() => setAdding(true)}><Icon name="plus" size={12} /> eigene</button>}
       </div>
+      {/* Garfamilie für einen neuen eigenen Baustein, den Mashi nicht kennt – davon hängen seine Zubereitungen ab */}
+      {askFamily && (
+        <div className="family-ask" role="group" aria-label={`Wie gart ${sideOf(askFamily)?.name}?`} ref={askRef}>
+          <span className="small">Wie gart <b>{sideOf(askFamily)?.name}</b>? <span className="muted">Dann weiß Mashi, wie man es zubereitet.</span></span>
+          <div className="chips">
+            {FAMILIES.map((f) => <button key={f.id} type="button" className="chip chip--sm" onClick={() => setFamily(askFamily, f.id)}>{f.label}</button>)}
+            <button type="button" className="link small" onClick={() => setAskFamily(null)}>später</button>
+          </div>
+        </div>
+      )}
       {/* die Punkte erklären sich nicht von selbst – nur zeigen, was gerade vorkommt */}
       {fixed.some((c) => c.stock) && (
         <p className="small muted stock-legend">

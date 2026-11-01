@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SPICES, WAYS, composeSteps, coveredByServing, servingText, spiceOf, wayOf, waysOf, type StyleStep } from './cookStyle';
+import { SPICES, WAYS, composeSteps, coveredByServing, servingText, spiceOf, wayOf, waysOf, type StyleStep, guessFamily, needsFamily, familyOf, type WayContext } from './cookStyle';
 import { sideOf } from './sides';
 
 const step = (id: string, kind: StyleStep['kind'], name: string, text: string, minutes: number, extra: Partial<StyleStep> = {}): StyleStep =>
@@ -112,5 +112,54 @@ describe('Kochstil: Anrichten je Richtung', () => {
   it('was beim Anrichten ohnehin passiert, braucht keinen eigenen Schritt – anderes bleibt', () => {
     for (const t of ['frisch drüberreiben', 'drüberstreuen', 'drüberbröseln', 'unter die heißen Nudeln heben']) expect(coveredByServing(t), t).toBe(true);
     for (const t of ['grob zupfen', 'hacken und drüberstreuen', 'in Ringe schneiden', undefined]) expect(coveredByServing(t), t).toBe(false);
+  });
+});
+
+describe('Garfamilien (Julia: Zubereitungswege für alle Bausteine, pflegeleicht)', () => {
+  const ctx = { sauceSimmers: true, pastaBoils: false };
+  const ids = (id: string, c: WayContext = ctx) => waysOf(id, c).map((w) => `${w.id}:${w.label}`);
+
+  it('Mashis Standard vorn – an der Stelle seiner Garart; die Familie bringt den Rest', () => {
+    // Gnocchi (schon gar): Standard „in Salzwasser garen“ passt zu keinem Familienweg → eigener Chip „gekocht“
+    expect(ids('gnocchi')).toEqual(['standard:gekocht', 'pfanne:knusprig', 'sauce:in der Sauce', 'ofen:im Ofen']);
+    expect(waysOf('gnocchi', ctx)[0]).toMatchObject({ text: 'in Salzwasser garen, bis sie oben schwimmen', minutes: 4 });
+    // Süßkartoffel (fest): Standard „im Ofen rösten“ ersetzt den Ofen-Weg
+    expect(ids('suesskartoffel')).toEqual(['ofen:geröstet', 'pfanne:gebraten', 'gedaempft:gedämpft']);
+    expect(waysOf('suesskartoffel', ctx)[0].text).toBe('würfeln und im Ofen rösten');
+    // Tomaten (roh gut): „würfeln“ ist roh
+    expect(ids('tomaten')).toEqual(['roh:roh', 'pfanne:angebraten', 'ofen:geröstet']);
+    expect(ids('linsen')).toEqual(['koecheln:gekocht', 'sauce:in der Sauce']);
+  });
+
+  it('„in der Sauce“ nur, wenn eine köchelt – wie bei den eigenen Wegen', () => {
+    expect(ids('gnocchi', { sauceSimmers: false, pastaBoils: false })).not.toContain('sauce:in der Sauce');
+  });
+
+  it('eigene Wege (WAYS) gehen vor; ohne Familie bleibt es bei einem Satz', () => {
+    expect(ids('brokkoli')[0]).toBe('gedaempft:gedämpft');
+    expect(waysOf('pasta', ctx)).toEqual([]);
+    expect(waysOf('gurke', ctx)).toEqual([]); // roh – nichts zu wählen
+    expect(waysOf('parmesan', ctx)).toEqual([]);
+  });
+
+  it('eigene Bausteine: am Namen geraten, sonst deine Wahl – sonst keine (dann fragt Mashi)', () => {
+    expect(guessFamily('Kürbis')).toBe('fest');
+    expect(guessFamily('Champignons')).toBe('zart');
+    expect(guessFamily('grüne Bohnen')).toBe('zart');
+    expect(guessFamily('Kichererbsen aus der Dose')).toBe('gar');
+    expect(guessFamily('Romanesco')).toBeUndefined();
+    expect(ids('eigen:veg:Kürbis')).toEqual(['ofen:geröstet', 'pfanne:gebraten', 'gedaempft:gedämpft']);
+    expect(waysOf('eigen:veg:Romanesco', ctx)).toEqual([]);
+    expect(needsFamily({ id: 'eigen:veg:Romanesco', name: 'Romanesco', kind: 'veg' })).toBe(true);
+    const mine = { ...ctx, families: { 'eigen:veg:Romanesco': 'zart' as const } };
+    expect(ids('eigen:veg:Romanesco', mine)[0]).toBe('pfanne:gebraten');
+    expect(needsFamily({ id: 'eigen:veg:Romanesco', name: 'Romanesco', kind: 'veg' }, mine.families)).toBe(false);
+    // Saucen und Toppings brauchen keine
+    expect(needsFamily({ id: 'eigen:topping:Kresse', name: 'Kresse', kind: 'topping' })).toBe(false);
+    expect(familyOf({ id: 'eigen:sauce:Kürbispüree', name: 'Kürbispüree', kind: 'sauce' })).toBeUndefined();
+  });
+
+  it('deine Wahl schlägt Mashis Familie – auch bei festen Bausteinen', () => {
+    expect(familyOf({ id: 'gnocchi', name: 'Gnocchi', kind: 'carb', family: 'gar' }, { gnocchi: 'zart' })).toBe('zart');
   });
 });

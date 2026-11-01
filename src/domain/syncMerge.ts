@@ -190,12 +190,19 @@ function merge3Household(base: Household | undefined, ours: Household | undefine
     const v = merge3Value(b.sideFood?.[id], o.sideFood?.[id], t.sideFood?.[id]);
     return v === undefined ? [] : [[id, v]];
   }));
+  // Garfamilie deiner eigenen Bausteine – je Baustein, wie die Zubereitung
+  const famIds = [...new Set([b, o, t].flatMap((h) => Object.keys(h.sideFamily ?? {})))];
+  const sideFamily = Object.fromEntries(famIds.flatMap((id) => {
+    const v = merge3Value(b.sideFamily?.[id], o.sideFamily?.[id], t.sideFamily?.[id]);
+    return v === undefined ? [] : [[id, v]];
+  }));
   return {
     portions: merge3Value(b.portions, o.portions, t.portions), lunchDays: merge3Value(b.lunchDays, o.lunchDays, t.lunchDays),
     ...(ids.length && Object.keys(sides).length ? { sides } : {}),
     ...(customSides.length ? { customSides } : {}),
     ...(Object.keys(sidePrep).length ? { sidePrep } : {}),
     ...(Object.keys(sideFood).length ? { sideFood } : {}),
+    ...(Object.keys(sideFamily).length ? { sideFamily } : {}),
   };
 }
 

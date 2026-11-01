@@ -102,6 +102,14 @@ describe('Wochenplan: merge3', () => {
     expect(merge3Plan(handy, cleared, handy).household!.sideFood).toBeUndefined();
   });
 
+  it('Garfamilie je eigenem Baustein: Handy wählt für Romanesco, Tablet für Okra – beides bleibt', () => {
+    const b2: MealPlan = { ...week, household: { portions: 1, lunchDays: [] } };
+    const handy: MealPlan = { ...b2, household: { ...b2.household!, sideFamily: { 'eigen:veg:Romanesco': 'fest' } } };
+    const tablet: MealPlan = { ...b2, household: { ...b2.household!, sideFamily: { 'eigen:veg:Okra': 'zart' } } };
+    expect(merge3Plan(b2, handy, tablet).household!.sideFamily).toEqual({ 'eigen:veg:Romanesco': 'fest', 'eigen:veg:Okra': 'zart' });
+    expect(merge3Plan(b2, b2, b2).household).not.toHaveProperty('sideFamily');
+  });
+
   it('Woche: beide legen ein Gericht auf denselben freien Abend – eines rückt weiter statt zu verschwinden', () => {
     const move = (id: string, day: number): MealPlan => ({ ...week, week: { ...week.week!, meals: week.week!.meals.map((m) => (m.id === id ? { ...m, day } : m)) } });
     const m = merge3Plan(week, move('m2', 4), move('m3', 4));

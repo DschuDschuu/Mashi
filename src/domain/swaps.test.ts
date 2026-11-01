@@ -235,6 +235,16 @@ describe('Rezept mit Tausch – die Schritte bleiben', () => {
     ]);
   });
 
+  it('Garfamilien machen die Ampel genauer: Bratkartoffeln → Gnocchi knusprig, Brokkoli im Ofen → dein Kürbis geröstet', () => {
+    const carb: RecipeContent = { ...content(), ingredients: [ing('k', 'Kartoffeln')], steps: [{ id: 'k1', text: 'Kartoffeln in der Pfanne braten.', timerMinutes: 15 }] };
+    expect(swapChecks(carb, { k: swapFor('gnocchi')! })).toEqual({}); // früher gelb: Gnocchi kannten nur „kochen“
+    expect(withSwaps(carb, { k: swapFor('gnocchi')! }).steps[0]).toMatchObject({ text: 'Gnocchi in der Pfanne braten. (Tipp: Gnocchi in der Pfanne knusprig braten, 8 Min.)', timerMinutes: 8 });
+    const veg: RecipeContent = { ...content(), ingredients: [ing('b', 'Brokkoli')], steps: [{ id: 'v1', text: 'Brokkoli im Ofen rösten.' }] };
+    const custom = ['eigen:veg:Kürbis'];
+    expect(swapChecks(veg, { b: swapFor('eigen:veg:Kürbis')! }, custom)).toEqual({});
+    expect(withSwaps(veg, { b: swapFor('eigen:veg:Kürbis')! }, custom).steps[0].text).toBe('Kürbis im Ofen rösten. (Tipp: Kürbis in Stücke schneiden, mit Öl im Ofen rösten, 25 Min.)');
+  });
+
   it('zwei Tausche im selben Schritt: ein Tipp für beide', () => {
     const c: RecipeContent = { ...content(), ingredients: [ing('h', 'Hackfleisch'), ing('k', 'Karotten')], steps: [{ id: 'x', text: 'Karotten anschwitzen, Hack krümelig braten.' }] };
     expect(withSwaps(c, { h: swapFor('tofu')!, k: swapFor('zucchini')! }).steps[0].text)

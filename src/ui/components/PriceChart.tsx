@@ -55,7 +55,7 @@ export function PriceChart({ points, unit, label }: { points: PricePoint[]; unit
   return (
     <svg className="price-chart" viewBox={`0 0 ${W} ${H}`} role="img" tabIndex={0}
       aria-label={`${label}: Preisverlauf von ${shortDate(points[0].date)} bis ${shortDate(points[points.length - 1].date)}, zuletzt ${money(values[values.length - 1])}`}
-      onPointerMove={onMove} onPointerDown={onMove} onPointerLeave={(e) => e.pointerType === 'mouse' && setActive(null)}
+      data-nodrag onPointerMove={onMove} onPointerDown={onMove} onPointerLeave={(e) => e.pointerType === 'mouse' && setActive(null)}
       onKeyDown={onKey} onBlur={() => setActive(null)}>
       {/* Gitter: nur Höchst- und Tiefstwert, haarfein */}
       {[hi - pad, lo + pad].map((v, i) => (

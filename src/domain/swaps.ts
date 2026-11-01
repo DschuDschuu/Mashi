@@ -1,5 +1,5 @@
 import type { Household } from './mealplan';
-import { WAYS } from './cookStyle';
+import { methodOf, waysOf } from './cookStyle';
 import { SIDE_KINDS, foodOf, sideGrams, sideOf, sidesOfKind, type Side, type SideKind, type SidePrep } from './sides';
 import { stepIngredients } from './stepIngredients';
 import type { Ingredient, RecipeContent, Unit } from './types';
@@ -208,28 +208,21 @@ export function swapFor(sideId: string, household?: Pick<Household, 'sides' | 's
 }
 
 /**
- * Wie ein Schritt gart (Julia: „das Rezept checkt das“) – Ofen vor Pfanne vor Dämpfen vor Kochen („anbraten und in der
- * Sauce fertig garen“ ist Pfanne). Ohne Garart (abgießen, schneiden) gibt es nichts zu prüfen.
- */
-const METHODS: readonly (readonly [string, RegExp])[] = [
-  ['ofen', /ofen|blech|backen/i],
-  ['pfanne', /brat|pfanne|anr(ö|oe)st|zusammenfallen/i],
-  ['dampf', /d(ä|ae)mpf/i],
-  ['wasser', /koch|k(ö|oe)chel|garen|blanchier|salzwasser/i],
-];
-const methodOf = (text: string): string | undefined => METHODS.find(([, re]) => re.test(text))?.[0];
-
-/**
  * Die Zubereitung des neuen Bausteins, die zum Schritt passt: „Brokkoli im Ofen rösten“ → Zucchini geröstet (20 Min.),
  * nicht ihr Standard „anbraten“. Gesucht unter seinem Standard und seinen Wegen (cookStyle.ts: WAYS; die, die in einer
  * Sauce oder im Nudelwasser mitgaren, hängen am Baukasten-Abend und zählen hier nicht). `ok: false` – keine passt.
  */
+const NO_CONTEXT = { sauceSimmers: false, pastaBoils: false } as const;
+
 function prepFor(to: SwapTarget, step: string): { prep?: SidePrep; ok: boolean } {
   // Zutaten ohne eigene Zubereitung (Frischkäse statt Schmand): wie es gart, sagt dein Schritt – nichts zu prüfen
-  if (!to.prep && !WAYS[to.id]?.length) return { ok: true };
+  // die Wege des Bausteins – eigene (cookStyle.ts: WAYS) oder die seiner Garfamilie; ohne die, die in einer Sauce oder im
+  // Nudelwasser mitgaren (die hängen am Baukasten-Abend)
+  const own = waysOf(to.id, NO_CONTEXT);
+  if (!to.prep && !own.length) return { ok: true };
   const method = methodOf(step);
   if (!method) return { prep: to.prep, ok: true };
-  const ways: SidePrep[] = [...(to.prep ? [to.prep] : []), ...(WAYS[to.id] ?? []).filter((w) => !w.into)];
+  const ways: SidePrep[] = [...(to.prep ? [to.prep] : []), ...own];
   const fit = ways.find((w) => methodOf(w.text) === method);
   return fit ? { prep: fit, ok: true } : { prep: to.prep, ok: false };
 }

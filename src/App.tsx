@@ -4,7 +4,8 @@ import { useLeftoverAsk, useStoreReady } from './data/store';
 import { navigate, useRoute, type Route } from './router';
 import { BottomNav } from './ui/components/BottomNav';
 import { StatusBanner } from './ui/components/StatusBanner';
-import { dismissToast, useToast } from './ui/toast';
+import { useToast } from './ui/toast';
+import { ToastBar } from './ui/components/ToastBar';
 import { AiCreateScreen } from './ui/screens/AiCreateScreen';
 import { ConnectScreen } from './ui/screens/ConnectScreen';
 import { CookbookScreen } from './ui/screens/CookbookScreen';
@@ -133,16 +134,8 @@ export function App({ mode }: { mode: Mode | null }) {
       {/* Nachfragen im Mashi-Stil statt Browser-Dialog (ask) */}
       <ConfirmSheet />
       {/* solange „Was ist übrig?“ offen ist, nicht über dessen Knöpfe legen – danach erscheint er wieder */}
-      {message && !leftoverOpen && !confirmOpen && (
-        <div className={`toast${message.action ? ' toast--action' : ''}`} role="status">
-          {message.text}
-          {message.action && (
-            <button className="toast__action" onClick={() => { message.action!.run(); dismissToast(); }}>
-              {message.action.label}
-            </button>
-          )}
-        </div>
-      )}
+      {/* wegwischbar (Julia) – ein neuer Hinweis ist ein neues Bauteil, ein halber Wisch hängt nicht nach */}
+      {message && !leftoverOpen && !confirmOpen && <ToastBar key={message.text + (message.action?.label ?? '')} message={message} />}
     </div>
   );
 }

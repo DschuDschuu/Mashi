@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { DAY_SHORT } from '../../domain/week';
 import { WORKDAYS } from '../../domain/mealplan';
+import { FAMILIES, familyOf, type Family } from '../../domain/cookStyle';
 import { SIDE_KINDS, sideGrams, sidesOfKind } from '../../domain/sides';
 import { PrepSheet } from './ComboSteps';
 import { Icon } from './Icon';
@@ -32,6 +33,17 @@ export function HouseholdSettings() {
         {/* Zubereitung als Standard (Julia: „woher weiß ich, wie ich das zubereite?“) */}
         <button type="button" className="iconbtn iconbtn--sm" aria-label={`Zubereitung ${s.name}`} onClick={() => setPrepFor(s.id)}><Icon name="pencil" size={14} /></button>
         {/* eigene Bausteine (Julia: „Tomaten“) wieder rausnehmen – alte Abende damit behalten ihren Namen (steht in der id) */}
+        {/* Garfamilie eigener Bausteine – geraten oder gewählt, hier änderbar (Julia: „Mashi rät, wenn es nicht kennt, fragen“) */}
+        {s.id.startsWith('eigen:') && (s.kind === 'carb' || s.kind === 'protein' || s.kind === 'veg') && (
+          <select className="household__family" aria-label={`Wie gart ${s.name}?`} value={familyOf(s, hh.sideFamily) ?? ''}
+            onChange={(e) => {
+              const family = e.target.value as Family;
+              set({ sideFamily: { ...(hh.sideFamily ?? {}), [s.id]: family } }, `${s.name}: ${FAMILIES.find((f) => f.id === family)?.label}`);
+            }}>
+            {!familyOf(s, hh.sideFamily) && <option value="" disabled>gart wie?</option>}
+            {FAMILIES.map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
+          </select>
+        )}
         {s.id.startsWith('eigen:') && <button type="button" className="link small" onClick={() => {
           const { [s.id]: _g, ...sides } = hh.sides ?? {};
           set({ customSides: (hh.customSides ?? []).filter((x) => x !== s.id), sides: Object.keys(sides).length ? sides : undefined }, `${s.name} entfernt`);
