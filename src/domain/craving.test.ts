@@ -4,10 +4,11 @@ import {
   baseCraving, coveredBy, halfOf, ownComboSteps, ownSteps, plateImage, weekCookSteps, cravingCombo, cravingContent, directionOf, guessKind, matchingRecipes, optionsFor, pick, recipeChoiceId, recipeChoices, reopen, rollCraving, runsAlone, staleTrials, startLabel, stockMarks, understand, variantTargets, withoutGone, cravingTimeline,
   type CravingState, type StockMark,
 } from './craving';
+import { cookingContent } from './homemade';
 import { localFoodTable } from './nutrition/localFoods';
 import { emptyPantry, type Pantry, type PantryItem } from './pantry';
 import { FINISH, doneParts, followBlockParts } from './parts';
-import { withNewVersion } from './recipe';
+import { currentContent, withNewVersion } from './recipe';
 import { SIDES, comboText, foodOf, ownEntry, ownOf, ownSidesOf, sideIngredient, sideOf, sidesOf } from './sides';
 import { computeNutrition } from './nutrition/engine';
 import { swapFor } from './swaps';
@@ -670,13 +671,29 @@ describe('Tortilla = Taco + Wrap', () => {
 });
 
 describe('Baukasten im Wochenplan: die Grundlage ist schon gewählt', () => {
+  // unmarkiert entscheiden die Schritte (Julia: „an den Schritten“): köchelt sie, ist sie Protein und Sauce
+  const withSteps = (r: Recipe, ...texts: string[]): Recipe => ({
+    ...r, versions: [{ ...r.versions[0], content: { ...r.versions[0].content, steps: texts.map((text, i) => ({ id: `x${i}`, text })) } }],
+  });
+
   it('unmarkiert: Bolognese & Co. decken Protein und Sauce ab, eine Sauce nur die Sauce', () => {
-    const { state, own } = baseCraving(recipe('g', 'Testbolognese'));
+    const { state, own } = baseCraving(withSteps(recipe('g', 'Testbolognese'), 'Hack anbraten.', 'Mit Tomaten 30 Min. köcheln lassen.'));
     expect(state.picks.protein).toEqual(['rezept:g']);
     expect(state.closed).toEqual(expect.arrayContaining(['protein', 'sauce']));
     expect(currentStep(state)).toBe('carb');
     expect(own).toHaveLength(1);
     expect(baseCraving(recipe('t', 'Testtomatensauce')).state.closed).toEqual(['sauce']);
+  });
+
+  it('unmarkiert und kein Topf (Rundgang): was gebacken oder nur gebraten wird, deckt die Sauce nicht ab', () => {
+    const lasagne = withSteps(recipe('l', 'Testlasagne'), 'Sauce köcheln lassen.', 'Schichten und im Ofen backen.');
+    const frikadellen = withSteps(recipe('f', 'Testfrikadellen'), 'Formen und in der Pfanne braten.');
+    for (const r of [lasagne, frikadellen]) {
+      const { state } = baseCraving(r);
+      expect(state.closed, currentContent(r).title).toEqual(['protein']);
+      expect(weekCookSteps('pasta', r)[0]).not.toHaveProperty('pot');
+    }
+    expect(weekCookSteps('pasta', withSteps(recipe('g', 'Testbolognese'), 'Köcheln lassen.'))[0]).toMatchObject({ pot: true });
   });
 
   it('markiert mit einer Richtung: die ist gleich gewählt; gespeichert werden nur die festen Bausteine', () => {
@@ -955,12 +972,31 @@ describe('Deine Schritte in der Zeitleiste (Julia: Weg B – „die Kochschritte
     let n = 0;
     const c = cravingContent(s, { own, recipes: all, servings: 2, title: '', newId: () => `x${++n}` });
     const texts = c.steps.map((x) => x.text);
-    expect(texts[0]).toBe('Sofort – Testofengemüse nach deinem Rezept zubereiten');
-    expect(texts[1]).toMatch(/^Nach 10 Min\. – Reis: /);
-    expect(texts[2]).toBe('Nach 17 Min. – Hähnchenbrust in Speisestärke wenden.');
-    expect(texts[3]).toBe('Hähnchenbrust knusprig braten.');
+    // ein ganzes Rezept bringt seine Schritte an ihrer Stelle mit (Rundgang: früher Platzhalter + doppelt)
+    expect(texts[0]).toBe('Sofort – Kürbis würfeln.');
+    expect(texts[1]).toBe('Kürbis im Ofen rösten.');
+    expect(texts[2]).toMatch(/^Nach 10 Min\. – Reis: /);
+    expect(texts[3]).toBe('Nach 17 Min. – Hähnchenbrust in Speisestärke wenden.');
+    expect(texts[4]).toBe('Hähnchenbrust knusprig braten.');
+    expect(texts.some((x) => x.includes('nach deinem Rezept'))).toBe(false);
     expect(texts).toContain('Zum Schluss – Erdnussbutter mit Sojasauce glatt rühren.');
     expect(texts.some((x) => x.includes('Alles in Schalen anrichten'))).toBe(false); // „Zum Schluss“ der Bowl: Mashis Anrichten
+    // Anrichten nennt alles beim Namen – aber keine Zutaten darüber (Rundgang)
+    expect(c.steps.find((x) => x.text.includes('Anrichten'))?.ingredientIds).toEqual([]);
+  });
+
+  it('gekocht (cookingContent): ein ganzes Rezept nur einmal – Zutaten aufgelöst, Schritte an ihrer Stelle mit seinen Zutaten', () => {
+    let n = 0;
+    const content = cravingContent(s, { own, recipes: all, servings: 2, title: 'Testgericht', newId: () => `x${++n}` });
+    const dish: Recipe = { ...recipe('d', 'Testgericht'), versions: [{ id: 'v', number: 1, createdAt: '', author: 'nutzer', content }] };
+    const c = cookingContent(dish, all);
+    const kuerbis = c.steps.filter((x) => x.text.includes('Kürbis'));
+    expect(kuerbis.map((x) => x.text)).toEqual(['Sofort – Kürbis würfeln.', 'Kürbis im Ofen rösten.']); // nicht doppelt
+    expect(kuerbis.every((x) => x.part === 'Testofengemüse')).toBe(true); // nicht „Zum Schluss“
+    const kIng = c.ingredients.find((i) => i.name === 'Kürbis')!;
+    expect(kIng).toMatchObject({ part: 'Testofengemüse' });
+    expect(kuerbis[0].ingredientIds).toEqual([kIng.id]);
+    expect(c.ingredients.some((i) => i.recipeId)).toBe(false); // aufgelöst – Einkauf und Vorrat sehen den Kürbis
   });
 
   it('Wochenplan: deine Schritte am Abend; vorgekocht nur aus dem Kühlschrank; ohne Schritte wie bisher', () => {

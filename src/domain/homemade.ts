@@ -52,10 +52,10 @@ const subId = (ingredientId: string, id: string) => `${ingredientId}>${id}`;
  * @param self ID des Rezepts – zeigt eine Zutat auf das Rezept selbst, bleibt sie gekauft
  */
 export function withHomemade(content: RecipeContent, chosen: readonly string[], all: readonly Recipe[], self?: string): RecipeContent {
-  const subs = new Map<string, { name: string; c: RecipeContent; portions: number }>();
+  const subs = new Map<string, { name: string; c: RecipeContent; portions: number; inline: boolean }>();
   for (const i of content.ingredients) {
     const r = chosen.includes(i.id) ? linked(i, all, self) : undefined;
-    if (r) subs.set(i.id, { name: i.name, c: chosenContent(r), portions: isBaseLink(i) && i.amount ? i.amount : content.servings });
+    if (r) subs.set(i.id, { name: i.name, c: chosenContent(r), portions: isBaseLink(i) && i.amount ? i.amount : content.servings, inline: !!i.stepsInline });
   }
   if (!subs.size) return content;
 
@@ -66,12 +66,17 @@ export function withHomemade(content: RecipeContent, chosen: readonly string[], 
       ...x, id: subId(i.id, x.id), part: sub.name, ...(i.optional ? { optional: true } : {}),
     }));
   });
-  const subSteps = [...subs].flatMap(([id, sub]) => sub.c.steps.map((s) => ({
+  // stehen die Schritte schon im Gericht (stepsInline, Baukasten-Gericht), nicht noch einmal davor – dort nur die
+  // eingesetzten Zutaten zuordnen
+  const inline = new Map([...subs].filter(([, sub]) => sub.inline).map(([id, sub]) => [sub.name, { id, c: sub.c }]));
+  const subSteps = [...subs].filter(([, sub]) => !sub.inline).flatMap(([id, sub]) => sub.c.steps.map((s) => ({
     ...s, id: subId(id, s.id), part: sub.name,
     // fest zuordnen – sonst fände die Erkennung „Mehl“ auch in den Schritten des Gerichts
     ingredientIds: stepIngredients(s, sub.c.ingredients).map((x) => subId(id, x.id)),
   })));
   const steps = content.steps.map((s) => {
+    const own = s.part ? inline.get(s.part) : undefined;
+    if (own) return { ...s, ingredientIds: stepIngredients(s, own.c.ingredients).map((x) => subId(own.id, x.id)) };
     const used = stepIngredients(s, content.ingredients);
     const touches = used.some((x) => subs.has(x.id));
     return {

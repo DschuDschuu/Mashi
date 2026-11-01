@@ -57,6 +57,11 @@ export interface Ingredient {
   recipeId?: string;
   /** Nur in dieser Variante (RecipeContent.choices) – fehlt: in allen, siehe choices.ts */
   choice?: string;
+  /**
+   * Nur bei recipeId: die Schritte des Rezepts stehen schon im Gericht (Baukasten-Gericht, craving.ts) – aufgelöst
+   * werden nur seine Zutaten, sonst stünden die Schritte doppelt da (homemade.ts: withHomemade)
+   */
+  stepsInline?: true;
 }
 
 export interface Step {

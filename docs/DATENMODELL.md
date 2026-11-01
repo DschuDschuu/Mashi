@@ -45,6 +45,7 @@ Recipe  (Hülle – ändert sich selten)
 │              ingredients[] { id, name, amount?, unit?, note? (Hinweis „gewürfelt“), part? (Teil „Sauce“), optional?, foodRef?,
 │                              recipeId? (Grundrezept zum Selbstmachen – selbst gemacht ersetzen dessen Zutaten und Schritte die Zutat, als eigener Teil;
 │                                mit Einheit „Portion“ eine Grundlage: immer selbst gemacht, so viele Portionen wie die Menge, in der Vorkoch-Woche aus dem Vorgekochten),
+│                              stepsInline? (nur mit recipeId: die Schritte stehen schon im Gericht – Baukasten-Gericht; aufgelöst werden nur die Zutaten),
 │                              choice? (nur in dieser Variante – fehlt: in allen) },
 │              steps[] { id, text, timerMinutes?, ingredientIds?, part? (Teil – fehlt: aus den Zutaten; „-“ Frisch, „*“ Zum Schluss), choice? },
 │              categories[], tags[], devices[], imagePrompt?,

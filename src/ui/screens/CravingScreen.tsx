@@ -8,7 +8,7 @@ import { NO_SPICE, SPICES, defaultSpice } from '../../domain/cookStyle';
 import type { Recipe } from '../../domain/types';
 import { keyOfName } from '../../domain/mealplan';
 import { currentContent, newId, totalMinutes } from '../../domain/recipe';
-import { addToPlan, createRecipe, deleteRecipe, householdOf, keepTrial, useFoodTable, usePlan, useRecipes } from '../../data/store';
+import { addToPlan, createRecipe, deleteRecipe, householdOf, keepTrial, updateTrial, useFoodTable, usePlan, useRecipes } from '../../data/store';
 import { useOwnChoices, useRoll } from '../cravingHooks';
 import { goBack, navigate } from '../../router';
 import { Stepper } from '../components/Controls';
@@ -193,7 +193,9 @@ function Finished({ q, state, own, set }: { q: string; state: CravingState; own:
   const [title, setTitle] = useState(() => cravingTitle(state, own));
   const [servings, setServings] = useState(Math.max(1, hh.portions));
   // dasselbe Gericht nicht zweimal anlegen (erst „In den Wochenplan“, dann doch „Jetzt kochen“) – solange nichts geändert ist
-  const made = useRef<{ key: string; id: string } | null>(null);
+  const made = useRef<{ key: string; dish: string; id: string } | null>(null);
+  // hat das letzte ensure ein Probiergericht neu gefasst?
+  const updated = useRef(false);
   const steps = cravingSteps(state, own, hh);
   const timeline = cravingTimeline(steps);
   const text = cravingText(state, own);
@@ -201,20 +203,29 @@ function Finished({ q, state, own, set }: { q: string; state: CravingState; own:
   const spice = state.spice ?? defaultSpice(state.direction) ?? NO_SPICE;
 
   const ensure = (trial: boolean): string => {
-    // andere Würze oder Zubereitung = andere Schritte → ein neues Gericht
+    updated.current = false;
     const key = JSON.stringify([state.picks, state.spice, state.ways, title.trim(), servings]);
-    const known = made.current?.key === key && recipes.find((r) => r.id === made.current!.id);
-    if (known) {
+    const dish = JSON.stringify([state.picks, title.trim(), servings]);
+    const known = made.current && recipes.find((r) => r.id === made.current!.id);
+    if (known && made.current!.key === key) {
       if (!trial && known.trial) keepTrial(known.id);
       return known.id;
     }
     const content = cravingContent(state, { own, recipes, household: hh, servings, title, newId: () => newId('i') });
+    // nur Würze oder Zubereitung anders (Rundgang): dasselbe Probiergericht neu fassen – es bleibt im Plan, kein zweites.
+    // Steht es schon im Kochbuch, bleibt es, wie es ist, und das hier wird ein neues
+    if (known && made.current!.dish === dish && updateTrial(known.id, content)) {
+      made.current = { key, dish, id: known.id };
+      updated.current = true;
+      if (!trial) keepTrial(known.id);
+      return known.id;
+    }
     // woher die Teile stammen – so erkennt das Gericht den vorgekochten Dip (Recipe.partsFrom)
     const partsFrom = cravingPartsFrom(state, own);
     // als Bild der Teller, wie du ihn gebaut hast (Julia) – statt einer zufälligen Linienzeichnung
     const image = plateImage(state, own, randomHue());
     const id = createRecipe(content, { source: 'selbst', status: 'zum_testen', image, ...(trial ? { trial: true } : {}), ...(partsFrom ? { partsFrom } : {}) });
-    made.current = { key, id };
+    made.current = { key, dish, id };
     // das Gericht gibt es jetzt (Plan, Kochmodus, Kochbuch) – beim nächsten Mal fängt der Stepper frisch an; dafür steht
     // es auf der Startseite unter „Wie letztes Mal?“ (Julia)
     clearCraving();
@@ -233,7 +244,8 @@ function Finished({ q, state, own, set }: { q: string; state: CravingState; own:
   const toPlan = () => {
     const id = ensure(true);
     if (addToPlan(id, servings)) toast(`„${title.trim() || 'Dein Gericht'}“ im Wochenplan`, { label: 'Rückgängig', run: undo(id) });
-    else toast('Steht schon im Wochenplan');
+    // eben neu gefasst (Würze/Zubereitung geändert) – das sagen, nicht „steht schon“
+    else toast(updated.current ? `„${title.trim() || 'Dein Gericht'}“ im Wochenplan aktualisiert` : 'Steht schon im Wochenplan');
   };
   const save = () => {
     const id = ensure(false);

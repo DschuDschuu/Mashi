@@ -786,10 +786,15 @@ export function cravingContent(s: CravingState, opts: {
       ingredients.push({ id: newId(), name: c.name, amount: servings, unit: 'Portion', recipeId: recipe.id });
       steps.push({ minutes: prep.minutes, text: prep.text, list: [{ id: newId(), text: `${c.name} ${prep.text}`, ...(prep.minutes ? { timerMinutes: prep.minutes } : {}) }] });
     } else if (recipe) {
-      ingredients.push({ id: newId(), name: c.name, amount: servings, unit: 'Portion', recipeId: recipe.id });
+      // ein ganzes Rezept: verknüpft (Einkauf, Vorrat, Vorgekochtes), seine Schritte stehen gleich an ihrer Stelle in der
+      // Zeitleiste – stepsInline, damit cookingContent sie nicht noch einmal davorsetzt (Rundgang: doppelt und dazu ein
+      // „… nach deinem Rezept zubereiten“ unter „Zum Schluss“)
+      const mine = ownSteps(recipe, undefined, recipes);
       const minutes = c.prep?.minutes ?? 0;
-      // eingeordnet an deinen Schritten wie in „So geht's“ – sonst stünde es im Kochmodus an anderer Stelle
-      steps.push({ minutes, ...(c.steps?.length ? { steps: c.steps } : {}), list: [{ id: newId(), text: `${c.name} nach deinem Rezept zubereiten`, ...(minutes ? { timerMinutes: minutes } : {}) }] });
+      ingredients.push({ id: newId(), name: c.name, amount: servings, unit: 'Portion', recipeId: recipe.id, ...(mine.length ? { stepsInline: true as const } : {}) });
+      steps.push(mine.length
+        ? { minutes, steps: mine, list: mine.map((st) => ({ id: newId(), ...st, part: c.name })) }
+        : { minutes, list: [{ id: newId(), text: `${c.name} nach deinem Rezept zubereiten`, ...(minutes ? { timerMinutes: minutes } : {}) }] });
     } else {
       // fester Baustein: nur die Zutat hier – seine Schritte kommen mit Kochstil aus cookSteps (unten)
       const ing = sideIngredient(c.id, servings, household);
@@ -798,7 +803,8 @@ export function cravingContent(s: CravingState, opts: {
   }
   // feste Bausteine zusammengeführt und gewürzt, am Ende „Anrichten“ – dasselbe wie in „So geht's“
   for (const st of cookSteps(s, own, household).filter((x) => x.fixed || x.serving)) {
-    steps.push({ minutes: st.minutes, text: st.text, list: [{ id: newId(), text: st.text ? `${st.name}: ${st.text}` : st.name, ...(st.minutes ? { timerMinutes: st.minutes } : {}) }] });
+    // „Anrichten“ nennt alle Bestandteile – ohne feste Zuordnung hinge die Erkennung alle Zutaten darüber (Rundgang)
+    steps.push({ minutes: st.minutes, text: st.text, list: [{ id: newId(), text: st.text ? `${st.name}: ${st.text}` : st.name, ...(st.minutes ? { timerMinutes: st.minutes } : {}), ...(st.serving ? { ingredientIds: [] } : {}) }] });
   }
   // in der Reihenfolge der Zeitleiste, der erste Schritt jeder Gruppe sagt, wann (Julia: auch im Kochmodus) –
   // „Sofort – Reis: …“, „Nach 5 Min. – Tofu: …“, „Zum Schluss – Sesam: …“
@@ -929,11 +935,20 @@ export function cookbookMatches(text: string, recipes: readonly Recipe[], limit 
  * Markierung als ganzes Rezept – sonst geraten: was nach Sauce klingt, ist Sauce; alles andere (Bolognese, Chili,
  * Curry) ist Protein und bringt die Sauce mit.
  */
+/**
+ * Kocht die Grundlage wie eine Sauce – köcheln, schmoren, einkochen, und am Ende geht nichts in den Ofen? Bolognese,
+ * Curry, Chili, Suppe ja; Lasagne (köchelt, wird dann gebacken), Frikadellen, Ofengemüse nein.
+ */
+export const cooksAsSauce = (c: Pick<RecipeContent, 'steps'>): boolean =>
+  c.steps.some((st) => /k(ö|oe)chel|schmor|einkoch|reduzier/i.test(st.text)) && !c.steps.some((st) => /ofen|backen|blech|gratin/i.test(st.text));
+
 export function baseChoice(r: Recipe): Choice {
   const c = currentContent(r);
   const b = r.blocks?.find((x) => !x.part);
   const kind = b?.kind ?? guessKind(c.title);
-  const also = b ? b.also ?? [] : kind === 'protein' ? ['sauce' as const] : [];
+  // unmarkiert: Sauce mit dabei nur, wenn sie wie eine kocht (Julia: „an den Schritten“) – sonst wären Lasagne und
+  // Frikadellen ein Topf, in dem der Brokkoli mitgart (Rundgang)
+  const also = b ? b.also ?? [] : kind !== 'sauce' && cooksAsSauce(c) ? ['sauce' as const] : [];
   return {
     id: recipeChoiceId(r.id), name: c.title, kind, recipeId: r.id,
     directions: b ? [...new Set(b.directions.map(normDirection))] : [], ...(also.length ? { also } : {}),

@@ -697,6 +697,18 @@ export function saveContent(id: string, content: RecipeContent, label = 'Bearbei
 }
 
 /**
+ * Probiergericht (Recipe.trial) neu fassen, ohne zweites anzulegen (Rundgang: eingeplant, dann Würze geändert → ein
+ * zweites Gericht, das erste blieb im Plan). Ersetzt die aktuelle Fassung – noch nicht im Kochbuch, eine Versionsliste
+ * wäre nur Lärm. Steht es schon im Kochbuch: false, nichts geändert.
+ */
+export function updateTrial(id: string, content: RecipeContent): boolean {
+  const r = get(id);
+  if (!r.trial) return false;
+  commit({ ...r, versions: r.versions.map((v) => (v.id === r.currentVersionId ? { ...v, content } : v)) });
+  return true;
+}
+
+/**
  * Testergebnis speichern. Das Feedback hängt an der GEKOCHTEN Version;
  * Anpassungen daraus werden eine neue Version.
  */
