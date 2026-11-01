@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { weekCookSteps } from '../../domain/craving';
+import { weekCookSteps } from '../../domain/weekCraving';
 import { NO_SPICE, SPICES, defaultSpice, type OwnStep } from '../../domain/cookStyle';
 import { foodOf, ownOf, prepOf, sideOf, styleOf, type SideStyle } from '../../domain/sides';
 import type { Household } from '../../domain/mealplan';

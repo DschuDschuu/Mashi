@@ -20,6 +20,9 @@ import { currentContent, currentVersion, newId, sameContent, withNewVersion } fr
 import { addChoiceFrom } from '../domain/choices';
 import { retireMix, sideContent } from '../domain/mix';
 import { ownIngredients, readyPortions, staleTrials } from '../domain/craving';
+import { chosenWays, learnWays } from '../domain/cookStyle';
+import { weekCookSteps } from '../domain/weekCraving';
+import type { PartSwap } from '../domain/partSwaps';
 import { foodOf, ownSidesOf, sideGrams, sidesOf, styleOf, withStyle, type SideStyle } from '../domain/sides';
 import { swapFor } from '../domain/swaps';
 import type { SideSalad } from '../domain/sideSalad';
@@ -301,6 +304,9 @@ export function useRecipes(): Recipe[] {
   return useSyncExternalStore(subscribe, () => recipes);
 }
 
+/** Alle Rezepte, ohne Hook – z. B. für getauschte Teile auf den Rezeptkarten (partSwaps.ts) */
+export const currentRecipes = (): readonly Recipe[] => recipes;
+
 export function useRecipe(id: string | undefined): Recipe | undefined {
   return useSyncExternalStore(subscribe, () => recipes.find((r) => r.id === id));
 }
@@ -493,8 +499,10 @@ function unstampCooked(cur: Recipe, before: Pick<Recipe, 'lastCookedAt' | 'previ
 export function markCooked(id: string, servings?: number, amounts: Record<string, number> = {}, variants?: Record<string, string>): CookedResult {
   const r = get(id);
   commit(stampCooked(r));
+  // aus dem Baukasten (Lust-Seite): seine Zubereitungen als „wie letztes Mal“ merken (Julia: „wenn gekocht“)
+  const unlearn = r.style ? learn(r.style.direction, r.style.ways) : undefined;
   const planned = plan.items.find((i) => i.recipeId === id);
-  if (planned && plan.cooked.includes(id)) return { used: [], toCheck: [], undo: () => commit(unstampCooked(get(id), r)) };
+  if (planned && plan.cooked.includes(id)) return { used: [], toCheck: [], undo: () => { unlearn?.(); commit(unstampCooked(get(id), r)); } };
   if (planned) commitPlan(toggleCooked(plan, id, true));
   const cookedServings = servings ?? planned?.servings ?? currentContent(r).servings;
   // immer mitschreiben, was genommen wurde – auch ohne Plan lässt sich „Heute gekocht“ so später zurücknehmen
@@ -506,8 +514,26 @@ export function markCooked(id: string, servings?: number, amounts: Record<string
       result.undo?.();
       dropLeftover(id);
       if (planned && plan.cooked.includes(id)) commitPlan({ ...plan, cooked: plan.cooked.filter((x) => x !== id) });
+      unlearn?.();
       commit(unstampCooked(get(id), r));
     },
+  };
+}
+
+/**
+ * Wie letztes Mal (Julia: „das Letzte gilt, je Richtung, wenn gekocht“): diese Zubereitungen in der Richtung merken
+ * (Household.lastWays, cookStyle.ts: learnWays). Gibt das Zurücknehmen fürs „Rückgängig“ des Kochens zurück – nichts
+ * Neues gelernt: undefined. Zurück geht nur das Gemerkte, nicht, was du inzwischen am Haushalt geändert hast.
+ */
+function learn(direction: string | undefined, ways: Readonly<Record<string, string>>): (() => void) | undefined {
+  const hh = householdOf();
+  const next = learnWays(hh.lastWays, direction, ways);
+  if (next === hh.lastWays) return undefined;
+  const before = hh.lastWays;
+  commitPlan(withWeek(plan, plan.week, { ...hh, lastWays: next }));
+  return () => {
+    const { lastWays: _l, ...now } = householdOf();
+    commitPlan(withWeek(plan, plan.week, before ? { ...now, lastWays: before } : now));
   };
 }
 
@@ -627,6 +653,8 @@ interface CreateOptions {
   trial?: boolean;
   /** Teile aus anderen Rezepten (Recipe.partsFrom) */
   partsFrom?: Record<string, string>;
+  /** Kochstil aus dem Baukasten – wird beim Kochen gemerkt (Recipe.style) */
+  style?: Recipe['style'];
 }
 
 /** Legt ein neues Rezept mit Version 1 an. Ohne Bild wird eines erzeugt (einmalig). */
@@ -653,6 +681,7 @@ export function createRecipe(content: RecipeContent, opts: CreateOptions, id = n
     ...(opts.fromBase ? { fromBase: opts.fromBase } : {}),
     ...(opts.trial ? { trial: true } : {}),
     ...(opts.partsFrom && Object.keys(opts.partsFrom).length ? { partsFrom: opts.partsFrom } : {}),
+    ...(opts.style && Object.keys(opts.style.ways).length ? { style: opts.style } : {}),
   };
   commit(recipe);
   if (!opts.image) void regenerateImage(recipe.id);
@@ -701,10 +730,11 @@ export function saveContent(id: string, content: RecipeContent, label = 'Bearbei
  * zweites Gericht, das erste blieb im Plan). Ersetzt die aktuelle Fassung – noch nicht im Kochbuch, eine Versionsliste
  * wäre nur Lärm. Steht es schon im Kochbuch: false, nichts geändert.
  */
-export function updateTrial(id: string, content: RecipeContent): boolean {
+export function updateTrial(id: string, content: RecipeContent, style?: Recipe['style']): boolean {
   const r = get(id);
   if (!r.trial) return false;
-  commit({ ...r, versions: r.versions.map((v) => (v.id === r.currentVersionId ? { ...v, content } : v)) });
+  const { style: _s, ...rest } = r;
+  commit({ ...rest, versions: r.versions.map((v) => (v.id === r.currentVersionId ? { ...v, content } : v)), ...(style && Object.keys(style.ways).length ? { style } : {}) });
   return true;
 }
 
@@ -903,6 +933,23 @@ export function setSwap(id: string, ingredientId: string, sideId?: string): () =
   const next = { ...(before ?? {}) };
   if (swap) next[ingredientId] = swap;
   else delete next[ingredientId];
+  apply(next);
+  return () => apply(before);
+}
+
+/**
+ * Einen ganzen Teil tauschen (Julia: „Sauce als Teil tauschen“, partSwaps.ts) – ohne `swap` wieder das Original.
+ * Gilt fürs Rezept, bis du zurücktauschst. Gibt „Rückgängig“ zurück.
+ */
+export function setPartSwap(id: string, part: string, swap?: PartSwap): () => void {
+  const before = get(id).partSwaps;
+  const apply = (partSwaps: Recipe['partSwaps']) => {
+    const { partSwaps: _, ...rest } = get(id);
+    commit(partSwaps && Object.keys(partSwaps).length ? { ...rest, partSwaps } : rest);
+  };
+  const next = { ...(before ?? {}) };
+  if (swap) next[part] = swap;
+  else delete next[part];
   apply(next);
   return () => apply(before);
 }
@@ -1241,7 +1288,12 @@ export function eatMeal(mealId: string, alongIds: readonly string[] = []): WeekR
     ...week,
     meals: week.meals.map((m) => (m.id === mealId ? { ...m, done: true } : along.includes(m) ? { ...m, freshCooked: true as const } : m)),
   }));
-  return { used: [...new Set(d.used)], toCheck: [...new Set(d.toCheck)], undo: weekUndo(before, after) };
+  // Baukasten-Abend gegessen: seine Zubereitungen (wie in „So geht's“) als „wie letztes Mal“ merken (Julia)
+  const unlearn = r && meal.recipeId === meal.baseId && meal.side
+    ? learn(styleOf(meal.side).direction, chosenWays(weekCookSteps(meal.side, r, { household: hh, recipes, items: before.pantry.items, portions: n })))
+    : undefined;
+  const undo = weekUndo(before, after);
+  return { used: [...new Set(d.used)], toCheck: [...new Set(d.toCheck)], undo: () => { undo(); unlearn?.(); } };
 }
 
 /**

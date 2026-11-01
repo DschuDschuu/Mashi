@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SPICES, WAYS, composeSteps, coveredByServing, servingText, spiceOf, wayOf, waysOf, type StyleStep, guessFamily, needsFamily, familyOf, type WayContext } from './cookStyle';
+import { SPICES, WAYS, chosenWays, composeSteps, coveredByServing, learnWays, learnedFor, servingText, spiceOf, wayOf, waysOf, type StyleStep, guessFamily, needsFamily, familyOf, type WayContext } from './cookStyle';
 import { sideOf } from './sides';
 
 const step = (id: string, kind: StyleStep['kind'], name: string, text: string, minutes: number, extra: Partial<StyleStep> = {}): StyleStep =>
@@ -33,6 +33,28 @@ describe('Kochstil: Würze und Zubereitung (Julia: „die Kochschritte sind pro 
     expect(waysOf('brokkoli', { ...ctx, sauceSimmers: true, pastaBoils: true }).map((w) => w.id)).toEqual(['gedaempft', 'ofen', 'nudeln', 'sauce']);
     // Curry ohne köchelnde Sauce: der Vorschlag „in der Sauce“ fällt weg → Standard
     expect(wayOf('haehnchen', { direction: 'curry', sauceSimmers: false, pastaBoils: false })?.id).toBe('pfanne');
+  });
+
+  it('wie letztes Mal (Julia: „das Letzte gilt, je Richtung“): nach deinem Standard, vor dem Vorschlag der Richtung', () => {
+    const ctx = { direction: 'ofen', sauceSimmers: false, pastaBoils: false };
+    const last = learnWays(undefined, 'ofen', { brokkoli: 'gedaempft' });
+    expect(last).toEqual({ 'ofen:brokkoli': 'gedaempft' });
+    expect(wayOf('brokkoli', { ...ctx, learned: learnedFor(last, 'ofen') })?.id).toBe('gedaempft'); // statt „im Ofen“
+    expect(learnedFor(last, 'bowl')).toEqual({}); // andere Richtung: nichts gelernt
+    // deine Wahl am Gericht und dein Standard gehen vor
+    expect(wayOf('brokkoli', { ...ctx, learned: { brokkoli: 'gedaempft' } }, 'ofen')?.id).toBe('ofen');
+    expect(wayOf('brokkoli', { ...ctx, learned: { brokkoli: 'gedaempft' } }, undefined, true)).toBeUndefined();
+    // geht heute nicht („mit den Nudeln“ ohne Nudeln): zählt nicht
+    expect(wayOf('brokkoli', { ...ctx, direction: 'pasta', learned: { brokkoli: 'nudeln' } })?.id).toBe(wayOf('brokkoli', { ...ctx, direction: 'pasta' })?.id);
+    // das Letzte gilt; nichts Neues → dasselbe Objekt (nichts zu speichern)
+    const again = learnWays(last, 'ofen', { brokkoli: 'ofen' });
+    expect(again).toEqual({ 'ofen:brokkoli': 'ofen' });
+    expect(learnWays(again, 'ofen', { brokkoli: 'ofen' })).toBe(again);
+    // ohne Richtung ein eigener Topf; eigene Bausteine (mit Doppelpunkt in der id) gehen auch
+    expect(learnedFor(learnWays(undefined, undefined, { 'eigen:veg:Kürbis': 'ofen' }), undefined)).toEqual({ 'eigen:veg:Kürbis': 'ofen' });
+    // aus den Schritten – auch aus der gemeinsamen Pfanne; deine eigene Zubereitung nicht, die gilt ohnehin
+    expect(chosenWays([{ options: [{ id: 'brokkoli', name: 'Brokkoli', ways: [], chosen: 'ofen' }, { id: 'paprika', name: 'Paprika', ways: [], chosen: 'eigen' }] }, {}]))
+      .toEqual({ brokkoli: 'ofen' });
   });
 });
 

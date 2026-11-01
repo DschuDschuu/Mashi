@@ -4,7 +4,7 @@ import {
   currentStep, directionOf, matchingRecipes, plateImage, startLabel, understand, type Choice, type CravingState,
 } from '../../domain/craving';
 import { randomHue } from '../../services/images/imageProvider';
-import { NO_SPICE, SPICES, defaultSpice } from '../../domain/cookStyle';
+import { NO_SPICE, SPICES, chosenWays, defaultSpice } from '../../domain/cookStyle';
 import type { Recipe } from '../../domain/types';
 import { keyOfName } from '../../domain/mealplan';
 import { currentContent, newId, totalMinutes } from '../../domain/recipe';
@@ -212,9 +212,11 @@ function Finished({ q, state, own, set }: { q: string; state: CravingState; own:
       return known.id;
     }
     const content = cravingContent(state, { own, recipes, household: hh, servings, title, newId: () => newId('i') });
+    // die Zubereitungen, wie sie in „So geht's“ stehen – gekocht, merkt Mashi sie sich als „wie letztes Mal“ (Recipe.style)
+    const style = { ...(state.direction ? { direction: state.direction } : {}), ways: chosenWays(steps) };
     // nur Würze oder Zubereitung anders (Rundgang): dasselbe Probiergericht neu fassen – es bleibt im Plan, kein zweites.
     // Steht es schon im Kochbuch, bleibt es, wie es ist, und das hier wird ein neues
-    if (known && made.current!.dish === dish && updateTrial(known.id, content)) {
+    if (known && made.current!.dish === dish && updateTrial(known.id, content, style)) {
       made.current = { key, dish, id: known.id };
       updated.current = true;
       if (!trial) keepTrial(known.id);
@@ -224,7 +226,7 @@ function Finished({ q, state, own, set }: { q: string; state: CravingState; own:
     const partsFrom = cravingPartsFrom(state, own);
     // als Bild der Teller, wie du ihn gebaut hast (Julia) – statt einer zufälligen Linienzeichnung
     const image = plateImage(state, own, randomHue());
-    const id = createRecipe(content, { source: 'selbst', status: 'zum_testen', image, ...(trial ? { trial: true } : {}), ...(partsFrom ? { partsFrom } : {}) });
+    const id = createRecipe(content, { source: 'selbst', status: 'zum_testen', image, style, ...(trial ? { trial: true } : {}), ...(partsFrom ? { partsFrom } : {}) });
     made.current = { key, dish, id };
     // das Gericht gibt es jetzt (Plan, Kochmodus, Kochbuch) – beim nächsten Mal fängt der Stepper frisch an; dafür steht
     // es auf der Startseite unter „Wie letztes Mal?“ (Julia)

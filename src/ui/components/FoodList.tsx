@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ask, choose } from '../confirm';
 import { basicsOf } from '../../domain/mealplan';
 import { buildFoodList, findFoodRow, matchesFilter, type FoodFilter, type FoodRow } from '../../domain/nutrition/foodList';
@@ -28,6 +28,7 @@ import { useSlide } from '../useSlide';
 import { Icon } from './Icon';
 import { ProductForm } from './MyProductsPanel';
 import { MatchChips, visibleExcludes } from './MatchChips';
+import { FoodGaps } from './FoodGaps';
 
 const fmt = (n: number) => n.toLocaleString('de-DE', { maximumFractionDigits: 1 });
 const cap = (s: string) => s.replace(/(^|[\s-])(\p{L})/gu, (_m, sep: string, ch: string) => sep + ch.toLocaleUpperCase('de-DE'));
@@ -65,6 +66,8 @@ export function FoodList({ adding, onAdding }: {
     [products, basics, zero, known, keep, spiceTable]);
   const [filter, setFilter] = useState<FoodFilter>('produkte');
   const [open, setOpen] = useState<string | null>(null);
+  /** über „Gewicht“ aus den Nährwert-Lücken geöffnet – die Kachel zeigt gleich das Formular mit „1 Stück wiegt“ */
+  const [weigh, setWeigh] = useState<string | null>(null);
   /** fertig hinzugefügt – als weitere Sorte gleich die Zeile aufklappen, damit man sie sieht */
   const addDone = (openKey?: string) => {
     onAdding(false);
@@ -83,13 +86,26 @@ export function FoodList({ adding, onAdding }: {
   const swipe = useSwipe(() => step(1), () => step(-1));
   const slide = useSlide(TABS.findIndex(([f]) => f === filter));
   const count = (f: FoodFilter) => rows.filter((r) => matches(r, f)).length;
+  /** Nährwert-Lücke „ohne Gewicht“: die Kachel aufklappen, dort steht „1 Stück wiegt“ – false: noch keine Kachel */
+  const openFood = (name: string): boolean => {
+    const r = findFoodRow(rows, name, foodTable);
+    if (!r) return false;
+    setFilter(TABS.find(([f]) => matches(r, f))?.[0] ?? 'produkte');
+    setOpen(r.key);
+    setWeigh(r.key);
+    // erst nach dem Umschalten steht die Zeile da
+    setTimeout(() => document.querySelector(`[data-food="${CSS.escape(r.key)}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' }), 60);
+    return true;
+  };
   const line = (r: FoodRow) => (
-    <FoodLine key={r.key} row={r} open={open === r.key} onToggle={() => setOpen(open === r.key ? null : r.key)}
+    <FoodLine key={r.key} row={r} open={open === r.key} weigh={weigh === r.key} onWeighed={() => setWeigh(null)} onToggle={() => setOpen(open === r.key ? null : r.key)}
       products={products} onTouch={() => touch(r.ingredient)} />
   );
 
   return (
     <div className="stack foods-panel">
+      {/* was in deinen Rezepten und Bausteinen keine Werte hat (Julia) – über den Tabs, gilt für alle */}
+      <FoodGaps onOpen={openFood} />
       {/* wie die Tabs im Rezept: eine Zeile auch auf dem Handy – kurze Namen, Anzahl darunter */}
       <div className="tabs foods__tabs" role="tablist" aria-label="Filter">
         {TABS.map(([f, label, full, icon]) => (
@@ -135,12 +151,20 @@ export function FoodList({ adding, onAdding }: {
   );
 }
 
-function FoodLine({ row, open, onToggle, products, onTouch }: {
+function FoodLine({ row, open, weigh = false, onWeighed, onToggle, products, onTouch }: {
   row: FoodRow; open: boolean; onToggle: () => void; products: MyProduct[];
+  /** aus den Nährwert-Lücken („Stückgewicht fehlt“): gleich das Formular der Sorte öffnen, mit der Mashi rechnet – einmal,
+   *  danach meldet die Kachel es zurück (sonst ginge es nach dem Speichern wieder auf) */
+  weigh?: boolean; onWeighed?: () => void;
   /** Zeile merken, damit sie nach dem Ausschalten nicht verschwindet */
   onTouch: () => void;
 }) {
   const [editing, setEditing] = useState<string | null>(null);
+  useEffect(() => {
+    if (!weigh) return;
+    setEditing((row.products.find((p) => p.favorite) ?? row.products[0])?.id ?? null);
+    onWeighed?.();
+  }, [weigh, row.products, onWeighed]);
   /** Name wird gerade getippt (Stift oben in der Kachel) */
   const [renaming, setRenaming] = useState<string | null>(null);
   const [addingSort, setAddingSort] = useState(false);
@@ -236,7 +260,7 @@ function FoodLine({ row, open, onToggle, products, onTouch }: {
   const bare = ps.length === 1 && !!ps[0].noValues && !valuesOf(ps[0], tableOf(ps[0])) && !brandOf(ps[0]) && !ps[0].detail && !ps[0].packageAmount && !sortBought;
 
   return (
-    <li className={`foods__item${open ? ' is-open' : ''}`}>
+    <li className={`foods__item${open ? ' is-open' : ''}`} data-food={row.key}>
       <div className="foods__head">
         {/* die ganze Kopfzeile klappt auf (unsichtbarer Knopf darunter) – nur der Stift liegt darüber */}
         <button type="button" className="foods__toggle" onClick={onToggle} aria-expanded={open} aria-label={`${title}: ${open ? 'zuklappen' : 'aufklappen'}`} />

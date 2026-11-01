@@ -262,6 +262,28 @@ describe('Store: Vorkoch-Woche (Julia: Bolo am Sonntag, unter der Woche Nudeln u
     expect(spaetzle()).toBe(500);
   });
 
+  it('wie letztes Mal: Baukasten-Abend gegessen → Zubereitung je Richtung gemerkt; „Rückgängig“ nimmt es zurück', async () => {
+    await freshStore('last-ways-week');
+    const bolo = createRecipe({ ...content('Testbolo', [{ id: 'h', name: 'Hackfleisch', amount: 100, unit: 'g' }]), servings: 1 }, { source: 'selbst', status: 'kochbuch' });
+    setHousehold({ portions: 1, lunchDays: [] });
+    setWeek(suggestWeek([6], [{ baseId: bolo, meals: [mealKey(bolo, 'pasta,brokkoli,richtung:pasta,weg:brokkoli:gedaempft')] }], () => 'b1'));
+    cookBase(bolo);
+    const meal = eatMeal('b1')!;
+    expect(currentPlan().household?.lastWays).toMatchObject({ 'pasta:brokkoli': 'gedaempft' });
+    meal.undo();
+    expect(currentPlan().household?.lastWays).toBeUndefined();
+  });
+
+  it('wie letztes Mal: Gericht von der Lust-Seite gekocht → seine Zubereitung gemerkt (Recipe.style); „Rückgängig“ zurück', async () => {
+    await freshStore('last-ways-craving');
+    setHousehold({ portions: 1, lunchDays: [], lastWays: { 'bowl:brokkoli': 'gedaempft' } });
+    const id = createRecipe(content('Testteller', [{ id: 'r', name: 'Reis', amount: 100, unit: 'g' }]), { source: 'selbst', status: 'zum_testen', trial: true, style: { direction: 'bowl', ways: { brokkoli: 'ofen' } } });
+    const done = markCooked(id, 1);
+    expect(currentPlan().household?.lastWays).toEqual({ 'bowl:brokkoli': 'ofen' });
+    done.undo!();
+    expect(currentPlan().household?.lastWays).toEqual({ 'bowl:brokkoli': 'gedaempft' });
+  });
+
   it('normaler Plan: vorgekochte Bolognese wird gegessen statt Hack abzuziehen; „Rückgängig“ legt sie zurück', async () => {
     await freshStore('base-stock');
     const bolo = createRecipe({ ...content('Testbolo', [{ id: 'h', name: 'Hackfleisch', amount: 100, unit: 'g' }]), servings: 1 }, { source: 'selbst', status: 'kochbuch' });

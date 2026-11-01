@@ -1,4 +1,5 @@
-import { DEFAULT_BASICS, DEFAULT_HOUSEHOLD, type Household, type MealPlan, type Week } from './mealplan';
+import { DEFAULT_BASICS, DEFAULT_HOUSEHOLD, type Household, type MealPlan, type Week, type WeekMeal } from './mealplan';
+import { bareSide, styleOf, withStyle } from './sides';
 import { resolveClashes } from './week';
 import { DEFAULT_NO_NUTRITION } from './nutrition/noNutrition';
 import type { MyProduct } from './nutrition/myProducts';
@@ -148,6 +149,41 @@ export function merge3Plan(base: MealPlan, ours: MealPlan, theirs: MealPlan): Me
 }
 
 /**
+ * Ein Abend, an beiden Geräten geändert (Rundgang 10: Würze am Handy, Zubereitung am Tablet – eins ging verloren): je
+ * Feld gewinnt, wer dort etwas geändert hat, wie beim Haushalt. Beide dasselbe Feld: unseres. Gelöscht und geändert:
+ * behalten (wie bisher).
+ */
+function merge3Meal(b: WeekMeal | undefined, o: WeekMeal | undefined, t: WeekMeal | undefined): WeekMeal | undefined {
+  if (!b || !o || !t) return o ?? t;
+  const keys = [...new Set([b, o, t].flatMap((m) => Object.keys(m)))].filter((k) => k !== 'side') as (keyof WeekMeal)[];
+  const meal = Object.fromEntries(keys.flatMap((k) => {
+    const v = merge3Value(b[k], o[k], t[k]);
+    return v === undefined ? [] : [[k, v]];
+  })) as unknown as WeekMeal;
+  const side = merge3Side(b.side, o.side, t.side);
+  return side ? { ...meal, side } : meal;
+}
+
+/**
+ * `side` eines Abends: die Bausteine als Ganzes (Brokkoli raus, Zucchini rein – eine Wahl), Richtung, Würze und die
+ * Zubereitung je Baustein einzeln (sides.ts: styleOf). Zubereitung nur für Bausteine, die noch dabei sind; ohne
+ * Bausteine kein Stil (ein Gericht statt Grundlage gewählt → side fällt weg, auch wenn dort die Würze geändert wurde).
+ */
+function merge3Side(b: string | undefined, o: string | undefined, t: string | undefined): string | undefined {
+  if (same(b, o)) return t;
+  if (same(b, t)) return o;
+  const items = merge3Value(bareSide(b), bareSide(o), bareSide(t));
+  const [sb, so, st] = [b, o, t].map(styleOf);
+  const on = new Set(items?.split(',') ?? []);
+  const ids = [...new Set([sb, so, st].flatMap((x) => Object.keys(x.ways)))].filter((id) => on.has(id));
+  const ways = Object.fromEntries(ids.flatMap((id) => {
+    const w = merge3Value(sb.ways[id], so.ways[id], st.ways[id]);
+    return w ? [[id, w]] : [];
+  }));
+  return withStyle(items, { direction: merge3Value(sb.direction, so.direction, st.direction), spice: merge3Value(sb.spice, so.spice, st.spice), ways });
+}
+
+/**
  * Vorkoch-Woche: Abendessen je Eintrag (am Handy getauscht, am Tablet einen Abend dazu → beides), Grundlagen je
  * Rezept, Kochtage als Ganzes. Landen dabei zwei Gerichte auf einem Abend, rückt eines weiter (resolveClashes).
  */
@@ -162,7 +198,7 @@ function merge3Week(base: Week | undefined, ours: Week | undefined, theirs: Week
     ...(start !== undefined ? { start } : {}),
     cookDays: merge3Value(base?.cookDays ?? [], ours.cookDays, theirs.cookDays),
     bases: merge3Keyed(base?.bases ?? [], ours.bases, theirs.bases, (b) => b.recipeId),
-    meals: merge3Keyed(base?.meals ?? [], ours.meals, theirs.meals, (m) => m.id),
+    meals: merge3Keyed(base?.meals ?? [], ours.meals, theirs.meals, (m) => m.id, merge3Meal),
     ...(noLunch.length ? { noLunch } : {}),
   });
 }
@@ -196,6 +232,12 @@ function merge3Household(base: Household | undefined, ours: Household | undefine
     const v = merge3Value(b.sideFamily?.[id], o.sideFamily?.[id], t.sideFamily?.[id]);
     return v === undefined ? [] : [[id, v]];
   }));
+  // wie letztes Mal – je Richtung und Baustein (am Handy Brokkoli gekocht, am Tablet die Paprika → beides gemerkt)
+  const lastIds = [...new Set([b, o, t].flatMap((h) => Object.keys(h.lastWays ?? {})))];
+  const lastWays = Object.fromEntries(lastIds.flatMap((id) => {
+    const v = merge3Value(b.lastWays?.[id], o.lastWays?.[id], t.lastWays?.[id]);
+    return v === undefined ? [] : [[id, v]];
+  }));
   return {
     portions: merge3Value(b.portions, o.portions, t.portions), lunchDays: merge3Value(b.lunchDays, o.lunchDays, t.lunchDays),
     ...(ids.length && Object.keys(sides).length ? { sides } : {}),
@@ -203,6 +245,7 @@ function merge3Household(base: Household | undefined, ours: Household | undefine
     ...(Object.keys(sidePrep).length ? { sidePrep } : {}),
     ...(Object.keys(sideFood).length ? { sideFood } : {}),
     ...(Object.keys(sideFamily).length ? { sideFamily } : {}),
+    ...(Object.keys(lastWays).length ? { lastWays } : {}),
   };
 }
 

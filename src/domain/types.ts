@@ -13,6 +13,7 @@
 import type { SideKind } from './sides';
 import type { SideSalad } from './sideSalad';
 import type { IngredientSwap } from './swaps';
+import type { PartSwap } from './partSwaps';
 
 /** Lebenszyklus eines Rezepts. Archivieren ist ein eigenes Flag (archivedAt). */
 export type RecipeStatus = 'ki_entwurf' | 'zum_testen' | 'bewaehrt' | 'kochbuch';
@@ -191,6 +192,12 @@ export interface Recipe {
    */
   swaps?: Record<string, IngredientSwap>;
   /**
+   * Getauschte Teile {Teilname: PartSwap} (Julia: „Sauce als Teil tauschen“) – die Erdnuss-Sauce gegen deine
+   * Teriyaki-Sauce oder Mashis Pesto, verknüpft: Zutaten und Schritte kommen frisch aus der Quelle (partSwaps.ts).
+   * Gilt, bis du zurücktauschst; nicht versioniert.
+   */
+  partSwaps?: Record<string, PartSwap>;
+  /**
    * Beilagensalat (Julia: zu jedem Rezept, Zutaten selbst gewählt) – nur fürs nächste Kochen, außer „immer dazu“; siehe
    * sideSalad.ts. Wie die Tauschplätze nicht versioniert.
    */
@@ -238,6 +245,12 @@ export interface Recipe {
    * Kochen fragt die Startseite „Wie war's?“; speichern nimmt die Markierung weg, „Nicht speichern“ löscht es.
    */
   trial?: boolean;
+  /**
+   * Kochstil, mit dem das Gericht im Baukasten zusammengestellt wurde (Lust-Seite): Richtung und die gewählte
+   * Zubereitung je Baustein. Ist es gekocht, merkt Mashi sie sich als „wie letztes Mal“ (Household.lastWays) – auch,
+   * wenn es erst eingeplant und später gekocht wird. Die Schritte selbst stehen fest im Rezept.
+   */
+  style?: { direction?: string; ways: Record<string, string> };
 }
 
 /** Ein Rezept (ohne part) oder ein Teil davon als Baustein */

@@ -110,6 +110,32 @@ describe('Wochenplan: merge3', () => {
     expect(merge3Plan(b2, b2, b2).household).not.toHaveProperty('sideFamily');
   });
 
+  it('derselbe Abend an beiden Geräten: Würze am Handy, Zubereitung und Portionen am Tablet – alles bleibt (Rundgang 10)', () => {
+    const at = (side: string | undefined, extra: object = {}): MealPlan => ({
+      ...week, week: { ...week.week!, meals: week.week!.meals.map((m) => (m.id === 'm1' ? { id: m.id, day: m.day, baseId: m.baseId, recipeId: side ? 'bolo' : 'spag', ...(side ? { side } : {}), ...extra } : m)) },
+    });
+    const m1 = (p: MealPlan) => p.week!.meals.find((x) => x.id === 'm1');
+    const b2 = at('pasta,brokkoli,richtung:pasta,wuerze:mediterran,weg:brokkoli:nudeln');
+    const handy = at('pasta,brokkoli,richtung:pasta,wuerze:indisch,weg:brokkoli:nudeln');
+    const tablet = at('pasta,brokkoli,richtung:pasta,wuerze:mediterran,weg:brokkoli:gedaempft', { portions: 3 });
+    expect(m1(merge3Plan(b2, handy, tablet))).toEqual({ id: 'm1', day: 6, baseId: 'bolo', recipeId: 'bolo', portions: 3, side: 'pasta,brokkoli,richtung:pasta,wuerze:indisch,weg:brokkoli:gedaempft' });
+    // Bausteine am Handy (Zucchini statt Brokkoli), Würze am Tablet: beides – die Brokkoli-Zubereitung fällt weg
+    expect(m1(merge3Plan(b2, at('pasta,zucchini,richtung:pasta,wuerze:mediterran'), handy))?.side).toBe('pasta,zucchini,richtung:pasta,wuerze:indisch');
+    // umgekehrt: wir dämpfen den Brokkoli, das andere Gerät hat ihn herausgenommen – keine Zubereitung für Fehlendes
+    expect(m1(merge3Plan(b2, tablet, at('pasta,zucchini,richtung:pasta,wuerze:mediterran')))?.side).toBe('pasta,zucchini,richtung:pasta,wuerze:mediterran');
+    // beide die Würze: unsere
+    expect(m1(merge3Plan(b2, handy, at('pasta,brokkoli,richtung:pasta,wuerze:asiatisch,weg:brokkoli:nudeln')))?.side).toContain('wuerze:indisch');
+    // am Handy ein fertiges Gericht statt der Grundlage, am Tablet die Würze: das Gericht, ohne Bausteine
+    expect(m1(merge3Plan(b2, at(undefined), handy))).toEqual({ id: 'm1', day: 6, baseId: 'bolo', recipeId: 'spag' });
+  });
+
+  it('Wie letztes Mal je Richtung und Baustein: Handy kocht Brokkoli, Tablet Paprika – beides gemerkt', () => {
+    const b2: MealPlan = { ...week, household: { portions: 1, lunchDays: [], lastWays: { 'pasta:brokkoli': 'nudeln' } } };
+    const handy: MealPlan = { ...b2, household: { ...b2.household!, lastWays: { 'pasta:brokkoli': 'gedaempft' } } };
+    const tablet: MealPlan = { ...b2, household: { ...b2.household!, lastWays: { 'pasta:brokkoli': 'nudeln', 'bowl:paprika': 'ofen' } } };
+    expect(merge3Plan(b2, handy, tablet).household!.lastWays).toEqual({ 'pasta:brokkoli': 'gedaempft', 'bowl:paprika': 'ofen' });
+  });
+
   it('Woche: beide legen ein Gericht auf denselben freien Abend – eines rückt weiter statt zu verschwinden', () => {
     const move = (id: string, day: number): MealPlan => ({ ...week, week: { ...week.week!, meals: week.week!.meals.map((m) => (m.id === id ? { ...m, day } : m)) } });
     const m = merge3Plan(week, move('m2', 4), move('m3', 4));

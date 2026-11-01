@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import { baseCraving, cravingCombo, currentStep } from '../../domain/craving';
+import { currentStep } from '../../domain/craving';
+import { baseCraving, cravingCombo } from '../../domain/weekCraving';
 import { comboText, sidesOf, withStyle } from '../../domain/sides';
 import type { Recipe } from '../../domain/types';
 import { ask } from '../confirm';

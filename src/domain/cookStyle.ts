@@ -217,7 +217,11 @@ export const OWN_WAY = 'eigen';
  * Woran eine Zubereitung hängt: eine Sauce, die köchelt („in der Sauce“), Pasta im Salzwasser („mit den Nudeln“) – und
  * deine Garfamilien (Household.sideFamily)
  */
-export interface WayContext { direction?: string; sauceSimmers: boolean; pastaBoils: boolean; families?: Readonly<Record<string, Family>> }
+export interface WayContext {
+  direction?: string; sauceSimmers: boolean; pastaBoils: boolean; families?: Readonly<Record<string, Family>>;
+  /** wie letztes Mal – schon für diese Richtung ausgelesen (learnedFor): Baustein → Weg */
+  learned?: Readonly<Record<string, string>>;
+}
 
 /** die Wege, die bei diesem Gericht gehen – „in der Sauce“ nur, wenn eine köchelt */
 export const waysOf = (sideId: string, ctx: WayContext): SideWay[] =>
@@ -225,14 +229,40 @@ export const waysOf = (sideId: string, ctx: WayContext): SideWay[] =>
 
 /**
  * Die Zubereitung eines Bausteins: deine Wahl am Gericht → dein Standard aus den Einstellungen (undefined – dann gilt
- * dein Text) → der Vorschlag der Richtung → Mashis Standard.
+ * dein Text) → wie letztes Mal in dieser Richtung (Julia) → der Vorschlag der Richtung → Mashis Standard. Was zuletzt
+ * ging, heute aber nicht („mit den Nudeln“ ohne Nudeln), zählt nicht.
  */
 export function wayOf(sideId: string, ctx: WayContext, chosen?: string, ownStandard = false): SideWay | undefined {
   const ways = waysOf(sideId, ctx);
   const picked = ways.find((w) => w.id === chosen);
   if (picked) return picked;
   if (chosen === OWN_WAY || ownStandard) return undefined;
-  return ways.find((w) => !!ctx.direction && !!w.for?.includes(ctx.direction)) ?? ways[0];
+  return ways.find((w) => w.id === ctx.learned?.[sideId])
+    ?? ways.find((w) => !!ctx.direction && !!w.for?.includes(ctx.direction)) ?? ways[0];
+}
+
+/** „pasta:brokkoli“ – je Richtung gemerkt (Julia); ohne Richtung ein eigener Topf. Richtungen haben keinen Doppelpunkt. */
+const learnKey = (direction: string | undefined, sideId: string) => `${direction || 'ohne'}:${sideId}`;
+
+/** Wie letztes Mal für diese Richtung: Baustein → Weg (Household.lastWays) */
+export function learnedFor(lastWays: Readonly<Record<string, string>> | undefined, direction?: string): Record<string, string> {
+  const prefix = learnKey(direction, '');
+  return Object.fromEntries(Object.entries(lastWays ?? {}).flatMap(([k, w]) => (k.startsWith(prefix) ? [[k.slice(prefix.length), w]] : [])));
+}
+
+/** Was in diesen Schritten gewählt ist (auch in der gemeinsamen Pfanne) – deine eigene Zubereitung nicht, die gilt ohnehin */
+export function chosenWays(steps: readonly Pick<StyleStep, 'options'>[]): Record<string, string> {
+  return Object.fromEntries(steps.flatMap((s) => s.options ?? []).filter((o) => o.chosen !== OWN_WAY).map((o) => [o.id, o.chosen]));
+}
+
+/**
+ * Gekocht (Julia: „wenn gekocht“, „das Letzte gilt“): die Zubereitungen dieses Gerichts als „zuletzt“ in seiner Richtung
+ * merken. Unverändert → dasselbe Objekt (dann gibt es nichts zu speichern).
+ */
+export function learnWays<T extends Readonly<Record<string, string>> | undefined>(lastWays: T, direction: string | undefined, ways: Readonly<Record<string, string>>): T | Record<string, string> {
+  const fresh = Object.entries(ways).filter(([id, w]) => lastWays?.[learnKey(direction, id)] !== w);
+  if (!fresh.length) return lastWays;
+  return { ...lastWays, ...Object.fromEntries(fresh.map(([id, w]) => [learnKey(direction, id), w])) };
 }
 
 /** Zubereitung zum Umschalten (Chips in „So geht's“) – je Baustein mit mehreren Wegen */

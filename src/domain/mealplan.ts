@@ -120,6 +120,11 @@ export interface Household {
   sideFood?: Record<string, string>;
   /** Garfamilie deiner eigenen Bausteine, wo Mashi sie nicht am Namen erkennt (Julia: „wenn es nicht kennt, fragen“) – cookStyle.ts */
   sideFamily?: Record<string, Family>;
+  /**
+   * Wie letztes Mal (Julia: „das Letzte gilt, je Richtung, wenn gekocht“): die zuletzt gekochte Zubereitung je Richtung
+   * und Baustein, „pasta:brokkoli“ → „nudeln“ (ohne Richtung „ohne:…“) – cookStyle.ts: learnWays, beim Abgleich je Eintrag
+   */
+  lastWays?: Record<string, string>;
 }
 
 export const DEFAULT_HOUSEHOLD: Household = { portions: 1, lunchDays: [] };

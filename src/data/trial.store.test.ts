@@ -23,13 +23,15 @@ describe('Store: Probiergericht neu fassen (Rundgang: Würze geändert → kein 
     const repo = await freshStore('trial-update');
     const id = createRecipe(dish('Mit Gyros-Würze braten.'), { source: 'selbst', status: 'zum_testen', trial: true });
     addToPlan(id, 2);
-    expect(updateTrial(id, dish('Mit Curry-Würze braten.'))).toBe(true);
+    expect(updateTrial(id, dish('Mit Curry-Würze braten.'), { direction: 'bowl', ways: { brokkoli: 'ofen' } })).toBe(true);
     await whenSaved();
     const all = await repo.list();
     expect(all.filter((r) => r.trial)).toHaveLength(1);
     const r = all.find((x) => x.id === id)!;
     expect(r.versions).toHaveLength(1);
     expect(currentContent(r).steps[0].text).toBe('Mit Curry-Würze braten.');
+    // der Kochstil reist mit – gekocht, merkt Mashi ihn sich als „wie letztes Mal“ (Recipe.style)
+    expect(r.style).toEqual({ direction: 'bowl', ways: { brokkoli: 'ofen' } });
     expect((await repo.loadPlan()).items.map((i) => i.recipeId)).toEqual([id]);
   });
 

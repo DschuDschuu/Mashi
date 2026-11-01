@@ -1,11 +1,18 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { activeChoice, forChoice } from '../../domain/choices';
+import { guessKind, recipeChoices } from '../../domain/craving';
+import { partOf, partsOf, REST } from '../../domain/parts';
+import type { PartSwap } from '../../domain/partSwaps';
 import { currentContent } from '../../domain/recipe';
+import { sidesOfKind } from '../../domain/sides';
 import { swapChecks, swapSlots, swapTargetOf, type SwapSlot } from '../../domain/swaps';
 import type { Recipe } from '../../domain/types';
-import { householdOf, setSwap, usePlan } from '../../data/store';
+import { householdOf, setPartSwap, setSwap, usePlan, useRecipes } from '../../data/store';
 import { toast } from '../toast';
 import { Icon } from './Icon';
+
+/** eine Sauce zum Tauschen – `label` nur, wenn der Name allein nicht reicht („Sauce aus Testbowl“) */
+type SauceOption = { swap: PartSwap; label: string };
 
 /** „Paprika (rot oder bunt)“ → „Paprika“ – als Chip reicht der Name */
 const short = (name: string) => name.replace(/\s*\(.*?\)/g, '').trim() || name;
@@ -19,13 +26,27 @@ const short = (name: string) => name.replace(/\s*\(.*?\)/g, '').trim() || name;
  */
 export function SwapPanel({ recipe }: { recipe: Recipe }) {
   const hh = householdOf(usePlan());
+  const recipes = useRecipes();
   const [open, setOpen] = useState<string | null>(null);
   // die Fassung ohne Tausch – sonst wäre der Tofu sein eigener Tauschplatz
   const base = forChoice(currentContent(recipe), activeChoice(recipe));
-  const slots = swapSlots(base, recipe.swaps, hh.customSides);
+  const parted = recipe.partSwaps ?? {};
+  // Zutaten eines getauschten Teils gibt es im Gericht nicht mehr – nichts davon zum Tauschen anbieten
+  const slots = swapSlots(base, recipe.swaps, hh.customSides).filter((sl) => !parted[partOf(sl.ingredient)]);
   // die Ampel (Julia: „das Rezept checkt das“): Schritte, deren Garart der neue Baustein nicht kann
   const checks = swapChecks(base, recipe.swaps, hh.customSides);
-  if (!slots.length) return null;
+  // ganze Teile tauschen (Julia: „Sauce als Teil tauschen“): Teile, die eine Sauce sind – markiert oder am Namen erkannt
+  const sauceParts = partsOf(base).filter((p) => p !== REST && (recipe.blocks?.some((b) => b.part === p && (b.kind === 'sauce' || b.also?.includes('sauce'))) || guessKind(p) === 'sauce'));
+  // wogegen: deine Saucen (ganze Rezepte und Teile, nicht aus diesem Rezept) und Mashis Sauce-Bausteine
+  const sauces = useMemo((): SauceOption[] => {
+    const own = recipeChoices(recipes).filter((c) => c.recipeId && c.recipeId !== recipe.id && (c.kind === 'sauce' || c.also?.includes('sauce')));
+    const twice = (name: string) => own.filter((c) => c.name === name).length > 1;
+    return [
+      ...own.map((c) => ({ swap: { recipeId: c.recipeId!, ...(c.from ? { part: c.name } : {}), name: c.name }, label: c.from && twice(c.name) ? `${c.name} aus ${c.from}` : c.name })),
+      ...sidesOfKind('sauce').map((x) => ({ swap: { side: x.id, name: x.name }, label: x.name })),
+    ];
+  }, [recipes, recipe.id]);
+  if (!slots.length && !(sauceParts.length && sauces.length)) return null;
   const done = slots.filter((sl) => sl.current);
   const idle = slots.filter((sl) => !sl.current);
   const openIdle = idle.find((sl) => sl.ingredient.id === open);
@@ -36,6 +57,28 @@ export function SwapPanel({ recipe }: { recipe: Recipe }) {
     toast(to ? `${to} statt ${sl.ingredient.name}` : `Wieder ${sl.ingredient.name}`, { label: 'Rückgängig', run: setSwap(recipe.id, sl.ingredient.id, sideId) });
     setOpen(null);
   };
+  const swapPart = (part: string, to?: PartSwap) => {
+    toast(to ? `${to.name} statt ${part}` : `Wieder ${part}`, { label: 'Rückgängig', run: setPartSwap(recipe.id, part, to) });
+    setOpen(null);
+  };
+  const same = (a?: PartSwap, b?: PartSwap) => !!a && !!b && a.side === b.side && a.recipeId === b.recipeId && a.part === b.part;
+  // deine Saucen und Mashis – beim getauschten Teil vorn „Original“
+  const partOptions = (part: string) => {
+    const now = parted[part];
+    return (
+      <div className="swap__opts" role="group" aria-label={`Statt ${part}`}>
+        <span className="small muted swap__for">Statt {part}:</span>
+        {now && <button type="button" className="chip chip--sm" onClick={() => swapPart(part)}>{part} (Original)</button>}
+        {sauces.map(({ swap, label }) => (
+          <button key={swap.side ?? `${swap.recipeId}:${swap.part ?? ''}`} type="button" className={`chip chip--sm${same(now, swap) ? ' is-on' : ''}`} aria-pressed={same(now, swap)}
+            onClick={() => !same(now, swap) && swapPart(part, swap)}>{label}</button>
+        ))}
+      </div>
+    );
+  };
+  const idleParts = sauces.length ? sauceParts.filter((p) => !parted[p]) : [];
+  const openPart = open?.startsWith('teil:') ? open.slice(5) : undefined;
+
   // die Bausteine derselben Stufe – bei einer getauschten Zutat vorn „Original“
   const options = (sl: SwapSlot) => {
     const now = sl.current?.side;
@@ -53,6 +96,17 @@ export function SwapPanel({ recipe }: { recipe: Recipe }) {
 
   return (
     <div className="swaps" role="group" aria-label="Zutaten tauschen">
+      {Object.entries(parted).filter(([p]) => sauceParts.includes(p)).map(([p, sw]) => (
+        <div key={`teil:${p}`} className="swap">
+          <div className="swap__row">
+            <span className="swap__name"><span className="swap__dot" aria-hidden="true" /><b>{sw.name}</b> statt {p}</span>
+            <button type="button" className="link small" aria-expanded={open === `teil:${p}`} onClick={() => toggle(`teil:${p}`)}>
+              <Icon name="shuffle" size={14} /> ändern
+            </button>
+          </div>
+          {open === `teil:${p}` && partOptions(p)}
+        </div>
+      ))}
       {done.map((sl) => {
         const id = sl.ingredient.id;
         const now = swapTargetOf(sl.current!.side);
@@ -77,15 +131,21 @@ export function SwapPanel({ recipe }: { recipe: Recipe }) {
           </div>
         );
       })}
-      {idle.length > 0 && (
+      {(idle.length > 0 || idleParts.length > 0) && (
         <div className="swaps__idle">
           <span className="small muted swaps__label"><Icon name="shuffle" size={14} /> Tauschen</span>
+          {/* ganze Sauce-Teile zuerst – sie ersetzen Zutaten und Schritte auf einmal */}
+          {idleParts.map((p) => (
+            <button key={`teil:${p}`} type="button" className={`chip chip--sm${open === `teil:${p}` ? ' is-on' : ''}`}
+              aria-expanded={open === `teil:${p}`} onClick={() => toggle(`teil:${p}`)}>{p}</button>
+          ))}
           {idle.map((sl) => (
             <button key={sl.ingredient.id} type="button" className={`chip chip--sm${open === sl.ingredient.id ? ' is-on' : ''}`}
               aria-expanded={open === sl.ingredient.id} onClick={() => toggle(sl.ingredient.id)}>{short(sl.ingredient.name)}</button>
           ))}
         </div>
       )}
+      {openPart && !parted[openPart] && partOptions(openPart)}
       {openIdle && options(openIdle)}
     </div>
   );

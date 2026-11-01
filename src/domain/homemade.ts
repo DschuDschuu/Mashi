@@ -1,5 +1,6 @@
 import { chosenContent } from './choices';
 import { FINISH } from './parts';
+import { withPartSwaps } from './partSwaps';
 import { currentContent } from './recipe';
 import { scaleIngredients } from './scaling';
 import { stepIngredients } from './stepIngredients';
@@ -97,7 +98,8 @@ export function withHomemade(content: RecipeContent, chosen: readonly string[], 
  *   wird frisch gemacht; 1 = ganz da, dann fällt sie weg wie bei `without`
  */
 export function cookingContent(r: Recipe, all: readonly Recipe[], without: readonly string[] = [], covered: ReadonlyMap<string, number> = NONE): RecipeContent {
-  const c = withCovered(withoutBases(chosenContent(r), without), covered);
+  // getauschte Teile zuerst (partSwaps.ts) – ihre Quelle kann selbst eine Grundlage verknüpfen, die wird unten mit aufgelöst
+  const c = withCovered(withoutBases(withPartSwaps(chosenContent(r), r.partSwaps, all), without), covered);
   const chosen = [...(r.homemade ?? []), ...c.ingredients.filter(isBaseLink).map((i) => i.id)];
   return chosen.length ? withHomemade(c, chosen, all, r.id) : c;
 }

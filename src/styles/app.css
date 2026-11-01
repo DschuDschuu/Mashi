@@ -1035,6 +1035,14 @@ p { margin: 0; }
 .fold[open] .fold__chevron { transform: rotate(90deg); }
 .fold > p { margin: 0; }
 
+/* Nährwert-Lücken oben in „Meine Lebensmittel“ (Julia) – Name und Herkunft dürfen umbrechen, der Knopf nicht */
+.food-gaps__list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.food-gaps__item { display: flex; align-items: center; gap: 10px; }
+.food-gaps__item > .btn { flex: none; }
+.food-gaps__item > :only-child { flex: 1; min-width: 0; }
+.food-gaps__text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; overflow-wrap: anywhere; }
+.food-gaps__text small { font-size: var(--fs-sm); }
+
 /* ── Haltbarkeit einstellen ─────────────────────────────────── */
 .shelf__special { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .shelf__tile { display: flex; flex-direction: column; justify-content: space-between; gap: 8px; padding: 10px; border-radius: var(--r-sm); background: var(--bg); min-width: 0; }

@@ -1,4 +1,5 @@
-import { ownIngredients, ownMinutes, readyPortions, readyPrep, weekCookSteps } from './craving';
+import { ownIngredients, ownMinutes, readyPortions, readyPrep } from './craving';
+import { weekCookSteps } from './weekCraving';
 import { spiceOf, type StyleStep } from './cookStyle';
 import { cookingContent } from './homemade';
 import type { Household, Week, WeekMeal, Weekday } from './mealplan';

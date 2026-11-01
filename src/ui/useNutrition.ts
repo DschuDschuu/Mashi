@@ -3,8 +3,9 @@ import { computeNutrition } from '../domain/nutrition/engine';
 import { withMyProducts, type MyProduct } from '../domain/nutrition/myProducts';
 import type { FoodTable, NutritionResult } from '../domain/nutrition/types';
 import { chosenContent } from '../domain/choices';
+import { withPartSwaps } from '../domain/partSwaps';
 import type { Recipe, RecipeContent } from '../domain/types';
-import { currentMacroGoal, currentNoNutrition, currentPantry, currentProducts, currentStock, useMacroGoal, useNoNutrition, usePantry, useProducts, useStock } from '../data/store';
+import { currentMacroGoal, currentNoNutrition, currentPantry, currentProducts, currentRecipes, currentStock, useMacroGoal, useNoNutrition, usePantry, useProducts, useStock } from '../data/store';
 import { pickFor, variantChoices, type VariantChoice } from '../domain/nutrition/variants';
 import { withoutNutrition } from '../domain/nutrition/noNutrition';
 import { foodTable } from '../services';
@@ -45,8 +46,9 @@ export function nutritionOf(content: RecipeContent, products: MyProduct[] = curr
   return n;
 }
 
-// in der gewählten Variante – sonst zählten auf der Karte Hähnchen UND Tofu (siehe choices.ts)
-export const recipeNutrition = (r: Recipe) => nutritionOf(chosenContent(r));
+// in der gewählten Variante – sonst zählten auf der Karte Hähnchen UND Tofu (siehe choices.ts); getauschte Teile wie
+// auf der Rezeptseite (partSwaps.ts), sonst zeigte die Karte noch die Erdnuss-Sauce
+export const recipeNutrition = (r: Recipe) => nutritionOf(r.partSwaps ? withPartSwaps(chosenContent(r), r.partSwaps, currentRecipes()) : chosenContent(r));
 
 /** Bei welchen Zutaten die Sorte zählt (mind. eine im Vorrat) – jetzt, ohne Hook */
 export function choicesFor(content: RecipeContent): VariantChoice[] {

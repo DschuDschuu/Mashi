@@ -1,13 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
   DIRECTIONS, EMPTY_CRAVING, STAGES, chooseDirection, closeStep, cookbookMatches, cravingCooking, cravingMinutes, cravingPartsFrom, cravingSteps, cravingText, cravingTitle, currentStep,
-  baseCraving, coveredBy, halfOf, ownComboSteps, ownSteps, plateImage, weekCookSteps, cravingCombo, cravingContent, directionOf, guessKind, matchingRecipes, optionsFor, pick, recipeChoiceId, recipeChoices, reopen, rollCraving, runsAlone, staleTrials, startLabel, stockMarks, understand, variantTargets, withoutGone, cravingTimeline,
+  coveredBy, halfOf, ownSteps, plateImage, cravingContent, directionOf, guessKind, matchingRecipes, optionsFor, pick, recipeChoiceId, recipeChoices, reopen, rollCraving, runsAlone, staleTrials, startLabel, stockMarks, understand, variantTargets, withoutGone, cravingTimeline,
   type CravingState, type StockMark,
 } from './craving';
+import { baseCraving, cravingCombo, ownComboSteps, weekCookSteps } from './weekCraving';
 import { cookingContent } from './homemade';
 import { localFoodTable } from './nutrition/localFoods';
 import { emptyPantry, type Pantry, type PantryItem } from './pantry';
-import { FINISH, doneParts, followBlockParts } from './parts';
+import { FINISH, doneParts, followBlockParts, partLabel, stepPart } from './parts';
 import { currentContent, withNewVersion } from './recipe';
 import { SIDES, comboText, foodOf, ownEntry, ownOf, ownSidesOf, sideIngredient, sideOf, sidesOf } from './sides';
 import { computeNutrition } from './nutrition/engine';
@@ -892,6 +893,25 @@ describe('Kochstil im Wochenplan (weekCookSteps)', () => {
   });
 });
 
+describe('Wie letztes Mal im Baukasten (Julia: „das Letzte gilt, je Richtung“)', () => {
+  const s: CravingState = { picks: { carb: ['pasta'], veg: ['brokkoli'] }, closed: [...STAGES], direction: 'pasta' };
+  const brokkoli = (steps: readonly { options?: { id: string; chosen: string }[] }[]) => steps.flatMap((x) => x.options ?? []).find((o) => o.id === 'brokkoli')?.chosen;
+
+  it('Lust-Seite: bei Pasta zuletzt im Ofen → vorgewählt; bei der Bowl gilt das nicht', () => {
+    expect(brokkoli(cravingSteps(s))).toBe('nudeln'); // Vorschlag der Richtung
+    const household = { lastWays: { 'pasta:brokkoli': 'ofen' } };
+    expect(brokkoli(cravingSteps(s, [], household))).toBe('ofen');
+    expect(brokkoli(cravingSteps({ ...s, picks: { carb: ['reis'], veg: ['brokkoli'] }, direction: 'bowl' }, [], household))).toBe('gedaempft');
+  });
+
+  it('Wochenplan-Abend: dasselbe – deine Wahl am Abend geht vor', () => {
+    const bolo = recipe('bo', 'Testbolo', [{ kind: 'protein', also: ['sauce'], directions: ['pasta'] }]);
+    const household = { lastWays: { 'pasta:brokkoli': 'gedaempft' } };
+    expect(brokkoli(weekCookSteps('pasta,brokkoli,richtung:pasta', bolo, { household }))).toBe('gedaempft');
+    expect(brokkoli(weekCookSteps('pasta,brokkoli,richtung:pasta,weg:brokkoli:nudeln', bolo, { household }))).toBe('nudeln');
+  });
+});
+
 describe('Zweimal Nudeln im zusammengeführten Schritt (Rundgang 2)', () => {
   const bolo = recipe('bo', 'Testbolo', [{ kind: 'protein', also: ['sauce'], directions: ['pasta'] }]);
   const side = 'pasta,brokkoli,richtung:pasta,weg:brokkoli:nudeln';
@@ -1010,6 +1030,18 @@ describe('Deine Schritte in der Zeitleiste (Julia: Weg B – „die Kochschritte
     expect(one({ minutes: 25, steps: [{ text: 'Kartoffeln kochen.', timerMinutes: 20 }, { text: 'In der Pfanne braten.', timerMinutes: 5 }] })).toBe(false);
     expect(one({ minutes: 5, steps: [{ text: 'Kürbis würfeln.' }] })).toBe(false); // ohne Uhr: deine Hände
     expect(one({ minutes: 5, text: 'aus dem Kühlschrank aufwärmen', steps: [{ text: 'braten', timerMinutes: 5 }] })).toBe(true);
+  });
+
+  it('dein Rezept ohne Schritte: der Platzhalter steht unter seinem Namen, nicht unter „Zum Schluss“ (Rundgang 5)', () => {
+    const ohne: Recipe = { ...ofen, versions: [{ ...ofen.versions[0], content: { ...ofen.versions[0].content, steps: [] } }] };
+    const rs = [bowl, ohne];
+    let n = 0;
+    const c = cravingContent(s, { own: recipeChoices(rs), recipes: rs, servings: 2, title: '', newId: () => `x${++n}` });
+    const dish: Recipe = { ...recipe('neu', 'Neu'), versions: [{ id: 'v', number: 1, createdAt: '', author: 'nutzer', content: c }] };
+    const shown = cookingContent(dish, rs); // so, wie die Rezeptseite es zeigt
+    const step = shown.steps.find((x) => x.text.includes('nach deinem Rezept'))!;
+    expect(step.text).toBe('Sofort – Testofengemüse nach deinem Rezept zubereiten');
+    expect(partLabel(stepPart(step, shown))).toBe('Testofengemüse');
   });
 
   it('das gespeicherte Gericht ordnet genauso – Kochmodus und „So geht’s“ sagen dasselbe', () => {

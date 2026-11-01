@@ -20,7 +20,9 @@ mashi/
 │  │  ├─ sides.ts             Baukasten-Bausteine (Kohlenhydrat, Protein, Sauce, Gemüse, Topping) mit Menge und Zubereitung
 │  │  ├─ craving.ts           „Worauf hast du Lust?“: Richtungen (Tortilla, Bowl …), was zusammenpasst, Textfeld verstehen,
 │  │  │                       Rezepte/Teile als Bausteine (auch für mehrere Stufen), aus dem Gericht ein Rezept
-│  │  │                       (Probiergericht), „Passt dazu“, Grundlage als Start für den Baukasten im Wochenplan
+│  │  │                       (Probiergericht), „Passt dazu“, Zeitleiste
+│  │  ├─ weekCraving.ts       Baukasten im Wochenplan: Grundlage als Start, gespeicherte Form eines Abends, „So geht's“
+│  │  │                       am Abend (Kochstil, Mitkochen, Aufwärmen) – baut auf craving.ts auf, nie umgekehrt
 │  │  ├─ cookStyle.ts         Kochstil im Baukasten: Würze je Richtung, Zubereitungen je Baustein, Zusammenführen
 │  │  │                       (Pfanne, Blech, Sauce, Nudeln), „Anrichten“ – nur Regeln und Texte, keine Mengen
 │  │  ├─ weekBases.ts         Grundlage-Zutat einer Verwandlung nicht einkaufen (für Einkauf und Vorrat)

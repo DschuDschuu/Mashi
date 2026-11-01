@@ -16,7 +16,7 @@ Live: <https://dschudschuu.github.io/Mashi/> · installierbar als App (PWA), fun
   (füllt, was offen ist, bevorzugt, was bald weg muss) – Mashi baut das Gericht Stufe für Stufe (Kohlenhydrat,
   Protein, Sauce, Gemüse, Topping) und schlägt vor, was dazu passt; eigene Rezepte oder einzelne Teile davon lassen
   sich als Baustein markieren – auch für mehrere Stufen (Bolognese = Protein und Sauce) oder statt eines festen Bausteins
-  (deine Guacamole), mit „Passt gut zu“ (Bolognese → Spätzle, Parmesan) – in „So geht's“ stehen dann deine Schritte aus dem Rezept (bei Teilen nur die des Teils); Mashi schlägt Bausteine selbst vor (Teile wie „Erdnuss-Sauce“, Beilagen wie „Knoblauchbrot“ – nur, was es sicher erkennt), gesammelt im Kochbuch und am Rezept, mit ✓ oder „Nein“; Vorgekochtes steht vorn; „Fertig – Rest weglassen“, sobald zwei Stufen gefüllt sind. Kochstil: Würze je Richtung (umschaltbar, auch „ohne“), Zubereitung je Baustein wählbar (Brokkoli gedämpft, geröstet, mit den Nudeln …; über fünf Garfamilien auch Gnocchi knusprig, Süßkartoffel gedämpft und deine eigenen – Kürbis erkennt Mashi, sonst fragt es einmal), Zusammenführen (eine Pfanne, ein Blech, in der Sauce), zum Schluss „Anrichten“ – der Würfel würfelt Würze und Zubereitung mit. Am Ende eine Zeitleiste (was allein läuft, startet so,
+  (deine Guacamole), mit „Passt gut zu“ (Bolognese → Spätzle, Parmesan) – in „So geht's“ stehen dann deine Schritte aus dem Rezept (bei Teilen nur die des Teils); Mashi schlägt Bausteine selbst vor (Teile wie „Erdnuss-Sauce“, Beilagen wie „Knoblauchbrot“ – nur, was es sicher erkennt), gesammelt im Kochbuch und am Rezept, mit ✓ oder „Nein“; Vorgekochtes steht vorn; „Fertig – Rest weglassen“, sobald zwei Stufen gefüllt sind. Kochstil: Würze je Richtung (umschaltbar, auch „ohne“), Zubereitung je Baustein wählbar (Brokkoli gedämpft, geröstet, mit den Nudeln …; über fünf Garfamilien auch Gnocchi knusprig, Süßkartoffel gedämpft und deine eigenen – Kürbis erkennt Mashi, sonst fragt es einmal), wie letztes Mal (je Richtung die zuletzt gekochte Zubereitung vorgewählt), Zusammenführen (eine Pfanne, ein Blech, in der Sauce), zum Schluss „Anrichten“ – der Würfel würfelt Würze und Zubereitung mit. Am Ende eine Zeitleiste (was allein läuft, startet so,
   dass alles zusammen fertig ist; erst Kaltes, dann Heißes – auch im Kochmodus), dann: jetzt kochen, in den Wochenplan
   oder als Rezept speichern (als Bild der Teller, wie du ihn gebaut hast) – nach dem Kochen fragt die Startseite „Wie war's?“, erst dann kommt es ins Kochbuch
   (als eigenes Rezept oder als umschaltbare Variante eines bestehenden, z. B. „Original | mit Spätzle“).
@@ -29,7 +29,9 @@ Live: <https://dschudschuu.github.io/Mashi/> · installierbar als App (PWA), fun
   Milchprodukte untereinander wie Frischkäse statt Schmand; Milchprodukte, Toppings und Saucen behalten die Menge aus
   deinem Rezept; Dosentomaten und Ei nicht) – deine Schritte bleiben und nennen den neuen Namen, mit Tipp
   zur Zubereitung passend zum Schritt (Ofen bleibt Ofen); eine Ampel sagt, wenn ein Schritt anders gart, als der neue
-  Baustein es kann („kurz anschauen“); Menge, Einkauf, Nährwerte und Kochmodus rechnen mit, gemerkt bis du zurücktauschst; „+ Beilagensalat“ zu jedem
+  Baustein es kann („kurz anschauen“); Menge, Einkauf, Nährwerte und Kochmodus rechnen mit, gemerkt bis du zurücktauschst; eine Sauce
+  als ganzen Teil tauschen (Erdnuss-Sauce gegen deine Teriyaki-Sauce oder Mashis Pesto – Zutaten und Schritte kommen
+  verknüpft aus der Quelle, auf die Portionen umgerechnet); „+ Beilagensalat“ zu jedem
   Rezept (Gemüse, Dressing – Balsamico ohne Öl vorgewählt –, Topping wählen) – nur fürs nächste Kochen oder „immer dazu"
 - **Vorkoch-Woche**: eine oder zwei Grundlagen (Bolognese, Curry …) an wählbaren Kochtagen vorkochen, unter der Woche
   daraus verschiedene Abendessen (Verwandlungen wie Wraps oder Pasta, die nur unter ihrer Grundlage stehen). Mashi
@@ -45,7 +47,9 @@ Live: <https://dschudschuu.github.io/Mashi/> · installierbar als App (PWA), fun
   „Bald verbrauchen“, Einfrieren, Reste verwerten
 - **Meine Lebensmittel**: eigene Produkte mit Marke, Nährwerte per Barcode, Open Food Facts
   oder abgetippt (oder leer – dann rechnet Mashi mit der Tabelle); mehrere Sorten einer Zutat mit Favorit ★; je Lebensmittel eine Stufe: normal · Nachkaufen ·
-  Immer im Haus · Gewürze (ohne Nährwerte, mit Packung und Preis) – je ein Tab; Kräuter frisch und getrocknet getrennt
+  Immer im Haus · Gewürze (ohne Nährwerte, mit Packung und Preis) – je ein Tab; Kräuter frisch und getrocknet getrennt; oben „Fehlen Werte“:
+  was in deinen Rezepten (so, wie gekocht) und genutzten Bausteinen keine Werte oder kein Stückgewicht hat – mit „Werte“
+  bzw. „Gewicht“ gleich nachtragen (Mashi erfindet keine Zahlen)
   (TL/Prise im Rezept = getrocknet, sonst frisch – frische im Vorrat geht vor);
   Fettstufen bei Milch, Joghurt, Quark
 - **Nährwerte** rein rechnerisch aus Zutaten × Lebensmitteltabelle (nie von der KI), je Zutat

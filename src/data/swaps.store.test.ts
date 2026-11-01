@@ -3,7 +3,7 @@ import PouchDB from 'pouchdb-core';
 import memory from 'pouchdb-adapter-memory';
 import { describe, expect, it } from 'vitest';
 import { PouchRecipeRepository, type RecipeDb } from './pouchRepository';
-import { addToPlan, createRecipe, currentPantry, householdOf, initStore, setHousehold, setSwap, whenSaved } from './store';
+import { addToPlan, createRecipe, currentPantry, householdOf, initStore, setHousehold, setPartSwap, setSwap, whenSaved } from './store';
 import { buildShoppingList } from '../domain/mealplan';
 import { sideContent } from '../domain/mix';
 import { foodTable } from '../services';
@@ -59,5 +59,20 @@ describe('Store: Zutat tauschen (Julia: Tofu statt Hähnchen)', () => {
     undo();
     await whenSaved();
     expect((await repo.list()).find((r) => r.id === id)?.swaps?.h?.name).toBe('Räuchertofu');
+  });
+
+  it('ganzen Teil tauschen (Julia: „Sauce als Teil“): gespeichert am Rezept, zurück mit „Original“ – beides mit Rückgängig', async () => {
+    const repo = await freshStore('part-swap');
+    const id = pfanne();
+    const saved = async () => { await whenSaved(); return (await repo.list()).find((r) => r.id === id); };
+    const undo = setPartSwap(id, 'Erdnuss-Sauce', { side: 'joghurt', name: 'Joghurt-Dip' });
+    expect((await saved())?.partSwaps).toEqual({ 'Erdnuss-Sauce': { side: 'joghurt', name: 'Joghurt-Dip' } });
+    undo();
+    expect(await saved()).not.toHaveProperty('partSwaps');
+    setPartSwap(id, 'Erdnuss-Sauce', { side: 'joghurt', name: 'Joghurt-Dip' });
+    const back = setPartSwap(id, 'Erdnuss-Sauce');
+    expect(await saved()).not.toHaveProperty('partSwaps');
+    back();
+    expect((await saved())?.partSwaps?.['Erdnuss-Sauce']?.name).toBe('Joghurt-Dip');
   });
 });
