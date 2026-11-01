@@ -128,6 +128,14 @@ describe('Import prüft gründlich (Code-Review #22)', () => {
     expect(parseBackup([photo]).recipes[0].image).toBeUndefined(); // auch das Original muss eingebettet sein
   });
 
+  it('Teller als Bild übersteht die Sicherung – mit kaputten Feldern fällt nur das Bild weg', () => {
+    const plate = { kind: 'plate' as const, fields: { carb: ['Testreis'], protein: ['Testbolo'] }, half: true, hue: 40 };
+    expect(parseBackup(JSON.parse(JSON.stringify(createBackup([{ ...r, image: plate }])))).recipes[0].image).toEqual(plate);
+    const broken = { ...r, image: { kind: 'plate', fields: { carb: [{ src: 'https://tracker.example/x.gif' }] }, hue: 40 } };
+    expect(parseBackup([broken]).recipes[0].image).toBeUndefined();
+    expect(parseBackup([{ ...r, image: { kind: 'plate', fields: {}, half: 'ja', hue: 40 } }]).recipes[0].image).toBeUndefined();
+  });
+
   it('kaputte Listen in Speisekammer oder Plan → werden nicht übernommen (statt später überall abzustürzen)', () => {
     const pantry = { ...emptyPantry(), updatedAt: T };
     expect(parseBackup({ recipes: [], pantry: { ...pantry, prices: 'kaputt' } }).pantry).toBeUndefined();

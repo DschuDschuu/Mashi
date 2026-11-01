@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { choiceOf, coveredBy, coversOf, currentStep, reopen, type Choice, type CravingState } from '../../domain/craving';
+import { choiceOf, coveredBy, currentStep, halfOf, reopen, type Choice, type CravingState } from '../../domain/craving';
 import type { SideKind } from '../../domain/sides';
 import { labelOf, StageOptions } from './CravingSteps';
 import { Icon } from './Icon';
@@ -7,7 +7,7 @@ import { Icon } from './Icon';
 /** Wo jedes Schild auf dem Teller liegt (Julia: Topping in der Mitte, Protein und Sauce nebeneinander; die oberen lieber
  * über den Tellerrand als auf den mittleren Kreis) in %: x die Mitte, y oben die Unterkante, unten die Oberkante, damit
  * lange Namen nach außen wachsen; Topping mittig */
-const FIELDS: { kind: SideKind; x: number; y: number; d?: string }[] = [
+export const FIELDS: { kind: SideKind; x: number; y: number; d?: string }[] = [
   { kind: 'carb', x: 31, y: 31, d: 'M150 150 L22 150 A128 128 0 0 1 150 22 Z' },
   { kind: 'protein', x: 69, y: 31, d: 'M150 150 L150 22 A128 128 0 0 1 278 150 Z' },
   { kind: 'veg', x: 31, y: 69, d: 'M150 150 L150 278 A128 128 0 0 1 22 150 Z' },
@@ -15,7 +15,7 @@ const FIELDS: { kind: SideKind; x: number; y: number; d?: string }[] = [
   { kind: 'topping', x: 50, y: 50 },
 ];
 /** Protein und Sauce in einem (Bolognese): die rechte Hälfte */
-const HALF = 'M150 22 A128 128 0 0 1 150 278 Z';
+export const HALF = 'M150 22 A128 128 0 0 1 150 278 Z';
 /** Platz, an dem sich ein Schild ausrichtet (Breite in %): reicht bis 4 % vor die Mittellinie (Julia: mehr Abstand) –
  *  ist der Name breiter, wächst das Schild nur nach außen */
 const SLOT = 30;
@@ -37,10 +37,9 @@ export function CravingPlate({ state, set, own, small = false, summary }: {
   const [focus, setFocus] = useState<SideKind | undefined>();
   const step = focus && !state.closed.includes(focus) ? focus : currentStep(state);
   const picked = (k: SideKind) => (state.picks[k] ?? []).flatMap((id) => choiceOf(id, own) ?? []);
-  // zur Hälfte, wenn eine Wahl Protein und Sauce abdeckt und beim Protein nichts anderes liegt – liegt schon Hackfleisch
-  // da, bleiben es zwei Felder. Weitere Saucen (Julia: Bolo + Joghurt-Dip) stehen unten in der Hälfte.
-  const cand = [...picked('protein'), ...picked('sauce')].find((c) => coversOf(c).includes('protein') && coversOf(c).includes('sauce'));
-  const both = cand && picked('protein').every((c) => c.id === cand.id) ? cand : undefined;
+  // zur Hälfte, wenn eine Wahl Protein und Sauce abdeckt (halfOf). Weitere Saucen (Julia: Bolo + Joghurt-Dip) stehen
+  // unten in der Hälfte.
+  const both = halfOf(state, own);
   const extras = both ? picked('sauce').filter((c) => c.id !== both.id) : [];
   const open = (k: SideKind) => {
     if (state.closed.includes(k)) set(reopen(state, k));

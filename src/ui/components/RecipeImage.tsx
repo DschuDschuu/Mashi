@@ -1,7 +1,12 @@
 import type { CSSProperties, ReactNode } from 'react';
+import { STAGES } from '../../domain/craving';
+import type { SideKind } from '../../domain/sides';
 import type { ImageMotif, RecipeImage as Img } from '../../domain/types';
+import { mixIcon } from '../catalogIcons';
 import { useSpecial } from '../settings';
+import { FIELDS, HALF } from './CravingPlate';
 import { CobwebCorner } from './HalloweenDeko';
+import { Icon } from './Icon';
 
 /**
  * Rezeptbild. Im Prototyp eine Linienzeichnung auf Pastellgrund – im Stil der
@@ -14,9 +19,10 @@ export function RecipeImage({ image, size = 'md', className = '' }: { image?: Im
     return <img className={`rimg rimg--${size} ${className}`} src={image.url} alt="" loading="lazy" />;
   }
   const style = { '--h': image?.hue ?? 155 } as CSSProperties;
+  const label = image?.kind === 'plate' ? `Teller: ${Object.values(image.fields).flat().join(', ')}` : 'Platzhalterbild';
   return (
-    <div className={`rimg rimg--ph rimg--${size} ${className}`} style={style} role="img" aria-label="Platzhalterbild">
-      <LineArt motif={image?.motif ?? 'bowl'} />
+    <div className={`rimg rimg--ph rimg--${size} ${className}`} style={style} role="img" aria-label={label}>
+      {image?.kind === 'plate' ? <PlateArt image={image} small={size === 'sm'} /> : <LineArt motif={image?.motif ?? 'bowl'} />}
       {/* Halloween: ein Spinnennetz in der Ecke – nur am Platzhalter, echte Fotos bleiben unberührt */}
       {halloween && size !== 'sm' && <CobwebCorner className="rimg__web" />}
     </div>
@@ -78,6 +84,51 @@ const MOTIFS: Record<ImageMotif, ReactNode> = {
     </>
   ),
 };
+
+/** Gabel und Messer vom Tischset im Baukasten */
+const FORK = 'M5 4v30M11 4v30M17 4v30M5 34c0 8 12 8 12 0M11 42v120';
+const KNIFE = 'M11 4c6 8 6 40 0 52v106';
+/** wo das Icon eines Felds sitzt (Mitte x, y und Größe im 300er-Raster des Tellers) – in der Hälfte rechts neben dem Topping */
+const ICON_AT: Record<SideKind, [number, number, number]> = {
+  carb: [90, 90, 50], protein: [210, 90, 50], veg: [90, 210, 50], sauce: [210, 210, 50], topping: [150, 150, 40],
+};
+const HALF_AT: [number, number, number] = [230, 150, 50];
+/** Topping ohne eigenes Icon: Streusel – Sand ist von einem leeren Feld kaum zu unterscheiden, und gestreut wird fast jedes */
+const SPRINKLES = 'M137 133l5 3 M160 130l-2 6 M127 151l6 1 M172 148l-5 4 M144 170l3-5 M160 163l5 2 M149 146l1 5 M131 166l4-3';
+
+/**
+ * Teller als Bild (Julia): derselbe Teller wie im Baukasten – Felder in den Stufenfarben, leere Stufen bleiben blass, je
+ * Feld ein Linien-Icon, wenn der Name eins hergibt (mixIcon). Auf dem Pastellgrund der Platzhalter, mit Gabel und Messer.
+ */
+function PlateArt({ image, small }: { image: Extract<Img, { kind: 'plate' }>; small: boolean }) {
+  const { fields, half } = image;
+  const filled = (k: SideKind) => !!fields[k]?.length;
+  const icons = STAGES.filter((k) => !(half && k === 'sauce')).flatMap((k) => {
+    const name = fields[k]?.[0];
+    const icon = name && mixIcon(name, k);
+    if (!icon) return name && k === 'topping' ? [<path key={k} className="plate-art__sprinkles" d={SPRINKLES} />] : [];
+    const [x, y, s] = half && k === 'protein' ? HALF_AT : ICON_AT[k];
+    return [<g key={k} transform={`translate(${x - s / 2} ${y - s / 2})`}><Icon name={icon} size={s} className="plate-art__icon" /></g>];
+  });
+  return (
+    // klein (Plan, Listen): nur der Teller, sonst bliebe im Quadrat ein Krümel übrig
+    <svg className="plate-art" viewBox={small ? '36 1 128 128' : '0 0 200 156'} aria-hidden="true">
+      {/* etwas über der Mitte – unten liegt auf den Karten das Status-Schild, wie bei den Zeichnungen */}
+      <svg className="plate-art__cutlery" x="14" y="17" width="16" height="96" viewBox="0 0 22 170"><path d={FORK} /></svg>
+      <svg className="plate-art__cutlery" x="170" y="17" width="16" height="96" viewBox="0 0 22 170"><path d={KNIFE} /></svg>
+      <svg x="41" y="6" width="118" height="118" viewBox="0 0 300 300" overflow="visible">
+        <circle className="plate-art__shadow" cx="150" cy="158" r="146" />
+        <circle className="plate__rim" cx="150" cy="150" r="146" />
+        {FIELDS.filter((f) => f.d && !(half && (f.kind === 'protein' || f.kind === 'sauce'))).map((f) => (
+          <path key={f.kind} d={f.d} className={`plate__f plate__f--${f.kind}${filled(f.kind) ? '' : ' is-empty'}`} />
+        ))}
+        {half && <path d={HALF} className="plate__f plate__f--protein" />}
+        <circle cx="150" cy="150" r="44" className={`plate__f plate__f--topping${filled('topping') ? '' : ' is-empty'}`} />
+        {icons}
+      </svg>
+    </svg>
+  );
+}
 
 export function LineArt({ motif }: { motif: ImageMotif }) {
   return (

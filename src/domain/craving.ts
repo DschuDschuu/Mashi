@@ -320,6 +320,30 @@ export function coveredBy(s: CravingState, kind: SideKind, own: readonly Choice[
     .find((c): c is Choice => !!c && coversOf(c).includes(kind));
 }
 
+/**
+ * Deckt eine Wahl Protein und Sauce ab (Bolognese), werden die beiden Viertel des Tellers zu einer Hälfte – aber nur,
+ * wenn beim Protein nichts anderes liegt (liegt schon Hackfleisch da, bleiben es zwei Felder). Für Teller und Tellerbild.
+ */
+export function halfOf(s: CravingState, own: readonly Choice[] = []): Choice | undefined {
+  const picked = (k: SideKind) => (s.picks[k] ?? []).flatMap((id) => choiceOf(id, own) ?? []);
+  const cand = [...picked('protein'), ...picked('sauce')].find((c) => coversOf(c).includes('protein') && coversOf(c).includes('sauce'));
+  return cand && picked('protein').every((c) => c.id === cand.id) ? cand : undefined;
+}
+
+/**
+ * Teller als Bild (Julia): das gespeicherte Gericht zeigt den Teller, wie er gebaut wurde. Je Stufe die Namen – eine
+ * Stufe, die eine andere Wahl mitbringt („in Lasagne“), ist nicht leer. Die Hintergrundfarbe bringt der Aufrufer mit.
+ */
+export function plateImage(s: CravingState, own: readonly Choice[], hue: number): RecipeImage {
+  const fields: Partial<Record<SideKind, string[]>> = {};
+  for (const k of STAGES) {
+    const names = (s.picks[k] ?? []).flatMap((id) => choiceOf(id, own)?.name ?? []);
+    const inside = names.length ? undefined : coveredBy(s, k, own);
+    if (names.length || inside) fields[k] = inside ? [inside.name] : names;
+  }
+  return { kind: 'plate', fields, ...(halfOf(s, own) ? { half: true } : {}), hue };
+}
+
 const closeStage = (closed: SideKind[], kind: SideKind) => (closed.includes(kind) ? closed : [...closed, kind]);
 
 /** „Weiter“ bzw. „Ohne … weiter“ – bei Einzel-Stufen ohne Wahl */

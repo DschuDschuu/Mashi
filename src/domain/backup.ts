@@ -73,6 +73,11 @@ export function isSafeImage(v: unknown): boolean {
   if (v === undefined) return true;
   if (!isObj(v)) return false;
   if (v.kind === 'placeholder') return typeof v.hue === 'number' && typeof v.motif === 'string';
+  // Teller als Bild: nur Namen-Listen – landen als Text im Bild (aria-label), nie als Adresse
+  if (v.kind === 'plate') {
+    return typeof v.hue === 'number' && (v.half === undefined || typeof v.half === 'boolean') && isObj(v.fields)
+      && Object.values(v.fields).every((names) => Array.isArray(names) && names.every((n) => typeof n === 'string'));
+  }
   if (v.kind !== 'url' || !isDataImage(v.url)) return false;
   if (v.original !== undefined && !isDataImage(v.original)) return false;
   return v.crop === undefined || (isObj(v.crop) && ['x', 'y', 'zoom'].every((k) => typeof (v.crop as Record<string, unknown>)[k] === 'number'));

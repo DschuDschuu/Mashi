@@ -125,6 +125,11 @@ export type ImageMotif = 'bowl' | 'plate' | 'pot' | 'stack' | 'jar';
 export type RecipeImage =
   /** Prototyp: Pastellfläche mit Linienzeichnung statt Foto */
   | { kind: 'placeholder'; motif: ImageMotif; hue: number }
+  /**
+   * Baukasten (Julia: „Teller als Bild“): der Teller, wie er gebaut wurde – je Stufe, was darauf liegt (färbt die Felder,
+   * die Namen geben die Icons). `half`: eine Wahl ist Protein und Sauce (Bolognese) und liegt auf der rechten Hälfte.
+   */
+  | { kind: 'plate'; fields: Partial<Record<SideKind, string[]>>; half?: boolean; hue: number }
   /** Später: Supabase Storage URL (KI-Bild oder eigenes Foto) */
   | {
     kind: 'url'; url: string; prompt?: string;

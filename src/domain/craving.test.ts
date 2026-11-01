@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   DIRECTIONS, EMPTY_CRAVING, STAGES, chooseDirection, closeStep, cookbookMatches, cravingCooking, cravingMinutes, cravingPartsFrom, cravingSteps, cravingText, cravingTitle, currentStep,
-  baseCraving, coveredBy, cravingCombo, cravingContent, directionOf, guessKind, matchingRecipes, optionsFor, pick, recipeChoiceId, recipeChoices, reopen, rollCraving, runsAlone, staleTrials, startLabel, stockMarks, understand, variantTargets, withoutGone, cravingTimeline,
+  baseCraving, coveredBy, halfOf, plateImage, cravingCombo, cravingContent, directionOf, guessKind, matchingRecipes, optionsFor, pick, recipeChoiceId, recipeChoices, reopen, rollCraving, runsAlone, staleTrials, startLabel, stockMarks, understand, variantTargets, withoutGone, cravingTimeline,
   type StockMark,
 } from './craving';
 import { localFoodTable } from './nutrition/localFoods';
@@ -720,5 +720,30 @@ describe('Passt gut zu und ersetzt (Julia: in den Grundrezepten notieren, zu was
     expect(optionsFor(chooseDirection(EMPTY_CRAVING, 'taco'), 'protein', own)[0].id).toBe('hack');
     const s = pick(chooseDirection(EMPTY_CRAVING, 'taco'), 'sauce', 'rezept:gu', own);
     expect(optionsFor(s, 'protein', own)[0].id).toBe('haehnchen');
+  });
+});
+
+describe('Teller als Bild (Julia)', () => {
+  const bolo = recipe('bo', 'Testbolo', [{ kind: 'protein', also: ['sauce'], directions: ['pasta'] }]);
+  const own = recipeChoices([bolo]);
+
+  it('je Stufe, was darauf liegt – leere Stufen fehlen, die Farbe kommt mit', () => {
+    const s = { direction: 'bowl', picks: { carb: ['reis'], protein: ['tofu'], veg: ['brokkoli', 'paprika'] }, closed: [...STAGES] };
+    expect(plateImage(s, [], 155)).toEqual({ kind: 'plate', fields: { carb: ['Reis'], protein: ['Tofu'], veg: ['Brokkoli', 'Paprika'] }, hue: 155 });
+  });
+
+  it('Bolognese: eine Hälfte, die mitgebrachte Stufe ist nicht leer – egal, wo sie gewählt wurde', () => {
+    const asProtein = { picks: { carb: ['pasta'], protein: ['rezept:bo'], topping: ['parmesan'] }, closed: [...STAGES] };
+    expect(plateImage(asProtein, own, 40)).toEqual({
+      kind: 'plate', half: true, hue: 40, fields: { carb: ['Pasta'], protein: ['Testbolo'], sauce: ['Testbolo'], topping: ['Parmesan'] },
+    });
+    const asSauce = { picks: { sauce: ['rezept:bo'] }, closed: [] };
+    expect(plateImage(asSauce, own, 40)).toMatchObject({ half: true, fields: { protein: ['Testbolo'], sauce: ['Testbolo'] } });
+  });
+
+  it('liegt schon Hackfleisch beim Protein, bleiben es zwei Felder', () => {
+    const s = { picks: { protein: ['hack'], sauce: ['rezept:bo'] }, closed: [] };
+    expect(halfOf(s, own)).toBeUndefined();
+    expect(plateImage(s, own, 40)).toEqual({ kind: 'plate', hue: 40, fields: { protein: ['Hackfleisch'], sauce: ['Testbolo'] } });
   });
 });

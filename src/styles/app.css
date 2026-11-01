@@ -244,6 +244,13 @@ p { margin: 0; }
 .art .art-berry { fill: #8093b5; }
 .art .art-spark { fill: #fffdf9; stroke-width: 1px; }
 .rimg.is-busy { filter: blur(3px) saturate(0.6); transition: filter 0.3s; }
+/* Teller als Bild (Baukasten): Feldfarben aus .plate__f – Linien so fein wie die Zeichnungen der Platzhalter */
+.plate-art { width: 86%; height: 92%; }
+.plate-art__shadow { fill: rgb(45 71 72 / 0.1); }
+.plate-art__cutlery path, .plate-art__icon path, .plate-art__sprinkles { vector-effect: non-scaling-stroke; stroke: var(--art); stroke-width: 1.5px; stroke-linecap: round; stroke-linejoin: round; fill: none; }
+.rimg--lg .plate-art__cutlery path, .rimg--lg .plate-art__icon path, .rimg--lg .plate-art__sprinkles { stroke-width: 2px; }
+/* klein (Liste, Plan) wären Icons und Besteck nur Krümel – dort reichen die Farbfelder */
+.rimg--sm .plate-art__cutlery, .rimg--sm .plate-art__icon, .rimg--sm .plate-art__sprinkles { display: none; }
 
 /* ── Bottom Navigation ───────────────────────────────────────── */
 .nav {

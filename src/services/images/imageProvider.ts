@@ -21,6 +21,12 @@ export function motifFor(title: string): ImageMotif {
 /** Nur die Pastelltöne der App (Pfirsich, Butter, Salbei, Mint, Himmelblau) – nie Lila oder Neon. */
 export const PASTEL_HUES = [22, 40, 110, 155, 200];
 
+/** ein zufälliger Pastellton – auf Wunsch ein anderer als `not` (neues Bild soll auch anders aussehen) */
+export function randomHue(not?: number): number {
+  const pool = PASTEL_HUES.filter((h) => h !== not);
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
 /** Prototyp: kein echtes Bild, sondern eine Linienzeichnung auf Pastellgrund. */
 export const placeholderImages: ImageProvider = {
   id: 'placeholder',
@@ -28,7 +34,6 @@ export const placeholderImages: ImageProvider = {
     // Der Prompt wird schon gebaut, damit der spätere Wechsel nur den Provider betrifft.
     void buildImagePrompt(content.imagePrompt ?? content.title);
     await new Promise((r) => setTimeout(r, 600));
-    const hue = PASTEL_HUES[Math.floor(Math.random() * PASTEL_HUES.length)];
-    return { kind: 'placeholder', motif: motifFor(content.title), hue };
+    return { kind: 'placeholder', motif: motifFor(content.title), hue: randomHue() };
   },
 };

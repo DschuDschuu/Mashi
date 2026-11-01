@@ -35,6 +35,7 @@ import { DEFAULT_MACRO_GOAL, withFavorite, type MacroGoal } from '../domain/nutr
 import { canTransition } from '../domain/status';
 import type { Rating, Recipe, RecipeBlock, RecipeContent, RecipeImage, RecipeSource, RecipeStatus } from '../domain/types';
 import { foodTable, imageProvider } from '../services';
+import { randomHue } from '../services/images/imageProvider';
 import { LocalRecipeRepository } from './localRepository';
 import type { RecipeRepository } from './repository';
 
@@ -721,7 +722,10 @@ export function adoptToCookbook(id: string) {
 }
 
 export async function regenerateImage(id: string) {
-  const image = await imageProvider.generate(currentContent(get(id)));
+  // Teller als Bild bleibt ein Teller, nur auf anderem Grund – die Auswahl dahinter gibt es nicht mehr, eine
+  // Linienzeichnung statt des Tellers wäre ein Rückschritt
+  const before = get(id).image;
+  const image = before?.kind === 'plate' ? { ...before, hue: randomHue(before.hue) } : await imageProvider.generate(currentContent(get(id)));
   // Während das Bild entsteht, kann das Rezept gelöscht werden (oder ein anderes Kochbuch geladen) –
   // dann gibt es nichts mehr zu bebildern. Vorher warf get() hier „nicht gefunden“ ins Leere (im CI rot).
   const r = recipes.find((x) => x.id === id);

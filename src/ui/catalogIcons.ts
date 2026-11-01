@@ -1,4 +1,5 @@
 import type { FoodCategory } from '../domain/categories';
+import type { SideKind } from '../domain/sides';
 import type { RecipeStatus } from '../domain/types';
 import type { IconName } from './components/Icon';
 
@@ -41,22 +42,24 @@ export const CATEGORY_ICONS: Record<FoodCategory, IconName> = {
 /** Unbekannte (später ergänzte) Geräte bekommen ein neutrales Icon statt eines Fehlers. */
 export const deviceIcon = (id: string): IconName => DEVICE_ICONS[id] ?? 'stove';
 
-/** Mix & Match (Julia: „zu jeder Sache ein Icon“): erstes passendes Wort im Namen gewinnt */
+/** Bausteine (Julia: „zu jeder Sache ein Icon“), heute für den Teller als Bild: erstes passendes Wort im Namen gewinnt */
 const MIX_WORD_ICONS: [RegExp, IconName][] = [
   [/gnocchi|schupfnudel|spätzle|spaetzle|knödel|klöße/, 'gnocchi'],
   [/pasta|nudel|spaghetti|penne|fusilli|tagliatelle|makkaroni|maccheroni|farfalle|linguine|ramen|udon/, 'pasta'],
   [/reis|risotto|couscous|bulgur|quinoa|hirse/, 'rice'],
   [/kartoffel|pommes|püree|puree|rösti|wedges/, 'potato'],
-  [/brot|baguette|fladen|naan|ciabatta/, 'bread'],
+  [/brot|brötchen|baguette|fladen|naan|ciabatta/, 'bread'],
   [/tomat|arrabbiata|bolognese|napoli|passata/, 'tomato'],
   [/pesto|kräuter|basilikum|spinat|grün/, 'leaf'],
   [/curry|eintopf|chili|gulasch|ragout/, 'pot'],
+  [/hähnchen|haehnchen|huhn|chicken|pute/, 'drumstick'],
 ];
 
-/** Was nichts erkennt, bekommt das Icon seiner Rolle – Sauce: Kelle, Beilage: Besteck */
-const MIX_ROLE_ICONS: Record<string, IconName> = { sosse: 'ladle', beilage: 'cutlery' };
+/** Was nichts erkennt, bekommt das Icon seiner Stufe – aber nur, wo es sicher passt: Kohlenhydrat, Protein und Topping
+ *  bleiben dann ohne (ein Hähnchenschenkel beim Tofu wäre schlimmer als kein Icon) */
+const MIX_KIND_ICONS: Partial<Record<SideKind, IconName>> = { sauce: 'ladle', veg: 'leaf' };
 
-export function mixIcon(title: string, role: string): IconName {
+export function mixIcon(title: string, kind: SideKind): IconName | undefined {
   const t = title.toLocaleLowerCase('de-DE');
-  return MIX_WORD_ICONS.find(([re]) => re.test(t))?.[1] ?? MIX_ROLE_ICONS[role] ?? 'cutlery';
+  return MIX_WORD_ICONS.find(([re]) => re.test(t))?.[1] ?? MIX_KIND_ICONS[kind];
 }

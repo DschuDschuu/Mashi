@@ -73,7 +73,7 @@ const PATHS = {
   snow: 'M12 3v18 M4.2 7.5l15.6 9 M4.2 16.5l15.6-9 M9.8 4.6 12 6l2.2-1.4 M9.8 19.4 12 18l2.2 1.4',
   drumstick: 'M15.4 3a5.6 5.6 0 0 1 5.6 5.6c0 3.4-3.4 6.4-6.8 6.4l-3.1 3.1a2 2 0 1 1-2.9 2.2 2 2 0 1 1-2.2-2.9L9.1 14.3C8.8 10.5 11.8 3 15.4 3z',
 
-  // Mix & Match – Bausteine (siehe mixIcon in catalogIcons.ts)
+  // Bausteine – Teller als Bild (siehe mixIcon in catalogIcons.ts)
   // Schüssel mit Nudeln obendrauf
   pasta: 'M3 13h18a9 9 0 0 1-18 0z M5 13c1.2-2.4 3.3-2.4 4.5 0 1.2-2.4 3.3-2.4 4.5 0 1.2-2.4 3.3-2.4 4.5 0 M7 9.5c1.2-2.4 3.3-2.4 4.5 0 1.2-2.4 3.3-2.4 4.5 0 M10 20.5h4',
   // drei geriffelte Gnocchi

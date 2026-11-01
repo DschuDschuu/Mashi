@@ -3,7 +3,7 @@ import PouchDB from 'pouchdb-core';
 import memory from 'pouchdb-adapter-memory';
 import { describe, expect, it } from 'vitest';
 import { PouchRecipeRepository, type RecipeDb } from './pouchRepository';
-import { currentPlan, initStore, keepTrial, trialAsChoice, whenSaved } from './store';
+import { currentPlan, initStore, keepTrial, regenerateImage, trialAsChoice, whenSaved } from './store';
 import { choicesOf } from '../domain/choices';
 import { currentContent } from '../domain/recipe';
 import { sideContent } from '../domain/mix';
@@ -85,5 +85,22 @@ describe('Store: Probiergericht als Variante (Julia: „als Variante eines Rezep
     list = await repo.list();
     expect(list.find((x) => x.id === 't')?.trial).toBe(true);
     expect(choicesOf(currentContent(list.find((x) => x.id === 'r')!))).toEqual([]);
+  });
+});
+
+describe('Store: Teller als Bild (Julia)', () => {
+  it('„Bild neu generieren“ behält den Teller, nur der Grund wird ein anderer – andere Rezepte bekommen weiter eine Zeichnung', async () => {
+    const plate = { kind: 'plate' as const, fields: { carb: ['Testreis'], veg: ['Testgemüse'] }, hue: 40 };
+    const repo = new PouchRecipeRepository(new PouchDB(`plate-${Date.now()}`, { adapter: 'memory' }) as unknown as RecipeDb);
+    await repo.save(recipe('teller', { image: plate }));
+    await repo.save(recipe('anderes', { image: { kind: 'placeholder', motif: 'bowl', hue: 40 } }));
+    await initStore(repo);
+    await regenerateImage('teller');
+    await regenerateImage('anderes');
+    await whenSaved();
+    const [anderes, teller] = (await repo.list()).sort((a, b) => a.id.localeCompare(b.id));
+    expect(teller.image).toMatchObject({ kind: 'plate', fields: plate.fields });
+    expect(teller.image).not.toHaveProperty('hue', 40);
+    expect(anderes.image?.kind).toBe('placeholder');
   });
 });
