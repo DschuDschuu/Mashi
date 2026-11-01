@@ -49,7 +49,8 @@ describe('Kochtag in einem Durchgang (Julia: „vorkochen und heute schon was da
   it('Grundlage mit Bausteinen: Beilagen als Zutat und Schritt, das Längste zuerst; nur die Grundlage: nichts frisch', () => {
     const f = freshFor({ id: 'a', day: SO, recipeId: 'bolo', baseId: 'bolo', side: 'pasta,parmesan' }, all, hh)!;
     expect(f.ingredients.map((i) => [i.name, i.amount])).toEqual([['Pasta', 100], ['Parmesan', 15]]);
-    expect(f.steps.map((s) => s.text)).toEqual(['Pasta: in Salzwasser kochen', 'Parmesan: frisch drüberreiben']);
+    // ohne Richtung (alter Abend): nicht gewürzt, zum Schluss allgemein angerichtet – „frisch drüberreiben“ steckt darin
+    expect(f.steps.map((s) => s.text)).toEqual(['Pasta: in Salzwasser kochen', 'Anrichten: Alles auf die Teller verteilen, mit Parmesan bestreuen']);
     expect(f.steps[0]).toMatchObject({ timerMinutes: 10, ingredientIds: [`${TODAY}beilage:pasta`] });
     expect(freshFor({ id: 'b', day: MO, recipeId: 'bolo', baseId: 'bolo' }, all, hh)).toBeUndefined();
   });
@@ -147,7 +148,7 @@ describe('Kochtag: dein Rezept als Baustein (Julia: deine Guacamole auch im Woch
     expect(steps.map((s) => s.text)).toEqual(['Testdip: Testjoghurt verrühren.']);
     expect(steps[0].ingredientIds).toEqual([`${TODAY}mein:dip:d1`]);
     // das Längste zuerst: 20 Min. Dip vor der Pasta
-    expect(f.steps.map((s) => s.text.split(':')[0])).toEqual(['Testdip', 'Pasta']);
+    expect(f.steps.map((s) => s.text.split(':')[0])).toEqual(['Testdip', 'Pasta', 'Anrichten']);
   });
 
   it('genug vorgekocht (2 Portionen für 2): nur aus dem Kühlschrank, nichts zu kochen', () => {

@@ -1,11 +1,12 @@
-import { ownIngredients, ownMinutes, readyPortions, readyPrep } from './craving';
+import { ownIngredients, ownMinutes, readyPortions, readyPrep, weekCookSteps } from './craving';
+import type { StyleStep } from './cookStyle';
 import { cookingContent } from './homemade';
 import type { Household, Week, WeekMeal, Weekday } from './mealplan';
 import { scaleIngredients } from './scaling';
 import type { PantryItem } from './pantry';
 import { stepPart } from './parts';
 import { currentContent } from './recipe';
-import { comboSteps, ownSidesOf, sideIngredient } from './sides';
+import { comboSteps, ownSidesOf, sideIngredient, sidesOf } from './sides';
 import type { Ingredient, Recipe, RecipeContent, Step } from './types';
 import { FRESH_DAYS, keepsOf, servingsOf, slotIndex, slotOf, weekOrder, type MealView, type WeekView } from './week';
 
@@ -82,8 +83,14 @@ export const TODAY = 'heute:';
 export function freshFor(meal: WeekMeal, recipes: readonly Recipe[], household: Household, items: readonly PantryItem[] = []): RecipeContent | undefined {
   const dish = meal.recipeId !== meal.baseId ? recipes.find((r) => r.id === meal.recipeId) : undefined;
   const own = dish ? cookingContent(dish, recipes, [meal.baseId]) : undefined;
-  // Zubereitung wie im Wochenplan (ComboSteps) – auch die nur für diese Grundlage
-  const sides = comboSteps(meal.side, '', household, recipes.find((r) => r.id === meal.baseId)).filter((s) => s.id);
+  // Zubereitung wie im Wochenplan (ComboSteps: weekCookSteps) – mit Kochstil, auch die nur für diese Grundlage. Die
+  // Grundlage wird heute erst gekocht, nicht aufgewärmt: in ihr gart nichts mit (basePot: false). Ohne Grundlage
+  // (gelöscht) wie früher, ohne Kochstil.
+  const baseRecipe = recipes.find((r) => r.id === meal.baseId);
+  const sides = sidesOf(meal.side);
+  const styled: StyleStep[] = baseRecipe
+    ? weekCookSteps(meal.side, baseRecipe, { household, recipes, items, portions: servingsOf(meal, household), basePot: false }).filter((s) => s.fixed || s.serving)
+    : comboSteps(meal.side, '', household).filter((s) => s.id).map((s) => ({ ids: [s.id!], name: s.name, text: s.text, minutes: s.minutes, fixed: true }));
   // deine Rezepte als Baustein (die Guacamole): steht genug vorgekocht da, nur „aus dem Kühlschrank“ – sonst seine
   // Zutaten (für eine Portion) und Schritte, der erste mit dem Namen davor
   const mine = ownSidesOf(meal.side).flatMap((o): { ingredients: Ingredient[]; steps: Step[]; minutes: number }[] => {
@@ -103,16 +110,17 @@ export function freshFor(meal: WeekMeal, recipes: readonly Recipe[], household: 
   });
   const ingredients = [
     ...(own ? scaleIngredients(own, 1) : []),
-    ...sides.flatMap((s) => sideIngredient(s.id!, 1, household) ?? []),
+    ...sides.flatMap((s) => sideIngredient(s.id, 1, household) ?? []),
     ...mine.flatMap((m) => m.ingredients),
   ];
   if (!ingredients.length && !mine.length) return undefined;
-  // Bausteine – feste und deine – das Längste zuerst (die Gnocchi vor dem Parmesan)
+  // Bausteine – feste und deine – das Längste zuerst (die Gnocchi vor dem Parmesan); „Anrichten“ ganz zum Schluss
   const groups = [
-    ...sides.map((s) => ({ minutes: s.minutes, steps: [{ id: `beilage:${s.id}`, text: `${s.name}: ${s.text ?? 'zubereiten'}`, ingredientIds: [`beilage:${s.id}`], ...(s.minutes > 0 ? { timerMinutes: s.minutes } : {}) }] })),
+    ...styled.filter((s) => !s.serving).map((s) => ({ minutes: s.minutes, steps: [{ id: `beilage:${s.ids.join('+')}`, text: `${s.name}: ${s.text ?? 'zubereiten'}`, ingredientIds: s.ids.map((id) => `beilage:${id}`), ...(s.minutes > 0 ? { timerMinutes: s.minutes } : {}) }] })),
     ...mine,
   ].sort((a, b) => b.minutes - a.minutes);
-  const steps: Step[] = [...(own?.steps ?? []).filter((s) => s.text.trim()), ...groups.flatMap((g) => g.steps)];
+  const serving = styled.filter((s) => s.serving).map((s): Step => ({ id: 'beilage:anrichten', text: `${s.name}: ${s.text}` }));
+  const steps: Step[] = [...(own?.steps ?? []).filter((s) => s.text.trim()), ...groups.flatMap((g) => g.steps), ...serving];
   return {
     ...(own ?? { title: '', description: '', prepMinutes: 0, cookMinutes: 0, difficulty: 1, categories: [], tags: [], devices: [] }),
     servings: 1,

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   DIRECTIONS, EMPTY_CRAVING, STAGES, chooseDirection, closeStep, cookbookMatches, cravingCooking, cravingMinutes, cravingPartsFrom, cravingSteps, cravingText, cravingTitle, currentStep,
-  baseCraving, coveredBy, halfOf, ownComboSteps, plateImage, cravingCombo, cravingContent, directionOf, guessKind, matchingRecipes, optionsFor, pick, recipeChoiceId, recipeChoices, reopen, rollCraving, runsAlone, staleTrials, startLabel, stockMarks, understand, variantTargets, withoutGone, cravingTimeline,
+  baseCraving, coveredBy, halfOf, ownComboSteps, plateImage, weekCookSteps, cravingCombo, cravingContent, directionOf, guessKind, matchingRecipes, optionsFor, pick, recipeChoiceId, recipeChoices, reopen, rollCraving, runsAlone, staleTrials, startLabel, stockMarks, understand, variantTargets, withoutGone, cravingTimeline,
   type CravingState, type StockMark,
 } from './craving';
 import { localFoodTable } from './nutrition/localFoods';
@@ -837,5 +837,39 @@ describe('Kochstil im Baukasten (Julia: mehr Abwechslung in den Schritten)', () 
     expect(new Set(spices).size).toBeGreaterThan(2);
     const count = (id: string) => spices.filter((x) => x === id).length;
     expect(count('mexikanisch')).toBeGreaterThan(count('indisch'));
+  });
+});
+
+describe('Kochstil im Wochenplan (weekCookSteps)', () => {
+  const bolo = recipe('bo', 'Testbolo', [{ kind: 'protein', also: ['sauce'], directions: ['pasta'] }]);
+  const texts = (side: string, opts: Parameters<typeof weekCookSteps>[2] = {}) => weekCookSteps(side, bolo, opts).map((s) => `${s.name}: ${s.text}`);
+
+  it('mit Richtung: Würze, Zubereitung nach Richtung, Anrichten – „drüberreiben“ steckt im Anrichten', () => {
+    expect(texts('pasta,brokkoli,parmesan,richtung:pasta')).toEqual([
+      'Testbolo: aufwärmen',
+      'Pasta: in Salzwasser kochen; die letzten 3 Min. die Brokkoli-Röschen mitkochen',
+      'Anrichten: Pasta abgießen, Testbolo und Brokkoli unterheben, mit Parmesan servieren – mit etwas Olivenöl beträufeln',
+    ]);
+  });
+
+  it('die Grundlage ist eine Sauce: „in der Sauce“ gart darin – am Kochtag nicht (sie wird erst gekocht)', () => {
+    const steps = weekCookSteps('reis,haehnchen,weg:haehnchen:sauce', bolo);
+    expect(steps[0]).toMatchObject({ ids: ['grundlage', 'haehnchen'], text: 'aufwärmen; die Hähnchenwürfel kurz anbraten und darin fertig garen', minutes: 12 });
+    expect(texts('reis,haehnchen,weg:haehnchen:sauce', { basePot: false })).toContain('Hähnchenbrust: in Streifen schneiden und braten');
+  });
+
+  it('alter Abend ohne Stil: nicht gewürzt, allgemein angerichtet', () => {
+    expect(texts('reis,haehnchen')).toEqual([
+      'Testbolo: aufwärmen', 'Reis: mit doppelter Menge Wasser köcheln', 'Hähnchenbrust: in Streifen schneiden und braten',
+      'Anrichten: Alles auf die Teller verteilen',
+    ]);
+  });
+
+  it('nur bei dieser Grundlage geht vor den Vorschlag der Richtung – als Chip „deine“, mit „nur hier“', () => {
+    const own = { ...bolo, blockPrep: { brokkoli: { text: 'in Röschen blanchieren', minutes: 4 } } };
+    const [, brokkoli] = weekCookSteps('brokkoli,richtung:ofen', own);
+    expect(brokkoli).toMatchObject({ text: 'in Röschen blanchieren', source: 'grundlage' });
+    expect(brokkoli.options?.[0]).toMatchObject({ chosen: 'eigen' });
+    expect(weekCookSteps('brokkoli,richtung:ofen,weg:brokkoli:ofen', own)[1].text).toContain('im Ofen rösten');
   });
 });

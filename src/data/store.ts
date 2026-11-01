@@ -20,7 +20,7 @@ import { currentContent, currentVersion, newId, sameContent, withNewVersion } fr
 import { addChoiceFrom } from '../domain/choices';
 import { retireMix, sideContent } from '../domain/mix';
 import { ownIngredients, readyPortions, staleTrials } from '../domain/craving';
-import { foodOf, ownSidesOf, sideGrams, sidesOf } from '../domain/sides';
+import { foodOf, ownSidesOf, sideGrams, sidesOf, styleOf, withStyle, type SideStyle } from '../domain/sides';
 import { cookingContent } from '../domain/homemade';
 import { recordSavings, type BonSavings } from '../domain/savings';
 import { addBon, bonFromImport, dropDayPrices, editBonLine, includeBonLine, sameBonOf, withdrawBonStock, dropUnsavedDay, type BonLine, type BonLinePatch } from '../domain/bons';
@@ -1037,6 +1037,20 @@ export function setWeek(week: Week | undefined): () => void {
   const before = plan;
   commitPlan(withWeek(plan, week));
   return () => commitPlan({ ...plan, items: before.items, cooked: before.cooked, ...(before.week ? { week: before.week } : { week: undefined }) });
+}
+
+/**
+ * Kochstil eines Abends ändern – Würze, Zubereitung (sides.ts: withStyle). Kein Toast: ein Tipp auf den vorigen Chip
+ * nimmt es zurück, wie auf der Lust-Seite.
+ */
+export function setMealStyle(mealId: string, style: Partial<SideStyle>) {
+  const week = plan.week;
+  const m = week?.meals.find((x) => x.id === mealId);
+  if (!week || !m) return;
+  const now = styleOf(m.side);
+  const side = withStyle(m.side, { ...now, ...style, ways: { ...now.ways, ...style.ways } });
+  if (!side || side === m.side) return;
+  commitPlan(withWeek(plan, { ...week, meals: week.meals.map((x) => (x.id === mealId ? { ...x, side } : x)) }));
 }
 
 /** Haushalt: Portionen pro Mahlzeit, Mittagstage – abgeglichen. Gibt „Rückgängig“ zurück. */

@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { ownComboSteps } from '../../domain/craving';
-import { comboSteps, foodOf, ownOf, prepOf, sideOf, type ComboStep } from '../../domain/sides';
+import { weekCookSteps, type WeekStep } from '../../domain/craving';
+import { NO_SPICE, SPICES, defaultSpice } from '../../domain/cookStyle';
+import { foodOf, ownOf, prepOf, sideOf, styleOf, type SideStyle } from '../../domain/sides';
 import type { Household } from '../../domain/mealplan';
 import type { Recipe } from '../../domain/types';
 import { currentContent } from '../../domain/recipe';
@@ -14,43 +15,70 @@ import { Icon } from './Icon';
 import { IngredientNames } from './IngredientNames';
 
 /**
- * „So geht's“ für einen Baukasten-Abend (Julia: „woher weiß ich, wie ich das zubereite?“) – das Längste zuerst, jeder
- * Baustein mit Stift zum Ändern: als Standard oder nur bei dieser Grundlage.
+ * „So geht's“ für einen Baukasten-Abend (Julia: „woher weiß ich, wie ich das zubereite?“) – mit Kochstil (craving.ts:
+ * weekCookSteps): das Längste zuerst, Würze und Zubereitung umschaltbar (gespeichert am Abend über `onStyle`), feste
+ * Bausteine mit Stift zum Ändern: als Standard oder nur bei dieser Grundlage.
  */
-export function ComboSteps({ side, base, household, carry, portions = 1 }: { side: string; base: Recipe; household: Household; carry?: CarbCarry; portions?: number }) {
-  const [edit, setEdit] = useState<ComboStep | null>(null);
+export function ComboSteps({ side, base, household, carry, portions = 1, onStyle }: {
+  side: string; base: Recipe; household: Household; carry?: CarbCarry; portions?: number;
+  /** Würze oder Zubereitung am Abend ändern – ohne: nur anzeigen */ onStyle?: (style: Partial<SideStyle>) => void;
+}) {
+  const [edit, setEdit] = useState<string | null>(null);
   const recipes = useRecipes();
   const pantry = usePantry();
   // zweimal Nudeln (auch deine Gnocchi): am ersten Abend mitkochen, am zweiten nur aufwärmen (3 Min.) – danach neu nach
   // Dauer ordnen. Steht dein Rezept vorgekocht da, gibt es nichts mitzukochen – fürs Mitkochen muss es für beide reichen.
+  // Zusammengeführte Schritte (Pasta mit Brokkoli) bleiben, wie sie sind – „aufwärmen“ verlöre sonst den Brokkoli.
   const more = carry?.with !== undefined ? { entry: carry.side, portions: carry.portions ?? 0 } : undefined;
-  const steps = [...comboSteps(side, currentContent(base).title, household, base), ...ownComboSteps(side, recipes, pantry.items, portions, more)]
-    .map((s): ComboStep => {
-      if (!carry || s.id !== carry.side || s.ready) return s;
+  const steps = weekCookSteps(side, base, { household, recipes, items: pantry.items, portions, more })
+    .map((s): WeekStep => {
+      if (!carry || s.ids.length !== 1 || s.ids[0] !== carry.side || s.ready) return s;
       if (carry.from !== undefined) return { ...s, text: `von ${DAY_LONG[carry.from]} aufwärmen`, minutes: 3 };
       return carry.with !== undefined ? { ...s, text: `${s.text ?? 'kochen'} – gleich für ${DAY_LONG[carry.with]} mitkochen` } : s;
     }).sort((a, b) => b.minutes - a.minutes);
+  const style = styleOf(side);
+  const spice = style.spice ?? defaultSpice(style.direction) ?? NO_SPICE;
   return (
     <>
+      {/* Würze für diesen Abend – die der Richtung ist vorgewählt (cookStyle.ts) */}
+      {onStyle && (
+        <div className="craving-spice combo-steps__spice" role="group" aria-label="Würze">
+          <span className="small muted">Würze</span>
+          {[...SPICES, { id: NO_SPICE, name: 'ohne' }].map((x) => (
+            <button key={x.id} type="button" className={`chip chip--xs${spice === x.id ? ' is-on' : ''}`} aria-pressed={spice === x.id}
+              onClick={() => onStyle({ spice: x.id })}>{x.name}</button>
+          ))}
+        </div>
+      )}
       <ol className="combo-steps">
         {steps.map((s) => {
           // dein Rezept: der Name führt hin. Zu kochen → gleich in den Kochmodus, mit der Menge für heute und fürs
           // Mitkochen (den Rest trägst du bei „Was ist übrig?“ ein – dann steht er morgen vorgekocht da); vorgekocht → zum Rezept
-          const mine = s.source === 'rezept' && s.id ? ownOf(s.id) : undefined;
-          const cookFor = portions + (more && more.entry === s.id ? more.portions : 0);
+          const mine = s.source === 'rezept' ? ownOf(s.ids[0]) : undefined;
+          const cookFor = portions + (more && more.entry === s.ids[0] ? more.portions : 0);
           const to = mine && (s.ready ? `/rezept/${mine.recipeId}` : `/rezept/${mine.recipeId}/kochen?p=${cookFor}`);
           return (
-            <li key={s.id ?? 'base'}>
+            <li key={s.ids.join('+')}>
               <span>{mine && to
                 ? <button type="button" className="combo-steps__recipe" onClick={() => navigate(to)}>{s.name}</button>
                 : <b>{s.name}</b>} {s.text ?? <span className="muted">– noch keine Zubereitung</span>}{s.minutes > 0 ? <span className="muted"> · {s.minutes} Min.</span> : null}
-                {s.source === 'grundlage' && <span className="tag">nur hier</span>}</span>
-              {s.id && !mine && <button type="button" className="iconbtn iconbtn--sm" aria-label={`Zubereitung ${s.name} ändern`} onClick={() => setEdit(s)}><Icon name="pencil" size={14} /></button>}
+                {s.source === 'grundlage' && <span className="tag">nur hier</span>}
+                {/* anders zubereiten – auch in der gemeinsamen Pfanne je Baustein */}
+                {onStyle && s.options?.map((o) => (
+                  <span key={o.id} className="craving-ways" role="group" aria-label={`Zubereitung ${o.name}`}>
+                    {s.options!.length > 1 && <span className="small muted">{o.name}</span>}
+                    {o.ways.map((w) => (
+                      <button key={w.id} type="button" className={`chip chip--xs${o.chosen === w.id ? ' is-on' : ''}`} aria-pressed={o.chosen === w.id}
+                        onClick={() => onStyle({ ways: { [o.id]: w.id } })}>{w.label}</button>
+                    ))}
+                  </span>
+                ))}</span>
+              {s.fixed && s.ids.length === 1 && <button type="button" className="iconbtn iconbtn--sm" aria-label={`Zubereitung ${s.name} ändern`} onClick={() => setEdit(s.ids[0])}><Icon name="pencil" size={14} /></button>}
             </li>
           );
         })}
       </ol>
-      {edit?.id && <PrepSheet sideId={edit.id} base={base} household={household} onClose={() => setEdit(null)} />}
+      {edit && <PrepSheet sideId={edit} base={base} household={household} onClose={() => setEdit(null)} />}
     </>
   );
 }

@@ -8,7 +8,7 @@ import { formatAmount } from '../../domain/scaling';
 import type { Week } from '../../domain/mealplan';
 import type { Recipe } from '../../domain/types';
 import { specialDays } from '../../domain/shelfLife';
-import { currentPlan, eatMeal, eatOutToday, householdOf, thawPantryItem, usePantry, usePlan, useRecipes } from '../../data/store';
+import { currentPlan, eatMeal, eatOutToday, householdOf, setMealStyle, thawPantryItem, usePantry, usePlan, useRecipes } from '../../data/store';
 import { navigate } from '../../router';
 import { toast } from '../toast';
 import { Icon } from './Icon';
@@ -113,7 +113,7 @@ export function WeekToday({ week }: { week: Week }) {
                     : 'Nur aufwärmen'}
               </p>
               {/* Baukasten-Abend: so geht's (Julia) – das Längste zuerst */}
-              {meal.meal.recipeId === meal.meal.baseId && (sides.length > 0 || own.length > 0) && meal.recipe && <ComboSteps side={meal.meal.side!} base={meal.recipe} household={hh} carry={carry} portions={servingsOf(meal.meal, hh)} />}
+              {meal.meal.recipeId === meal.meal.baseId && (sides.length > 0 || own.length > 0) && meal.recipe && <ComboSteps side={meal.meal.side!} base={meal.recipe} household={hh} carry={carry} portions={servingsOf(meal.meal, hh)} onStyle={(st) => setMealStyle(meal.meal.id, st)} />}
               <div className="week-today__actions">
                 {/* am Kochtag, noch nicht vorgekocht: Vorkochen und das Essen in einem Durchgang (Julia) */}
                 {go

@@ -155,6 +155,8 @@ export interface StyleStep {
   seasoned?: boolean;
   /** der Abschluss „Anrichten“ */
   serving?: boolean;
+  /** ein Topf, in dem anderes mitgaren kann – die Grundlage im Wochenplan, wenn sie eine Sauce ist (Bolognese) */
+  pot?: boolean;
 }
 
 const simmers = (t?: string) => !!t && /k(ö|oe)cheln/i.test(t);
@@ -188,7 +190,7 @@ export function composeSteps<T extends StyleStep>(input: readonly T[], spice?: S
   const replace = (target: T, gone: readonly T[], next: T) => { steps = steps.filter((s) => !gone.includes(s)).map((s) => (s === target ? next : s)); };
 
   for (const into of ['sauce', 'carb'] as const) {
-    const target = steps.find((s) => s.fixed && s.kind === into && (into === 'sauce' ? simmers(s.text) : /salzwasser/i.test(s.text ?? '')));
+    const target = steps.find((s) => (into === 'sauce' && s.pot) || (s.fixed && s.kind === into && (into === 'sauce' ? simmers(s.text) : /salzwasser/i.test(s.text ?? ''))));
     const moving = steps.filter((s) => s.fixed && s.way?.into === into);
     if (!target || !moving.length) continue;
     const text = [target.text, ...moving.map((m) => m.way!.joined)].filter(Boolean).join('; ');

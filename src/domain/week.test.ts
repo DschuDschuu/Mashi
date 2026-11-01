@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { sideContent } from './mix';
-import { comboOf, comboSteps, customSideId, ownEntry, prepOf, sideOf, sidesOfKind } from './sides';
+import { comboOf, comboSteps, customSideId, ownEntry, prepOf, sideOf, sidesOfKind, styleOf, withStyle } from './sides';
 import type { Week } from './mealplan';
 import type { Ingredient, Recipe } from './types';
 import { buildShoppingList, emptyPlan } from './mealplan';
@@ -673,5 +673,21 @@ describe('Umbenennen zieht mit (Julia: kein still fehlender Dip)', () => {
     expect(followOwnRename(w, dip('Testplatte', 'Testdip'), dip('Testplatte', 'Testdip'))).toBe(w);
     const other = { ...dip('Testplatte', 'Testdip'), id: 'anderes' };
     expect(followOwnRename(w, other, { ...dip('X', 'Y'), id: 'anderes' })).toBe(w);
+  });
+});
+
+describe('Kochstil am Abend (Julia: die abwechslungsreichen Schritte auch im Wochenplan)', () => {
+  it('im selben Feld: Bausteine bleiben, der Stil wird ersetzt – fest sortiert, pur bleibt pur', () => {
+    const side = withStyle('pasta,brokkoli', { direction: 'pasta', spice: 'indisch', ways: { brokkoli: 'nudeln' } })!;
+    expect(side).toBe('pasta,brokkoli,richtung:pasta,wuerze:indisch,weg:brokkoli:nudeln');
+    expect(styleOf(side)).toEqual({ direction: 'pasta', spice: 'indisch', ways: { brokkoli: 'nudeln' } });
+    // wer nur Bausteine liest, sieht nur die Bausteine
+    expect(comboOf(side.split(','))).toBe('pasta,brokkoli');
+    expect(mealTitle({ side }, bolo)).toBe(`${bolo.versions[0].content.title} mit Pasta & Brokkoli`);
+    expect(splitMealKey(mealKey('bolo', side))).toEqual({ recipeId: 'bolo', side });
+    // Stil ersetzen statt anhängen; ungültige ids fallen weg; ohne Bausteine kein Stil
+    expect(withStyle(side, { direction: 'pasta', spice: 'ohne', ways: {} })).toBe('pasta,brokkoli,richtung:pasta,wuerze:ohne');
+    expect(withStyle('pasta', { direction: 'Pasta!', ways: { 'x y': 'z' } })).toBe('pasta');
+    expect(withStyle(undefined, { direction: 'pasta', ways: {} })).toBeUndefined();
   });
 });

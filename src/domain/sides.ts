@@ -164,6 +164,40 @@ export function ownOf(entry: string): OwnSide | undefined {
 /** die eigenen Bausteine eines Abends */
 export const ownSidesOf = (side: string | undefined): OwnSide[] => (side ? side.split(',').flatMap((e) => ownOf(e) ?? []) : []);
 
+/**
+ * Kochstil eines Abends (Julia: die abwechslungsreichen Schritte auch im Wochenplan, cookStyle.ts) – im selben Feld als
+ * „richtung:pasta“, „wuerze:indisch“, „weg:brokkoli:ofen“. Nur Kleinbuchstaben-ids, also nichts zu kodieren; alte
+ * App-Fassungen und alle, die nur Bausteine lesen (sidesOf, comboText), überspringen die Einträge.
+ */
+export interface SideStyle { direction?: string; spice?: string; ways: Record<string, string> }
+
+const STYLE_ENTRY = /^(richtung|wuerze):([a-z0-9-]+)$|^weg:([a-z0-9-]+):([a-z0-9-]+)$/;
+
+export function styleOf(side: string | undefined): SideStyle {
+  const style: SideStyle = { ways: {} };
+  for (const e of side ? side.split(',') : []) {
+    const m = STYLE_ENTRY.exec(e);
+    if (!m) continue;
+    if (m[1] === 'richtung') style.direction = m[2];
+    else if (m[1] === 'wuerze') style.spice = m[2];
+    else style.ways[m[3]] = m[4];
+  }
+  return style;
+}
+
+/** Bausteine bleiben, wie sie sind; der Kochstil wird ersetzt (am Ende, fest sortiert – gleiche Abende, gleicher mealKey) */
+export function withStyle(side: string | undefined, style: Partial<SideStyle>): string | undefined {
+  const items = (side ? side.split(',') : []).filter((e) => e && !STYLE_ENTRY.test(e));
+  if (!items.length) return undefined; // pur bleibt pur – ohne Bausteine gibt es nichts zu kochen
+  const valid = (x?: string) => !!x && /^[a-z0-9-]+$/.test(x);
+  return [
+    ...items,
+    ...(valid(style.direction) ? [`richtung:${style.direction}`] : []),
+    ...(valid(style.spice) ? [`wuerze:${style.spice}`] : []),
+    ...Object.entries(style.ways ?? {}).filter(([id, w]) => valid(id) && valid(w)).sort(([a], [b]) => a.localeCompare(b)).map(([id, w]) => `weg:${id}:${w}`),
+  ].join(',');
+}
+
 /** Bausteine lesbar: „Pasta, Hähnchenbrust & Parmesan“ – eigene mit ihrem Namen, in gespeicherter Reihenfolge */
 export function comboText(side: string | undefined): string {
   const names = (side ? side.split(',') : []).flatMap((e) => sideOf(e)?.name ?? ownOf(e)?.name ?? []);

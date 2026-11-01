@@ -6,7 +6,7 @@ import { partOf, partsOf, stepPart } from './parts';
 import { currentContent, totalMinutes } from './recipe';
 import { searchRecipes } from './recipeSearch';
 import { cookingContent } from './homemade';
-import { SIDE_KINDS, SIDES, comboOf, foodOf, ownEntry, ownSidesOf, prepOf, sideIngredient, sideOf, sidesOfKind, type ComboStep, type SideKind, type SidePrep } from './sides';
+import { SIDE_KINDS, SIDES, comboOf, foodOf, ownEntry, ownOf, ownSidesOf, prepOf, sideIngredient, sideOf, sidesOf, sidesOfKind, styleOf, type ComboStep, type SideKind, type SidePrep } from './sides';
 import { OWN_WAY, SPICES, composeSteps, coveredByServing, defaultSpice, servingText, spiceOf, wayOf, waysOf, type StyleStep, type WayContext } from './cookStyle';
 import type { Ingredient, Recipe, RecipeContent, RecipeImage, Step } from './types';
 
@@ -943,4 +943,52 @@ export function ownComboSteps(side: string | undefined, recipes: readonly Recipe
     }
     return [{ id: o.entry, name: o.name, text: 'nach deinem Rezept', minutes: ownMinutes(currentContent(r), o.part), source: 'rezept' }];
   });
+}
+
+/** Ein Schritt eines Wochenabends – wie im Baukasten, dazu woher die Zubereitung kommt (Stift) und ob dein Rezept fertig dasteht */
+export type WeekStep = StyleStep & { source: ComboStep['source']; ready?: true };
+
+/**
+ * „So geht's“ für einen Abend der Woche mit Kochstil (Julia: die abwechslungsreichen Schritte auch im Wochenplan): die
+ * Grundlage aufwärmen – ist sie eine Sauce (Bolognese), gart „in der Sauce“ darin –, die festen Bausteine mit ihrer
+ * Zubereitung (am Abend gewählt → nur bei dieser Grundlage → dein Standard → Vorschlag der Richtung → Mashis
+ * Standard), zusammengeführt und gewürzt, deine Rezepte wie bisher (ownComboSteps), am Ende „Anrichten“. Richtung,
+ * Würze und Wege stehen am Abend (sides.ts: styleOf); alte Abende ohne Richtung: ungewürzt, allgemein angerichtet.
+ * `basePot: false` am Kochtag – da wird die Grundlage gerade erst gekocht, nicht aufgewärmt.
+ */
+export function weekCookSteps(side: string | undefined, base: Recipe, opts: {
+  household?: Pick<Household, 'sidePrep'>; recipes?: readonly Recipe[]; items?: readonly PantryItem[]; portions?: number;
+  more?: { entry: string; portions: number }; basePot?: boolean;
+} = {}): WeekStep[] {
+  const { household, recipes = [], items = [], portions = 1, more, basePot = true } = opts;
+  const style = styleOf(side);
+  const b = baseChoice(base);
+  const pot = basePot && coversOf(b).includes('sauce');
+  const fixed = sidesOf(side);
+  const ctx: WayContext = {
+    direction: style.direction,
+    sauceSimmers: pot || fixed.some((x) => x.kind === 'sauce' && /k(ö|oe)cheln/i.test(prepOf(x.id, household, base)?.text ?? '')),
+    pastaBoils: fixed.some((x) => x.id === 'pasta'),
+  };
+  const spice = spiceOf(style.spice, style.direction);
+  const sides = fixed.map((x): WeekStep => {
+    const mine = base.blockPrep?.[x.id] ?? household?.sidePrep?.[x.id];
+    const way = wayOf(x.id, ctx, style.ways[x.id], !!mine);
+    const ways = [...(mine ? [{ id: OWN_WAY, label: 'deine', ...mine }] : []), ...waysOf(x.id, ctx)];
+    const prep = way ?? prepOf(x.id, household, base);
+    const source = way ? 'standard' : base.blockPrep?.[x.id] ? 'grundlage' : household?.sidePrep?.[x.id] ? 'eigen' : 'standard';
+    return {
+      ids: [x.id], kind: x.kind, name: x.name, text: prep?.text, minutes: prep?.minutes ?? 0, fixed: true, source,
+      ...(way ? { way } : {}),
+      ...(ways.length > 1 ? { options: [{ id: x.id, name: x.name, ways, chosen: way?.id ?? OWN_WAY }] } : {}),
+    };
+  });
+  const own = ownComboSteps(side, recipes, items, portions, more)
+    .map((s): WeekStep => ({ ids: [s.id!], kind: ownOf(s.id!)?.kind, name: s.name, text: s.text, minutes: s.minutes, source: 'rezept', ...(s.ready ? { ready: true as const } : {}) }));
+  const baseStep: WeekStep = { ids: ['grundlage'], kind: b.kind, name: b.name, text: 'aufwärmen', minutes: 5, source: 'standard', ...(pot ? { pot: true } : {}) };
+  const names: Partial<Record<SideKind, string[]>> = { [b.kind]: [b.name] };
+  for (const x of [...fixed, ...ownSidesOf(side)]) names[x.kind] = [...(names[x.kind] ?? []), x.name];
+  const serving = servingText(style.direction, names, spice);
+  const steps = composeSteps([baseStep, ...sides, ...own], spice).filter((st) => !(serving && st.fixed && st.minutes <= 0 && coveredByServing(st.text)));
+  return serving ? [...steps, { ids: ['anrichten'], name: 'Anrichten', text: serving, minutes: 0, serving: true, source: 'standard' }] : steps;
 }

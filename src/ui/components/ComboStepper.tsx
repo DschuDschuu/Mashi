@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { baseCraving, cravingCombo } from '../../domain/craving';
-import { comboText } from '../../domain/sides';
+import { comboText, withStyle } from '../../domain/sides';
 import type { Recipe } from '../../domain/types';
 import { ask } from '../confirm';
 import { useOwnChoices } from '../cravingHooks';
@@ -43,7 +43,8 @@ export function ComboStepper({ base, onAdd, label = 'Zusammenstellen', lunch = f
       <div className="combo-stepper__top"><ViewToggle view={view} onChange={setView} /></div>
       <CravingBuilder view={view} state={state} set={setState} own={own} small />
       <div className="row-gap">
-        <button type="button" className="btn btn--primary btn--sm" onClick={() => { onAdd(combo); close(); }}>
+        {/* die Richtung reist mit (sides.ts: withStyle) – daraus Würze, Zubereitung und Anrichten im „So geht's“ des Abends */}
+        <button type="button" className="btn btn--primary btn--sm" onClick={() => { onAdd(withStyle(combo, { direction: state.direction })); close(); }}>
           <Icon name="plus" size={14} /> Für diesen {lunch ? 'Mittag' : 'Abend'}{combo ? ` · mit ${comboText(combo)}` : ' · pur'}
         </button>
         <button type="button" className="btn btn--ghost btn--sm" onClick={cancel}>Abbrechen</button>

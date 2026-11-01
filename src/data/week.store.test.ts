@@ -3,7 +3,7 @@ import PouchDB from 'pouchdb-core';
 import memory from 'pouchdb-adapter-memory';
 import { describe, expect, it, vi } from 'vitest';
 import { PouchRecipeRepository, type RecipeDb } from './pouchRepository';
-import { addPantryItem, addToPlan, answerLeftover, clearPlan, cookBase, cookDay, cookParts, saveContent, createRecipe, deleteRecipe, freezeFromFridge, makeBase, markCooked, scheduleRecipe, currentPantry, currentPlan, eatMeal, eatOutToday, initStore, setHousehold, setPrepInfo, setWeek, togglePlanCooked, unfreezeToFridge, whenSaved } from './store';
+import { addPantryItem, addToPlan, answerLeftover, clearPlan, cookBase, cookDay, cookParts, saveContent, setMealStyle, createRecipe, deleteRecipe, freezeFromFridge, makeBase, markCooked, scheduleRecipe, currentPantry, currentPlan, eatMeal, eatOutToday, initStore, setHousehold, setPrepInfo, setWeek, togglePlanCooked, unfreezeToFridge, whenSaved } from './store';
 import { buildShoppingList } from '../domain/mealplan';
 import { shoppingList } from '../domain/restock';
 import { mealKey, putMeal, setExtra, suggestWeek } from '../domain/week';
@@ -441,5 +441,20 @@ describe('Store: dein Rezept als Baustein eines Abends (Julia: deine Guacamole a
     expect([joghurt(), dipReady()]).toEqual([300, 1]);
     meal.undo();
     expect(dipReady()).toBe(2);
+  });
+});
+
+describe('Store: Kochstil eines Abends umschalten', () => {
+  it('Würze und Zubereitung landen am Abend, ohne den Rest zu verlieren; ein purer Abend bleibt pur', async () => {
+    await freshStore('meal-style');
+    const bolo = createRecipe(content('Testbolo', [{ id: 'h', name: 'Hackfleisch', amount: 125, unit: 'g' }]), { source: 'selbst', status: 'kochbuch' });
+    setWeek(suggestWeek([6], [{ baseId: bolo, meals: [mealKey(bolo, 'pasta,brokkoli,richtung:pasta'), bolo] }], (() => { let n = 0; return () => `m${++n}`; })()));
+    const side = (id: string) => currentPlan().week!.meals.find((m) => m.id === id)!.side;
+    setMealStyle('m1', { spice: 'indisch' });
+    expect(side('m1')).toBe('pasta,brokkoli,richtung:pasta,wuerze:indisch');
+    setMealStyle('m1', { ways: { brokkoli: 'gedaempft' } });
+    expect(side('m1')).toBe('pasta,brokkoli,richtung:pasta,wuerze:indisch,weg:brokkoli:gedaempft');
+    setMealStyle('m2', { spice: 'indisch' });
+    expect(side('m2')).toBeUndefined();
   });
 });
