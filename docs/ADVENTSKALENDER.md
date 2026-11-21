@@ -13,6 +13,11 @@ Vom 1. bis 24. Dezember öffnet sich in Mashi jeden Tag ein Türchen mit einem R
   sind in der Sicherung enthalten – **nie im Repo** (das ist öffentlich). Code: `src/domain/advent.ts`,
   `src/data/adventStore.ts`, `src/ui/screens/AdventScreen.tsx`.
 - **Neu befüllen** im selben Jahr behält geöffnete und gespeicherte Türchen; ein neues Jahr fängt von vorn an.
+- **Erstes Öffnen:** Die bemalte Tür schwingt auf, es funkelt kurz, dann kommt das Rezept (bei „weniger Bewegung“
+  sofort).
+- **Was hab ich da?** Im geöffneten Türchen steht je Zutat da / reicht nicht / fehlt (wie auf der Rezeptseite, mit
+  dem, was nach dem Wochenplan frei bleibt). „N Zutaten auf die Einkaufsliste“ setzt Fehlendes und Knappes als eigene
+  Einträge (nur Namen) auf die Liste, mit Rückgängig; in der Vorschau nicht.
 - **Vorschau zum Ausprobieren:** `…/Mashi/#/advent?vorschau=5` tut so, als wäre der 5. Dezember (ohne Zahl: der 1.,
   oben mit −/+ umschalten). Türchen lassen sich ansehen, aber Mashi merkt sich nichts – kein „geöffnet“, kein Speichern
   ins Kochbuch. „Beenden“ führt zum echten Kalender. Befüllen geht dort ganz normal (das ist echt).

@@ -745,7 +745,8 @@ function MenuPanel({ onClose, children }: { onClose: () => void; children: React
 }
 
 /** Rechts an der Zutat: ✓ da · „reicht nicht“ · „fehlt“ – und die Uhr, wenn sie bald weg muss. Grundvorrat: nichts. */
-function IngredientStock({ status, soon }: { status?: Stock; soon: boolean }) {
+/** da / reicht nicht / fehlt an einer Zutat – auch im Adventskalender (AdventScreen) */
+export function IngredientStock({ status, soon }: { status?: Stock; soon: boolean }) {
   if (!status || status === 'basis') return <span />;
   return (
     <span className={`ing-stock ing-stock--${status}`}>

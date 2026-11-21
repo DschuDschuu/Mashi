@@ -11,7 +11,21 @@ describe('Feiertagsthemen', () => {
 
   it('ist in der Saison von selbst an, sonst aus', () => {
     expect(activeSpecial('2026-10-29')).toBe('halloween');
-    expect(activeSpecial('2026-12-01')).toBeUndefined();
+    expect(activeSpecial('2026-11-20')).toBeUndefined();
+  });
+
+  it('Weihnachten läuft vom 1. bis einschließlich 26. Dezember', () => {
+    expect(seasonOn('2026-11-30')).toBeUndefined();
+    expect(activeSpecial('2026-12-01')).toBe('weihnachten');
+    expect(activeSpecial('2026-12-26')).toBe('weihnachten');
+    expect(activeSpecial('2026-12-27')).toBeUndefined();
+  });
+
+  it('Weihnachten ausgeschaltet: Ruhe bis zum 26., nächstes Jahr kommt es wieder', () => {
+    const off = toggleSpecial('weihnachten', false, '2026-12-05');
+    expect(off).toEqual({ id: 'aus', until: '2026-12-26' });
+    expect(activeSpecial('2026-12-20', off)).toBeUndefined();
+    expect(activeSpecial('2027-12-03', off)).toBe('weihnachten');
   });
 
   it('ausgeschaltet bleibt es bis Saisonende aus – nächstes Jahr kommt es wieder', () => {

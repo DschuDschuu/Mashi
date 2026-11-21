@@ -12,6 +12,7 @@ import { ConnectScreen } from './ui/screens/ConnectScreen';
 import { CookbookScreen } from './ui/screens/CookbookScreen';
 import { CookModeScreen } from './ui/screens/CookModeScreen';
 import { CelebrationSwarm, HalloweenDeko } from './ui/components/HalloweenDeko';
+import { WeihnachtsDeko } from './ui/components/WeihnachtsDeko';
 import { CravingScreen } from './ui/screens/CravingScreen';
 import { ImportScreen } from './ui/screens/ImportScreen';
 import { MoreScreen } from './ui/screens/MoreScreens';
@@ -134,6 +135,7 @@ export function App({ mode }: { mode: Mode | null }) {
     <div className={`app${cooking ? '' : ' app--nav'}`}>
       {/* Feiertagsdeko – im Kochmodus nicht: dort liest man Schritte, Bewegung am Rand lenkt ab */}
       {!cooking && <HalloweenDeko />}
+      {!cooking && <WeihnachtsDeko />}
       <CelebrationSwarm />
       <StatusBanner />
       {/* stürzt eine Seite ab: Meldung statt leerem Bildschirm – je Seite neu (key), damit Zurück wieder geht */}

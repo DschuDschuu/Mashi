@@ -6,6 +6,7 @@ import { mixIcon } from '../catalogIcons';
 import { useSpecial } from '../settings';
 import { FIELDS, HALF } from './CravingPlate';
 import { CobwebCorner } from './HalloweenDeko';
+import { HollyCorner } from './WeihnachtsDeko';
 import { Icon } from './Icon';
 
 /**
@@ -14,7 +15,8 @@ import { Icon } from './Icon';
  * der Rest der App merkt davon nichts.
  */
 export function RecipeImage({ image, size = 'md', className = '' }: { image?: Img; size?: 'sm' | 'md' | 'lg'; className?: string }) {
-  const halloween = useSpecial() === 'halloween';
+  const special = useSpecial();
+  const halloween = special === 'halloween';
   if (image?.kind === 'url') {
     return <img className={`rimg rimg--${size} ${className}`} src={image.url} alt="" loading="lazy" />;
   }
@@ -25,6 +27,8 @@ export function RecipeImage({ image, size = 'md', className = '' }: { image?: Im
       {image?.kind === 'plate' ? <PlateArt image={image} small={size === 'sm'} /> : <LineArt motif={image?.motif ?? 'bowl'} />}
       {/* Halloween: ein Spinnennetz in der Ecke – nur am Platzhalter, echte Fotos bleiben unberührt */}
       {halloween && size !== 'sm' && <CobwebCorner className="rimg__web" />}
+      {/* Weihnachten: ein Stechpalmenzweig in der Ecke – ebenso nur am Platzhalter */}
+      {special === 'weihnachten' && size !== 'sm' && <HollyCorner className="rimg__holly" />}
     </div>
   );
 }

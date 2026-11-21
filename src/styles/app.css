@@ -997,6 +997,7 @@ p { margin: 0; }
 .advent-preview__text { display: flex; flex-direction: column; gap: 2px; margin: 0; font-size: var(--fs-sm); min-width: 0; }
 .advent-preview__text strong { font-size: var(--fs-md); }
 .advent-preview__controls { display: flex; align-items: center; gap: 12px; }
+.advent-sheet__shop { margin-top: 12px; }
 .advent-sheet__note { margin: 0; padding: 10px 12px; border-radius: var(--r-sm); background: var(--butter); font-size: var(--fs-sm); color: var(--ink-2); text-align: center; }
 /* 4 × 6 Türchen im Hochformat (Julia: „wie mein Beispiel“) – auf 375 px je knapp 80 × 105 px; unten Platz fürs Schild */
 .advent-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px 8px; margin-bottom: 20px; }
@@ -1035,6 +1036,32 @@ p { margin: 0; }
 }
 .advent-door.has-photo .advent-door__saved { padding: 2px; border-radius: 50%; background: rgb(255 255 255 / 0.9); width: 18px; height: 18px; }
 .advent-door.has-photo .advent-door__title { padding: 30px 6px 6px; }
+.advent-door__photo { border-radius: inherit; }
+/* erstes Öffnen: die bemalte Tür schwingt an der linken Kante auf (wie ein echtes Türchen), dazu goldenes Funkeln */
+.advent-door.is-swinging { overflow: visible; perspective: 420px; z-index: 2; }
+.advent-door__leaf {
+  position: absolute; inset: 0; border-radius: inherit; overflow: hidden; transform-origin: left center;
+  box-shadow: 3px 0 8px rgb(45 30 20 / 0.25); animation: advent-swing 0.65s cubic-bezier(0.45, 0, 0.6, 1) forwards;
+}
+@keyframes advent-swing {
+  from { transform: rotateY(0); }
+  75% { opacity: 1; }
+  to { transform: rotateY(-115deg); opacity: 0; }
+}
+.advent-door__sparks { position: absolute; inset: 0; pointer-events: none; }
+.advent-spark { position: absolute; left: 50%; top: 50%; color: #e8b04a; opacity: 0; animation: advent-spark 0.7s ease-out 0.12s forwards; }
+.advent-spark--0 { --dx: -38px; --dy: -46px; }
+.advent-spark--1 { --dx: 34px; --dy: -52px; }
+.advent-spark--2 { --dx: 46px; --dy: 6px; }
+.advent-spark--3 { --dx: 30px; --dy: 50px; }
+.advent-spark--4 { --dx: -34px; --dy: 46px; }
+.advent-spark--5 { --dx: -48px; --dy: -2px; }
+@keyframes advent-spark {
+  0% { transform: translate(-50%, -50%) scale(0.4); opacity: 0; }
+  30% { opacity: 1; }
+  100% { transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(1.1); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) { .advent-door__leaf, .advent-door__sparks { display: none; } }
 @media (min-width: 600px) { .advent-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
 
 .advent-sheet__photo { display: block; width: 100%; aspect-ratio: 4 / 3; max-height: 260px; object-fit: cover; border-radius: var(--r); margin: 6px 0 10px; }
@@ -1699,6 +1726,62 @@ p { margin: 0; }
 .prep__item .rimg--sm { width: 48px; height: 48px; }
 .prep__text { flex: 1; min-width: 0; display: grid; color: var(--ink); overflow-wrap: break-word; }
 .from-base { font-weight: 700; }
+
+/* ── Feiertagsthema Weihnachten (Einstellungen → Spezial; von selbst an vom 1. bis 26.12.) ─────
+   Julia: Tannengrün + Rot auf Creme, „mehr Deko“. Tannengrüne Knöpfe (auf Weiß 7,6 : 1), rote Akzente.
+   Deko in WeihnachtsDeko.tsx: Schnee und Lichterkette hinter den Karten, Schneehaube auf der Leiste, Stechpalme am Bild. */
+:root[data-theme="weihnachten"] {
+  --bg: #f9f5ee; --surface: #ffffff; --surface-2: #f2ebe0; --line: #e7ddcf; --backdrop: #eee5d8;
+  --ink: #1f3a2c; --ink-2: #48594d; --ink-3: #5c6b60;
+  --primary: #2f5b40; --primary-press: #234632; --primary-soft: #e2ede4; --primary-text: #2f5b40;
+  --art: #2f5b40; --heart: #b3322c; --star: #c9a24a; --on-primary: #ffffff;
+  --xm-red: #b3322c; --xm-snow: #ffffff;
+}
+:root[data-theme="weihnachten"] .app { isolation: isolate; } /* Himmel (z-index -1) hinter den Karten, vor dem Grund */
+.xm-sky { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
+/* Lichterkette: Girlande aus Bögen (60 px), daran Birnen, die nacheinander funkeln */
+.xm-lights {
+  position: absolute; top: 0; left: 0; right: 0; height: 30px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='30'%3E%3Cpath d='M0 4 Q30 22 60 4' fill='none' stroke='%232f5b40' stroke-width='1.4'/%3E%3C/svg%3E") repeat-x;
+}
+.xm-bulb {
+  position: absolute; top: 13px; left: calc(var(--i) * 60px + 26px); width: 8px; height: 12px; border-radius: 50% 50% 45% 45%;
+  background: var(--c); box-shadow: 0 0 8px var(--c); animation: xm-twinkle 2.4s ease-in-out infinite; animation-delay: calc(var(--i) * -0.37s);
+}
+.xm-bulb::before { content: ''; position: absolute; top: -3px; left: 2px; width: 4px; height: 4px; border-radius: 1px; background: #2f5b40; }
+@keyframes xm-twinkle { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+/* Schneefall: blaugraue Flocken (Weiß sähe man auf Creme nicht), fallen langsam und wehen etwas zur Seite */
+.xm-flake { position: absolute; top: -20px; left: var(--x); color: #b9cad3; opacity: 0.8; animation: xm-fall var(--dur) linear infinite; animation-delay: var(--delay); }
+.xm-dot { display: block; width: var(--s); height: var(--s); border-radius: 50%; background: #c7d5dc; }
+@keyframes xm-fall {
+  from { transform: translate(0, 0) rotate(0); }
+  50% { transform: translate(var(--drift), 52vh) rotate(90deg); }
+  to { transform: translate(0, 105vh) rotate(180deg); }
+}
+/* Leiste unten: tannengrün mit Schneehaube (Julia: wie die Grabsteine an Halloween – aber Schnee) */
+:root[data-theme="weihnachten"] .nav { background: rgb(31 58 44 / 0.97); border-top-color: transparent; border-right-color: transparent; --nav-brush: rgb(255 255 255 / 0.16); }
+:root[data-theme="weihnachten"] .nav__item { color: #d9e4dc; }
+:root[data-theme="weihnachten"] .nav__item.is-active { color: #f4d27a; }
+:root[data-theme="weihnachten"] .nav__logo { color: #f4d27a; }
+:root[data-theme="weihnachten"] .nav__plus { background: var(--xm-red); box-shadow: 0 3px 10px rgb(179 50 44 / 0.35); }
+:root[data-theme="weihnachten"] .nav::after {
+  content: ''; position: absolute; left: 0; right: 0; top: -9px; height: 16px; pointer-events: none;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='16'%3E%3Cpath d='M0 9C8 3 16 4 22 8s12 3 18-1 14-4 20 1 10 7 16 4 12-6 20-3 12 5 24 0V16H0z' fill='%23ffffff'/%3E%3Cpath d='M27 10c0 3 1 5 2 5s2-2 2-5zM66 11c0 2 1 4 2 4s2-2 2-4zM101 9c0 3 1 5 2 5s2-2 2-5z' fill='%23ffffff'/%3E%3C/svg%3E") repeat-x;
+  filter: drop-shadow(0 -1px 1px rgb(31 58 44 / 0.18));
+}
+/* Stechpalme an Platzhalterbildern (oben rechts – oben links sitzt an Halloween das Netz) */
+.rimg__holly { position: absolute; top: 0; right: 0; width: 26%; max-width: 68px; aspect-ratio: 1; }
+.holly__leaf { fill: #2f5b40; }
+.holly__vein { fill: none; stroke: #8dbb3e; stroke-width: 1.2; stroke-linecap: round; }
+.holly__berry { fill: var(--xm-red, #b3322c); }
+@media (min-width: 768px) {
+  :root[data-theme="weihnachten"] .nav::after { display: none; } /* Seitenleiste: keine Schneehaube */
+}
+@media (prefers-reduced-motion: reduce) {
+  .xm-bulb { animation: none; }
+  /* Schnee steht still – verteilt statt alle oben am Rand */
+  .xm-flake { animation: none; top: calc(var(--s) * 7 + 10vh); }
+}
 
 /* ── Vorkoch-Woche (Julia: Grundlagen am Kochtag, daraus die Abendessen) ── */
 .tag { display: inline-flex; align-items: center; gap: 4px; width: fit-content; max-width: 100%; padding: 1px 8px; border-radius: 999px; font-size: var(--fs-xs); font-weight: 700; color: var(--ink-2); background: var(--surface-2); }

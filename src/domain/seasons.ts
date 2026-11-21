@@ -3,7 +3,7 @@
  * wer eins ausschaltet, hat bis Saisonende Ruhe; außerhalb der Saison kann man es von Hand einschalten.
  * (Julia: Halloween saisonal automatisch, später genauso Weihnachten)
  */
-export type SpecialId = 'halloween';
+export type SpecialId = 'halloween' | 'weihnachten';
 
 export interface Season {
   id: SpecialId;
@@ -13,7 +13,11 @@ export interface Season {
   to: string;
 }
 
-export const SEASONS: Season[] = [{ id: 'halloween', label: 'Halloween', from: '10-15', to: '11-02' }];
+export const SEASONS: Season[] = [
+  { id: 'halloween', label: 'Halloween', from: '10-15', to: '11-02' },
+  // Julia: genau zum Adventskalender, endet nach den Feiertagen
+  { id: 'weihnachten', label: 'Weihnachten', from: '12-01', to: '12-26' },
+];
 
 /** Eigene Wahl, die die Saison überstimmt – bis einschließlich `until` („JJJJ-MM-TT“) oder für immer */
 export interface SpecialOverride {

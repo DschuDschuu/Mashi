@@ -332,7 +332,7 @@ function SpecialThemes() {
   return (
     <details className="panel special">
       <summary>
-        <Icon name="pumpkin" size={22} />
+        <Icon name={active === 'weihnachten' ? 'snow' : 'pumpkin'} size={22} />
         <span className="special__head">
           <strong>Spezial</strong>
           <small className="muted">{label ? `${label} ist an` : 'Themen für Feiertage'}</small>
@@ -352,13 +352,8 @@ function SpecialThemes() {
             </button>
           );
         })}
-        <div className="special__pick is-soon" aria-hidden>
-          <span className="special__swatch"><i style={{ background: '#f3f1ec' }} /><i style={{ background: '#b3322c' }} /><i style={{ background: '#2f5b40' }} /></span>
-          Weihnachten
-          <small className="muted">kommt bald</small>
-        </div>
       </div>
-      <p className="small muted">Vom 15. Oktober bis 2. November von selbst an. Gilt nur für dieses Gerät.</p>
+      <p className="small muted">Halloween vom 15. Oktober bis 2. November, Weihnachten vom 1. bis 26. Dezember – jeweils von selbst an. Gilt nur für dieses Gerät.</p>
     </details>
   );
 }

@@ -3,7 +3,7 @@ import { resolveIngredient } from '../domain/mealplan';
 import { deductRecipe, pantryAfterPlan, plannedByDish, type Stock } from '../domain/pantry';
 import { cookingContent } from '../domain/homemade';
 import { useUpKeys } from '../domain/shelfLife';
-import type { Recipe } from '../domain/types';
+import type { Recipe, RecipeContent } from '../domain/types';
 import { useFoodTable, usePantry, usePlan, useRecipes } from '../data/store';
 
 /**
@@ -12,6 +12,21 @@ import { useFoodTable, usePantry, usePlan, useRecipes } from '../data/store';
  * - Nicht geplant: mit dem, was nach dem Wochenplan frei bleibt
  * Leere Speisekammer → stock undefined: dann zeigt die Seite nichts dazu.
  */
+/**
+ * Für Inhalte, die (noch) kein Rezept im Kochbuch sind – z. B. hinter einem Türchen im Adventskalender (Julia: „was hab
+ * ich da?“): je Zutat da / knapp / fehlt, mit dem, was nach dem Wochenplan frei bleibt. Leere Speisekammer → undefined.
+ */
+export function useContentStock(content: RecipeContent, servings: number): Map<string, Stock> | undefined {
+  const pantry = usePantry();
+  const plan = usePlan();
+  const recipes = useRecipes();
+  const table = useFoodTable();
+  return useMemo(
+    () => (pantry.items.length ? deductRecipe(pantryAfterPlan(pantry, plan, recipes, table), content, servings, table).stock : undefined),
+    [pantry, plan, recipes, table, content, servings],
+  );
+}
+
 export function useRecipeStock(recipe: Recipe, servings: number): { stock?: Map<string, Stock>; soon: Set<string> } {
   const pantry = usePantry();
   const plan = usePlan();
