@@ -992,6 +992,12 @@ p { margin: 0; }
 .advent-banner__close { flex: none; margin-right: 4px; color: var(--ink-3); }
 
 .advent-lead { margin: 4px 0 12px; color: var(--ink-2); }
+/* Vorschau (#/advent?vorschau): deutlich als Ausprobieren erkennbar, Tag mit −/+ */
+.advent-preview { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; margin: 4px 0 8px; padding: 10px 14px; border-radius: var(--r); background: var(--butter); border: 1px dashed var(--yellow); }
+.advent-preview__text { display: flex; flex-direction: column; gap: 2px; margin: 0; font-size: var(--fs-sm); min-width: 0; }
+.advent-preview__text strong { font-size: var(--fs-md); }
+.advent-preview__controls { display: flex; align-items: center; gap: 12px; }
+.advent-sheet__note { margin: 0; padding: 10px 12px; border-radius: var(--r-sm); background: var(--butter); font-size: var(--fs-sm); color: var(--ink-2); text-align: center; }
 /* 4 × 6 Türchen im Hochformat (Julia: „wie mein Beispiel“) – auf 375 px je knapp 80 × 105 px; unten Platz fürs Schild */
 .advent-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px 8px; margin-bottom: 20px; }
 .advent-door {

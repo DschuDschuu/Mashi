@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   ADVENT_TAG, adventHint, canOpen, doorNotes, emptyAdvent, fillAdvent, isAdventCalendar, markOpened, markSaved,
-  merge3Advent, needsFilling, parseAdventJson, unionAdvent, type AdventCalendar,
+  merge3Advent, needsFilling, parseAdventJson, previewDate, unionAdvent, type AdventCalendar,
 } from './advent';
 import { createBackup, parseBackup } from './backup';
 import { ADVENT_DEMO } from '../data/adventDemo';
@@ -156,6 +156,19 @@ describe('Türchen öffnen', () => {
 
   it('ein leerer Kalender geht nie auf', () => {
     expect(canOpen(emptyAdvent(), 1, on(2026, 12, 24))).toBe(false);
+  });
+
+  it('Vorschau: tut so, als wäre der gewählte Dezembertag – begrenzt auf 1 bis 24', () => {
+    const nov = on(2026, 11, 21);
+    const d5 = previewDate(cal, 5, nov);
+    expect([d5.getFullYear(), d5.getMonth(), d5.getDate()]).toEqual([2026, 11, 5]);
+    expect(canOpen(cal, 5, d5)).toBe(true);
+    expect(canOpen(cal, 6, d5)).toBe(false);
+    expect(previewDate(cal, 99, nov).getDate()).toBe(24);
+    expect(previewDate(cal, 0, nov).getDate()).toBe(1);
+    expect(previewDate(cal, Number('quatsch'), nov).getDate()).toBe(1);
+    // leerer Kalender: dieses Jahr
+    expect(previewDate(emptyAdvent(), 3, on(2027, 11, 1)).getFullYear()).toBe(2027);
   });
 
   it('merkt sich den ersten Öffnungszeitpunkt', () => {

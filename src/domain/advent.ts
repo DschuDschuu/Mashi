@@ -241,6 +241,16 @@ export function canOpen(cal: AdventCalendar, day: number, now: Date): boolean {
   return now.getMonth() === 11 && now.getDate() >= day;
 }
 
+/**
+ * Vorschau (Julia: „jetzt schon ansehen, so dev-mäßig“, #/advent?vorschau): Mashi tut so, als wäre der `day`. Dezember
+ * im Jahr des Kalenders (leer: dieses Jahr), mittags – dann gehen die Türchen 1 bis `day` auf. Der Tag wird auf 1–24
+ * begrenzt; Unsinn in der Adresse wird zum 1.
+ */
+export function previewDate(cal: AdventCalendar, day: number, now: Date): Date {
+  const d = Math.min(ADVENT_DAYS, Math.max(1, Math.round(Number.isFinite(day) ? day : 1)));
+  return new Date(cal.year || now.getFullYear(), 11, d, 12);
+}
+
 export function markOpened(cal: AdventCalendar, day: number, now: Date): AdventCalendar {
   if (cal.opened[day]) return cal;
   return { ...cal, opened: { ...cal.opened, [day]: now.toISOString() } };

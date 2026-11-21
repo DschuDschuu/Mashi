@@ -3,7 +3,7 @@ import { fillCalendar, openDoor, saveDoor, useAdvent, useAdventError, useAdventI
 import { ADVENT_DEMO } from '../../data/adventDemo';
 import { isDemo, useRecipes } from '../../data/store';
 import {
-  ADVENT_DAYS, canOpen, doorOn, needsFilling, parseAdventJson, type AdventCalendar, type AdventDoor, type AdventImport,
+  ADVENT_DAYS, canOpen, doorOn, needsFilling, parseAdventJson, previewDate, type AdventCalendar, type AdventDoor, type AdventImport,
 } from '../../domain/advent';
 import { totalMinutes } from '../../domain/recipe';
 import { formatQuantity } from '../../domain/scaling';
@@ -13,6 +13,7 @@ import { formatMinutes, portionCount } from '../format';
 import { toast } from '../toast';
 import { useSheet } from '../useSheet';
 import { AdventDoorArt } from '../components/AdventDoorArt';
+import { Stepper } from '../components/Controls';
 import { Icon } from '../components/Icon';
 import { downscaled } from '../components/ImageCropper';
 import { TopBar } from '../components/TopBar';
@@ -22,51 +23,73 @@ const DAYS = Array.from({ length: ADVENT_DAYS }, (_, i) => i + 1);
 /**
  * Adventskalender (Julia): 24 Türchen, hinter jedem ein Rezept aus ihrer Datei. Ein Türchen geht an seinem Tag auf;
  * geöffnet zeigt es das Rezept, „Zum Testen speichern“ legt es ins Kochbuch. `day` = von der Startseite aus gleich
- * das Türchen des Tages aufmachen.
+ * das Türchen des Tages aufmachen. `preview` = Vorschau (#/advent?vorschau=5): so tun, als wäre der 5. Dezember.
  */
-export function AdventScreen({ day }: { day?: number }) {
+export function AdventScreen({ day, preview }: { day?: number; preview?: number }) {
   const cal = useAdvent();
   const error = useAdventError();
   const [openDay, setOpenDay] = useState<number | null>(null);
-  const now = new Date();
+  // Vorschau (Julia: „jetzt schon ansehen, so dev-mäßig“): gewählter Tag und was hier schon angesehen wurde –
+  // nur auf dieser Seite, nichts davon wird gespeichert; im Dezember sind die Türchen also weiter zu
+  const isPreview = preview !== undefined;
+  const [previewDay, setPreviewDay] = useState(preview ?? 1);
+  const [peeked, setPeeked] = useState<number[]>([]);
+  const now = isPreview && cal ? previewDate(cal, previewDay, new Date()) : new Date();
 
   // von der Startseite („Türchen 5 öffnen“): gleich auf – sobald der Kalender geladen ist, und nur einmal
   const jumped = useRef(false);
   useEffect(() => {
-    if (!cal || !day || jumped.current) return;
+    if (!cal || !day || isPreview || jumped.current) return;
     jumped.current = true;
     if (canOpen(cal, day, new Date()) && doorOn(cal, day)) {
       openDoor(day);
       setOpenDay(day);
     }
-  }, [cal, day]);
+  }, [cal, day, isPreview]);
 
   if (!cal) return <main className="screen"><TopBar title="Adventskalender" backTo="/" /></main>;
 
   const tap = (d: number) => {
-    if (!canOpen(cal, d, new Date())) {
+    if (!canOpen(cal, d, now)) {
       toast(`Noch zu – Türchen ${d} geht am ${d}. Dezember auf`);
       return;
     }
-    openDoor(d);
+    if (isPreview) setPeeked((p) => (p.includes(d) ? p : [...p, d]));
+    else openDoor(d);
     setOpenDay(d);
   };
+  // in der Vorschau zählt nur, was hier angesehen wurde (und am gewählten Tag schon aufgehen darf)
+  const isOpened = (d: number) => (isPreview ? peeked.includes(d) && d <= previewDay : !!cal.opened[d]);
   const door = openDay ? doorOn(cal, openDay) : undefined;
 
   return (
     <main className="screen">
       <TopBar title="Adventskalender" backTo="/" intro="advent" />
       {error && <p className="error" role="alert">{error}</p>}
+      {isPreview && (
+        <div className="advent-preview" role="status">
+          <p className="advent-preview__text">
+            <strong>Vorschau: {previewDay}. Dezember</strong>
+            <span>Zum Ausprobieren – Mashi merkt sich hier nichts.</span>
+          </p>
+          <div className="advent-preview__controls">
+            <Stepper value={previewDay} min={1} max={ADVENT_DAYS} onChange={setPreviewDay} label="Tag der Vorschau" small />
+            <button type="button" className="link" onClick={() => navigate('/advent', { replace: true })}>Beenden</button>
+          </div>
+        </div>
+      )}
       {cal.doors.length > 0 && (
         <>
           <p className="advent-lead">{leadText(cal, now)}</p>
           <div className="advent-grid">
-            {DAYS.map((d) => <Door key={d} day={d} cal={cal} now={now} onTap={tap} />)}
+            {DAYS.map((d) => <Door key={d} day={d} cal={cal} now={now} opened={isOpened(d)} onTap={tap} />)}
           </div>
         </>
       )}
       <FillPanel cal={cal} stale={needsFilling(cal, now)} />
-      {door && openDay && <DoorSheet day={openDay} door={door} savedId={cal.saved[openDay]} onClose={() => setOpenDay(null)} />}
+      {door && openDay && (
+        <DoorSheet day={openDay} door={door} savedId={cal.saved[openDay]} preview={isPreview} onClose={() => setOpenDay(null)} />
+      )}
     </main>
   );
 }
@@ -78,10 +101,9 @@ function leadText(cal: AdventCalendar, now: Date): string {
   return 'Frohe Weihnachten! Verpasste Türchen kannst du jederzeit nachholen.';
 }
 
-function Door({ day, cal, now, onTap }: { day: number; cal: AdventCalendar; now: Date; onTap: (d: number) => void }) {
+function Door({ day, cal, now, opened, onTap }: { day: number; cal: AdventCalendar; now: Date; opened: boolean; onTap: (d: number) => void }) {
   const door = doorOn(cal, day);
   const can = canOpen(cal, day, now);
-  const opened = !!cal.opened[day];
   const today = cal.year === now.getFullYear() && now.getMonth() === 11 && now.getDate() === day;
   if (!door) {
     return <div className="advent-door is-empty" aria-label={`Türchen ${day}: leer`}><span className="advent-door__num">{day}</span></div>;
@@ -125,7 +147,7 @@ function DoorPhoto({ id, title }: { id: string; title: string }) {
 }
 
 /** Das Rezept hinter dem Türchen – wie eine kleine Rezeptkarte, mit „Zum Testen speichern“ */
-function DoorSheet({ day, door, savedId, onClose }: { day: number; door: AdventDoor; savedId?: string; onClose: () => void }) {
+function DoorSheet({ day, door, savedId, preview = false, onClose }: { day: number; door: AdventDoor; savedId?: string; preview?: boolean; onClose: () => void }) {
   const ref = useSheet(onClose);
   const saved = useRecipes().find((r) => r.id === savedId);
   const photo = useAdventImage(door.imageId);
@@ -186,6 +208,9 @@ function DoorSheet({ day, door, savedId, onClose }: { day: number; door: AdventD
             <button type="button" className="btn btn--soft btn--block" onClick={() => navigate(`/rezept/${saved.id}`)}>
               <Icon name="check" size={18} /> Im Kochbuch – ansehen
             </button>
+          ) : preview ? (
+            // Vorschau: nichts speichern – sonst stünde das Rezept schon vor dem Dezember im Kochbuch
+            <p className="advent-sheet__note">Vorschau – hier wird nichts gespeichert. „Zum Testen speichern“ gibt es am {day}. Dezember.</p>
           ) : (
             <button type="button" className="btn btn--primary btn--block" disabled={saving} onClick={save}>
               <Icon name="bookmark" size={18} /> Zum Testen speichern
