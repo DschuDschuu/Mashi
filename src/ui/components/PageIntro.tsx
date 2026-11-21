@@ -31,6 +31,8 @@ const TOURS: Record<IntroId, Step[]> = {
     { at: 'main .advent-banner', title: 'Adventskalender', text: 'Vom 1. bis 24. Dezember jeden Tag ein Türchen mit einem Rezept – es meldet sich einmal am Tag von selbst. Befüllen: Einstellungen → Adventskalender.', added: 4 },
     // Stand 5: der Adventskalender (Stand 4) ist schon live – wer ihn gesehen hat, bekäme einen Schritt mit 4 nie zu sehen
     { at: '.shop-day', title: 'Einkauf planen', text: 'Freitags und samstags steht hier „Einkauf planen“: Angebote deiner Märkte einfügen, Mashi findet passende Rezepte.', added: 5 },
+    // Stand 6: Einkauf planen (Stand 5) ist schon live
+    { at: '.home-head__advent', title: 'Zum Adventskalender', text: 'Der kleine Baum führt zu deinen Türchen – vom Befüllen bis zum 6. Januar.', added: 6 },
     { title: 'Jede Seite erklärt sich selbst', text: 'Beim ersten Besuch zeigt dir jede Seite ihre Knöpfe. Noch mal ansehen: Einstellungen → „Alle Einführungen wieder zeigen“.' },
   ],
   kochbuch: [

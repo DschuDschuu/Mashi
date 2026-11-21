@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useAdvent } from '../../data/adventStore';
-import { adventHint, doorOn } from '../../domain/advent';
+import { adventHint, doorOn, showsTree } from '../../domain/advent';
 import { navigate } from '../../router';
 import { Icon } from './Icon';
 
@@ -13,6 +13,20 @@ const hiddenYear = () => {
     return 0;
   }
 };
+
+/**
+ * Kleiner Baum oben neben dem Zahnrad (Julia) – führt zum Adventskalender, solange er befüllt ist, bis zum 6. Januar
+ * (advent.ts: showsTree). Dezent wie das Zahnrad, damit die Startseite ruhig bleibt.
+ */
+export function AdventTreeButton({ className = '' }: { className?: string }) {
+  const cal = useAdvent();
+  if (!cal || !showsTree(cal, new Date())) return null;
+  return (
+    <button type="button" className={`settings-btn advent-tree ${className}`.trim()} onClick={() => navigate('/advent')} aria-label="Adventskalender">
+      <Icon name="tree" size={20} />
+    </button>
+  );
+}
 
 /**
  * Adventskalender auf der Startseite (advent.ts: adventHint): vom 1. bis 24. Dezember das Türchen des Tages, ab dem

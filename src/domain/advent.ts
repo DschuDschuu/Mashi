@@ -325,6 +325,17 @@ export function adventHint(cal: AdventCalendar, now: Date): AdventHint | undefin
 }
 
 /**
+ * Kleiner Baum oben auf der Startseite (Julia: „Zum Kalender oben rechts neben dem Zahnrad“): sobald der Kalender für
+ * dieses Jahr befüllt ist – bis zum 6. Januar danach, damit sich Verpasstes nachholen lässt. Sonst steht im Sommer
+ * kein Tannenbaum in der Kopfzeile.
+ */
+export function showsTree(cal: AdventCalendar, now: Date): boolean {
+  if (!cal.doors.length || !cal.year) return false;
+  if (now.getFullYear() === cal.year) return true;
+  return now.getFullYear() === cal.year + 1 && now.getMonth() === 0 && now.getDate() <= 6;
+}
+
+/**
  * Täglicher Dialog (Julia: „soll täglich als Dialog aufpoppen“, einmal am Tag, solange zu): Tag des heutigen Türchens,
  * wenn es heute (1.–24.12., Kalender befüllt) eins gibt, es noch zu ist und der Dialog heute noch nicht kam.
  * `lastShown` = Tag („JJJJ-MM-TT“), an dem er zuletzt kam – je Gerät gemerkt.

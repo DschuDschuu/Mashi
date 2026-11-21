@@ -1161,6 +1161,9 @@ p { margin: 0; }
 .settings-btn { display: grid; place-items: center; width: 44px; height: 44px; color: var(--art); opacity: 0.7; }
 .settings-btn:active { opacity: 1; }
 .home-head__settings { position: absolute; right: -6px; top: 8px; }
+/* Baum zum Adventskalender links neben dem Zahnrad (Julia); auf dem Tablet sitzt das Zahnrad in der Seitenleiste */
+.home-head__advent { position: absolute; right: 40px; top: 8px; }
+@media (min-width: 768px) { .home-head .home-head__advent { display: grid; right: -6px; } }
 .nav__settings { display: none; }
 @media (min-width: 768px) {
   .nav__settings { display: flex; margin-top: auto; }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   ADVENT_TAG, adventHint, canOpen, dailyDoor, doorNotes, exportAdvent, emptyAdvent, fillAdvent, isAdventCalendar, markOpened, markSaved,
-  merge3Advent, needsFilling, parseAdventJson, previewDate, unionAdvent, withDoorImage, type AdventCalendar,
+  merge3Advent, needsFilling, parseAdventJson, previewDate, showsTree, unionAdvent, withDoorImage, type AdventCalendar,
 } from './advent';
 import { createBackup, parseBackup } from './backup';
 import { ADVENT_DEMO } from '../data/adventDemo';
@@ -215,6 +215,18 @@ describe('Hinweis auf der Startseite', () => {
     expect(adventHint(cal, on(2026, 12, 4))).toEqual({ kind: 'door', day: 4, opened: false });
     expect(adventHint(cal, on(2026, 12, 5))).toEqual({ kind: 'door', day: 5, opened: true });
     expect(adventHint(cal, on(2026, 12, 25))).toBeUndefined();
+  });
+});
+
+describe('Baum auf der Startseite', () => {
+  it('vom Befüllen bis zum 6. Januar – leer, vom Vorjahr oder danach nicht', () => {
+    const cal = filled(on(2026, 11, 20));
+    expect(showsTree(cal, on(2026, 11, 20))).toBe(true);
+    expect(showsTree(cal, on(2026, 12, 31))).toBe(true);
+    expect(showsTree(cal, on(2027, 1, 6, 23))).toBe(true);
+    expect(showsTree(cal, on(2027, 1, 7))).toBe(false);
+    expect(showsTree(cal, on(2027, 7, 1))).toBe(false);
+    expect(showsTree(emptyAdvent(), on(2026, 12, 5))).toBe(false);
   });
 });
 

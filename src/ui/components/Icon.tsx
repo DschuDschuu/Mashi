@@ -98,6 +98,8 @@ const PATHS = {
   // Adventskalender: Geschenk mit Schleife, Schloss am Türchen, das noch nicht dran ist
   gift: 'M3 8h18v4H3z M5 12v9h14v-9 M12 8v13 M12 8C10.5 4.5 7 4 7 6.3 7 7.6 9 8 12 8 M12 8c1.5-3.5 5-4 5-1.7C17 7.6 15 8 12 8',
   lock: 'M6 11h12v10H6z M8.5 11V7.5a3.5 3.5 0 0 1 7 0V11',
+  // Tannenbaum – führt auf der Startseite zum Adventskalender
+  tree: 'M12 2.5l-4.5 6h2.6L6 14h3L5 19.5h14L15 14h3l-4.1-5.5h2.6z M12 19.5V22',
   ghost: 'M5 20.5V11a7 7 0 0 1 14 0v9.5l-2.3-1.6-2.4 1.6-2.3-1.6-2.3 1.6-2.4-1.6z M9.5 11h.01 M14.5 11h.01',
 } as const;
 

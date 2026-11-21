@@ -3,7 +3,6 @@ import { fillCalendar, loadDoorImages, useAdvent } from '../../data/adventStore'
 import { ADVENT_DEMO } from '../../data/adventDemo';
 import { isDemo } from '../../data/store';
 import { exportAdvent, needsFilling, parseAdventJson, type AdventDoor, type AdventImport } from '../../domain/advent';
-import { navigate } from '../../router';
 import { ask } from '../confirm';
 import { shareJsonFile } from '../shareRecipes';
 import { toast } from '../toast';
@@ -95,11 +94,6 @@ export function AdventSettings() {
         {filled && (
           <button type="button" className="btn btn--ghost" disabled={busy} onClick={exportFile}>
             <Icon name="share" size={18} /> Exportieren …
-          </button>
-        )}
-        {filled && (
-          <button type="button" className="btn btn--ghost" onClick={() => navigate('/advent')}>
-            <Icon name="gift" size={18} /> Zum Kalender
           </button>
         )}
       </div>

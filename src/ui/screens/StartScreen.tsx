@@ -10,7 +10,7 @@ import { navigate } from '../../router';
 import { Empty } from '../components/Controls';
 import { CravingAsk } from '../components/CravingAsk';
 import { TrialAsk } from '../components/TrialAsk';
-import { AdventBanner } from '../components/AdventBanner';
+import { AdventBanner, AdventTreeButton } from '../components/AdventBanner';
 import { AdventDailyDialog } from '../components/AdventDialog';
 import { Icon } from '../components/Icon';
 import { PageIntro } from '../components/PageIntro';
@@ -65,6 +65,7 @@ export function StartScreen() {
         <Icon name="heart" size={18} className="logo-heart" />
         <Icon name="sparkles" size={20} className="home-head__spark home-head__spark--a" />
         <Icon name="sparkles" size={14} className="home-head__spark home-head__spark--b" />
+        <AdventTreeButton className="home-head__advent" />
         <SettingsButton className="home-head__settings" />
       </header>
       {/* statt acht Einführungskarten ein kurzes Willkommen – jede Seite hat ihre eigene Tour */}
