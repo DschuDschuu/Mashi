@@ -6,6 +6,8 @@ Vom 1. bis 24. Dezember öffnet sich in Mashi jeden Tag ein Türchen mit einem R
 - **Wo:** Startseite (1.–24.12. „Türchen 5 öffnen“; ab 15.11. die Erinnerung „befüllen“, wegklickbar) und
   `#/advent`, das ganze Jahr über die Einstellungen erreichbar.
 - **Türchen:** gehen an ihrem Tag auf (Ortszeit). Nach dem Dezember des Kalenders ist alles offen – Verpasstes nachholen.
+  Geschlossen ist jedes eine eigene Grafik in Rot, Grün, Braun und Rosa (`AdventDoorArt.tsx`, reines SVG); wartet es
+  noch, ist es blasser und hat ein Schloss, das heutige hat Rahmen und „Heute“.
 - **Daten:** Die Rezepte kommen aus einer JSON-Datei, die man selbst einspielt („Kalender befüllen“). Sie liegen im
   eigenen Dokument `adventskalender` (Demo: localStorage `mashi-advent-v1`), werden mit den Geräten abgeglichen und
   sind in der Sicherung enthalten – **nie im Repo** (das ist öffentlich). Code: `src/domain/advent.ts`,

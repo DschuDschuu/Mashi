@@ -992,20 +992,26 @@ p { margin: 0; }
 .advent-banner__close { flex: none; margin-right: 4px; color: var(--ink-3); }
 
 .advent-lead { margin: 4px 0 12px; color: var(--ink-2); }
-/* 4 × 6 Türchen – auf 375 px je knapp 80 px im Quadrat */
-.advent-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-bottom: 16px; }
+/* 4 × 6 Türchen im Hochformat (Julia: „wie mein Beispiel“) – auf 375 px je knapp 80 × 105 px; unten Platz fürs Schild */
+.advent-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px 8px; margin-bottom: 20px; }
 .advent-door {
-  position: relative; aspect-ratio: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  position: relative; aspect-ratio: 3 / 4; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
   padding: 6px; border-radius: var(--r-sm); border: 1px solid var(--line); background: var(--surface); color: var(--ink); text-align: center;
 }
 .advent-door__num { font-family: var(--script); font-size: 1.7rem; line-height: 1; }
-.advent-door__icon { flex: none; color: var(--art); }
-.advent-door.is-locked { background: var(--surface-2); color: var(--ink-3); }
-.advent-door.is-locked .advent-door__icon { color: var(--ink-3); }
-.advent-door.is-ready { background: var(--rose); border-color: transparent; }
-.advent-door.is-ready .advent-door__icon { color: var(--danger-ink); }
-.advent-door.is-today { box-shadow: 0 0 0 2px var(--danger-ink); }
-.advent-door__today { font-size: var(--fs-xs); font-weight: 700; color: var(--danger-ink); }
+/* geschlossen: die Grafik füllt das Türchen (AdventDoorArt) */
+.advent-door.is-closed { padding: 0; border: 0; background: var(--surface-2); }
+.advent-door__art { position: absolute; inset: 0; border-radius: inherit; overflow: hidden; }
+.advent-door__svg { display: block; width: 100%; height: 100%; }
+/* wartet noch: blasser, mit Schloss – darf schon auf: volle Farbe */
+.advent-door.is-locked .advent-door__art { opacity: 0.5; filter: saturate(0.7); }
+.advent-door__badge {
+  position: absolute; left: 50%; bottom: -9px; transform: translateX(-50%); display: inline-flex; align-items: center; justify-content: center;
+  min-width: 20px; height: 20px; padding: 0 7px; border-radius: 999px; background: var(--surface); color: var(--ink-2);
+  font-size: var(--fs-xs); font-weight: 700; box-shadow: 0 1px 3px rgb(45 71 72 / 0.18); white-space: nowrap;
+}
+.advent-door.is-today { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--danger-ink); }
+.advent-door.is-today .advent-door__badge { background: var(--danger-ink); color: #fff; }
 .advent-door.is-open { background: var(--primary-soft); border-color: transparent; justify-content: flex-start; }
 .advent-door.is-open .advent-door__num { font-size: 1.2rem; }
 .advent-door__title {

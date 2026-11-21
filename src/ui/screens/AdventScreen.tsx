@@ -12,6 +12,7 @@ import { ask } from '../confirm';
 import { formatMinutes, portionCount } from '../format';
 import { toast } from '../toast';
 import { useSheet } from '../useSheet';
+import { AdventDoorArt } from '../components/AdventDoorArt';
 import { Icon } from '../components/Icon';
 import { downscaled } from '../components/ImageCropper';
 import { TopBar } from '../components/TopBar';
@@ -97,14 +98,22 @@ function Door({ day, cal, now, onTap }: { day: number; cal: AdventCalendar; now:
       </button>
     );
   }
+  if (opened) {
+    return (
+      <button type="button" className={`advent-door is-open${today ? ' is-today' : ''}`} aria-label={label} onClick={() => onTap(day)}>
+        <span className="advent-door__num">{day}</span>
+        <span className="advent-door__title">{door.content.title}</span>
+        {cal.saved[day] && <Icon name="check" size={14} className="advent-door__saved" />}
+      </button>
+    );
+  }
+  // geschlossen: die Grafik (Julia: „so fancy wie mein Beispiel“); wartet es noch, blasser mit Schloss
   return (
     // gesperrt nicht „disabled“: Antippen sagt dann, wann es aufgeht
-    <button type="button" className={`advent-door ${state}${today ? ' is-today' : ''}`} aria-label={label} aria-disabled={!can || undefined} onClick={() => onTap(day)}>
-      <span className="advent-door__num">{day}</span>
-      {!can && <Icon name="lock" size={14} className="advent-door__icon" />}
-      {can && !opened && (today ? <span className="advent-door__today">Heute</span> : <Icon name="gift" size={18} className="advent-door__icon" />)}
-      {opened && <span className="advent-door__title">{door.content.title}</span>}
-      {cal.saved[day] && <Icon name="check" size={14} className="advent-door__saved" />}
+    <button type="button" className={`advent-door is-closed ${state}${today ? ' is-today' : ''}`} aria-label={label} aria-disabled={!can || undefined} onClick={() => onTap(day)}>
+      <span className="advent-door__art"><AdventDoorArt day={day} /></span>
+      {!can && <span className="advent-door__badge"><Icon name="lock" size={11} /></span>}
+      {today && <span className="advent-door__badge">Heute</span>}
     </button>
   );
 }
