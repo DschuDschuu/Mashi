@@ -1,5 +1,5 @@
 /// <reference types="pouchdb-core" />
-import { emptyAdvent, isAdventCalendar, merge3Advent, unionAdvent, type AdventCalendar } from '../domain/advent';
+import { ADVENT_IMAGE_PREFIX, emptyAdvent, isAdventCalendar, merge3Advent, unionAdvent, type AdventCalendar } from '../domain/advent';
 import { emptyPlan, type MealPlan } from '../domain/mealplan';
 import { mergeRecipes } from '../domain/merge';
 import { merge3Pantry, merge3Plan, merge3Products, merge3Recipe, unionPantry, unionPlan, unionProducts } from '../domain/syncMerge';
@@ -36,6 +36,8 @@ const PRODUCTS: SingleKind<MyProduct[]> = {
 const PLAN: SingleKind<MealPlan> = { id: 'wochenplan', type: 'plan', field: 'plan', merge3: merge3Plan, union: unionPlan, stamp: (p) => p.updatedAt };
 const PANTRY: SingleKind<Pantry> = { id: 'speisekammer', type: 'pantry', field: 'pantry', merge3: merge3Pantry, union: unionPantry, stamp: (p) => p.updatedAt };
 const ADVENT: SingleKind<AdventCalendar> = { id: 'adventskalender', type: 'advent', field: 'advent', merge3: merge3Advent, union: unionAdvent, stamp: (a) => a.updatedAt };
+/** Foto eines Türchens – eigenes Dokument, damit der Kalender klein bleibt (Julia: A) */
+type ImageDoc = { _id: string; _rev?: string; type: 'adventImage'; url: string };
 /** Kaputtes Dokument (anderes Gerät mit Fehler) → leerer Kalender statt Absturz beim Öffnen */
 const pickAdvent = (d: SingleDoc) => (isAdventCalendar(d.advent) ? d.advent : emptyAdvent());
 
@@ -127,6 +129,39 @@ export class PouchRecipeRepository implements RecipeRepository {
 
   saveAdvent(calendar: AdventCalendar, base?: AdventCalendar): Promise<AdventCalendar> {
     return this.saveSingle(ADVENT, calendar, base, pickAdvent);
+  }
+
+  async loadAdventImage(id: string): Promise<string | undefined> {
+    try {
+      const doc = await (this.db as unknown as PouchDB.Database<ImageDoc>).get(id);
+      return doc.type === 'adventImage' ? doc.url : undefined;
+    } catch (e) {
+      if ((e as { status?: number }).status === 404) return undefined; // vom anderen Gerät noch nicht angekommen
+      throw e;
+    }
+  }
+
+  /** Fotos ändern sich nie (neue Datei = neue IDs) – darum ohne Zusammenführen, alle auf einmal */
+  saveAdventImages(images: readonly { id: string; url: string }[]): Promise<void> {
+    const db = this.db as unknown as PouchDB.Database<ImageDoc>;
+    return this.enqueue(async () => {
+      const res = await db.bulkDocs(images.map((i) => ({ _id: i.id, type: 'adventImage' as const, url: i.url })));
+      for (const r of res) if ('rev' in r && r.rev) this.ownRevs.add(r.rev);
+      const failed = res.find((r) => 'error' in r && r.error);
+      if (failed) throw new Error(`Foto ${failed.id} konnte nicht gespeichert werden`);
+    });
+  }
+
+  pruneAdventImages(keep: readonly string[]): Promise<void> {
+    const db = this.db as unknown as PouchDB.Database<ImageDoc>;
+    return this.enqueue(async () => {
+      const all = await db.allDocs({ startkey: ADVENT_IMAGE_PREFIX, endkey: `${ADVENT_IMAGE_PREFIX}￿` });
+      const stale = all.rows.filter((r) => !keep.includes(r.id));
+      if (!stale.length) return;
+      // Löschen = Grabstein-Revision, die mit abgeglichen wird – so verschwinden die Fotos auch auf den anderen Geräten
+      const res = await db.bulkDocs(stale.map((r) => ({ _id: r.id, _rev: r.value.rev, _deleted: true }) as unknown as ImageDoc));
+      for (const r of res) if ('rev' in r && r.rev) this.ownRevs.add(r.rev);
+    });
   }
 
   /**

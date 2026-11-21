@@ -14,6 +14,8 @@ PouchDB.plugin(memory).plugin(replication);
 let n = 0;
 const newDb = () => new PouchDB(`advent-${Date.now()}-${n++}`, { adapter: 'memory' }) as unknown as RecipeDb;
 const tick = (ms = 50) => new Promise((r) => setTimeout(r, ms));
+/** ein Pixel als PNG – ein echtes eingebettetes Foto, nur winzig */
+const PHOTO = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
 
 // erfundene Rezepte – das Repo ist öffentlich
 const doors = () => parseAdventJson(JSON.stringify([1, 2, 3].map((tag) => ({
@@ -28,9 +30,9 @@ describe('Adventskalender: speichern und abgleichen', () => {
     await initStore(repo);
     await initAdvent(repo);
 
-    fillCalendar(doors(), new Date(2026, 10, 20));
+    await fillCalendar(doors(), {}, new Date(2026, 10, 20));
     openDoor(2, new Date(2026, 11, 2));
-    const res = saveDoor(2)!;
+    const res = (await saveDoor(2))!;
     await whenSaved();
     await tick();
 
@@ -51,6 +53,56 @@ describe('Adventskalender: speichern und abgleichen', () => {
     await tick();
     expect(currentRecipes().some((r) => r.id === res.recipeId)).toBe(false);
     expect((await new PouchRecipeRepository(db).loadAdvent()).saved).toEqual({});
+  });
+
+  it('Fotos (Julia: A): eigene Dokumente, Türchen nur mit Verweis, beim Speichern das Bild des Rezepts', async () => {
+    const db = newDb();
+    const repo = new PouchRecipeRepository(db);
+    await initStore(repo);
+    await initAdvent(repo);
+
+    await fillCalendar(doors(), { 1: PHOTO, 3: PHOTO }, new Date(2026, 10, 20));
+    await whenSaved();
+    await tick();
+    const stored = await new PouchRecipeRepository(db).loadAdvent();
+    const [one, two, three] = stored.doors;
+    expect(one.imageId).toMatch(/^adventbild_/);
+    expect(two.imageId).toBeUndefined();
+    // der Kalender selbst bleibt klein: das Foto steht nicht darin
+    expect(JSON.stringify(stored)).not.toContain(PHOTO);
+    expect(await repo.loadAdventImage(three.imageId!)).toBe(PHOTO);
+
+    const res = (await saveDoor(1))!;
+    await whenSaved();
+    expect(currentRecipes().find((r) => r.id === res.recipeId)!.image).toEqual({ kind: 'url', url: PHOTO });
+  });
+
+  it('neu befüllen räumt Fotos auf – die vom vorigen Kalender bleiben fürs Rückgängig', async () => {
+    const db = newDb();
+    const repo = new PouchRecipeRepository(db);
+    await initStore(repo);
+    await initAdvent(repo);
+    const ids = async () => (await repo.loadAdvent()).doors.flatMap((d) => (d.imageId ? [d.imageId] : []));
+    const photoDocs = async () => (await db.allDocs({ startkey: 'adventbild_', endkey: 'adventbild_￿' })).rows.map((r) => r.id).sort();
+
+    await fillCalendar(doors(), { 1: PHOTO }, new Date(2026, 10, 20));
+    await whenSaved();
+    const first = await ids();
+    await fillCalendar(doors(), { 1: PHOTO }, new Date(2026, 10, 21));
+    await whenSaved();
+    const second = await ids();
+    const third = await fillCalendar(doors(), { 1: PHOTO }, new Date(2026, 10, 22));
+    await whenSaved();
+    await tick();
+    const now = await ids();
+    expect(await photoDocs()).toEqual([...second, ...now].sort()); // das erste ist weg
+    expect(await repo.loadAdventImage(first[0])).toBeUndefined();
+
+    third.undo(); // zurück zum zweiten – dessen Foto ist noch da
+    await whenSaved();
+    await tick();
+    expect(await ids()).toEqual(second);
+    expect(await repo.loadAdventImage(second[0])).toBe(PHOTO);
   });
 
   it('zwei Geräte ändern gleichzeitig – beim Speichern geht nichts verloren', async () => {

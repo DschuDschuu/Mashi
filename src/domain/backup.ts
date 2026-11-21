@@ -1,4 +1,5 @@
 import { isAdventCalendar, type AdventCalendar } from './advent';
+import { isDataImage } from './dataImage';
 import { isValidProduct, type MyProduct } from './nutrition/myProducts';
 import type { MealPlan } from './mealplan';
 import type { Pantry } from './pantry';
@@ -66,10 +67,6 @@ function isValidRecipe(v: unknown): v is Recipe {
       && Array.isArray(c.steps) && c.steps.every((s) => isObj(s) && isStr(s.id) && typeof s.text === 'string');
   });
 }
-
-/** größtes Foto aus einer Datei (als data-URL, ~3 MB) – der Zuschnitt erzeugt deutlich kleinere */
-const MAX_IMAGE = 4_000_000;
-const isDataImage = (v: unknown) => typeof v === 'string' && v.length <= MAX_IMAGE && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(v);
 
 /**
  * Bild aus einer fremden Datei (geteiltes Rezept, WhatsApp): nur eingebettete Fotos oder der Platzhalter.

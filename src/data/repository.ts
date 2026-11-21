@@ -31,6 +31,11 @@ export interface RecipeRepository {
   /** Adventskalender (advent.ts) – Türchen samt Rezepten, auf allen Geräten gleich; nie befüllt = emptyAdvent() */
   loadAdvent(): Promise<AdventCalendar>;
   saveAdvent(calendar: AdventCalendar, base?: AdventCalendar): Promise<AdventCalendar | void>;
+  /** Fotos der Türchen – je Foto ein eigenes Dokument (AdventDoor.imageId); fehlt es (noch nicht abgeglichen): undefined */
+  loadAdventImage(id: string): Promise<string | undefined>;
+  saveAdventImages(images: readonly { id: string; url: string }[]): Promise<void>;
+  /** Fotos löschen, die keiner der genannten mehr braucht */
+  pruneAdventImages(keep: readonly string[]): Promise<void>;
   /**
    * Meldet Änderungen, die NICHT aus dieser App-Sitzung stammen –
    * z. B. Rezepte, die der Abgleich vom Handy auf den PC geholt hat.

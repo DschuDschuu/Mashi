@@ -195,8 +195,8 @@ export function ImageCropper({ src, initial, onDone, onCancel, aspect = CARD_ASP
   );
 }
 
-/** Bild auf höchstens max px (lange Seite) verkleinern, als JPEG */
-function downscaled(img: HTMLImageElement, max: number): string {
+/** Bild auf höchstens max px (lange Seite) verkleinern, als JPEG – auch für die Fotos im Adventskalender */
+export function downscaled(img: HTMLImageElement, max: number): string {
   const scale = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
   const canvas = document.createElement('canvas');
   canvas.width = Math.round(img.naturalWidth * scale);

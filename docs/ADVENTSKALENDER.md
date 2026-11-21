@@ -51,6 +51,15 @@ Eine JSON-Datei (UTF-8) mit einer Liste von bis zu 24 Rezepten, eins je Tag. Bei
 | `beschreibung` | nein | ein Satz |
 | `vorbereitung`, `backzeit` | nein | Minuten (`kochzeit` geht statt `backzeit` auch) |
 | `tipp` | nein | landet beim Speichern in den Notizen |
+| `bild` | nein | Foto **in der Datei**: `"data:image/jpeg;base64,/9j/4AAQ…"` (JPEG, PNG oder WebP, bis 4 MB) – keine Links |
+
+**Fotos:** Am besten vorher auf etwa 1000 px verkleinern, sonst wird die Datei riesig. Mashi verkleinert jedes Foto
+beim Einspielen auf 800 px (wie eigene Fotos) und legt es als **eigenes Dokument** ab (`adventbild_…`, Demo:
+`mashi-advent-bild-…`) – im Kalender steht nur der Verweis, so gleicht ein geöffnetes Türchen nur ein paar Bytes ab.
+Zu sehen ist das Foto auf der geöffneten Kachel, oben im Türchen und beim Speichern als Bild des Rezepts. Links
+(`https://…`) nimmt Mashi nicht: Sie würden bei jedem Anzeigen einen fremden Server fragen (Code-Review #22). Beim
+Neu-Befüllen werden alte Fotos aufgeräumt; die des vorigen Kalenders bleiben, damit „Rückgängig“ sie noch findet.
+Die Sicherungsdatei enthält den Kalender ohne Fotos – die stehen ja in deiner JSON-Datei.
 
 **Einheiten** wie in Mashi: `g`, `kg`, `ml`, `l`, `EL`, `TL`, `Prise`, `Stück`, `Zehe`, `Dose`, `Glas`, `Bund`,
 `Handvoll`, `cm`, `Portion`. Päckchen bitte in Gramm (Vanillezucker 8 g, Backpulver 15 g, Puddingpulver 37 g) – eine

@@ -110,6 +110,27 @@ describe('Adventskalender einlesen', () => {
     expect(res.doors.map((d) => d.day)).toEqual(Array.from({ length: 24 }, (_, i) => i + 1));
   });
 
+  it('Fotos: eingebettet übernommen, Links und Kaputtes mit Hinweis weggelassen – das Rezept kommt trotzdem', () => {
+    const photo = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
+    const huge = `data:image/jpeg;base64,${'A'.repeat(4_000_001)}`;
+    const res = parse([
+      recipe(1, { bild: photo }),
+      recipe(2, { bild: 'https://example.org/zimtsterne.jpg' }),
+      recipe(3, { bild: 'kein foto' }),
+      recipe(4, { bild: huge }),
+      recipe(5),
+    ]);
+    expect(res.errors).toEqual([]);
+    expect(res.doors).toHaveLength(5);
+    expect(res.images).toEqual({ 1: photo });
+    expect(res.doors[0]).not.toHaveProperty('image'); // das Foto steht nicht im Türchen, nur in images
+    expect(res.warnings.filter((w) => /^Tag [234]:/.test(w))).toEqual([
+      'Tag 2: Links nimmt Mashi nicht – das Foto muss in der Datei stehen („data:image/jpeg;base64,…“). Ohne Foto übernommen.',
+      'Tag 3: „bild“ ist kein Foto (JPEG, PNG oder WebP als „data:image/…;base64,…“). Ohne Foto übernommen.',
+      'Tag 4: Das Foto ist größer als 4 MB – bitte vorher verkleinern. Ohne Foto übernommen.',
+    ]);
+  });
+
   it('nimmt auch eine verpackte Liste { "rezepte": [...] }', () => {
     expect(parse({ rezepte: [recipe(1)] }).doors).toHaveLength(1);
   });

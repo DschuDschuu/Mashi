@@ -16,6 +16,8 @@ const PRODUCTS_KEY = 'mashi-products-v1';
 const PLAN_KEY = 'mashi-plan-v1';
 const PANTRY_KEY = 'mashi-pantry-v1';
 const ADVENT_KEY = 'mashi-advent-v1';
+/** je Foto ein Eintrag: mashi-advent-bild-adventbild_… */
+const ADVENT_IMAGE_KEY = 'mashi-advent-bild-';
 
 export class LocalRecipeRepository implements RecipeRepository {
   private read(): Recipe[] {
@@ -103,6 +105,29 @@ export class LocalRecipeRepository implements RecipeRepository {
 
   async saveAdvent(calendar: AdventCalendar) {
     localStorage.setItem(ADVENT_KEY, JSON.stringify(calendar));
+  }
+
+  async loadAdventImage(id: string): Promise<string | undefined> {
+    try {
+      return localStorage.getItem(ADVENT_IMAGE_KEY + id) ?? undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /** localStorage ist knapp (der Origin ist geteilt): passt nicht alles, wird nichts halb gespeichert – der Fehler geht nach oben */
+  async saveAdventImages(images: readonly { id: string; url: string }[]) {
+    try {
+      for (const img of images) localStorage.setItem(ADVENT_IMAGE_KEY + img.id, img.url);
+    } catch (e) {
+      for (const img of images) localStorage.removeItem(ADVENT_IMAGE_KEY + img.id);
+      throw e;
+    }
+  }
+
+  async pruneAdventImages(keep: readonly string[]) {
+    const stale = Object.keys(localStorage).filter((k) => k.startsWith(ADVENT_IMAGE_KEY) && !keep.includes(k.slice(ADVENT_IMAGE_KEY.length)));
+    for (const k of stale) localStorage.removeItem(k);
   }
 
   /** Nur für den Prototyp: Beispieldaten wiederherstellen. */

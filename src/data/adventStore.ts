@@ -1,5 +1,6 @@
-import { useSyncExternalStore } from 'react';
-import { doorNotes, doorOn, fillAdvent, markOpened, markSaved, unionAdvent, type AdventCalendar, type AdventDoor } from '../domain/advent';
+import { useEffect, useSyncExternalStore } from 'react';
+import { doorNotes, doorOn, fillAdvent, imageIdsOf, markOpened, markSaved, unionAdvent, type AdventCalendar, type AdventDoor } from '../domain/advent';
+import { newId } from '../domain/recipe';
 import type { RecipeRepository } from './repository';
 import { createRecipe, deleteRecipe } from './store';
 
@@ -99,12 +100,66 @@ export function useAdventError(): string | null {
   return useSyncExternalStore(subscribe, () => saveError);
 }
 
-/** Neue Datei einspielen. Gibt „Rückgängig“ zurück (der Kalender wie vorher). */
-export function fillCalendar(doors: AdventDoor[], now = new Date()): () => void {
-  if (!calendar) return () => {};
+/**
+ * Neue Datei einspielen – die Fotos (schon verkleinert, je Tag) kommen in eigene Dokumente, die Türchen bekommen nur
+ * den Verweis. Passen die Fotos nicht in den Speicher (Demo: localStorage ist knapp), wird ohne Fotos befüllt
+ * (`photosFailed`). Gibt „Rückgängig“ zurück (der Kalender wie vorher – seine Fotos sind noch da, siehe unten).
+ */
+export async function fillCalendar(doors: AdventDoor[], images: Record<number, string> = {}, now = new Date()): Promise<{ undo: () => void; photosFailed: boolean }> {
+  if (!calendar || !repo) return { undo: () => {}, photosFailed: false };
   const before = calendar;
-  commit(fillAdvent(calendar, doors, now));
-  return () => commit(before);
+  // neue Datei = neue IDs: ein Foto ändert sich nie, und „Rückgängig“ findet die alten noch
+  const photos = Object.entries(images).map(([day, url]) => ({ day: Number(day), id: newId('adventbild'), url }));
+  let withPhotos = doors;
+  let photosFailed = false;
+  if (photos.length) {
+    try {
+      await repo.saveAdventImages(photos);
+      for (const p of photos) imageCache.set(p.id, p.url);
+      withPhotos = doors.map((d) => {
+        const p = photos.find((x) => x.day === d.day);
+        return p ? { ...d, imageId: p.id } : d;
+      });
+    } catch (e) {
+      console.error('Mashi: Fotos des Adventskalenders nicht gespeichert', e);
+      photosFailed = true;
+    }
+  }
+  if (!calendar) return { undo: () => {}, photosFailed };
+  commit(fillAdvent(calendar, withPhotos, now));
+  // aufräumen: Fotos, die weder der neue noch der vorige Kalender braucht – die vorigen bleiben fürs „Rückgängig“
+  void repo.pruneAdventImages([...imageIdsOf(calendar), ...imageIdsOf(before)])
+    .catch((e) => console.error('Mashi: alte Fotos des Adventskalenders nicht aufgeräumt', e));
+  return { undo: () => commit(before), photosFailed };
+}
+
+// ── Fotos: erst laden, wenn ein Türchen sie zeigt ──
+
+/** geladene Fotos je ID – ändern sich nie, darum ohne Ablauf */
+const imageCache = new Map<string, string>();
+const imageLoading = new Set<string>();
+
+function loadImage(id: string) {
+  if (!repo || imageCache.has(id) || imageLoading.has(id)) return;
+  imageLoading.add(id);
+  repo.loadAdventImage(id)
+    .then((url) => {
+      if (url) {
+        imageCache.set(id, url);
+        emit();
+      }
+    }, (e) => console.error('Mashi: Foto des Adventskalenders ließ sich nicht laden', e))
+    // fehlt es noch (vom anderen Gerät nicht angekommen), beim nächsten Anzeigen erneut versuchen
+    .finally(() => imageLoading.delete(id));
+}
+
+/** Das Foto eines Türchens – undefined, solange es lädt oder es keins gibt */
+export function useAdventImage(id: string | undefined): string | undefined {
+  const url = useSyncExternalStore(subscribe, () => (id ? imageCache.get(id) : undefined));
+  useEffect(() => {
+    if (id) loadImage(id);
+  }, [id]);
+  return url;
 }
 
 /**
@@ -124,12 +179,20 @@ export function openDoor(day: number, now = new Date()) {
 
 /**
  * Rezept hinter dem Türchen ins Kochbuch – als „Zum Testen“ (Mashis Weg: erst testen, dann entscheiden), der Tipp
- * als Notiz. Gibt die Rezept-ID und „Rückgängig“ zurück (Rezept wieder weg, Türchen wieder ungespeichert).
+ * als Notiz, das Foto des Türchens als Bild (ohne Foto zeichnet Mashi wie immer eins). Gibt die Rezept-ID und
+ * „Rückgängig“ zurück (Rezept wieder weg, Türchen wieder ungespeichert).
  */
-export function saveDoor(day: number): { recipeId: string; undo: () => void } | undefined {
+export async function saveDoor(day: number): Promise<{ recipeId: string; undo: () => void } | undefined> {
   const door = calendar && doorOn(calendar, day);
   if (!calendar || !door) return undefined;
-  const recipeId = createRecipe(structuredClone(door.content), { source: 'import', status: 'zum_testen', notes: doorNotes(door) });
+  // schneller getippt, als das Foto geladen war → darauf warten, sonst käme das Rezept ohne Foto ins Kochbuch
+  const photo = door.imageId
+    ? imageCache.get(door.imageId) ?? await repo?.loadAdventImage(door.imageId).catch(() => undefined)
+    : undefined;
+  if (!calendar) return undefined;
+  const recipeId = createRecipe(structuredClone(door.content), {
+    source: 'import', status: 'zum_testen', notes: doorNotes(door), ...(photo ? { image: { kind: 'url' as const, url: photo } } : {}),
+  });
   commit(markSaved(calendar, day, recipeId));
   return {
     recipeId,

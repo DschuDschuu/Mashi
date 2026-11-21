@@ -1,3 +1,4 @@
+import { isDataImage, MAX_IMAGE } from './dataImage';
 import { timerFrom, toUnit } from './importText';
 import { newId } from './recipe';
 import type { Ingredient, RecipeContent, Step, Unit } from './types';
@@ -20,6 +21,11 @@ export interface AdventDoor {
   content: RecipeContent;
   /** „Tipp“ aus der Datei – landet beim Speichern in den Notizen des Rezepts */
   tip?: string;
+  /**
+   * Foto aus der Datei – nur der Verweis: das Foto selbst liegt in einem eigenen Dokument (Julia: A). So bleibt der
+   * Kalender klein, und ein geöffnetes Türchen gleicht nur ein paar Bytes ab statt aller 24 Fotos.
+   */
+  imageId?: string;
 }
 
 export interface AdventCalendar {
@@ -41,6 +47,8 @@ export const emptyAdvent = (): AdventCalendar => ({ year: 0, doors: [], opened: 
 
 export interface AdventImport {
   doors: AdventDoor[];
+  /** Fotos aus der Datei je Tag (data-URL) – werden beim Befüllen verkleinert und eigens gespeichert */
+  images: Record<number, string>;
   /** Was das Einspielen verhindert (kein Titel, Tag doppelt …) */
   errors: string[];
   /** Eingespielt wird trotzdem – aber Julia sieht, was Mashi anders gemacht hat */
@@ -91,7 +99,18 @@ function ingredientOf(raw: unknown, where: string, errors: string[], warnings: s
   };
 }
 
-function doorOf(raw: unknown, index: number, errors: string[], warnings: string[]): AdventDoor | undefined {
+/** „bild“: ein eingebettetes Foto – sonst ohne Foto übernehmen und sagen, warum */
+function imageOf(v: unknown, where: string, warnings: string[]): string | undefined {
+  if (v === undefined || v === null || v === '') return undefined;
+  if (isDataImage(v)) return v;
+  const s = typeof v === 'string' ? v.trim() : '';
+  if (/^https?:/i.test(s)) warnings.push(`${where}: Links nimmt Mashi nicht – das Foto muss in der Datei stehen („data:image/jpeg;base64,…“). Ohne Foto übernommen.`);
+  else if (s.startsWith('data:image/') && s.length > MAX_IMAGE) warnings.push(`${where}: Das Foto ist größer als 4 MB – bitte vorher verkleinern. Ohne Foto übernommen.`);
+  else warnings.push(`${where}: „bild“ ist kein Foto (JPEG, PNG oder WebP als „data:image/…;base64,…“). Ohne Foto übernommen.`);
+  return undefined;
+}
+
+function doorOf(raw: unknown, index: number, errors: string[], warnings: string[]): (AdventDoor & { image?: string }) | undefined {
   const r = isObj(raw) ? raw : {};
   const day = num(r.tag);
   const validDay = day !== undefined && Number.isInteger(day) && day >= 1 && day <= ADVENT_DAYS;
@@ -129,6 +148,7 @@ function doorOf(raw: unknown, index: number, errors: string[], warnings: string[
 
   if (errors.length > before) return undefined;
   const tip = text(r.tipp);
+  const image = imageOf(r.bild, where, warnings);
   return {
     day: day!,
     content: {
@@ -145,6 +165,7 @@ function doorOf(raw: unknown, index: number, errors: string[], warnings: string[
       devices: [],
     },
     ...(tip ? { tip } : {}),
+    ...(image ? { image } : {}),
   };
 }
 
@@ -158,25 +179,38 @@ export function parseAdventJson(json: string): AdventImport {
   try {
     data = JSON.parse(json);
   } catch {
-    return { doors: [], errors: ['Die Datei ist kein gültiges JSON – fehlt irgendwo ein Komma oder eine Klammer?'], warnings: [] };
+    return { doors: [], images: {}, errors: ['Die Datei ist kein gültiges JSON – fehlt irgendwo ein Komma oder eine Klammer?'], warnings: [] };
   }
   // eine Liste (wie im Format) – oder { "rezepte": [...] }, falls die Datei so verpackt ist
   const list = Array.isArray(data) ? data : isObj(data) && Array.isArray(data.rezepte) ? data.rezepte : undefined;
-  if (!list?.length) return { doors: [], errors: ['In der Datei steht keine Liste mit Rezepten.'], warnings: [] };
+  if (!list?.length) return { doors: [], images: {}, errors: ['In der Datei steht keine Liste mit Rezepten.'], warnings: [] };
 
   const errors: string[] = [];
   const warnings: string[] = [];
   const doors: AdventDoor[] = [];
+  const images: Record<number, string> = {};
   list.forEach((raw, i) => {
-    const door = doorOf(raw, i, errors, warnings);
-    if (!door) return;
-    if (doors.some((d) => d.day === door.day)) errors.push(`Tag ${door.day} kommt mehrmals vor.`);
-    else doors.push(door);
+    const parsed = doorOf(raw, i, errors, warnings);
+    if (!parsed) return;
+    const { image, ...door } = parsed;
+    if (doors.some((d) => d.day === door.day)) {
+      errors.push(`Tag ${door.day} kommt mehrmals vor.`);
+      return;
+    }
+    doors.push(door);
+    if (image) images[door.day] = image;
   });
   const missing = Array.from({ length: ADVENT_DAYS }, (_, i) => i + 1).filter((d) => !doors.some((x) => x.day === d));
   if (!errors.length && missing.length) warnings.push(`Ohne Rezept bleiben die Türchen ${missing.join(', ')}.`);
-  return { doors: doors.sort((a, b) => a.day - b.day), errors, warnings };
+  return { doors: doors.sort((a, b) => a.day - b.day), images, errors, warnings };
 }
+
+/** Foto-Verweise eines Kalenders – was beim Aufräumen bleiben muss */
+export const imageIdsOf = (cal: AdventCalendar | undefined): string[] =>
+  (cal?.doors ?? []).flatMap((d) => (d.imageId ? [d.imageId] : []));
+
+/** Foto-Dokumente heißen so – das Aufräumen findet sie über den Anfang */
+export const ADVENT_IMAGE_PREFIX = 'adventbild_';
 
 // ── Befüllen, Öffnen, Speichern ───────────────────────────────────
 
@@ -298,5 +332,6 @@ export function isAdventCalendar(v: unknown): v is AdventCalendar {
   if (!isObj(v)) return false;
   return typeof v.year === 'number' && Array.isArray(v.doors) && stringRecord(v.opened) && stringRecord(v.saved)
     && typeof v.filledAt === 'string' && typeof v.updatedAt === 'string'
-    && v.doors.every((d) => isObj(d) && typeof d.day === 'number' && isDoorContent(d.content) && (d.tip === undefined || typeof d.tip === 'string'));
+    && v.doors.every((d) => isObj(d) && typeof d.day === 'number' && isDoorContent(d.content)
+      && (d.tip === undefined || typeof d.tip === 'string') && (d.imageId === undefined || typeof d.imageId === 'string'));
 }

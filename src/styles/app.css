@@ -1014,8 +1014,18 @@ p { margin: 0; }
 }
 .advent-door__saved { position: absolute; top: 5px; right: 5px; color: var(--primary-text); }
 .advent-door.is-empty { border-style: dashed; color: var(--ink-3); background: transparent; }
+/* geöffnet mit Foto: das Foto füllt die Kachel, Nummer und Haken als kleine Schilder darauf */
+.advent-door.has-photo { padding: 0; overflow: hidden; }
+.advent-door__photo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.advent-door.has-photo .advent-door__num {
+  position: absolute; top: 5px; left: 5px; min-width: 24px; padding: 2px 6px; border-radius: 999px;
+  background: rgb(255 255 255 / 0.9); color: var(--ink); font-size: 1rem;
+}
+.advent-door.has-photo .advent-door__saved { padding: 2px; border-radius: 50%; background: rgb(255 255 255 / 0.9); width: 18px; height: 18px; }
+.advent-door.has-photo .advent-door__title { padding: 30px 6px 6px; }
 @media (min-width: 600px) { .advent-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
 
+.advent-sheet__photo { display: block; width: 100%; aspect-ratio: 4 / 3; max-height: 260px; object-fit: cover; border-radius: var(--r); margin: 6px 0 10px; }
 .advent-sheet__day { display: flex; align-items: center; gap: 6px; margin: 4px 0 2px; font-size: var(--fs-sm); font-weight: 700; color: var(--danger-ink); }
 .advent-sheet .sheet__title { margin-bottom: 4px; }
 .advent-sheet__desc { margin: 0 0 4px; color: var(--ink-2); }
