@@ -18,6 +18,7 @@ import { formatMinutes, portionCount } from '../format';
 import { toast } from '../toast';
 import { useSheet } from '../useSheet';
 import { AdventDoorArt } from '../components/AdventDoorArt';
+import { AdventPhotosSheet } from '../components/AdventPhotos';
 import { Stepper } from '../components/Controls';
 import { Icon } from '../components/Icon';
 import { downscaled } from '../components/ImageCropper';
@@ -298,6 +299,8 @@ function FillPanel({ cal, stale }: { cal: AdventCalendar; stale: boolean }) {
   const [result, setResult] = useState<(AdventImport & { fileName: string }) | null>(null);
   const filled = cal.doors.length > 0;
   const quiet = filled && !stale;
+  // „Fotos ergänzen“ (Julia): alle Türchen in einer Liste, je Foto wählen oder entfernen
+  const [photos, setPhotos] = useState(false);
 
   const onFile = async (file: File | undefined) => {
     if (input.current) input.current.value = ''; // dieselbe Datei nach dem Verbessern erneut wählbar
@@ -348,7 +351,13 @@ function FillPanel({ cal, stale }: { cal: AdventCalendar; stale: boolean }) {
             Mit Beispielrezepten
           </button>
         )}
+        {filled && (
+          <button type="button" className="btn btn--ghost" disabled={busy} onClick={() => setPhotos(true)}>
+            <Icon name="image" size={18} /> Fotos ergänzen …
+          </button>
+        )}
       </div>
+      {photos && <AdventPhotosSheet cal={cal} onClose={() => setPhotos(false)} />}
       {/* je nach Handy kommt die Datei als .json oder .txt an */}
       <input ref={input} type="file" accept="application/json,.json,text/plain,.txt" hidden onChange={(e) => onFile(e.target.files?.[0])} />
 

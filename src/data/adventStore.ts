@@ -1,8 +1,10 @@
 import { useEffect, useSyncExternalStore } from 'react';
-import { doorNotes, doorOn, fillAdvent, imageIdsOf, markOpened, markSaved, unionAdvent, type AdventCalendar, type AdventDoor } from '../domain/advent';
+import {
+  doorNotes, doorOn, fillAdvent, imageIdsOf, markOpened, markSaved, unionAdvent, withDoorImage, type AdventCalendar, type AdventDoor,
+} from '../domain/advent';
 import { newId } from '../domain/recipe';
 import type { RecipeRepository } from './repository';
-import { createRecipe, deleteRecipe, trackSaving } from './store';
+import { createRecipe, currentRecipes, deleteRecipe, setImage, trackSaving } from './store';
 
 /**
  * Zustand des Adventskalenders – bewusst neben store.ts statt darin: ein Dokument, wenige Aktionen, und der große
@@ -132,6 +134,45 @@ export async function fillCalendar(doors: AdventDoor[], images: Record<number, s
   void trackSaving(repo.pruneAdventImages([...imageIdsOf(calendar), ...imageIdsOf(before)]))
     .catch((e) => console.error('Mashi: alte Fotos des Adventskalenders nicht aufgeräumt', e));
   return { undo: () => commit(before), photosFailed };
+}
+
+/**
+ * Foto eines Türchens nachträglich ergänzen, austauschen oder entfernen (Julia: „Bilder nachträglich ergänzen“).
+ * Neues Foto = neues Dokument; das alte bleibt bis zum nächsten Aufräumen liegen, damit „Rückgängig“ es wiederfindet.
+ * Ist das Rezept schon im Kochbuch und hat noch kein eigenes Foto (Linienzeichnung oder das alte Kalenderfoto),
+ * bekommt es das neue mit (Julia). Gibt „Rückgängig“ zurück; wirft, wenn das Foto nicht gespeichert werden konnte.
+ */
+export async function setDoorPhoto(day: number, url: string | undefined): Promise<(() => void) | undefined> {
+  const door = calendar && doorOn(calendar, day);
+  if (!repo || !calendar || !door) return undefined;
+  const oldId = door.imageId;
+  const oldUrl = oldId ? imageCache.get(oldId) ?? await repo.loadAdventImage(oldId).catch(() => undefined) : undefined;
+  const id = url ? newId('adventbild') : undefined;
+  if (id && url) {
+    await repo.saveAdventImages([{ id, url }]);
+    imageCache.set(id, url);
+  }
+  if (!calendar) return undefined;
+  commit(withDoorImage(calendar, day, id));
+
+  // schon gespeichertes Rezept: neues Foto mitnehmen, solange es kein eigenes hat
+  const recipe = calendar.saved[day] ? currentRecipes().find((r) => r.id === calendar!.saved[day]) : undefined;
+  const ownPhoto = recipe?.image?.kind === 'url' && recipe.image.url !== oldUrl;
+  let undoRecipe: (() => void) | undefined;
+  if (recipe && url && !ownPhoto) {
+    const before = recipe.image;
+    setImage(recipe.id, { kind: 'url', url });
+    undoRecipe = () => {
+      if (before && currentRecipes().some((r) => r.id === recipe.id)) setImage(recipe.id, before);
+    };
+  }
+  // bei whenSaved() angemeldet wie beim Befüllen (trackSaving) – sonst liest ein Test die Datenbank zu früh
+  void trackSaving(repo.pruneAdventImages([...imageIdsOf(calendar), ...(oldId ? [oldId] : [])]))
+    .catch((e) => console.error('Mashi: alte Fotos des Adventskalenders nicht aufgeräumt', e));
+  return () => {
+    if (calendar) commit(withDoorImage(calendar, day, oldId));
+    undoRecipe?.();
+  };
 }
 
 // ── Fotos: erst laden, wenn ein Türchen sie zeigt ──

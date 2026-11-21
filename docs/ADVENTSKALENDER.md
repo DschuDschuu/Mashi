@@ -18,6 +18,10 @@ Vom 1. bis 24. Dezember öffnet sich in Mashi jeden Tag ein Türchen mit einem R
 - **Was hab ich da?** Im geöffneten Türchen steht je Zutat da / reicht nicht / fehlt (wie auf der Rezeptseite, mit
   dem, was nach dem Wochenplan frei bleibt). „N Zutaten auf die Einkaufsliste“ setzt Fehlendes und Knappes als eigene
   Einträge (nur Namen) auf die Liste, mit Rückgängig; in der Vorschau nicht.
+- **Fotos ergänzen:** Unten auf der Adventsseite „Fotos ergänzen …“ – alle Türchen mit Titel und Foto, je Foto wählen
+  (Ausschnitt wie bei Rezeptfotos, 4 : 3) oder entfernen, mit Rückgängig; geht jederzeit, auch vor Dezember. Ist das
+  Rezept schon im Kochbuch und hat noch kein eigenes Foto, bekommt es das neue mit. Zwei Geräte, die gleichzeitig
+  verschiedene Türchen ändern, verlieren dabei nichts (Zusammenführen je Türchen).
 - **Vorschau zum Ausprobieren:** `…/Mashi/#/advent?vorschau=5` tut so, als wäre der 5. Dezember (ohne Zahl: der 1.,
   oben mit −/+ umschalten). Türchen lassen sich ansehen, aber Mashi merkt sich nichts – kein „geöffnet“, kein Speichern
   ins Kochbuch. „Beenden“ führt zum echten Kalender. Befüllen geht dort ganz normal (das ist echt).

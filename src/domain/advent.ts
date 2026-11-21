@@ -256,6 +256,18 @@ export function markOpened(cal: AdventCalendar, day: number, now: Date): AdventC
   return { ...cal, opened: { ...cal.opened, [day]: now.toISOString() } };
 }
 
+/** Foto eines Türchens nachträglich setzen oder entfernen (Julia: „Bilder nachträglich ergänzen“) – nur der Verweis */
+export function withDoorImage(cal: AdventCalendar, day: number, imageId: string | undefined): AdventCalendar {
+  return {
+    ...cal,
+    doors: cal.doors.map((d) => {
+      if (d.day !== day) return d;
+      const { imageId: _, ...rest } = d;
+      return imageId ? { ...rest, imageId } : rest;
+    }),
+  };
+}
+
 export function markSaved(cal: AdventCalendar, day: number, recipeId: string | undefined): AdventCalendar {
   const { [day]: _, ...rest } = cal.saved;
   return { ...cal, saved: recipeId ? { ...rest, [day]: recipeId } : rest };
@@ -295,22 +307,34 @@ function merge3Record(base: Record<string, string>, ours: Record<string, string>
 const later = (a: string, b: string) => (a > b ? a : b);
 
 /**
- * Zwei Geräte haben gleichzeitig geändert. Die Befüllung (Jahr + Türchen) gilt als Ganzes – wer neu befüllt hat,
- * gewinnt, bei beiden die neuere. Geöffnete und gespeicherte Türchen werden zusammengeführt. Ist die gewinnende
- * Befüllung aus einem anderen Jahr, passen die Merklisten der anderen Seite nicht dazu → die ganze neuere Fassung.
+ * Zwei Geräte haben gleichzeitig geändert. Hat eins neu befüllt, gilt die Befüllung (Jahr + Türchen) als Ganzes –
+ * bei beiden die neuere. Sonst werden die Türchen einzeln zusammengeführt: ein nachträglich ergänztes Foto bleibt,
+ * auch wenn das andere Gerät gleichzeitig ein anderes Türchen geändert oder geöffnet hat. Geöffnete und gespeicherte
+ * Türchen werden immer zusammengeführt. Ist die gewinnende Befüllung aus einem anderen Jahr, passen die Merklisten der
+ * anderen Seite nicht dazu → die ganze neuere Fassung.
  */
 export function merge3Advent(base: AdventCalendar, ours: AdventCalendar, theirs: AdventCalendar): AdventCalendar {
   if (same(base, ours)) return theirs;
-  const oursFilled = ours.filledAt !== base.filledAt;
-  const theirsFilled = theirs.filledAt !== base.filledAt;
-  const fill = oursFilled && (!theirsFilled || ours.filledAt >= theirs.filledAt) ? ours : theirs;
-  if (ours.year !== theirs.year) return fill;
-  return {
-    ...fill,
+  const lists = {
     opened: merge3Record(base.opened, ours.opened, theirs.opened),
     saved: merge3Record(base.saved, ours.saved, theirs.saved),
     updatedAt: later(ours.updatedAt, theirs.updatedAt),
   };
+  const oursFilled = ours.filledAt !== base.filledAt;
+  const theirsFilled = theirs.filledAt !== base.filledAt;
+  if (oursFilled || theirsFilled) {
+    const fill = oursFilled && (!theirsFilled || ours.filledAt >= theirs.filledAt) ? ours : theirs;
+    return ours.year !== theirs.year ? fill : { ...fill, ...lists };
+  }
+  // niemand hat neu befüllt: je Türchen unseres, wenn wir es geändert haben (Foto), sonst deres
+  const byDay = (c: AdventCalendar) => new Map(c.doors.map((d) => [d.day, d]));
+  const b = byDay(base), o = byDay(ours), t = byDay(theirs);
+  const days = [...new Set([...t.keys(), ...o.keys()])].sort((x, y) => x - y);
+  const doors = days.flatMap((d) => {
+    const pick = same(b.get(d), o.get(d)) ? t.get(d) : o.get(d);
+    return pick ? [pick] : [];
+  });
+  return { ...theirs, doors, ...lists };
 }
 
 /** Offline-Konflikt ohne gemeinsamen Stand: die neuere Befüllung, Merklisten vereint (lieber zu viel als verloren) */

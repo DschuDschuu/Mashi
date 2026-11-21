@@ -5,9 +5,9 @@ import replication from 'pouchdb-replication';
 import { describe, expect, it } from 'vitest';
 import { ADVENT_TAG, markOpened, parseAdventJson } from '../domain/advent';
 import { currentContent } from '../domain/recipe';
-import { fillCalendar, initAdvent, openDoor, saveDoor } from './adventStore';
+import { fillCalendar, initAdvent, openDoor, saveDoor, setDoorPhoto } from './adventStore';
 import { PouchRecipeRepository, type RecipeDb } from './pouchRepository';
-import { currentRecipes, initStore, whenSaved } from './store';
+import { currentRecipes, initStore, setImage, whenSaved } from './store';
 
 PouchDB.plugin(memory).plugin(replication);
 
@@ -114,6 +114,46 @@ describe('Adventskalender: speichern und abgleichen', () => {
     const merged = await phone.saveAdvent(markOpened(filled, 1, new Date(2026, 11, 1)), filled);
     expect(merged.saved).toEqual({ 3: 'r3' });
     expect(merged.opened['1']).toBeDefined();
+  });
+
+  it('Foto nachträglich ergänzen (Julia): Türchen bekommt es, gespeichertes Rezept auch – Rückgängig nimmt beides zurück', async () => {
+    const db = newDb();
+    const repo = new PouchRecipeRepository(db);
+    await initStore(repo);
+    await initAdvent(repo);
+    await fillCalendar(doors(), {}, new Date(2026, 10, 20));
+    const saved = (await saveDoor(2))!;
+    await whenSaved();
+    await tick(700); // das Platzhalterbild entsteht kurz nach dem Anlegen
+    const recipeImage = () => currentRecipes().find((r) => r.id === saved.recipeId)!.image;
+    expect(recipeImage()?.kind).toBe('placeholder');
+
+    const undo = (await setDoorPhoto(2, PHOTO))!;
+    await whenSaved();
+    const cal = await new PouchRecipeRepository(db).loadAdvent();
+    const id = cal.doors.find((d) => d.day === 2)!.imageId!;
+    expect(await repo.loadAdventImage(id)).toBe(PHOTO);
+    expect(recipeImage()).toEqual({ kind: 'url', url: PHOTO });
+
+    undo();
+    await whenSaved();
+    expect((await new PouchRecipeRepository(db).loadAdvent()).doors.find((d) => d.day === 2)!.imageId).toBeUndefined();
+    expect(recipeImage()?.kind).toBe('placeholder');
+  });
+
+  it('ein eigenes Foto im Kochbuch bleibt, wenn das Kalenderfoto getauscht wird', async () => {
+    const db = newDb();
+    const repo = new PouchRecipeRepository(db);
+    await initStore(repo);
+    await initAdvent(repo);
+    await fillCalendar(doors(), { 1: PHOTO }, new Date(2026, 10, 20));
+    const saved = (await saveDoor(1))!;
+    await whenSaved();
+    const own = { kind: 'url' as const, url: PHOTO.replace('iVBOR', 'iVBOr') };
+    setImage(saved.recipeId, own); // selbst fotografiert
+    await setDoorPhoto(1, PHOTO.replace('ASUVORK5', 'ASUVORK6'));
+    await whenSaved();
+    expect(currentRecipes().find((r) => r.id === saved.recipeId)!.image).toEqual(own);
   });
 
   it('ein Änderungs-Feed für alle: eigene Änderungen melden sich bei keinem, fremde bei allen', async () => {

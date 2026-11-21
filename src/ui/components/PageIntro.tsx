@@ -100,6 +100,7 @@ const TOURS: Record<IntroId, Step[]> = {
     { at: 'main .advent-grid', title: 'Jeden Tag ein Türchen', text: 'Ein Türchen geht an seinem Tag auf. Verpasste holst du jederzeit nach.' },
     { title: 'Gefällt dir ein Rezept?', text: '„Zum Testen speichern“ legt es ins Kochbuch, mit dem Schlagwort „Adventskalender“. Wie immer: erst testen, dann entscheiden.' },
     { title: 'Was hab ich da?', text: 'Im geöffneten Türchen steht an jeder Zutat, ob sie da ist oder fehlt. Fehlendes kommt mit einem Tipp auf die Einkaufsliste.', added: 2 },
+    { at: byText('main button', 'Fotos ergänzen'), title: 'Fotos ergänzen', text: 'Fehlt einem Rezept ein Foto oder passt es nicht? Hier tauschst du es je Türchen aus – auch schon vor Dezember.', added: 2 },
   ],
   kochen: [
     { at: '.cook__progress', title: 'Schritt für Schritt', text: 'Der Bildschirm bleibt an, solange du kochst.' },

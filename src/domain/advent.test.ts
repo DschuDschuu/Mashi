@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   ADVENT_TAG, adventHint, canOpen, doorNotes, emptyAdvent, fillAdvent, isAdventCalendar, markOpened, markSaved,
-  merge3Advent, needsFilling, parseAdventJson, previewDate, unionAdvent, type AdventCalendar,
+  merge3Advent, needsFilling, parseAdventJson, previewDate, unionAdvent, withDoorImage, type AdventCalendar,
 } from './advent';
 import { createBackup, parseBackup } from './backup';
 import { ADVENT_DEMO } from '../data/adventDemo';
@@ -242,6 +242,32 @@ describe('Abgleich zwischen zwei Geräten', () => {
     const m = merge3Advent(base, opened, refilled);
     expect(m.doors[0].content.title).toBe('Neu');
     expect(m.opened['1']).toBeDefined();
+  });
+
+  it('Foto nachträglich ergänzt, anderes Gerät öffnet gleichzeitig ein Türchen – beides bleibt', () => {
+    const phone = withDoorImage(base, 2, 'adventbild_neu');
+    const laptop = markOpened(base, 1, on(2026, 12, 1));
+    const m = merge3Advent(base, phone, laptop);
+    expect(m.doors.find((d) => d.day === 2)?.imageId).toBe('adventbild_neu');
+    expect(m.opened['1']).toBeDefined();
+    // andersherum genauso
+    const m2 = merge3Advent(base, laptop, phone);
+    expect(m2.doors.find((d) => d.day === 2)?.imageId).toBe('adventbild_neu');
+  });
+
+  it('zwei Geräte ergänzen Fotos an verschiedenen Türchen – beide bleiben', () => {
+    const a = withDoorImage(base, 2, 'bild_a');
+    const b = withDoorImage(base, 5, 'bild_b');
+    const m = merge3Advent(base, a, b);
+    expect(m.doors.find((d) => d.day === 2)?.imageId).toBe('bild_a');
+    expect(m.doors.find((d) => d.day === 5)?.imageId).toBe('bild_b');
+  });
+
+  it('Foto entfernen nimmt nur den Verweis weg', () => {
+    const withPhoto = withDoorImage(base, 3, 'x');
+    const without = withDoorImage(withPhoto, 3, undefined);
+    expect(without.doors.find((d) => d.day === 3)).not.toHaveProperty('imageId');
+    expect(without.doors.find((d) => d.day === 3)?.content.title).toBe('Testgebäck 3');
   });
 
   it('ohne gemeinsamen Stand: neuere Befüllung, Merklisten vereint', () => {
