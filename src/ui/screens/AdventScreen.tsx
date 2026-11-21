@@ -1,27 +1,23 @@
 import { useEffect, useRef, useState } from 'react';
-import { fillCalendar, openDoor, saveDoor, useAdvent, useAdventError, useAdventImage } from '../../data/adventStore';
-import { ADVENT_DEMO } from '../../data/adventDemo';
-import { addExtra, isDemo, removeExtra, usePlan, useRecipes } from '../../data/store';
+import { openDoor, saveDoor, useAdvent, useAdventError, useAdventImage } from '../../data/adventStore';
+import { addExtra, removeExtra, usePlan, useRecipes } from '../../data/store';
 import { normalizeName } from '../../domain/nutrition/localFoods';
 import { stockSummary } from '../../domain/pantry';
 import { useContentStock } from '../useRecipeStock';
 import { StockLine } from '../components/StockLine';
 import { IngredientStock } from './RecipeDetailScreen';
 import {
-  ADVENT_DAYS, canOpen, doorOn, needsFilling, parseAdventJson, previewDate, type AdventCalendar, type AdventDoor, type AdventImport,
+  ADVENT_DAYS, canOpen, doorOn, needsFilling, previewDate, type AdventCalendar, type AdventDoor,
 } from '../../domain/advent';
 import { totalMinutes } from '../../domain/recipe';
 import { formatQuantity } from '../../domain/scaling';
 import { navigate } from '../../router';
-import { ask } from '../confirm';
 import { formatMinutes, portionCount } from '../format';
 import { toast } from '../toast';
 import { useSheet } from '../useSheet';
 import { AdventDoorArt } from '../components/AdventDoorArt';
-import { AdventPhotosSheet } from '../components/AdventPhotos';
 import { Stepper } from '../components/Controls';
 import { Icon } from '../components/Icon';
-import { downscaled } from '../components/ImageCropper';
 import { TopBar } from '../components/TopBar';
 
 const DAYS = Array.from({ length: ADVENT_DAYS }, (_, i) => i + 1);
@@ -116,7 +112,17 @@ export function AdventScreen({ day, preview }: { day?: number; preview?: number 
           </div>
         </>
       )}
-      <FillPanel cal={cal} stale={needsFilling(cal, now)} />
+      {/* Befüllen und Fotos liegen in den Einstellungen (Julia) – hier nur ein Hinweis, wenn es nötig ist */}
+      {needsFilling(cal, new Date()) && (
+        <div className="panel advent-empty">
+          <Icon name="gift" size={32} />
+          <p>
+            <strong>{cal.doors.length ? 'Neues Jahr, neue Türchen' : 'Dein Adventskalender ist noch leer'}</strong><br />
+            <span className="small muted">Befüllen kannst du ihn in den Einstellungen unter „Adventskalender“.</span>
+          </p>
+          <button type="button" className="btn btn--primary" onClick={() => navigate('/mehr?advent')}>Zu den Einstellungen</button>
+        </div>
+      )}
       {door && openDay && (
         <DoorSheet day={openDay} door={door} savedId={cal.saved[openDay]} preview={isPreview} onClose={() => setOpenDay(null)} />
       )}
@@ -288,126 +294,4 @@ function DoorSheet({ day, door, savedId, preview = false, onClose }: { day: numb
       </div>
     </div>
   );
-}
-
-/**
- * Befüllen: Julias JSON-Datei wählen, Vorschau mit Fehlern/Hinweisen, dann übernehmen (mit Rückgängig).
- * Leer: groß und erklärt; schon befüllt: leise unten („Neu befüllen …“) – oder im neuen Jahr wieder groß.
- */
-function FillPanel({ cal, stale }: { cal: AdventCalendar; stale: boolean }) {
-  const input = useRef<HTMLInputElement>(null);
-  const [result, setResult] = useState<(AdventImport & { fileName: string }) | null>(null);
-  const filled = cal.doors.length > 0;
-  const quiet = filled && !stale;
-  // „Fotos ergänzen“ (Julia): alle Türchen in einer Liste, je Foto wählen oder entfernen
-  const [photos, setPhotos] = useState(false);
-
-  const onFile = async (file: File | undefined) => {
-    if (input.current) input.current.value = ''; // dieselbe Datei nach dem Verbessern erneut wählbar
-    if (!file) return;
-    setResult({ ...parseAdventJson(await file.text()), fileName: file.name });
-  };
-
-  const [busy, setBusy] = useState(false);
-  const apply = async (doors: AdventDoor[], images: Record<number, string>) => {
-    if (quiet && !(await ask({
-      title: 'Kalender neu befüllen?',
-      text: 'Die Türchen bekommen die Rezepte aus der neuen Datei. Was du schon geöffnet oder gespeichert hast, bleibt.',
-      confirm: 'Neu befüllen',
-    }))) return;
-    setBusy(true);
-    try {
-      const { undo, photosFailed } = await fillCalendar(doors, await shrinkAll(images));
-      setResult(null);
-      toast(`Adventskalender mit ${doors.length} Türchen befüllt${photosFailed ? ' – die Fotos passten nicht in den Speicher' : ''}`, { label: 'Rückgängig', run: undo });
-    } finally {
-      setBusy(false);
-    }
-  };
-  const photoCount = result ? Object.keys(result.images).length : 0;
-
-  return (
-    <section className={`panel advent-fill${quiet ? ' advent-fill--quiet' : ''}`}>
-      {!filled && (
-        <div className="advent-fill__intro">
-          <Icon name="gift" size={32} />
-          <div>
-            <strong>Dein Adventskalender ist noch leer</strong>
-            <p className="small muted">Spiel eine Datei mit 24 Rezepten ein – eins pro Türchen. Ins Kochbuch kommt ein Rezept erst, wenn du es am Türchen speicherst.</p>
-          </div>
-        </div>
-      )}
-      {filled && stale && <p><strong>Neues Jahr, neue Türchen</strong><br /><span className="small muted">Spiel die Rezepte für diesen Dezember ein.</span></p>}
-      {quiet && <p className="small muted">Rezepte ändern? Eine neue Datei einspielen – Geöffnetes und Gespeichertes bleibt.</p>}
-      <div className="advent-fill__buttons">
-        <button type="button" className={`btn ${quiet ? 'btn--ghost' : 'btn--primary'}`} disabled={busy} onClick={() => input.current?.click()}>
-          <Icon name="file" size={18} /> {filled ? 'Neu befüllen …' : 'Kalender befüllen …'}
-        </button>
-        {isDemo() && !filled && (
-          <button type="button" className="btn btn--soft" disabled={busy} onClick={() => {
-            const demo = parseAdventJson(JSON.stringify(ADVENT_DEMO));
-            void apply(demo.doors, demo.images);
-          }}>
-            Mit Beispielrezepten
-          </button>
-        )}
-        {filled && (
-          <button type="button" className="btn btn--ghost" disabled={busy} onClick={() => setPhotos(true)}>
-            <Icon name="image" size={18} /> Fotos ergänzen …
-          </button>
-        )}
-      </div>
-      {photos && <AdventPhotosSheet cal={cal} onClose={() => setPhotos(false)} />}
-      {/* je nach Handy kommt die Datei als .json oder .txt an */}
-      <input ref={input} type="file" accept="application/json,.json,text/plain,.txt" hidden onChange={(e) => onFile(e.target.files?.[0])} />
-
-      {result && (result.errors.length ? (
-        <div className="error" role="alert">
-          <strong>{result.fileName}: so geht es noch nicht</strong>
-          <ul className="advent-fill__list">
-            {result.errors.slice(0, 8).map((e) => <li key={e}>{e}</li>)}
-            {result.errors.length > 8 && <li>… und {result.errors.length - 8} weitere</li>}
-          </ul>
-        </div>
-      ) : (
-        <div className="backup-preview">
-          <p><strong>{result.fileName}</strong> · {result.doors.length} Rezepte gefunden{photoCount > 0 && `, ${photoCount} mit Foto`}</p>
-          {result.warnings.length > 0 && (
-            <ul className="advent-fill__list small muted">{result.warnings.map((w) => <li key={w}>{w}</li>)}</ul>
-          )}
-          <div className="row-gap">
-            <button type="button" className="btn btn--primary" disabled={busy} onClick={() => apply(result.doors, result.images)}>
-              {busy ? (photoCount ? 'Fotos werden verkleinert …' : 'Einen Moment …') : 'Befüllen'}
-            </button>
-            <button type="button" className="btn btn--ghost" disabled={busy} onClick={() => setResult(null)}>Abbrechen</button>
-          </div>
-        </div>
-      ))}
-
-      <details className="advent-fill__format small">
-        <summary>Wie muss die Datei aussehen?</summary>
-        <p>Eine JSON-Liste mit einem Eintrag je Tag: <code>tag</code> (1–24), <code>titel</code>, <code>portionen</code>,
-          <code> zutaten</code> (je <code>name</code>, <code>menge</code>, <code>einheit</code>) und <code>schritte</code> (Texte).
-          Dazu nach Wunsch <code>beschreibung</code>, <code>vorbereitung</code>, <code>backzeit</code> (Minuten), <code>tipp</code> und
-          <code> bild</code> (Foto als <code>data:image/jpeg;base64,…</code>, bis 4 MB – keine Links).</p>
-        <p>Einheiten wie in Mashi: g, kg, ml, l, EL, TL, Prise, Stück, Zehe, Dose, Glas, Bund, Handvoll, cm, Portion.</p>
-      </details>
-    </section>
-  );
-}
-
-/** Fotos aus der Datei auf 800 px (lange Seite) verkleinern – wie eigene Fotos; ein kaputtes fällt still weg */
-async function shrinkAll(images: Record<number, string>): Promise<Record<number, string>> {
-  const out: Record<number, string> = {};
-  for (const [day, url] of Object.entries(images)) {
-    try {
-      const img = new Image();
-      img.src = url;
-      await img.decode();
-      out[Number(day)] = downscaled(img, 800);
-    } catch (e) {
-      console.warn(`Mashi: Foto für Türchen ${day} ließ sich nicht lesen`, e);
-    }
-  }
-  return out;
 }

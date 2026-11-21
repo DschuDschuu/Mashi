@@ -3,8 +3,12 @@
 Vom 1. bis 24. Dezember öffnet sich in Mashi jeden Tag ein Türchen mit einem Rezept. Gefällt es, legt
 „Zum Testen speichern“ es ins Kochbuch (Status „Zum Testen“, Schlagwort „Adventskalender“, der Tipp als Notiz).
 
-- **Wo:** Startseite (1.–24.12. „Türchen 5 öffnen“; ab 15.11. die Erinnerung „befüllen“, wegklickbar) und
-  `#/advent`, das ganze Jahr über die Einstellungen erreichbar.
+- **Wo:** Startseite (1.–24.12. „Türchen 5 öffnen“; ab 15.11. die Erinnerung „befüllen“, wegklickbar) und `#/advent`.
+  **Befüllen, Neu befüllen und Fotos ergänzen stehen in den Einstellungen** unter „Adventskalender“ (`#/mehr?advent`
+  springt dorthin) – die Adventsseite zeigt nur die Türchen.
+- **Täglicher Dialog:** vom 1. bis 24.12. beim ersten Öffnen der Startseite am Tag, solange das heutige Türchen zu
+  ist: das Türchen groß, „Öffnen“ (Tür schwingt auf, dahinter das Foto, dann das Rezept) oder „Später“ (bis morgen
+  Ruhe, je Gerät: `mashi-advent-dialog`). Wartet, bis die Tour der Startseite durch ist.
 - **Türchen:** gehen an ihrem Tag auf (Ortszeit). Nach dem Dezember des Kalenders ist alles offen – Verpasstes nachholen.
   Geschlossen ist jedes eine eigene Grafik in Rot, Grün, Braun und Rosa (`AdventDoorArt.tsx`, reines SVG); wartet es
   noch, ist es blasser und hat ein Schloss, das heutige hat Rahmen und „Heute“.
@@ -18,7 +22,7 @@ Vom 1. bis 24. Dezember öffnet sich in Mashi jeden Tag ein Türchen mit einem R
 - **Was hab ich da?** Im geöffneten Türchen steht je Zutat da / reicht nicht / fehlt (wie auf der Rezeptseite, mit
   dem, was nach dem Wochenplan frei bleibt). „N Zutaten auf die Einkaufsliste“ setzt Fehlendes und Knappes als eigene
   Einträge (nur Namen) auf die Liste, mit Rückgängig; in der Vorschau nicht.
-- **Fotos ergänzen:** Unten auf der Adventsseite „Fotos ergänzen …“ – alle Türchen mit Titel und Foto, je Foto wählen
+- **Fotos ergänzen:** In den Einstellungen unter „Adventskalender“ → „Fotos ergänzen …“ – alle Türchen mit Titel und Foto, je Foto wählen
   (Ausschnitt wie bei Rezeptfotos, 4 : 3) oder entfernen, mit Rückgängig; geht jederzeit, auch vor Dezember. Ist das
   Rezept schon im Kochbuch und hat noch kein eigenes Foto, bekommt es das neue mit. Zwei Geräte, die gleichzeitig
   verschiedene Türchen ändern, verlieren dabei nichts (Zusammenführen je Türchen).

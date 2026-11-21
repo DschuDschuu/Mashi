@@ -998,6 +998,23 @@ p { margin: 0; }
 .advent-preview__text strong { font-size: var(--fs-md); }
 .advent-preview__controls { display: flex; align-items: center; gap: 12px; }
 .advent-sheet__shop { margin-top: 12px; }
+/* Leer oder vom letzten Jahr: Hinweis auf die Einstellungen (dort wird befüllt) */
+.advent-empty { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 12px 14px; }
+.advent-empty > svg { flex: none; color: var(--danger-ink); }
+.advent-empty > p { flex: 1; min-width: 180px; margin: 0; }
+/* Täglicher Dialog: das heutige Türchen groß, darunter Öffnen / Später */
+.advent-dialog { text-align: center; }
+.advent-dialog__kicker { display: inline-flex; align-items: center; gap: 6px; margin: 4px 0 2px; font-size: var(--fs-sm); font-weight: 700; color: var(--danger-ink); }
+.advent-dialog__door {
+  position: relative; display: block; width: min(180px, 52vw); aspect-ratio: 3 / 4; margin: 4px auto 18px; padding: 0;
+  border-radius: 16px; perspective: 700px; box-shadow: 0 10px 26px rgb(45 30 20 / 0.22);
+}
+.advent-dialog__inside { position: absolute; inset: 0; border-radius: inherit; overflow: hidden; background: radial-gradient(circle at 50% 45%, #ffe7a8, #e8b04a 55%, #b3322c); }
+.advent-dialog__inside img { width: 100%; height: 100%; object-fit: cover; }
+.advent-dialog__leaf { position: absolute; inset: 0; border-radius: inherit; overflow: hidden; transform-origin: left center; }
+.advent-dialog__door.is-swinging .advent-dialog__leaf { animation: advent-swing 0.65s cubic-bezier(0.45, 0, 0.6, 1) forwards; box-shadow: 4px 0 12px rgb(45 30 20 / 0.3); }
+.advent-dialog__actions { display: flex; flex-direction: column; gap: 8px; }
+@media (prefers-reduced-motion: reduce) { .advent-dialog__door.is-swinging .advent-dialog__leaf { animation: none; } }
 /* „Fotos ergänzen“: je Türchen Vorschaubild, Titel, Knöpfe – auf 375 px bricht nur der Titel um */
 .advent-photos__list { list-style: none; margin: 0; padding: 0; overflow-y: auto; display: flex; flex-direction: column; }
 .advent-photos__row { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--line); }

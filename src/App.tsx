@@ -74,7 +74,7 @@ function resolve(route: Route): { screen: ReactElement; tab?: string; section?: 
       if (b === 'inventur') return { screen: <InventoryScreen />, section: '/speisekammer' };
       return { screen: <PantryScreen />, tab: '/speisekammer' };
     // „Einstellungen“ (früher Tab „Mehr“) – übers Zahnrad auf Start und Kochbuch, auf dem Tablet in der Seitenleiste
-    case 'mehr': return { screen: <MoreScreen />, section: '/mehr' };
+    case 'mehr': return { screen: <MoreScreen focus={route.query.has('advent') ? 'advent' : undefined} />, section: '/mehr' };
     case 'advent': return {
       // ?vorschau=5: so tun, als wäre der 5. Dezember (ohne Zahl: der 1.) – zum Ausprobieren, speichert nichts
       screen: <AdventScreen key={route.query.has('vorschau') ? 'vorschau' : 'echt'} day={Number(route.query.get('tag')) || undefined}

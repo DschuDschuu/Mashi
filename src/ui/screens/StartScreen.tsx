@@ -11,6 +11,7 @@ import { Empty } from '../components/Controls';
 import { CravingAsk } from '../components/CravingAsk';
 import { TrialAsk } from '../components/TrialAsk';
 import { AdventBanner } from '../components/AdventBanner';
+import { AdventDailyDialog } from '../components/AdventDialog';
 import { Icon } from '../components/Icon';
 import { PageIntro } from '../components/PageIntro';
 import { UseUpBadge } from '../components/UseUpBadge';
@@ -69,6 +70,7 @@ export function StartScreen() {
       {/* statt acht Einführungskarten ein kurzes Willkommen – jede Seite hat ihre eigene Tour */}
       <PageIntro id="start" />
       <AdventBanner />
+      <AdventDailyDialog />
       <TrialAsk />
       {expiring.length > 0 && (
         <button className="useup-banner" onClick={() => navigate('/reste')}>

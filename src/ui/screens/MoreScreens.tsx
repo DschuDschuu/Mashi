@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ask } from '../confirm';
 import { createBackup, parseBackup, type ParsedBackup } from '../../domain/backup';
 import type { MyProduct } from '../../domain/nutrition/myProducts';
@@ -7,7 +7,7 @@ import { isInCookbook } from '../../domain/status';
 import { disconnect, leaveDemo, savedSyncConfig, uploadPending, useSyncState } from '../../data/backend';
 import { deleteRecipe, importPantry, importPlan, importProducts, importRecipes, isDemo, resetDemoData, restoreRecipe, usePantry, usePlan, useProducts, useRecipes } from '../../data/store';
 import { importAdvent, useAdvent } from '../../data/adventStore';
-import { navigate } from '../../router';
+import { AdventSettings } from '../components/AdventSettings';
 import type { AdventCalendar } from '../../domain/advent';
 import type { MealPlan } from '../../domain/mealplan';
 import type { Pantry } from '../../domain/pantry';
@@ -27,10 +27,16 @@ import { recipeCount } from '../format';
 import { toast } from '../toast';
 import { shareMessage, shareRecipes } from '../shareRecipes';
 
-export function MoreScreen() {
+export function MoreScreen({ focus }: { focus?: 'advent' }) {
   const all = useRecipes();
   const archived = all.filter((r) => r.archivedAt);
   const settings = useSettings();
+  // von der Startseite / Adventsseite („befüllen“): gleich zum Abschnitt Adventskalender
+  useEffect(() => {
+    if (focus !== 'advent') return;
+    const t = setTimeout(() => document.getElementById('adventskalender')?.scrollIntoView({ block: 'center' }), 60);
+    return () => clearTimeout(t);
+  }, [focus]);
   return (
     <main className="screen">
       <TopBar title="Einstellungen" backTo="/" />
@@ -60,15 +66,6 @@ export function MoreScreen() {
           </div>
         </div>
         <SpecialThemes />
-        {/* den Rest des Jahres steht der Kalender nicht auf der Startseite – hier ist er immer erreichbar (befüllen, nachholen) */}
-        <button type="button" className="panel link-row" onClick={() => navigate('/advent')}>
-          <Icon name="gift" size={20} />
-          <span className="link-row__text">
-            <strong>Adventskalender</strong>
-            <small className="muted">24 Türchen mit deinen Rezepten – befüllen und öffnen</small>
-          </span>
-          <Icon name="chevron" size={18} />
-        </button>
         <MacroGoalSettings />
         <TasteSettings />
         <HouseholdSettings />
@@ -80,6 +77,11 @@ export function MoreScreen() {
           </span>
           <Icon name="refresh" size={18} />
         </button>
+      </Section>
+
+      {/* Befüllen, Neu befüllen, Fotos (Julia: „nicht beim Adventskalender“) – den Rest des Jahres auch der Weg zum Kalender */}
+      <Section title="Adventskalender" icon="gift">
+        <AdventSettings />
       </Section>
 
       <Section title="Sicherung" icon="file">

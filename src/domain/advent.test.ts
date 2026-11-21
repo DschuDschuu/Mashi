@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  ADVENT_TAG, adventHint, canOpen, doorNotes, emptyAdvent, fillAdvent, isAdventCalendar, markOpened, markSaved,
+  ADVENT_TAG, adventHint, canOpen, dailyDoor, doorNotes, emptyAdvent, fillAdvent, isAdventCalendar, markOpened, markSaved,
   merge3Advent, needsFilling, parseAdventJson, previewDate, unionAdvent, withDoorImage, type AdventCalendar,
 } from './advent';
 import { createBackup, parseBackup } from './backup';
@@ -215,6 +215,24 @@ describe('Hinweis auf der Startseite', () => {
     expect(adventHint(cal, on(2026, 12, 4))).toEqual({ kind: 'door', day: 4, opened: false });
     expect(adventHint(cal, on(2026, 12, 5))).toEqual({ kind: 'door', day: 5, opened: true });
     expect(adventHint(cal, on(2026, 12, 25))).toBeUndefined();
+  });
+});
+
+describe('Täglicher Dialog', () => {
+  it('1. bis 24. Dezember: einmal am Tag, solange das heutige Türchen zu ist', () => {
+    const cal = filled();
+    expect(dailyDoor(cal, on(2026, 12, 5))).toBe(5);
+    expect(dailyDoor(cal, on(2026, 12, 5), '2026-12-04')).toBe(5); // gestern kam er – heute wieder
+    expect(dailyDoor(cal, on(2026, 12, 5, 20), '2026-12-05')).toBeUndefined(); // heute schon da gewesen
+  });
+
+  it('nicht, wenn das Türchen schon offen ist, außerhalb der Adventszeit oder ohne Rezept für heute', () => {
+    expect(dailyDoor(markOpened(filled(), 5, on(2026, 12, 5)), on(2026, 12, 5))).toBeUndefined();
+    expect(dailyDoor(filled(), on(2026, 11, 28))).toBeUndefined();
+    expect(dailyDoor(filled(), on(2026, 12, 25))).toBeUndefined();
+    expect(dailyDoor(emptyAdvent(), on(2026, 12, 5))).toBeUndefined(); // leer: dafür ist die Erinnerung da
+    const onlyFirst = fillAdvent(emptyAdvent(), parse([recipe(1)]).doors, on(2026, 11, 20));
+    expect(dailyDoor(onlyFirst, on(2026, 12, 5))).toBeUndefined();
   });
 });
 

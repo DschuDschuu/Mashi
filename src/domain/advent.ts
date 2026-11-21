@@ -1,4 +1,5 @@
 import { isDataImage, MAX_IMAGE } from './dataImage';
+import { localDay } from './dates';
 import { timerFrom, toUnit } from './importText';
 import { newId } from './recipe';
 import type { Ingredient, RecipeContent, Step, Unit } from './types';
@@ -290,6 +291,17 @@ export function adventHint(cal: AdventCalendar, now: Date): AdventHint | undefin
   if (needsFilling(cal, now)) return { kind: 'fill' };
   if (m !== 11) return undefined;
   return { kind: 'door', day: d, opened: !!cal.opened[d] };
+}
+
+/**
+ * Täglicher Dialog (Julia: „soll täglich als Dialog aufpoppen“, einmal am Tag, solange zu): Tag des heutigen Türchens,
+ * wenn es heute (1.–24.12., Kalender befüllt) eins gibt, es noch zu ist und der Dialog heute noch nicht kam.
+ * `lastShown` = Tag („JJJJ-MM-TT“), an dem er zuletzt kam – je Gerät gemerkt.
+ */
+export function dailyDoor(cal: AdventCalendar, now: Date, lastShown?: string | null): number | undefined {
+  const hint = adventHint(cal, now);
+  if (hint?.kind !== 'door' || hint.opened || !doorOn(cal, hint.day)) return undefined;
+  return lastShown === localDay(now) ? undefined : hint.day;
 }
 
 // ── Abgleich zwischen Geräten (wie syncMerge.ts, aber nur für dieses Dokument) ──

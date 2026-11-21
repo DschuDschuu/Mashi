@@ -38,7 +38,8 @@ export function AdventBanner() {
     };
     return (
       <div className="advent-banner">
-        <button type="button" className="advent-banner__main" onClick={() => navigate('/advent')}>
+        {/* befüllt wird in den Einstellungen (Julia) */}
+        <button type="button" className="advent-banner__main" onClick={() => navigate('/mehr?advent')}>
           <Icon name="gift" size={22} />
           <span className="advent-banner__text">
             <strong>Adventskalender</strong>

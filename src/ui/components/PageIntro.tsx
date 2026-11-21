@@ -28,7 +28,7 @@ const TOURS: Record<IntroId, Step[]> = {
     { at: '.week-today', title: 'Heute aus der Woche', text: '„So geht’s“ mit Würze und Zubereitung zum Umschalten. „Gegessen“ merkt sich, wie du es gemacht hast – nächstes Mal ist das vorgewählt.', added: 2 },
     { at: () => document.querySelector('.week-today .chip__last')?.closest('.chip'), title: 'Wie letztes Mal', text: 'Die kleine Uhr am Chip zeigt, wie du einen Baustein zuletzt gekocht hast. Ohne andere Wahl ist das vorgewählt.', added: 3 },
     { at: byText('main button', 'Lieber was anderes?'), title: 'Worauf hast du Lust?', text: 'Ein Gericht aus Bausteinen zusammenstellen – Tortilla, Bowl, Pasta … Stufe für Stufe, auch mit deinen eigenen Rezepten.', added: 2 },
-    { at: 'main .advent-banner', title: 'Adventskalender', text: 'Vom 1. bis 24. Dezember hier jeden Tag ein Türchen mit einem Rezept. Befüllen und nachholen geht auch über die Einstellungen.', added: 4 },
+    { at: 'main .advent-banner', title: 'Adventskalender', text: 'Vom 1. bis 24. Dezember jeden Tag ein Türchen mit einem Rezept – es meldet sich einmal am Tag von selbst. Befüllen: Einstellungen → Adventskalender.', added: 4 },
     // Stand 5: der Adventskalender (Stand 4) ist schon live – wer ihn gesehen hat, bekäme einen Schritt mit 4 nie zu sehen
     { at: '.shop-day', title: 'Einkauf planen', text: 'Freitags und samstags steht hier „Einkauf planen“: Angebote deiner Märkte einfügen, Mashi findet passende Rezepte.', added: 5 },
     { title: 'Jede Seite erklärt sich selbst', text: 'Beim ersten Besuch zeigt dir jede Seite ihre Knöpfe. Noch mal ansehen: Einstellungen → „Alle Einführungen wieder zeigen“.' },
@@ -96,11 +96,10 @@ const TOURS: Record<IntroId, Step[]> = {
     { at: 'main .craving-done__actions', title: 'Kochen, einplanen, behalten', text: 'Jetzt kochen, in die Woche legen oder gleich ins Kochbuch. Nach dem Kochen fragt die Startseite, wie es war.', added: 2 },
   ],
   advent: [
-    { at: 'main .advent-fill', title: 'Befüllen', text: 'Spiel eine Datei mit 24 Rezepten ein – eins pro Türchen. Sie bleiben in deinen Daten und werden mit deinen Geräten abgeglichen.' },
     { at: 'main .advent-grid', title: 'Jeden Tag ein Türchen', text: 'Ein Türchen geht an seinem Tag auf. Verpasste holst du jederzeit nach.' },
     { title: 'Gefällt dir ein Rezept?', text: '„Zum Testen speichern“ legt es ins Kochbuch, mit dem Schlagwort „Adventskalender“. Wie immer: erst testen, dann entscheiden.' },
     { title: 'Was hab ich da?', text: 'Im geöffneten Türchen steht an jeder Zutat, ob sie da ist oder fehlt. Fehlendes kommt mit einem Tipp auf die Einkaufsliste.', added: 2 },
-    { at: byText('main button', 'Fotos ergänzen'), title: 'Fotos ergänzen', text: 'Fehlt einem Rezept ein Foto oder passt es nicht? Hier tauschst du es je Türchen aus – auch schon vor Dezember.', added: 2 },
+    { title: 'Befüllen und Fotos', text: 'Rezepte einspielen, neu befüllen und Fotos ergänzen: in den Einstellungen unter „Adventskalender“. Die Rezepte bleiben in deinen Daten.' },
   ],
   kochen: [
     { at: '.cook__progress', title: 'Schritt für Schritt', text: 'Der Bildschirm bleibt an, solange du kochst.' },
@@ -177,6 +176,12 @@ export function resetIntros() {
   seen = {};
   save();
   emit();
+}
+
+/** Steht auf dieser Seite noch eine Tour an? – damit sich nichts darüberlegt (Adventskalender-Dialog wartet) */
+export function useTourPending(id: IntroId): boolean {
+  useIntros();
+  return stepsToShow(TOURS[id], seen[id]).length > 0;
 }
 
 /** Die Tour dieser Seite – startet von selbst, solange sie nicht gesehen ist */
