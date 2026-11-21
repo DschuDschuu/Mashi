@@ -113,6 +113,18 @@ export async function whenSaved(): Promise<void> {
   }
 }
 
+/**
+ * Speichervorgänge anderer Stores (Adventskalender) hier anmelden, damit whenSaved() auch auf sie wartet – ihre Fehler
+ * zeigen sie selbst an, darum zählt hier nur „fertig“. Ohne das las ein Test die Datenbank, bevor der Kalender
+ * gespeichert war, und fiel mal durch, mal nicht (GitHub Action rot, Einkauf planen nicht veröffentlicht).
+ */
+export function trackSaving<T>(p: Promise<T>): Promise<T> {
+  const done = p.then(() => undefined, () => undefined);
+  inFlight.add(done);
+  void done.finally(() => inFlight.delete(done));
+  return p;
+}
+
 /** Jeder Speichervorgang meldet sich hier zurück – so bleibt ein Fehler nicht nur in der Konsole. */
 function tracked<T>(p: Promise<T>): Promise<T | void> {
   const t = p.then(

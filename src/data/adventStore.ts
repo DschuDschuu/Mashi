@@ -2,7 +2,7 @@ import { useEffect, useSyncExternalStore } from 'react';
 import { doorNotes, doorOn, fillAdvent, imageIdsOf, markOpened, markSaved, unionAdvent, type AdventCalendar, type AdventDoor } from '../domain/advent';
 import { newId } from '../domain/recipe';
 import type { RecipeRepository } from './repository';
-import { createRecipe, deleteRecipe } from './store';
+import { createRecipe, deleteRecipe, trackSaving } from './store';
 
 /**
  * Zustand des Adventskalenders – bewusst neben store.ts statt darin: ein Dokument, wenige Aktionen, und der große
@@ -66,7 +66,8 @@ function commit(next: AdventCalendar) {
   pending++;
   emit();
   if (!repo) return;
-  repo.saveAdvent(stamped, base)
+  // bei whenSaved() angemeldet – sonst sieht ein Test (oder ein Speichern danach) den Kalender noch ohne diese Änderung
+  void trackSaving(repo.saveAdvent(stamped, base)
     .then((stored) => {
       if (saveError) saveError = null;
       // zusammengeführt (anderes Gerät hat auch geändert) → das zeigen, falls hier nichts Neueres kam
@@ -83,7 +84,7 @@ function commit(next: AdventCalendar) {
         reloadMissed = false;
         scheduleReload();
       }
-    });
+    }));
 }
 
 const subscribe = (l: () => void) => {
@@ -128,7 +129,7 @@ export async function fillCalendar(doors: AdventDoor[], images: Record<number, s
   if (!calendar) return { undo: () => {}, photosFailed };
   commit(fillAdvent(calendar, withPhotos, now));
   // aufräumen: Fotos, die weder der neue noch der vorige Kalender braucht – die vorigen bleiben fürs „Rückgängig“
-  void repo.pruneAdventImages([...imageIdsOf(calendar), ...imageIdsOf(before)])
+  void trackSaving(repo.pruneAdventImages([...imageIdsOf(calendar), ...imageIdsOf(before)]))
     .catch((e) => console.error('Mashi: alte Fotos des Adventskalenders nicht aufgeräumt', e));
   return { undo: () => commit(before), photosFailed };
 }
