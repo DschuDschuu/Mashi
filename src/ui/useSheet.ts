@@ -77,7 +77,9 @@ export function useSheet<T extends HTMLElement = HTMLDivElement>(onClose: () => 
     const opener = document.activeElement as HTMLElement | null;
     const focusable = () => [...(ref.current?.querySelectorAll<HTMLElement>('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])') ?? [])]
       .filter((e) => !e.hasAttribute('disabled'));
-    focusable()[0]?.focus();
+    // ohne Scrollen: steht der erste Knopf weiter unten (Türchen: „Auf die Einkaufsliste“ nach den Zutaten),
+    // sprang das Blatt sonst beim Öffnen dorthin – Foto und Titel waren weg. Jedes Blatt fängt oben an.
+    focusable()[0]?.focus({ preventScroll: true });
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') close.current();
       if (e.key !== 'Tab') return;
