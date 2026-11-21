@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  ADVENT_TAG, adventHint, canOpen, dailyDoor, doorNotes, emptyAdvent, fillAdvent, isAdventCalendar, markOpened, markSaved,
+  ADVENT_TAG, adventHint, canOpen, dailyDoor, doorNotes, exportAdvent, emptyAdvent, fillAdvent, isAdventCalendar, markOpened, markSaved,
   merge3Advent, needsFilling, parseAdventJson, previewDate, unionAdvent, withDoorImage, type AdventCalendar,
 } from './advent';
 import { createBackup, parseBackup } from './backup';
@@ -294,6 +294,36 @@ describe('Abgleich zwischen zwei Geräten', () => {
     const u = unionAdvent(a, b);
     expect(u.doors[0].content.title).toBe('Neu');
     expect(Object.keys(u.opened).sort()).toEqual(['1', '2']);
+  });
+});
+
+describe('Export', () => {
+  const photo = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
+
+  it('wieder eingelesen ergibt denselben Kalender – Rezepte, Teile, Hinweise, Tipp und Fotos', () => {
+    const src = parse([
+      recipe(1, { beschreibung: 'Mit Glasur', tipp: 'Kühl lagern.', bild: photo,
+        zutaten: [{ name: 'Puderzucker', menge: 100, einheit: 'g', teil: 'Glasur', hinweis: 'gesiebt' }, { name: 'Backpulver', menge: 1, einheit: 'Päckchen' }, { name: 'Salz', einheit: 'Prise' }] }),
+      recipe(2),
+    ]);
+    const cal = withDoorImage(fillAdvent(emptyAdvent(), src.doors, on(2026, 11, 20)), 1, 'foto1');
+    const file = exportAdvent(cal, { foto1: photo });
+    const back = parseAdventJson(JSON.stringify(file));
+    expect(back.errors).toEqual([]);
+    expect(back.images).toEqual({ 1: photo });
+    const strip = (doors: typeof src.doors) => doors.map((d) => ({
+      ...d, content: { ...d.content, ingredients: d.content.ingredients.map(({ id: _, ...i }) => i), steps: d.content.steps.map(({ id: _, ...s }) => s) },
+    }));
+    expect(strip(back.doors)).toEqual(strip(src.doors));
+  });
+
+  it('ohne Fortschritt und ohne leere Felder; Fotos, die (noch) fehlen, bleiben einfach weg', () => {
+    const cal = markSaved(markOpened(withDoorImage(filled(), 2, 'fehlt'), 1, on(2026, 12, 1)), 1, 'r1');
+    const file = exportAdvent(cal);
+    expect(file).toHaveLength(24);
+    expect(JSON.stringify(file)).not.toMatch(/opened|saved|r1|fehlt/);
+    expect(file[1]).not.toHaveProperty('bild');
+    expect(file[0]).not.toHaveProperty('beschreibung');
   });
 });
 

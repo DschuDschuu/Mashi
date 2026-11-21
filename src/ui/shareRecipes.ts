@@ -22,7 +22,14 @@ export async function shareRecipes(recipes: readonly Recipe[]): Promise<ShareRes
   const base = one ? `mashi-rezept-${slug(one)}` : `mashi-rezepte-${new Date().toISOString().slice(0, 10)}`;
   const title = one ? `„${one}“ aus Mashi` : `${recipes.length} Rezepte aus Mashi`;
   const text = `${title}. So ${one ? 'kommt es' : 'kommen sie'} in dein Mashi: Einstellungen → Sicherung → Einspielen → diese Datei wählen.`;
+  return shareJsonFile(json, base, title, text);
+}
 
+/**
+ * Eine JSON-Datei übers Teilen-Menü (WhatsApp, Mail …) – sonst herunterladen. Für geteilte Rezepte und den
+ * Adventskalender-Export (AdventSettings). `base` = Dateiname ohne Endung.
+ */
+export async function shareJsonFile(json: string, base: string, title: string, text: string): Promise<ShareResult> {
   const files = [new File([json], `${base}.json`, { type: 'application/json' }), new File([json], `${base}.txt`, { type: 'text/plain' })];
   const file = files.find((f) => navigator.canShare?.({ files: [f] }));
   if (file) {

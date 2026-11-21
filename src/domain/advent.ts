@@ -213,6 +213,37 @@ export const imageIdsOf = (cal: AdventCalendar | undefined): string[] =>
 /** Foto-Dokumente heißen so – das Aufräumen findet sie über den Anfang */
 export const ADVENT_IMAGE_PREFIX = 'adventbild_';
 
+/**
+ * Export (Julia: „exportieren, dann kann ich ihn fertig machen und kopieren“): der Kalender zurück in das Format der
+ * Datei (docs/ADVENTSKALENDER.md) – mit den Fotos (`images`: Foto-ID → data-URL), ohne Fortschritt: Wer die Datei
+ * einspielt, fängt mit geschlossenen Türchen an. Was beim Einlesen leer oder 0 war, bleibt weg; parseAdventJson liest
+ * die Datei wieder genauso ein.
+ */
+export function exportAdvent(cal: AdventCalendar, images: Readonly<Record<string, string>> = {}): Record<string, unknown>[] {
+  return cal.doors.map((d) => {
+    const c = d.content;
+    const photo = d.imageId ? images[d.imageId] : undefined;
+    return {
+      tag: d.day,
+      titel: c.title,
+      ...(c.description ? { beschreibung: c.description } : {}),
+      portionen: c.servings,
+      ...(c.prepMinutes ? { vorbereitung: c.prepMinutes } : {}),
+      ...(c.cookMinutes ? { backzeit: c.cookMinutes } : {}),
+      zutaten: c.ingredients.map((i) => ({
+        name: i.name,
+        ...(i.amount !== undefined ? { menge: i.amount } : {}),
+        ...(i.unit ? { einheit: i.unit } : {}),
+        ...(i.note ? { hinweis: i.note } : {}),
+        ...(i.part ? { teil: i.part } : {}),
+      })),
+      schritte: c.steps.map((s) => s.text),
+      ...(d.tip ? { tipp: d.tip } : {}),
+      ...(photo ? { bild: photo } : {}),
+    };
+  });
+}
+
 // ── Befüllen, Öffnen, Speichern ───────────────────────────────────
 
 /**

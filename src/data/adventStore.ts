@@ -175,6 +175,20 @@ export async function setDoorPhoto(day: number, url: string | undefined): Promis
   };
 }
 
+/** Alle Fotos der Türchen (Foto-ID → data-URL) – für den Export; was (noch) nicht da ist, fehlt einfach */
+export async function loadDoorImages(): Promise<Record<string, string>> {
+  const ids = calendar ? imageIdsOf(calendar) : [];
+  const out: Record<string, string> = {};
+  for (const id of ids) {
+    const url = imageCache.get(id) ?? await repo?.loadAdventImage(id).catch(() => undefined);
+    if (url) {
+      imageCache.set(id, url);
+      out[id] = url;
+    }
+  }
+  return out;
+}
+
 // ── Fotos: erst laden, wenn ein Türchen sie zeigt ──
 
 /** geladene Fotos je ID – ändern sich nie, darum ohne Ablauf */

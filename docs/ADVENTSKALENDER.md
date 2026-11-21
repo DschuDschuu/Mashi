@@ -26,6 +26,9 @@ Vom 1. bis 24. Dezember öffnet sich in Mashi jeden Tag ein Türchen mit einem R
   (Ausschnitt wie bei Rezeptfotos, 4 : 3) oder entfernen, mit Rückgängig; geht jederzeit, auch vor Dezember. Ist das
   Rezept schon im Kochbuch und hat noch kein eigenes Foto, bekommt es das neue mit. Zwei Geräte, die gleichzeitig
   verschiedene Türchen ändern, verlieren dabei nichts (Zusammenführen je Türchen).
+- **Exportieren:** In den Einstellungen unter „Adventskalender“ → „Exportieren …“ – der Kalender als Datei im
+  Format unten, mit allen Fotos, ohne Fortschritt (wer sie einspielt, fängt mit geschlossenen Türchen an). Übers
+  Teilen-Menü (WhatsApp, Mail …), am Laptop als Download. So lässt er sich fertig machen und weitergeben (Tom).
 - **Vorschau zum Ausprobieren:** `…/Mashi/#/advent?vorschau=5` tut so, als wäre der 5. Dezember (ohne Zahl: der 1.,
   oben mit −/+ umschalten). Türchen lassen sich ansehen, aber Mashi merkt sich nichts – kein „geöffnet“, kein Speichern
   ins Kochbuch. „Beenden“ führt zum echten Kalender. Befüllen geht dort ganz normal (das ist echt).

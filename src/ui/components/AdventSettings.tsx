@@ -1,10 +1,11 @@
 import { useRef, useState } from 'react';
-import { fillCalendar, useAdvent } from '../../data/adventStore';
+import { fillCalendar, loadDoorImages, useAdvent } from '../../data/adventStore';
 import { ADVENT_DEMO } from '../../data/adventDemo';
 import { isDemo } from '../../data/store';
-import { needsFilling, parseAdventJson, type AdventDoor, type AdventImport } from '../../domain/advent';
+import { exportAdvent, needsFilling, parseAdventJson, type AdventDoor, type AdventImport } from '../../domain/advent';
 import { navigate } from '../../router';
 import { ask } from '../confirm';
+import { shareJsonFile } from '../shareRecipes';
 import { toast } from '../toast';
 import { AdventPhotosSheet } from './AdventPhotos';
 import { Icon } from './Icon';
@@ -49,6 +50,22 @@ export function AdventSettings() {
   };
   const photoCount = result ? Object.keys(result.images).length : 0;
 
+  // Export (Julia: „fertig machen und dann kopieren“): Rezepte + Fotos im Dateiformat, ohne Fortschritt – übers
+  // Teilen-Menü, am Laptop als Download. Lesbar eingerückt, falls du die Datei noch von Hand bearbeitest.
+  const exportFile = async () => {
+    setBusy(true);
+    try {
+      const json = JSON.stringify(exportAdvent(cal, await loadDoorImages()), null, 2);
+      const year = cal.year || new Date().getFullYear();
+      const res = await shareJsonFile(json, `mashi-adventskalender-${year}`, `Adventskalender ${year} aus Mashi`,
+        'So kommt er in dein Mashi: Einstellungen → Adventskalender → „Kalender befüllen …“ → diese Datei wählen.');
+      if (res === 'geteilt') toast('Adventskalender geteilt');
+      else if (res === 'heruntergeladen') toast('Datei gespeichert – weiterschicken z. B. per WhatsApp; eingespielt wird unter Einstellungen → Adventskalender');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div className="panel advent-fill" id="adventskalender">
       <p className="small muted">
@@ -73,6 +90,11 @@ export function AdventSettings() {
         {filled && (
           <button type="button" className="btn btn--ghost" disabled={busy} onClick={() => setPhotos(true)}>
             <Icon name="image" size={18} /> Fotos ergänzen …
+          </button>
+        )}
+        {filled && (
+          <button type="button" className="btn btn--ghost" disabled={busy} onClick={exportFile}>
+            <Icon name="share" size={18} /> Exportieren …
           </button>
         )}
         {filled && (
