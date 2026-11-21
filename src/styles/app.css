@@ -1920,10 +1920,10 @@ p { margin: 0; }
 :root[data-theme="weihnachten"] .home-head__spark--b { animation-delay: -0.8s; }
 .xm-star { position: absolute; fill: #e3b04b; pointer-events: none; filter: drop-shadow(0 0 2px rgb(244 210 122 / 0.8)); animation: xm-glint 1.4s ease-in-out infinite alternate; animation-delay: calc(var(--i) * -0.55s); }
 
-/* Schnee bleibt liegen: kleine Schneehauben auf den Karten der Startseite (auf dem Bild des Tages innen, das hat overflow: hidden) */
-:root[data-theme="weihnachten"] :is(.advent-banner, .useup-banner, .home-row) { position: relative; }
-:root[data-theme="weihnachten"] :is(.advent-banner, .useup-banner, .home-row)::before,
-:root[data-theme="weihnachten"] .bigcard__media::after {
+/* Schnee bleibt liegen: kleine Schneehauben auf den Karten der Startseite – auch auf den großen Rezeptkarten
+   (Rezept des Tages, Heute Abend, Bereit zum Kochen) */
+:root[data-theme="weihnachten"] :is(.advent-banner, .useup-banner, .home-row, .bigcard) { position: relative; }
+:root[data-theme="weihnachten"] :is(.advent-banner, .useup-banner, .home-row, .bigcard)::before {
   /* Julia: „zu niedrig“ – dicker wie bei der Leiste: Wellentäler (bis y 9) knapp ÜBER der Kartenkante, darunter
      durchgehend Schnee 5 px tief in die Karte, dazu drei kleine Tropfen; nur auf der geraden Kante (Ecken: 18 px rund) */
   content: ''; position: absolute; left: 16px; right: 16px; top: -12px; height: 22px; pointer-events: none;
@@ -1931,7 +1931,14 @@ p { margin: 0; }
   background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='90' height='22'%3E%3Cpath d='M0 9C6 2 12 2 18 6C23 9 30 10 36 6C42 2 50 1 55 6C60 10 68 10 74 6C79 3 86 3 90 9V17H0z' fill='%23ffffff'/%3E%3Cpath d='M22 16.5c0 3.5 1 5.5 2.2 5.5s2.2-2 2.2-5.5zM51 16.5c0 2.6.8 4 1.8 4s1.8-1.4 1.8-4zM80 16.5c0 3.5 1 5.5 2.2 5.5s2.2-2 2.2-5.5z' fill='%23ffffff'/%3E%3C/svg%3E") round; /* ganze Bögen: jede Haube beginnt und endet mit einer Welle */
   filter: drop-shadow(0 1px 1px rgb(31 58 44 / 0.22));
 }
-:root[data-theme="weihnachten"] .bigcard__media::after { top: 0; left: 0; right: 0; }
+/* Große Karten schnitten alles ab (overflow: hidden) – die Haube lag deshalb IM Bild, oben schaute das Bild zwischen
+   den Schneebergen durch (Julia: „bei Heute Abend stimmt der Schnee immer noch nicht“). Jetzt schneidet das Bild seine
+   Ecken selbst ab, die Karte nicht mehr; die Haube liegt wie überall auf der Kante, über dem Bild (z-index). */
+:root[data-theme="weihnachten"] .bigcard { overflow: visible; }
+:root[data-theme="weihnachten"] .bigcard__media { overflow: hidden; border-radius: calc(var(--r-lg) - 1px) calc(var(--r-lg) - 1px) 0 0; }
+:root[data-theme="weihnachten"] .bigcard::before { z-index: 1; left: 22px; right: 22px; } /* Ecken hier 24 px rund */
+/* das Karussell („Bereit zum Kochen“) schneidet oben ab – Platz für die Haube */
+:root[data-theme="weihnachten"] .swiper { padding-top: 14px; }
 
 /* Lebkuchenmann unten rechts im Platzhalterbild – der Rest steckt unter der Bildkante */
 :root[data-theme="weihnachten"] .rimg--ph { position: relative; }
