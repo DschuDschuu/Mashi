@@ -17,6 +17,8 @@ export interface KiForm {
   withTastes: boolean;
   /** Makro-Ziel mitschicken (ältere gemerkte Aufträge: fehlt → an) */
   withMacros?: boolean;
+  /** Angebote der Woche mitschicken (Einkauf planen) – fehlt: aus */
+  withOffers?: boolean;
 }
 
 export interface KiAgain {

@@ -1074,6 +1074,30 @@ p { margin: 0; }
 .shopping__row { display: flex; align-items: center; gap: 12px; min-height: 46px; }
 .shopping__item.is-have .shopping__name { color: var(--ink-2); }
 .shopping__undo { display: block; margin: -6px 0 8px 34px; font-size: var(--fs-sm); }
+
+/* Einkauf planen (Angebote) – Zeilen wie die Einkaufsliste, lange Prospektnamen umbrechen statt herausragen */
+.offer-preview { display: flex; flex-direction: column; gap: 12px; }
+.offer-preview .shopping { padding: 0; }
+.offer-preview .shopping__name, .offer-group .shopping__name { overflow-wrap: anywhere; }
+.offer-unread { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 10px 12px; border-radius: var(--r-sm); background: var(--sky); }
+.offer-unread p { margin: 0; overflow-wrap: anywhere; }
+.offer-until input { max-width: 200px; }
+.offer-matches { display: flex; flex-direction: column; gap: 12px; }
+.offer-matches > p { margin: 0; }
+.offer-hit { display: block; color: var(--ink-2); font-weight: 600; overflow-wrap: anywhere; }
+.offer-hit svg { vertical-align: -1px; }
+.offer-group { display: flex; flex-direction: column; gap: 6px; }
+.offer-group + .offer-group { margin-top: 12px; }
+.offer-group h3 { margin: 0; }
+.offer-food { display: flex; gap: 8px; margin-top: 6px; }
+.offer-food input {
+  flex: 1; min-width: 0; border: 1px solid var(--line); background: var(--surface); border-radius: var(--r-sm);
+  padding: 8px 10px; font-size: var(--fs-md); color: var(--ink); outline: none;
+}
+.offer-food input:focus { border-color: var(--primary); }
+.offer-food__link { align-self: flex-start; padding: 2px 0; text-align: left; }
+.shopping__offer { color: var(--ink-2); font-weight: 600; }
+.shopping__offer svg { vertical-align: -1px; }
 .stepper--sm button { width: 32px; height: 32px; }
 .stepper--sm output { min-width: 22px; font-size: var(--fs-md); }
 .sheet__title--sub { margin-top: 16px; }

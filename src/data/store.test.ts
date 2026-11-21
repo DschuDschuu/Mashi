@@ -3,7 +3,7 @@ import PouchDB from 'pouchdb-core';
 import memory from 'pouchdb-adapter-memory';
 import { describe, expect, it, vi } from 'vitest';
 import { PouchRecipeRepository, type RecipeDb } from './pouchRepository';
-import { importProducts, saveProducts, currentProducts, clearChecked, cookParts, setPlanAmounts, addExtra, addPantryItem, dropPriceDay, editBon, setCategory, addToPlan, answerLeftover, applyInventory, clearDoneExtras, deleteRecipe, importPantry, importReceipt, importRecipes, regenerateImage, markCooked, uncookRecipe, clearCooked, createRecipe, currentLeftoverAsk, currentPantry, eatPreparedPortions, freezePantryItem, initStore, thawPantryItem, togglePlanCooked, removeFromPlan, removePantryItem, setFoodStage, setPantryAmount, toggleShoppingItem, updatePantryItem, whenSaved } from './store';
+import { importProducts, saveProducts, currentProducts, clearChecked, cookParts, setPlanAmounts, addExtra, addPantryItem, dropPriceDay, editBon, setCategory, addToPlan, answerLeftover, applyInventory, clearDoneExtras, deleteRecipe, importPantry, importReceipt, importRecipes, regenerateImage, markCooked, uncookRecipe, clearCooked, createRecipe, currentLeftoverAsk, currentPantry, eatPreparedPortions, freezePantryItem, initStore, thawPantryItem, togglePlanCooked, removeFromPlan, removePantryItem, setFoodStage, setPantryAmount, toggleShoppingItem, updatePantryItem, whenSaved, saveOffers, removeOffer } from './store';
 import { buildShoppingList, keyOfName } from '../domain/mealplan';
 import { emptyPantry } from '../domain/pantry';
 import { EXTRA_PREFIX, RESTOCK_PREFIX } from '../domain/restock';
@@ -526,5 +526,31 @@ describe('Store: Bon ohne Datum um Mitternacht (Code-Review #24)', () => {
       vi.useRealTimers();
       vi.unstubAllEnvs();
     }
+  });
+});
+
+describe('Store: Angebote (Einkauf planen)', () => {
+  it('übernehmen, ersetzen, entfernen – Rückgängig holt genau das zurück und es landet in der Datenbank', async () => {
+    const repo = await freshStore('angebote');
+    // erfundene Angebote, gültig bis weit in die Zukunft – der Test hängt nicht am heutigen Datum
+    const until = '2099-12-31';
+    saveOffers([{ name: 'Brokkoli', price: 1.19 }, { name: 'Hähnchenbrust', price: 6.99 }], 'Lidl', until);
+    const names = () => (currentPantry().offers ?? []).map((o) => `${o.store}:${o.name}:${o.price}`);
+    expect(names()).toEqual(['Lidl:Brokkoli:1.19', 'Lidl:Hähnchenbrust:6.99']);
+
+    // derselbe Prospekt noch mal mit neuem Preis: ersetzt statt doppelt
+    const undoAgain = saveOffers([{ name: 'Hähnchenbrust', price: 5.99 }], 'Lidl', until);
+    expect(names()).toEqual(['Lidl:Brokkoli:1.19', 'Lidl:Hähnchenbrust:5.99']);
+    undoAgain();
+    expect(names()).toEqual(['Lidl:Brokkoli:1.19', 'Lidl:Hähnchenbrust:6.99']);
+
+    const brokkoli = currentPantry().offers!.find((o) => o.name === 'Brokkoli')!.id;
+    const undoRemove = removeOffer(brokkoli);
+    expect(names()).toEqual(['Lidl:Hähnchenbrust:6.99']);
+    undoRemove();
+    expect(names()).toEqual(['Lidl:Brokkoli:1.19', 'Lidl:Hähnchenbrust:6.99']);
+    await settle();
+    // Reihenfolge egal: der Speicherweg hängt Wiedergeholtes hinten an (merge3), die Seite sortiert nach Markt
+    expect((await repo.loadPantry()).offers?.map((o) => o.name).sort()).toEqual(['Brokkoli', 'Hähnchenbrust']);
   });
 });

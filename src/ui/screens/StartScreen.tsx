@@ -26,6 +26,8 @@ import { useUseUp } from '../useUseUp';
 import { useShoppingCount } from '../useShoppingCount';
 import { WeekToday } from '../components/WeekToday';
 import { weekdayOf } from '../../domain/week';
+import { activeOffers, shopDayHint } from '../../domain/offers';
+import { localDay } from '../../domain/dates';
 
 /**
  * Startseite: nur das, was heute ansteht. Geplantes als große Karten zum Wischen –
@@ -81,6 +83,7 @@ export function StartScreen() {
           <Icon name="chevron" size={16} />
         </button>
       )}
+      <ShopDayRow />
       <PreparedRow />
       {plan.week && <WeekToday week={plan.week} />}
       {planned.length > 0 ? (
@@ -122,6 +125,24 @@ export function StartScreen() {
       )}
       <Shortcuts />
     </main>
+  );
+}
+
+/**
+ * Freitags und samstags (Julia: „samstags gehe ich einkaufen, freitags oder morgens planen“): Einkauf planen mit den
+ * Angeboten der Woche. Sonst steht der Weg in der Einkaufsliste – die Startseite bleibt bei dem, was heute ansteht.
+ */
+function ShopDayRow() {
+  const pantry = usePantry();
+  const hint = shopDayHint(new Date());
+  if (!hint) return null;
+  const count = activeOffers(pantry.offers, localDay()).length;
+  return (
+    <button className="home-row shop-day" onClick={() => navigate('/angebote')}>
+      <Icon name="bag" size={18} />
+      <span><strong>Einkauf planen</strong> · {hint === 'morgen' ? 'morgen' : 'heute'} ist Einkaufstag{count ? ` · ${count} Angebote` : ''}</span>
+      <Icon name="chevron" size={16} />
+    </button>
   );
 }
 

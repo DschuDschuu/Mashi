@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { KiError, serverRecipeAi } from './serverAi';
+import { KiError, serverOffersAi, serverRecipeAi } from './serverAi';
 
 const cfg = { url: 'https://mashi.example.test/mashi', username: 'julia-test', password: 'pässwort-test' };
 const recipe = { title: 'Test-Pfanne', ingredients: [{ name: 'Paprika', amount: 1, unit: 'Stück' }], steps: [{ text: 'Braten.' }] };
@@ -59,5 +59,26 @@ describe('Älterer Server mit Grenze 8000', () => {
     const ai = serverRecipeAi(() => cfg, (async () => { calls++; return res(400, { error: 'auftrag' }); }) as typeof fetch);
     await expect(ai.generateRecipe({ prompt: 'kurz' })).rejects.toBeInstanceOf(KiError);
     expect(calls).toBe(1);
+  });
+});
+
+describe('Angebote mit KI lesen (Einkauf planen)', () => {
+  it('derselbe Weg wie Rezepte – Auftrag mit Prospekt-Text, Antwort als Angebote', async () => {
+    const calls: { url: string; init: RequestInit }[] = [];
+    const reply = '[{"name":"Test-Brokkoli","food":"Brokkoli","price":1.19,"amount":500,"unit":"g"}]';
+    const ai = serverOffersAi(() => cfg, (async (url: string, init: RequestInit) => { calls.push({ url, init }); return res(200, { text: reply }); }) as typeof fetch);
+    expect(await ai.readOffers('Test-Brokkoli 500 g 1,19', 'Lidl', '2026-11-21')).toEqual([
+      { name: 'Test-Brokkoli', food: 'Brokkoli', price: 1.19, amount: 500, unit: 'g' },
+    ]);
+    expect(calls[0].url).toBe('https://mashi.example.test/ki/rezept');
+    expect(JSON.parse(calls[0].init.body as string).prompt).toContain('Test-Brokkoli 500 g 1,19');
+  });
+
+  it('Meldungen: nicht verbunden, Limit, nichts gefunden', async () => {
+    await expect(serverOffersAi(() => null).readOffers('x', 'Lidl', '2026-11-21')).rejects.toThrow(/verbunden/);
+    const limit = serverOffersAi(() => cfg, (async () => res(429, { message: 'Für heute ist genug.' })) as typeof fetch);
+    await expect(limit.readOffers('x', 'Lidl', '2026-11-21')).rejects.toThrow(/genug/);
+    const none = serverOffersAi(() => cfg, (async () => res(200, { text: 'Keine Angebote.' })) as typeof fetch);
+    await expect(none.readOffers('x', 'Lidl', '2026-11-21')).rejects.toThrow(/keine Angebote/);
   });
 });

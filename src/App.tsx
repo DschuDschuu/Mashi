@@ -23,6 +23,7 @@ import { BonScreen } from './ui/screens/BonScreen';
 import { ReceiptsScreen } from './ui/screens/ReceiptsScreen';
 import { FoodPriceScreen } from './ui/screens/FoodPriceScreen';
 import { ShoppingScreen } from './ui/screens/ShoppingScreen';
+import { OffersScreen } from './ui/screens/OffersScreen';
 import { ReceiptImportScreen } from './ui/screens/ReceiptImportScreen';
 import { RecipeDetailScreen } from './ui/screens/RecipeDetailScreen';
 import { RecipeFormScreen } from './ui/screens/RecipeFormScreen';
@@ -65,6 +66,8 @@ function resolve(route: Route): { screen: ReactElement; tab?: string; section?: 
     case 'einkaeufe': return { screen: <ReceiptsScreen />, tab: '/speisekammer' };
     // die Einkaufsliste hängt am Wagen im Wochenplan
     case 'einkauf': return { screen: <ShoppingScreen />, tab: '/plan' };
+    // Einkauf planen mit den Angeboten der Woche (Startseite freitags/samstags, Einkaufsliste)
+    case 'angebote': return { screen: <OffersScreen />, section: '/plan' };
     case 'speisekammer':
       if (b === 'bon') return { screen: <ReceiptImportScreen shared={route.query.has('geteilt')} />, section: '/speisekammer' };
       if (b === 'inventur') return { screen: <InventoryScreen />, section: '/speisekammer' };
@@ -79,7 +82,7 @@ function resolve(route: Route): { screen: ReactElement; tab?: string; section?: 
     };
     case 'produkte': return { screen: <ProductsScreen />, section: '/speisekammer' };
     case 'neu':
-      if (b === 'ki') return { screen: <AiCreateScreen initialPrompt={route.query.get('text') ?? ''} /> };
+      if (b === 'ki') return { screen: <AiCreateScreen initialPrompt={route.query.get('text') ?? ''} offers={route.query.get('angebote') === '1'} /> };
       if (b === 'import') return { screen: <ImportScreen /> };
       return { screen: <RecipeFormScreen key={`neu${route.query.get('aus') ?? ''}`} fromBase={route.query.get('aus') ?? undefined} /> };
     case 'rezept':

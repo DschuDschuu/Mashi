@@ -6,7 +6,7 @@ import { localFoodTable } from '../domain/nutrition/localFoods';
 import type { FoodTable } from '../domain/nutrition/types';
 import { currentMode, savedSyncConfig } from '../data/connection';
 import { mockRecipeAi } from './ai/mockAi';
-import { serverRecipeAi } from './ai/serverAi';
+import { KiError, serverOffersAi, serverRecipeAi, type OffersAi } from './ai/serverAi';
 import { openFoodFacts, type BarcodeLookup } from './barcode/openFoodFacts';
 import type { RecipeAiProvider } from './ai/types';
 import { placeholderImages, type ImageProvider } from './images/imageProvider';
@@ -16,6 +16,13 @@ const serverAi = serverRecipeAi(savedSyncConfig);
 export const recipeAi: RecipeAiProvider = {
   id: 'auto',
   generateRecipe: (req) => (currentMode() === 'sync' ? serverAi : mockRecipeAi).generateRecipe(req),
+};
+// Angebote mit KI lesen (Einkauf planen) – nur mit Server; die Demo liest den Text selbst
+const serverOffers = serverOffersAi(savedSyncConfig);
+export const offersAi: OffersAi = {
+  readOffers: (...a) => (currentMode() === 'sync'
+    ? serverOffers.readOffers(...a)
+    : Promise.reject(new KiError('Mit KI lesen geht, sobald Mashi mit deinem Server verbunden ist – in der Demo liest Mashi selbst.'))),
 };
 export const imageProvider: ImageProvider = placeholderImages;
 export const foodTable: FoodTable = localFoodTable;

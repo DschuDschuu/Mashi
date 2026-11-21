@@ -11,6 +11,9 @@ import { CATEGORY_ICONS } from '../catalogIcons';
 import { TopBar } from '../components/TopBar';
 import { groupByCategory } from '../../domain/categories';
 import { useCategoryOf } from '../useCategory';
+import { activeOffers, offerFoods, offerPackLabel, offersByKey, type Offer } from '../../domain/offers';
+import { localDay } from '../../domain/dates';
+import { euro } from '../format';
 
 type View = 'liste' | 'basics';
 
@@ -29,6 +32,12 @@ export function ShoppingScreen() {
   const typeNow = useRoute().query.get('neu') === '1';
   const table = useFoodTable();
   const all = useMemo(() => shoppingList(plan, recipes, table, pantry, products), [plan, recipes, table, pantry, products]);
+  // Angebote der Woche (Einkauf planen): gleiches Lebensmittel = gleicher Schlüssel wie der Eintrag – auch, was die
+  // Tabelle nicht kennt, aber genauso auf der Liste steht (Brokkoli)
+  const offerOf = useMemo(() => {
+    const active = activeOffers(pantry.offers, localDay());
+    return offersByKey(active, offerFoods(active, table, new Set(all.map((i) => i.key))));
+  }, [pantry.offers, table, all]);
 
   const shown = all.filter((i) => (view === 'basics' ? i.pantry : !i.pantry));
   const isDone = (i: ShoppingItem) => plan.checked.includes(i.key);
@@ -41,7 +50,9 @@ export function ShoppingScreen() {
 
   return (
     <main className="screen screen--tabbed">
-      <TopBar title="Einkaufsliste" backTo="/plan" intro="einkauf" />
+      <TopBar title="Einkaufsliste" backTo="/plan" intro="einkauf" right={
+        <button className="iconbtn" aria-label="Einkauf planen" onClick={() => navigate('/angebote')}><Icon name="bag" /></button>
+      } />
       {/* eigene Einträge: „Spülmittel“, „Backpapier“ – auch ohne Plan */}
       <AddExtra autoFocus={typeNow} />
       {all.length === 0 ? (
@@ -70,7 +81,7 @@ export function ShoppingScreen() {
           )}
           {groupByCategory(open, (i) => categoryOf(i.name)).map((g) => (
             <Section key={g.title} title={g.title} icon={CATEGORY_ICONS[g.id]}>
-              <ul className="shopping panel">{g.items.map((i) => <ShoppingRow key={i.key} item={i} checked={false} />)}</ul>
+              <ul className="shopping panel">{g.items.map((i) => <ShoppingRow key={i.key} item={i} checked={false} offer={offerOf.get(i.key)} />)}</ul>
             </Section>
           ))}
           {done.length > 0 && (
@@ -112,7 +123,7 @@ export function ShoppingScreen() {
   );
 }
 
-function ShoppingRow({ item, checked }: { item: ShoppingItem; checked: boolean }) {
+function ShoppingRow({ item, checked, offer }: { item: ShoppingItem; checked: boolean; offer?: Offer }) {
   const buyAnyway = !!usePlan().buy?.includes(item.key);
   return (
     <li className={`shopping__item${checked ? ' is-done' : ''}${item.extra && !item.from.length && !item.restock ? ' shopping__item--extra' : ''}`}>
@@ -125,6 +136,12 @@ function ShoppingRow({ item, checked }: { item: ShoppingItem; checked: boolean }
           {item.restock && !checked && <span className="shopping__from shopping__restock"><Icon name="refresh" size={12} /> {item.restock}</span>}
           {item.have && !item.restock && !checked && <span className="shopping__from">Im Vorrat {item.have}</span>}
           {item.note && !checked && <span className="shopping__from">{item.note}</span>}
+          {/* im Angebot: wo und für wie viel – damit du im richtigen Markt zugreifst */}
+          {offer && !checked && (
+            <span className="shopping__from shopping__offer">
+              <Icon name="bag" size={12} /> Angebot {[offer.store, offer.price !== undefined ? euro(offer.price) : '', offerPackLabel(offer)].filter(Boolean).join(' · ')}
+            </span>
+          )}
         </span>
         <span className="shopping__qty">{item.quantity}</span>
       </label>

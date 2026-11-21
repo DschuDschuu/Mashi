@@ -34,6 +34,15 @@ describe('KI-Auftrag', () => {
     const p = buildRecipePrompt({ prompt: '  ' });
     expect(p).not.toContain('Wunsch:');
     expect(p).not.toContain('bald aufgebraucht');
+    expect(p).not.toContain('im Angebot');
+  });
+
+  it('Angebote der Woche gehen als Auswahl mit (Einkauf planen)', () => {
+    const p = buildRecipePrompt({ prompt: '', kitchen: { offers: ['Hähnchenbrust (Lidl)', 'Brokkoli (Rewe)'] } });
+    expect(p).toContain('im Angebot – nimm ein, zwei davon als Hauptzutaten');
+    expect(p).toContain('Hähnchenbrust (Lidl), Brokkoli (Rewe)');
+    // „Hauptzutat frei“ passt nicht zu den Angeboten
+    expect(p).not.toContain('Überrasche mich');
   });
 });
 

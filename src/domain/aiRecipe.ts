@@ -21,6 +21,8 @@ export interface KitchenContext {
   tastes?: string;
   /** Makro-Ziel – Anteil an den Kalorien in % (Julia: per Schalter mitschicken) */
   macros?: { carbs: number; protein: number; fat: number };
+  /** diese Woche im Angebot („Hähnchenbrust (Lidl)“) – Julia: aus Angeboten und Vorlieben ein Rezept, siehe offers.ts */
+  offers?: string[];
 }
 
 export interface RecipeAsk {
@@ -62,7 +64,8 @@ const list = (xs: string[] | undefined) => [...new Set((xs ?? []).map((x) => x.t
 export function buildRecipePrompt(ask: RecipeAsk, opts: { maxLength?: number } = {}): string {
   const k = ask.kitchen ?? {};
   const lines: string[] = ['Erstelle ein Kochrezept auf Deutsch.'];
-  const nothing = !ask.prompt.trim() && !ask.maxMinutes && !ask.devices?.length && !ask.wishes?.length;
+  // mit Angeboten ist die Hauptzutat nicht mehr „frei“ – dann keine Überraschung, die Angebote geben die Richtung
+  const nothing = !ask.prompt.trim() && !ask.maxMinutes && !ask.devices?.length && !ask.wishes?.length && !k.offers?.length;
   if (ask.prompt.trim()) lines.push(`Wunsch: ${ask.prompt.trim()}`);
   // „Überrasch mich“ (Julia): ganz ohne Angaben – dann ausdrücklich freie Wahl
   else if (nothing) lines.push('Überrasche mich mit einer Idee – Gericht, Küche und Hauptzutat sind frei.');
@@ -71,6 +74,8 @@ export function buildRecipePrompt(ask: RecipeAsk, opts: { maxLength?: number } =
   if (ask.devices?.length) lines.push(`Vorhandene Geräte, die genutzt werden sollen: ${list(ask.devices)}`);
   if (ask.wishes?.length) lines.push(`Stil: ${list(ask.wishes)}`);
   if (k.useUp?.length) lines.push(`Muss bald aufgebraucht werden – bitte möglichst alles davon verwenden: ${list(k.useUp)}`);
+  // Angebote als Auswahl, nicht als Pflichtliste – ein Rezept mit allen 30 Angeboten wäre keins
+  if (k.offers?.length) lines.push(`Diese Woche im Angebot – nimm ein, zwei davon als Hauptzutaten, damit der Einkauf günstig wird: ${list(k.offers)}`);
   if (k.pantry?.length) lines.push(`Außerdem im Vorrat (gern nutzen, damit wenig eingekauft werden muss): ${list(k.pantry)}`);
   if (k.basics?.length) lines.push(`Immer im Haus: ${list(k.basics)}`);
   if (k.macros) lines.push(`Makro-Ziel (Anteil an den Kalorien): Kohlenhydrate ${k.macros.carbs} %, Eiweiß ${k.macros.protein} %, Fett ${k.macros.fat} % – das Rezept soll möglichst nah daran liegen.`);
