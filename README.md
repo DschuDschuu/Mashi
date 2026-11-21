@@ -69,8 +69,8 @@ Live: <https://dschudschuu.github.io/Mashi/> · installierbar als App (PWA), fun
   Format: [docs/ADVENTSKALENDER.md](docs/ADVENTSKALENDER.md)
 - **Abgleich** zwischen Geräten über eine eigene CouchDB (siehe `server/couchdb/ANLEITUNG.md`),
   Sicherung als Datei (alles: Rezepte, Lebensmittel, Speisekammer, Plan), geführte Tour je Seite beim ersten Besuch (kommt Neues dazu, zeigt sie einmal nur das Neue mit „Neu“), vier Farbthemen
-  und Feiertagsthemen, die sich von selbst einschalten (Halloween 15.10.–2.11.; Weihnachten 1.–26.12. mit Schnee,
-  Lichterkette und tannengrüner Leiste)
+  und Feiertagsthemen, die sich von selbst einschalten (Halloween 15.10.–2.11.; Weihnachten ab dem 1. Advent bzw. 1.12. bis 26.12. dunkel in Tannengrün
+  und Gold mit Schnee, Lichterkette, Schlitten am Himmel, Schneemann, Mütze aufs Logo und Lebkuchenmännern)
 
 ## Loslegen
 

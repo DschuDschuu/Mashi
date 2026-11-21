@@ -8,16 +8,28 @@ export type SpecialId = 'halloween' | 'weihnachten';
 export interface Season {
   id: SpecialId;
   label: string;
-  /** erster und letzter Tag als „MM-TT“ – darf über Neujahr gehen (from > to) */
-  from: string;
+  /** erster und letzter Tag als „MM-TT“ – darf über Neujahr gehen (from > to); der Anfang darf je Jahr wandern */
+  from: string | ((year: number) => string);
   to: string;
+}
+
+const mmdd = (d: Date) => `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+/** 1. Advent („MM-TT“): vier Sonntage vor Weihnachten – der Sonntag 22 bis 28 Tage vor dem 25.12. (27.11. bis 3.12.) */
+export function firstAdvent(year: number): string {
+  const weekday = new Date(year, 11, 25).getDay(); // 0 = Sonntag
+  const fourth = 25 - (weekday === 0 ? 7 : weekday); // 4. Advent: der Sonntag vor dem 25.
+  return mmdd(new Date(year, 11, fourth - 21)); // Date rechnet „−1. Dezember“ selbst in den November um
 }
 
 export const SEASONS: Season[] = [
   { id: 'halloween', label: 'Halloween', from: '10-15', to: '11-02' },
-  // Julia: genau zum Adventskalender, endet nach den Feiertagen
-  { id: 'weihnachten', label: 'Weihnachten', from: '12-01', to: '12-26' },
+  // Julia: zum 1. Advent oder 1. Dezember – was früher ist (der Adventskalender beginnt am 1.12.), endet nach den Feiertagen
+  { id: 'weihnachten', label: 'Weihnachten', from: (year) => (firstAdvent(year) < '12-01' ? firstAdvent(year) : '12-01'), to: '12-26' },
 ];
+
+/** Erster Tag der Saison im Jahr `year` */
+export const seasonStart = (s: Season, year: number): string => (typeof s.from === 'string' ? s.from : s.from(year));
 
 /** Eigene Wahl, die die Saison überstimmt – bis einschließlich `until` („JJJJ-MM-TT“) oder für immer */
 export interface SpecialOverride {
@@ -26,8 +38,10 @@ export interface SpecialOverride {
 }
 
 const md = (day: string) => day.slice(5, 10);
-const inRange = (s: Season, day: string) =>
-  s.from <= s.to ? md(day) >= s.from && md(day) <= s.to : md(day) >= s.from || md(day) <= s.to;
+const inRange = (s: Season, day: string) => {
+  const from = seasonStart(s, Number(day.slice(0, 4)));
+  return from <= s.to ? md(day) >= from && md(day) <= s.to : md(day) >= from || md(day) <= s.to;
+};
 
 /** Welche Saison läuft an diesem Tag („JJJJ-MM-TT“)? */
 export const seasonOn = (day: string): Season | undefined => SEASONS.find((s) => inRange(s, day));
@@ -35,7 +49,8 @@ export const seasonOn = (day: string): Season | undefined => SEASONS.find((s) =>
 /** Letzter Tag der Saison, in der `day` liegt – bei Saisons über Neujahr ggf. im nächsten Jahr */
 export function seasonEnd(s: Season, day: string): string {
   const year = Number(day.slice(0, 4));
-  const wraps = s.from > s.to && md(day) >= s.from;
+  const from = seasonStart(s, year);
+  const wraps = from > s.to && md(day) >= from;
   return `${wraps ? year + 1 : year}-${s.to}`;
 }
 
@@ -61,6 +76,12 @@ export const isEvening = (now: Date) => now.getHours() >= 18 || now.getHours() <
 
 /** Der 31. Oktober selbst: ein bisschen mehr Halloween (Mond den ganzen Tag, dritte Fledermaus, Hexenhut) */
 export const isHalloweenNight = (day: string) => day.slice(5, 10) === '10-31';
+
+/** Heiligabend: ein bisschen mehr Weihnachten (zweiter Schlitten, dichterer Schnee) */
+export const isChristmasEve = (day: string) => day.slice(5, 10) === '12-24';
+
+/** 24. bis 26. Dezember: „Frohe Weihnachten“ unter dem Logo */
+export const isChristmasDays = (day: string) => ['12-24', '12-25', '12-26'].includes(day.slice(5, 10));
 
 /** Herbstzutaten fürs „Rezept des Tages“ in der Halloween-Saison – bewusst ohne Möhre/Apfel, die stecken in fast allem */
 const AUTUMN = ['kürbis', 'hokkaido', 'butternut', 'süßkartoffel', 'maronen', 'esskastanie', 'pastinake', 'steckrübe'];

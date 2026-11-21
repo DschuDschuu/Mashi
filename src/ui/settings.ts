@@ -28,7 +28,8 @@ export const THEMES: { id: Theme; label: string; colors: [string, string, string
 /** Feiertagsthemen – gleiche Vorschau-Farben wie oben; die Deko dazu liegt in ui/components/HalloweenDeko.tsx und WeihnachtsDeko.tsx */
 export const SPECIAL_THEMES: { id: SpecialId; label: string; colors: [string, string, string] }[] = [
   { id: 'halloween', label: 'Halloween', colors: ['#fbf5ee', '#ef7f1a', '#1b1613'] },
-  { id: 'weihnachten', label: 'Weihnachten', colors: ['#f9f5ee', '#2f5b40', '#b3322c'] },
+  // erste Farbe = Statusleiste (theme-color): dunkel wie der Grund
+  { id: 'weihnachten', label: 'Weihnachten', colors: ['#14241c', '#e3b04b', '#b3322c'] },
 ];
 
 /** Feiertagsthema, das heute gilt (Saison oder eigene Wahl) */

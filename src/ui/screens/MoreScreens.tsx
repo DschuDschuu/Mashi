@@ -355,7 +355,7 @@ function SpecialThemes() {
           );
         })}
       </div>
-      <p className="small muted">Halloween vom 15. Oktober bis 2. November, Weihnachten vom 1. bis 26. Dezember – jeweils von selbst an. Gilt nur für dieses Gerät.</p>
+      <p className="small muted">Halloween vom 15. Oktober bis 2. November, Weihnachten vom 1. Advent (spätestens 1. Dezember) bis 26. Dezember – jeweils von selbst an. Gilt nur für dieses Gerät.</p>
     </details>
   );
 }

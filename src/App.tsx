@@ -12,7 +12,7 @@ import { ConnectScreen } from './ui/screens/ConnectScreen';
 import { CookbookScreen } from './ui/screens/CookbookScreen';
 import { CookModeScreen } from './ui/screens/CookModeScreen';
 import { CelebrationSwarm, HalloweenDeko } from './ui/components/HalloweenDeko';
-import { WeihnachtsDeko } from './ui/components/WeihnachtsDeko';
+import { WeihnachtsDeko, XmasBurst } from './ui/components/WeihnachtsDeko';
 import { CravingScreen } from './ui/screens/CravingScreen';
 import { ImportScreen } from './ui/screens/ImportScreen';
 import { MoreScreen } from './ui/screens/MoreScreens';
@@ -137,6 +137,7 @@ export function App({ mode }: { mode: Mode | null }) {
       {!cooking && <HalloweenDeko />}
       {!cooking && <WeihnachtsDeko />}
       <CelebrationSwarm />
+      <XmasBurst />
       <StatusBanner />
       {/* stürzt eine Seite ab: Meldung statt leerem Bildschirm – je Seite neu (key), damit Zurück wieder geht */}
       <ErrorBoundary key={route.path}>{screen}</ErrorBoundary>

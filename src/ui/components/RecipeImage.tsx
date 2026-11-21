@@ -6,7 +6,7 @@ import { mixIcon } from '../catalogIcons';
 import { useSpecial } from '../settings';
 import { FIELDS, HALF } from './CravingPlate';
 import { CobwebCorner } from './HalloweenDeko';
-import { HollyCorner } from './WeihnachtsDeko';
+import { GingerbreadCorner } from './WeihnachtsDeko';
 import { Icon } from './Icon';
 
 /**
@@ -27,8 +27,8 @@ export function RecipeImage({ image, size = 'md', className = '' }: { image?: Im
       {image?.kind === 'plate' ? <PlateArt image={image} small={size === 'sm'} /> : <LineArt motif={image?.motif ?? 'bowl'} />}
       {/* Halloween: ein Spinnennetz in der Ecke – nur am Platzhalter, echte Fotos bleiben unberührt */}
       {halloween && size !== 'sm' && <CobwebCorner className="rimg__web" />}
-      {/* Weihnachten: ein Stechpalmenzweig in der Ecke – ebenso nur am Platzhalter */}
-      {special === 'weihnachten' && size !== 'sm' && <HollyCorner className="rimg__holly" />}
+      {/* Weihnachten: ein Lebkuchenmann guckt aus der Ecke und winkt (Julia) – ebenso nur am Platzhalter */}
+      {special === 'weihnachten' && size !== 'sm' && <GingerbreadCorner className="rimg__ginger" />}
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { navigate } from '../../router';
 import { useSheet } from '../useSheet';
 import { Icon, type IconName } from './Icon';
 import { useSpecial } from '../settings';
+import { Snowman } from './WeihnachtsDeko';
 
 const TABS: { path: string; label: string; icon: IconName }[] = [
   { path: '/', label: 'Start', icon: 'home' },
@@ -18,7 +19,8 @@ const TABS: { path: string; label: string; icon: IconName }[] = [
  */
 export function BottomNav({ active, onlyTablet = false }: { active?: string; onlyTablet?: boolean }) {
   const [sheet, setSheet] = useState(false);
-  const halloween = useSpecial() === 'halloween';
+  const special = useSpecial();
+  const halloween = special === 'halloween';
   // Halloween: beim Reiterwechsel steigt kurz ein kleiner Geist aus dem neuen Grabstein (Julia) – nicht beim ersten Zeichnen
   const [rise, setRise] = useState(0);
   const before = useRef(active);
@@ -56,6 +58,8 @@ export function BottomNav({ active, onlyTablet = false }: { active?: string; onl
           <NavIcon name="gear" />
           <span>Einstellungen</span>
         </button>
+        {/* Weihnachten: Schneemann sitzt auf der Schneehaube (Julia) – zuletzt, damit er beim Tabben nicht dazwischenfunkt */}
+        {special === 'weihnachten' && <Snowman />}
       </nav>
       {sheet && <CreateSheet onClose={() => setSheet(false)} />}
     </>

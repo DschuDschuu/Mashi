@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { currentContent, totalMinutes } from '../../domain/recipe';
 import { recipeOfTheDay } from '../../domain/recipeOfTheDay';
-import { isAutumnRecipe } from '../../domain/seasons';
+import { isAutumnRecipe, isChristmasDays } from '../../domain/seasons';
 import { useSpecial } from '../settings';
 import { ChefGhost } from '../components/HalloweenDeko';
+import { LogoStars, SantaHat, schneegestoeber } from '../components/WeihnachtsDeko';
 import type { Recipe } from '../../domain/types';
 import { addToPlan, useFoodTable, usePantry, usePlan, useRecipes } from '../../data/store';
 import { navigate } from '../../router';
@@ -51,7 +52,9 @@ export function StartScreen() {
     .sort((a, b) => Number(plannedUseUp.has(b.recipe.id)) - Number(plannedUseUp.has(a.recipe.id)));
   // Jeder Name nur einmal – die Liste ist nach Dringlichkeit sortiert, der dringendste Eintrag bleibt
   const expiring = all.filter((e, i) => !e.item.recipeId && all.findIndex((o) => o.item.name === e.item.name) === i);
-  const halloween = useSpecial() === 'halloween';
+  const special = useSpecial();
+  const halloween = special === 'halloween';
+  const xmas = special === 'weihnachten';
   // Halloween: Kürbis & Co. kommen öfter als Rezept des Tages dran (Julia)
   const autumn = halloween
     ? new Set(recipes.filter((r) => { const c = currentContent(r); return isAutumnRecipe(c.title, c.ingredients.map((i) => i.name)); }).map((r) => r.id))
@@ -61,10 +64,21 @@ export function StartScreen() {
   return (
     <main className="screen screen--tabbed">
       <header className="home-head">
-        <h1 className="logo">Mashi</h1>
+        {xmas ? (
+          // Weihnachten: Mütze auf dem „M“; antippen = Schneegestöber (Julia: „sei kreativ“ – ein kleines Geheimnis)
+          <h1 className="logo">
+            <button type="button" className="logo__btn" onClick={schneegestoeber} aria-label="Mashi – antippen für Schneegestöber">
+              Mashi<SantaHat />
+            </button>
+          </h1>
+        ) : (
+          <h1 className="logo">Mashi</h1>
+        )}
         <Icon name="heart" size={18} className="logo-heart" />
+        {xmas && isChristmasDays(localDay()) && <p className="xm-greeting">Frohe Weihnachten</p>}
         <Icon name="sparkles" size={20} className="home-head__spark home-head__spark--a" />
         <Icon name="sparkles" size={14} className="home-head__spark home-head__spark--b" />
+        {xmas && <LogoStars />}
         <AdventTreeButton className="home-head__advent" />
         <SettingsButton className="home-head__settings" />
       </header>

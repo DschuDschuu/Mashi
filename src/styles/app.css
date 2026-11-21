@@ -1755,22 +1755,32 @@ p { margin: 0; }
 .prep__text { flex: 1; min-width: 0; display: grid; color: var(--ink); overflow-wrap: break-word; }
 .from-base { font-weight: 700; }
 
-/* ── Feiertagsthema Weihnachten (Einstellungen → Spezial; von selbst an vom 1. bis 26.12.) ─────
+/* ── Feiertagsthema Weihnachten (Einstellungen → Spezial; von selbst an vom 1. Advent bzw. 1.12. bis 26.12.) ─────
    Julia: Tannengrün + Rot auf Creme, „mehr Deko“. Tannengrüne Knöpfe (auf Weiß 7,6 : 1), rote Akzente.
-   Deko in WeihnachtsDeko.tsx: Schnee und Lichterkette hinter den Karten, Schneehaube auf der Leiste, Stechpalme am Bild. */
+   Deko in WeihnachtsDeko.tsx: Schnee, Lichterkette, Schlitten und Sternschnuppe hinter den Karten, Schneehaube mit
+   Schneemann auf der Leiste, Mütze und Sterne am Logo, Lebkuchenmann am Bild (Julia: „sei kreativ“). */
+/* Julia: „ein bisschen anders als das normale“ → sechs Entwürfe → dunkles Tannengrün mit Gold („Winternacht“).
+   Das einzige dunkle Thema: helle Schrift (ink auf bg 14 : 1, ink-3 auf surface-2 6 : 1), goldene Knöpfe mit
+   dunkler Schrift, Pastellflächen als dunkle Tönungen. Feste Hellfarben im übrigen CSS sind unten einzeln umgestellt. */
 :root[data-theme="weihnachten"] {
-  --bg: #f9f5ee; --surface: #ffffff; --surface-2: #f2ebe0; --line: #e7ddcf; --backdrop: #eee5d8;
-  --ink: #1f3a2c; --ink-2: #48594d; --ink-3: #5c6b60;
-  --primary: #2f5b40; --primary-press: #234632; --primary-soft: #e2ede4; --primary-text: #2f5b40;
-  --art: #2f5b40; --heart: #b3322c; --star: #c9a24a; --on-primary: #ffffff;
-  --xm-red: #b3322c; --xm-snow: #ffffff;
+  --bg: #14241c; --surface: #1f3529; --surface-2: #294536; --line: #335342; --backdrop: #0f1d16;
+  --ink: #f4efe4; --ink-2: #d3dccf; --ink-3: #aebcb0;
+  /* press heller statt dunkler: auf Dunkel hellt Drücken auf – und als Schrift der zarten Knöpfe (btn--soft) 6 : 1 */
+  --primary: #e3b04b; --primary-press: #f0c766; --primary-soft: #2f4a3a; --primary-text: #f0c766; --on-primary: #1f2a24;
+  --art: #e9d9a8; --heart: #ef6a5e; --star: #e3b04b; --danger-ink: #ff9b8f;
+  --mint: #24402f; --sky: #233a48; --sage: #2a3f30; --peach: #47342a; --rose: #4a2a2a; --butter: #453c22; --sand: #353228;
+  --toast-bg: #2f4a3a; --toast-ink: #f4efe4;
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.2), 0 4px 14px rgb(0 0 0 / 0.22);
+  --shadow-lift: 0 2px 4px rgb(0 0 0 / 0.25), 0 16px 40px rgb(0 0 0 / 0.4);
+  --xm-red: #e0574c; --xm-snow: #ffffff;
+  color-scheme: dark; /* Eingabefelder, Scrollbalken, Datumswähler dunkel */
 }
 :root[data-theme="weihnachten"] .app { isolation: isolate; } /* Himmel (z-index -1) hinter den Karten, vor dem Grund */
 .xm-sky { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
 /* Lichterkette: Girlande aus Bögen (60 px), daran Birnen, die nacheinander funkeln */
 .xm-lights {
   position: absolute; top: 0; left: 0; right: 0; height: 30px;
-  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='30'%3E%3Cpath d='M0 4 Q30 22 60 4' fill='none' stroke='%232f5b40' stroke-width='1.4'/%3E%3C/svg%3E") repeat-x;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='30'%3E%3Cpath d='M0 4 Q30 22 60 4' fill='none' stroke='%236f9a7c' stroke-width='1.4'/%3E%3C/svg%3E") repeat-x; /* hell genug für den dunklen Grund */
 }
 .xm-bulb {
   position: absolute; top: 13px; left: calc(var(--i) * 60px + 26px); width: 8px; height: 12px; border-radius: 50% 50% 45% 45%;
@@ -1778,37 +1788,174 @@ p { margin: 0; }
 }
 .xm-bulb::before { content: ''; position: absolute; top: -3px; left: 2px; width: 4px; height: 4px; border-radius: 1px; background: #2f5b40; }
 @keyframes xm-twinkle { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
-/* Schneefall: blaugraue Flocken (Weiß sähe man auf Creme nicht), fallen langsam und wehen etwas zur Seite */
-.xm-flake { position: absolute; top: -20px; left: var(--x); color: #b9cad3; opacity: 0.8; animation: xm-fall var(--dur) linear infinite; animation-delay: var(--delay); }
-.xm-dot { display: block; width: var(--s); height: var(--s); border-radius: 50%; background: #c7d5dc; }
+/* Schneefall: fast weiße Flocken auf dem dunklen Grund, fallen langsam und wehen etwas zur Seite */
+.xm-flake { position: absolute; top: -20px; left: var(--x); color: #e8f0f4; opacity: 0.75; animation: xm-fall var(--dur) linear infinite; animation-delay: var(--delay); }
+.xm-dot { display: block; width: var(--s); height: var(--s); border-radius: 50%; background: #eef4f7; }
 @keyframes xm-fall {
   from { transform: translate(0, 0) rotate(0); }
   50% { transform: translate(var(--drift), 52vh) rotate(90deg); }
   to { transform: translate(0, 105vh) rotate(180deg); }
 }
 /* Leiste unten: tannengrün mit Schneehaube (Julia: wie die Grabsteine an Halloween – aber Schnee) */
-:root[data-theme="weihnachten"] .nav { background: rgb(31 58 44 / 0.97); border-top-color: transparent; border-right-color: transparent; --nav-brush: rgb(255 255 255 / 0.16); }
+:root[data-theme="weihnachten"] .nav { background: rgb(12 26 19 / 0.97); border-top-color: transparent; border-right-color: transparent; --nav-brush: rgb(255 255 255 / 0.16); }
 :root[data-theme="weihnachten"] .nav__item { color: #d9e4dc; }
 :root[data-theme="weihnachten"] .nav__item.is-active { color: #f4d27a; }
 :root[data-theme="weihnachten"] .nav__logo { color: #f4d27a; }
 :root[data-theme="weihnachten"] .nav__plus { background: var(--xm-red); box-shadow: 0 3px 10px rgb(179 50 44 / 0.35); }
 :root[data-theme="weihnachten"] .nav::after {
-  content: ''; position: absolute; left: 0; right: 0; top: -9px; height: 16px; pointer-events: none;
-  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='16'%3E%3Cpath d='M0 9C8 3 16 4 22 8s12 3 18-1 14-4 20 1 10 7 16 4 12-6 20-3 12 5 24 0V16H0z' fill='%23ffffff'/%3E%3Cpath d='M27 10c0 3 1 5 2 5s2-2 2-5zM66 11c0 2 1 4 2 4s2-2 2-4zM101 9c0 3 1 5 2 5s2-2 2-5z' fill='%23ffffff'/%3E%3C/svg%3E") repeat-x;
+  /* Julia: „zu niedrig, das Grün scheint durch“ – die Wellentäler (bis y 11) liegen jetzt 3 px ÜBER der Leistenkante,
+     darunter durchgehend Schnee bis 6 px in die Leiste; vorn hängen ein paar Tropfen herunter */
+  content: ''; position: absolute; left: 0; right: 0; top: -14px; height: 26px; pointer-events: none;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='26'%3E%3Cpath d='M0 10C8 3 18 3 26 8C32 12 44 12 52 6C58 2 72 2 78 8C84 13 96 12 102 7C108 3 116 4 120 10V20H0z' fill='%23ffffff'/%3E%3Cpath d='M35 19.5c0 4 1 6.5 2.5 6.5s2.5-2.5 2.5-6.5zM66 19.5c0 3 .8 5 2 5s2-2 2-5zM93 19.5c0 4 1 6 2.5 6s2.5-2 2.5-6zM112 19.5c0 2.5.7 4 1.7 4s1.7-1.5 1.7-4z' fill='%23ffffff'/%3E%3C/svg%3E") repeat-x;
   filter: drop-shadow(0 -1px 1px rgb(31 58 44 / 0.18));
 }
-/* Stechpalme an Platzhalterbildern (oben rechts – oben links sitzt an Halloween das Netz) */
-.rimg__holly { position: absolute; top: 0; right: 0; width: 26%; max-width: 68px; aspect-ratio: 1; }
-.holly__leaf { fill: #2f5b40; }
-.holly__vein { fill: none; stroke: #8dbb3e; stroke-width: 1.2; stroke-linecap: round; }
-.holly__berry { fill: var(--xm-red, #b3322c); }
+/* Dunkler Grund: was sonst fest hell ist – Glasknöpfe (Herz auf der Karte, Zurück auf Fotos), Symbolkästchen,
+   Platzhalterbilder (dunkle Tönung im eigenen Farbton, die Zeichnung ist hell: --art) */
+:root[data-theme="weihnachten"] :is(.iconbtn--glass, .card__fav) { background: rgb(20 36 28 / 0.86); color: var(--ink); box-shadow: 0 1px 6px rgb(0 0 0 / 0.3); }
+:root[data-theme="weihnachten"] .option__icon { background: rgb(255 255 255 / 0.08); }
+/* Abdunkeln hinter Blättern, Dialogen und Tour: Schwarz statt Blaugrau – das hellte den dunklen Grund sonst auf (Nebel) */
+:root[data-theme="weihnachten"] .sheet-backdrop { background: rgb(0 0 0 / 0.5); }
+:root[data-theme="weihnachten"] .tour__dim { background: rgb(0 0 0 / 0.6); }
+:root[data-theme="weihnachten"] .rimg--ph { background: linear-gradient(165deg, hsl(var(--h) 24% 29%), hsl(var(--h) 22% 21%)); }
+/* Kreise und Auswahl in der (hier hellen) Zeichenfarbe: dunkle statt weißer Schrift (vorher 1,4 : 1) */
+:root[data-theme="weihnachten"] :is(.steps__num, .devpick__item.is-on, .devpick__item.is-on svg) { color: var(--on-primary); }
+/* „Heute“ am Türchen: kräftiges Rot statt des hellen Warnrots (weiß darauf 5 : 1 statt 2 : 1) */
+:root[data-theme="weihnachten"] .advent-door.is-today .advent-door__badge { background: #b3322c; }
+
+/* Farben der Figuren (WeihnachtsDeko.tsx) */
+.xm-red { fill: #c8322c; } .xm-red-dark { fill: #a32622; } .xm-white { fill: #ffffff; } .xm-ink { fill: #1f3a2c; }
+.xm-skin { fill: #f3c9a6; } .xm-nose { fill: #e89a8a; } .xm-gold { fill: #e3b04b; } .xm-berry { fill: #d8383d; }
+.xm-gold-line { fill: none; stroke: #e3b04b; stroke-width: 1.4; stroke-linecap: round; }
+
+/* Schlitten: etwa einmal pro Minute quer über den Himmel (12 s unterwegs), auf und ab wie auf Wellen – hinter den
+   Karten, so lugt er auf der Startseite um das Logo und sonst zwischen den Karten hervor */
+.xm-sleigh { position: absolute; left: 0; top: calc(env(safe-area-inset-top, 0px) + 64px); animation: xm-fly 56s linear infinite; animation-delay: -46s; }
+.xm-sleigh--2 { top: 42%; animation-delay: -18s; } /* Heiligabend: ein zweiter, versetzt – alle knapp 30 s einer */
+@keyframes xm-fly { 0% { transform: translateX(-200px); } 22%, 100% { transform: translateX(calc(100vw + 40px)); } }
+.xm-sleigh__bob { position: relative; display: block; animation: xm-bob 1.8s ease-in-out infinite alternate; }
+@keyframes xm-bob { from { transform: translateY(-6px) rotate(-3deg); } to { transform: translateY(8px) rotate(2deg); } }
+.xm-santa { display: block; overflow: visible; }
+.xm-reins { fill: none; stroke: #e3b04b; stroke-width: 0.9; }
+.xm-sack { fill: #8a5a32; }
+.xm-arm { fill: none; stroke: #c8322c; stroke-width: 3; stroke-linecap: round; }
+.xm-mitten { fill: #2f5b40; }
+.xm-sleigh-body { fill: #b3322c; }
+.xm-runner { fill: none; stroke: #e3b04b; stroke-width: 2; stroke-linecap: round; }
+.xm-deer__body { fill: #8a5a32; } .xm-deer__snout { fill: #a8733f; } .xm-deer__tail { fill: #f3e6d4; }
+.xm-deer__eye { fill: #1f1410; } .xm-deer__ear { fill: #6b4226; } .xm-deer__nose { fill: #3a2416; }
+.xm-deer__nose--red { fill: #e0393d; filter: drop-shadow(0 0 2px #ff6b5e); }
+.xm-deer__antler { fill: none; stroke: #c99a6a; stroke-width: 1.1; stroke-linecap: round; }
+.xm-deer__harness { fill: none; stroke: #b3322c; stroke-width: 1.4; }
+/* Galopp: Vorder- und Hinterbeine schwingen gegeneinander */
+.xm-deer__legs { fill: none; stroke: #6b4226; stroke-width: 1.8; stroke-linecap: round; transform-box: fill-box; transform-origin: 50% 0; animation: xm-gallop 0.5s ease-in-out infinite alternate; }
+.xm-deer__legs--b { animation-direction: alternate-reverse; }
+@keyframes xm-gallop { from { transform: rotate(-16deg); } to { transform: rotate(14deg); } }
+/* Sternenstaub hinter dem Schlitten: sechs Funken, nach hinten kleiner, jeder blinkt versetzt */
+.xm-dust { position: absolute; left: 0; top: 24px; }
+.xm-dust__star {
+  position: absolute; left: calc(var(--i) * -15px - 10px); top: calc(var(--i) * 1.5px + (var(--i) - 3) * (var(--i) - 3) * -1px);
+  width: calc(10px - var(--i) * 1px); height: calc(10px - var(--i) * 1px); fill: #e3b04b; filter: drop-shadow(0 0 2px rgb(244 210 122 / 0.9));
+  animation: xm-glint 0.9s ease-in-out infinite alternate; animation-delay: calc(var(--i) * -0.15s);
+}
+@keyframes xm-glint { from { opacity: 0.25; transform: scale(0.6) rotate(0); } to { opacity: 1; transform: scale(1) rotate(30deg); } }
+
+/* Sternschnuppe: alle 23 s ein goldener Strich mit Kopf, schräg nach links unten, gut eine Sekunde lang */
+.xm-shoot {
+  position: absolute; top: 9%; left: 80%; width: 110px; height: 2px; border-radius: 2px; opacity: 0; transform-origin: left center;
+  background: linear-gradient(90deg, #f4d27a, rgb(244 210 122 / 0)); animation: xm-shoot 23s ease-in infinite; animation-delay: -16s;
+}
+.xm-shoot::before { content: ''; position: absolute; left: -3px; top: -2px; width: 6px; height: 6px; border-radius: 50%; background: #f7dc8e; box-shadow: 0 0 8px 2px rgb(244 210 122 / 0.9); }
+@keyframes xm-shoot {
+  0% { opacity: 0; transform: rotate(-24deg) translateX(0); }
+  0.6% { opacity: 1; }
+  5% { opacity: 0; transform: rotate(-24deg) translateX(-55vw); }
+  100% { opacity: 0; transform: rotate(-24deg) translateX(-55vw); }
+}
+
+/* Schneegestöber (Logo antippen, nach „Gekocht“): einmal kräftig über allem, nicht anklickbar */
+.xm-burst { position: fixed; inset: 0; z-index: 70; pointer-events: none; overflow: hidden; animation: xm-burst-life 3.4s linear forwards; }
+@keyframes xm-burst-life { to { visibility: visible; } } /* nur damit onAnimationEnd das Gestöber wieder abbaut */
+.xm-burst__bit { position: absolute; top: -30px; left: var(--x); color: #e8f0f4; opacity: 0; animation: xm-burst-fall var(--dur) ease-in forwards; animation-delay: var(--delay); }
+.xm-burst__bit .xm-dot { width: var(--s); height: var(--s); background: #eef4f7; }
+.xm-burst__bit--star svg { display: block; width: var(--s); height: var(--s); fill: #e3b04b; filter: drop-shadow(0 0 3px rgb(244 210 122 / 0.9)); }
+@keyframes xm-burst-fall {
+  0% { opacity: 0; transform: translate(0, 0) rotate(0); }
+  8% { opacity: 1; }
+  100% { opacity: 1; transform: translate(var(--drift), calc(100vh + 60px)) rotate(var(--rot)); }
+}
+
+/* Schneemann auf der Schneehaube der Leiste, ganz rechts – die Haube (.nav::after) liegt über seinen Füßen */
+.xm-snowman { position: absolute; right: 10px; bottom: calc(100% - 4px); width: 32px; height: 40px; padding: 0; border: 0; background: none; }
+.xm-snowman__svg { width: 32px; height: 40px; }
+/* ragt gut 30 px über die Leiste – so viel mehr Luft unter dem Letzten der Seite, damit nichts darunter liegen bleibt */
+:root[data-theme="weihnachten"] .screen--tabbed { padding-bottom: calc(var(--nav-h) + var(--safe-b) + 28px + 24px); }
+.xm-snowman__wiggle { display: block; transform-origin: 50% 100%; }
+.xm-snowman__wiggle.is-on { animation: xm-wiggle 0.7s ease-in-out; }
+@keyframes xm-wiggle { 20% { transform: rotate(-9deg); } 40% { transform: rotate(8deg) translateY(-3px); } 60% { transform: rotate(-6deg); } 80% { transform: rotate(3deg); } }
+.xm-snowman__svg { display: block; overflow: visible; }
+.xm-snowball { fill: #ffffff; stroke: #b9cad3; stroke-width: 1.2; }
+.xm-stick { fill: none; stroke: #6b4226; stroke-width: 1.6; stroke-linecap: round; }
+.xm-carrot { fill: #e8832a; }
+.xm-smile { fill: none; stroke: #1f3a2c; stroke-width: 1.4; stroke-linecap: round; }
+.xm-hatblack { fill: #23302a; }
+.xm-snowman__hat { transform-box: view-box; transform-origin: 22px 14px; transform: rotate(-8deg); }
+.xm-snowman__wiggle.is-on .xm-snowman__hat { animation: xm-hat-hop 0.7s ease-out; }
+@keyframes xm-hat-hop { 0% { transform: rotate(-8deg); } 35% { transform: translateY(-9px) rotate(-22deg); } 70% { transform: translateY(0) rotate(4deg); } 100% { transform: rotate(-8deg); } }
+/* winkt alle 7 s ein paarmal */
+.xm-snowman__arm { transform-box: view-box; transform-origin: 34px 36px; animation: xm-wave 7s ease-in-out infinite; }
+@keyframes xm-wave { 0%, 8% { transform: rotate(0); } 12% { transform: rotate(-28deg); } 16% { transform: rotate(6deg); } 20% { transform: rotate(-28deg); } 24% { transform: rotate(6deg); } 28%, 100% { transform: rotate(0); } }
+
+/* Logo: Mütze auf dem „M“, Knopf ohne Knopf-Optik; goldene Sterne funkeln drumherum */
+.logo__btn { position: relative; padding: 0; border: 0; background: none; font: inherit; color: inherit; line-height: inherit; }
+.xm-hat {
+  position: absolute; left: -0.26em; top: -0.4em; width: 0.86em; overflow: visible; pointer-events: none;
+  transform-origin: 60% 85%; animation: xm-hat-sway 3.2s ease-in-out infinite alternate;
+}
+@keyframes xm-hat-sway { from { transform: rotate(-22deg); } to { transform: rotate(-12deg); } }
+.xm-hat .xm-white { stroke: #e7ddcf; stroke-width: 0.8; }
+.xm-hat__pom { transform-box: fill-box; transform-origin: center; animation: xm-pom 0.8s ease-in-out infinite alternate; }
+@keyframes xm-pom { to { transform: translate(-1px, 2px); } }
+.xm-greeting { margin-top: 2px; font-family: var(--script); font-size: 1.45rem; line-height: 1.1; color: var(--xm-red); }
+:root[data-theme="weihnachten"] .home-head__spark { color: #c9a24a; opacity: 0.9; animation: xm-glint 1.6s ease-in-out infinite alternate; }
+:root[data-theme="weihnachten"] .home-head__spark--b { animation-delay: -0.8s; }
+.xm-star { position: absolute; fill: #e3b04b; pointer-events: none; filter: drop-shadow(0 0 2px rgb(244 210 122 / 0.8)); animation: xm-glint 1.4s ease-in-out infinite alternate; animation-delay: calc(var(--i) * -0.55s); }
+
+/* Schnee bleibt liegen: kleine Schneehauben auf den Karten der Startseite (auf dem Bild des Tages innen, das hat overflow: hidden) */
+:root[data-theme="weihnachten"] :is(.advent-banner, .useup-banner, .home-row) { position: relative; }
+:root[data-theme="weihnachten"] :is(.advent-banner, .useup-banner, .home-row)::before,
+:root[data-theme="weihnachten"] .bigcard__media::after {
+  /* Julia: „zu niedrig“ – dicker wie bei der Leiste: Wellentäler (bis y 9) knapp ÜBER der Kartenkante, darunter
+     durchgehend Schnee 5 px tief in die Karte, dazu drei kleine Tropfen; nur auf der geraden Kante (Ecken: 18 px rund) */
+  content: ''; position: absolute; left: 16px; right: 16px; top: -12px; height: 22px; pointer-events: none;
+  border-radius: 0 0 8px 8px; /* mit „round“ unten: runde Enden statt gerade abgeschnitten */
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='90' height='22'%3E%3Cpath d='M0 9C6 2 12 2 18 6C23 9 30 10 36 6C42 2 50 1 55 6C60 10 68 10 74 6C79 3 86 3 90 9V17H0z' fill='%23ffffff'/%3E%3Cpath d='M22 16.5c0 3.5 1 5.5 2.2 5.5s2.2-2 2.2-5.5zM51 16.5c0 2.6.8 4 1.8 4s1.8-1.4 1.8-4zM80 16.5c0 3.5 1 5.5 2.2 5.5s2.2-2 2.2-5.5z' fill='%23ffffff'/%3E%3C/svg%3E") round; /* ganze Bögen: jede Haube beginnt und endet mit einer Welle */
+  filter: drop-shadow(0 1px 1px rgb(31 58 44 / 0.22));
+}
+:root[data-theme="weihnachten"] .bigcard__media::after { top: 0; left: 0; right: 0; }
+
+/* Lebkuchenmann unten rechts im Platzhalterbild – der Rest steckt unter der Bildkante */
+:root[data-theme="weihnachten"] .rimg--ph { position: relative; }
+/* versteckt immer ein Drittel seiner eigenen Höhe (translate) – Prozent von bottom hingen an der Bildhöhe */
+.rimg__ginger { position: absolute; right: 7%; bottom: 0; width: 20%; max-width: 54px; overflow: visible; transform: translateY(32%); }
+.ginger__body { fill: #b9773d; }
+.ginger__limb { fill: none; stroke: #b9773d; stroke-width: 6.5; stroke-linecap: round; }
+.ginger__icing { fill: none; stroke: #ffffff; stroke-width: 1.1; stroke-linecap: round; stroke-linejoin: round; }
+.ginger__eye { fill: #ffffff; } .ginger__cheek { fill: #e89a8a; opacity: 0.8; } .ginger__drop { fill: #3f8a5a; }
+/* winkt alle 6 s – jedes Bild zu seiner Zeit (Farbton --h als Versatz) */
+.ginger__arm { transform-box: view-box; transform-origin: 29px 23px; animation: xm-ginger-wave 6s ease-in-out infinite; animation-delay: calc(var(--h, 0) * -0.017s); }
+@keyframes xm-ginger-wave { 0%, 60% { transform: rotate(0); } 66% { transform: rotate(-24deg); } 72% { transform: rotate(8deg); } 78% { transform: rotate(-24deg); } 84%, 100% { transform: rotate(0); } }
+
 @media (min-width: 768px) {
   :root[data-theme="weihnachten"] .nav::after { display: none; } /* Seitenleiste: keine Schneehaube */
+  /* Seitenleiste: der Schneemann steht unten über den Einstellungen */
+  .xm-snowman { right: auto; left: 50%; bottom: calc(var(--safe-b) + 92px); transform: translateX(-50%); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .xm-bulb { animation: none; }
+  .xm-bulb, .xm-star, .xm-hat, .xm-hat__pom, .xm-snowman__arm, .xm-snowman__wiggle, .ginger__arm, .xm-dust__star,
+  :root[data-theme="weihnachten"] .home-head__spark { animation: none !important; }
   /* Schnee steht still – verteilt statt alle oben am Rand */
   .xm-flake { animation: none; top: calc(var(--s) * 7 + 10vh); }
+  .xm-sleigh, .xm-shoot, .xm-burst { display: none; } /* ohne Bewegung ergeben Flug, Schnuppe und Gestöber keinen Sinn */
 }
 
 /* ── Vorkoch-Woche (Julia: Grundlagen am Kochtag, daraus die Abendessen) ── */
