@@ -3,7 +3,7 @@ import PouchDB from 'pouchdb-core';
 import memory from 'pouchdb-adapter-memory';
 import { describe, expect, it } from 'vitest';
 import { PouchRecipeRepository, type RecipeDb } from './pouchRepository';
-import { addToPlan, cookParts, createRecipe, currentPantry, householdOf, initStore, markCooked, setHousehold, setPartSwap, setSwap, whenSaved } from './store';
+import { addPantryItem, addToPlan, answerLeftover, cookParts, createRecipe, currentPantry, householdOf, initStore, markCooked, setHousehold, setPartSwap, setSwap, whenSaved } from './store';
 import { buildShoppingList } from '../domain/mealplan';
 import { sideContent } from '../domain/mix';
 import { foodTable } from '../services';
@@ -75,6 +75,36 @@ describe('Store: Zutat tauschen (Julia: Tofu statt Hähnchen)', () => {
     expect(await saved()).not.toHaveProperty('partSwaps');
     back();
     expect((await saved())?.partSwaps?.['Erdnuss-Sauce']?.name).toBe('Joghurt-Dip');
+  });
+
+  it('deine Teriyaki-Sauce vorgekocht: im getauschten Gericht fertig – nicht einkaufen, beim Kochen aus dem Vorrat (Julia)', async () => {
+    const repo = await freshStore('part-swap-ready');
+    const teri = createRecipe({
+      ...sideContent('Teriyaki-Sauce'), servings: 4,
+      ingredients: [{ id: 't1', name: 'Honig', amount: 4, unit: 'EL' }], steps: [{ id: 's', text: 'Honig aufkochen.' }],
+    }, { source: 'selbst', status: 'kochbuch' });
+    const bowl = createRecipe({
+      ...sideContent('Testbowl'), servings: 2,
+      ingredients: [{ id: 'e', name: 'Erdnussbutter', amount: 3, unit: 'EL', part: 'Erdnuss-Sauce' }, { id: 'r', name: 'Reis', amount: 150, unit: 'g' }],
+      steps: [{ id: 's1', text: 'Erdnussbutter glatt rühren.' }, { id: 's2', text: 'Reis kochen.' }],
+    }, { source: 'selbst', status: 'kochbuch' });
+    setPartSwap(bowl, 'Erdnuss-Sauce', { recipeId: teri, name: 'Teriyaki-Sauce' });
+    addToPlan(bowl, 2);
+    await whenSaved();
+    const shopping = async () => buildShoppingList(await repo.loadPlan(), await repo.list(), foodTable, currentPantry()).map((x) => x.name);
+    expect(await shopping()).toContain('Honig'); // noch nicht vorgekocht: die Sauce wird gekocht
+    addPantryItem('Honig', 500, 'g');
+    markCooked(teri, 4);
+    answerLeftover(4); // 4 Portionen Teriyaki-Sauce im Kühlschrank
+    const sauce = () => currentPantry().items.filter((i) => i.recipeId === teri).reduce((n, i) => n + (i.amount ?? 0), 0);
+    const honey = () => currentPantry().items.find((i) => i.name === 'Honig')?.amount;
+    expect(sauce()).toBe(4);
+    await whenSaved();
+    expect(await shopping()).not.toContain('Honig');
+    const honeyBefore = honey();
+    markCooked(bowl, 2);
+    expect(sauce()).toBe(2); // die Portionen von heute aus dem Kühlschrank
+    expect(honey()).toBe(honeyBefore); // kein Honig für eine Sauce, die schon fertig ist
   });
 
   it('Dip vorgekocht, im Gericht gegen Mashis Salsa getauscht: Kochen lässt den Dip stehen; deine Salsa-Menge ist gemerkt (Rundgang)', async () => {

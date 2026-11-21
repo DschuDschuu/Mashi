@@ -7,7 +7,7 @@ import { currentContent, totalMinutes } from './recipe';
 import { searchRecipes } from './recipeSearch';
 import { cookingContent } from './homemade';
 import { SIDE_KINDS, SIDES, foodOf, prepOf, sideIngredient, sideOf, sidesOfKind, type SideKind, type SidePrep } from './sides';
-import { OWN_WAY, SPICES, composeSteps, coveredByServing, defaultSpice, learnedFor, servingText, spiceOf, wayOf, waysOf, type OwnStep, type StyleStep, type WayContext } from './cookStyle';
+import { CRUNCHY_TOPPINGS, OWN_WAY, SPICES, composeSteps, coveredByServing, crunchyWay, defaultSpice, lastWayOf, learnedFor, servingText, spiceOf, wayOf, waysOf, type OwnStep, type StyleStep, type WayContext } from './cookStyle';
 import type { Ingredient, Recipe, RecipeContent, RecipeImage, Step } from './types';
 
 /**
@@ -309,13 +309,29 @@ export function optionsFor(
   // was dein Rezept ersetzt, steht nicht mehr zur Wahl
   const replaced = new Set(mine.flatMap((o) => o.replaces ?? []));
   const rank = (c: Choice) => (c.stock === 'bald' ? 2 : c.stock === 'da' ? 1 : 0);
+  // Teller-Regel (Julia): ist alles weich, steht beim Topping Knuspriges vorn – nach dem, was ausdrücklich gut dazu
+  // passt (Cheddar zum Patty) und dem Vorrat
+  const crunch = kind === 'topping' && softPlate(s, own, household) ? (id: string) => Number(CRUNCHY_TOPPINGS.includes(id)) : () => 0;
   // sort ist stabil: ohne Vorrat und Paar bleibt die Reihenfolge der Richtung
   const fixed = [...ids].filter((id) => !replaced.has(id) && !hidden.has(id))
     .flatMap((id) => choiceOf(id, [], household) ?? [])
     // über das, was du dafür kaufst: Joghurt im Kühlschrank → Punkt am Joghurt-Dip
     .map((c) => { const side = sideOf(c.id); const mark = stock?.(side ? foodOf(side, household) : c.name); return mark ? { ...c, stock: mark } : c; })
-    .sort((a, b) => rank(b) - rank(a) || score(b.id) - score(a.id));
+    .sort((a, b) => rank(b) - rank(a) || score(b.id) - score(a.id) || crunch(b.id) - crunch(a.id));
   return [...mine.filter((o) => o.ready), ...mine.filter((o) => !o.ready), ...fixed];
+}
+
+/**
+ * Ist der Teller ganz weich? (Julia: „etwas Knuspriges vorschlagen“) – ab zwei Bausteinen; knusprig ist ein Topping wie
+ * Röstzwiebeln, eine Zubereitung „geröstet“ oder „knusprig“ (so, wie sie in „So geht's“ gewählt ist) oder dein Rezept,
+ * das schon so heißt („Knuspriges Hähnchen“). Rohes Gemüse zählt nicht (Julia).
+ */
+export function softPlate(s: CravingState, own: readonly Choice[] = [], household?: Pick<Household, 'sidePrep' | 'sideFamily' | 'lastWays'>): boolean {
+  const picks = allPicks(s);
+  if (picks.length < 2 || picks.some((id) => CRUNCHY_TOPPINGS.includes(id))) return false;
+  if (picks.some((id) => { const c = own.find((o) => o.id === id); return !!c && /knusprig|kross|crunch|geröstet|röst/i.test(c.name); })) return false;
+  const ways = cookSteps(s, own, household).flatMap((st) => st.options ?? []);
+  return !ways.some((o) => crunchyWay(o.ways.find((w) => w.id === o.chosen)));
 }
 
 /**
@@ -665,7 +681,7 @@ export function cookSteps(s: CravingState, own: readonly Choice[] = [], househol
     return {
       ids: [c.id], kind: c.kind, name: c.name, text: prep?.text, minutes: prep?.minutes ?? 0, fixed: true,
       ...(way ? { way } : {}),
-      ...(ways.length > 1 ? { options: [{ id: c.id, name: c.name, ways, chosen: way?.id ?? OWN_WAY }] } : {}),
+      ...(ways.length > 1 ? { options: [{ id: c.id, name: c.name, ways, chosen: way?.id ?? OWN_WAY, ...lastWayOf(c.id, ctx, ways) }] } : {}),
     };
   });
   const names: Partial<Record<SideKind, string[]>> = {};

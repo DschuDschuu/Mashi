@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   EMPTY_CRAVING, cookbookMatches, cravingContent, cravingCooking, cravingMinutes, cravingPartsFrom, cravingSteps, cravingText, cravingTimeline, cravingTitle,
-  currentStep, directionOf, matchingRecipes, plateImage, startLabel, understand, type Choice, type CravingState,
+  currentStep, directionOf, matchingRecipes, optionsFor, pick, plateImage, softPlate, startLabel, understand, type Choice, type CravingState,
 } from '../../domain/craving';
+import { CRUNCHY_TOPPINGS } from '../../domain/cookStyle';
 import { randomHue } from '../../services/images/imageProvider';
 import { NO_SPICE, SPICES, chosenWays, defaultSpice } from '../../domain/cookStyle';
 import type { Recipe } from '../../domain/types';
@@ -15,7 +16,7 @@ import { Stepper } from '../components/Controls';
 import { CravingAsk } from '../components/CravingAsk';
 import { CravingBuilder, useCravingView, ViewToggle } from '../components/CravingBuilder';
 import { mins } from '../components/CravingSteps';
-import { OwnSteps } from '../components/ComboSteps';
+import { LastMark, OwnSteps } from '../components/ComboSteps';
 import { SURPRISE, clearCraving, loadCraving, rememberPlate, saveCraving } from '../cravingMemory';
 import { ask } from '../confirm';
 import { Icon } from '../components/Icon';
@@ -263,6 +264,7 @@ function Finished({ q, state, own, set }: { q: string; state: CravingState; own:
         <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={80} />
       </label>
       {text ? <p className="muted">{text}</p> : <p className="muted">Noch nichts gewählt – tipp oben auf „Ändern“.</p>}
+      <CrunchTip state={state} set={set} own={own} />
       {steps.length > 0 && (
         <>
           <h3 className="small muted craving-done__how">So geht's{total ? ` · in etwa ${mins(total)} fertig` : ''}</h3>
@@ -290,7 +292,7 @@ function Finished({ q, state, own, set }: { q: string; state: CravingState; own:
                       {s.options!.length > 1 && <span className="small muted">{o.name}</span>}
                       {o.ways.map((w) => (
                         <button key={w.id} type="button" className={`chip chip--xs${o.chosen === w.id ? ' is-on' : ''}`} aria-pressed={o.chosen === w.id}
-                          onClick={() => set({ ...state, ways: { ...state.ways, [o.id]: w.id } })}>{w.label}</button>
+                          onClick={() => set({ ...state, ways: { ...state.ways, [o.id]: w.id } })}>{w.label}<LastMark on={o.last === w.id} /></button>
                       ))}
                     </span>
                   ))}</div>
@@ -317,5 +319,24 @@ function Finished({ q, state, own, set }: { q: string; state: CravingState; own:
         </>
       )}
     </section>
+  );
+}
+
+/**
+ * Teller-Regel am fertigen Teller (Julia: „Topping + am fertigen Teller“): ist alles weich, bis zu drei knusprige
+ * Toppings zum Antippen – falls das Topping übersprungen wurde. Ein Tipp nimmt es dazu, dann verschwindet der Hinweis.
+ */
+function CrunchTip({ state, set, own }: { state: CravingState; set: (s: CravingState) => void; own: readonly Choice[] }) {
+  const hh = householdOf(usePlan());
+  if (!softPlate(state, own, hh)) return null;
+  const crunchy = optionsFor(state, 'topping', own, hh).filter((c) => CRUNCHY_TOPPINGS.includes(c.id)).slice(0, 3);
+  if (!crunchy.length) return null;
+  return (
+    <div className="crunch-tip" role="group" aria-label="Etwas Knuspriges dazu">
+      <span className="small muted"><Icon name="bulb" size={14} /> Alles eher weich – etwas Knuspriges dazu?</span>
+      {crunchy.map((c) => (
+        <button key={c.id} type="button" className="chip chip--sm" onClick={() => set(pick(state, 'topping', c.id, own))}>+ {c.name}</button>
+      ))}
+    </div>
   );
 }

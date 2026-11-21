@@ -185,6 +185,12 @@ p { margin: 0; }
 .chip.is-on { background: var(--primary); color: var(--on-primary); }
 .chip.is-on svg { color: var(--on-primary); }
 .chip--xs { min-height: 22px; padding: 0 9px; font-size: var(--fs-xs); background: var(--sky); color: var(--ink-2); }
+/* Teller-Regel (Julia): alles weich → etwas Knuspriges vorschlagen */
+.crunch-hint { display: flex; align-items: center; gap: 6px; margin: 0 0 6px; }
+.crunch-tip { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 2px 0 6px; }
+.crunch-tip > span { display: inline-flex; align-items: center; gap: 6px; flex-basis: 100%; }
+/* die Uhr am Chip: so zuletzt gekocht (Julia) */
+.chip__last { margin-left: 4px; flex: none; opacity: 0.75; }
 /* Grundlage auf der Rezeptkarte („3 Gerichte daraus“) – in der Farbe der Vorkoch-Knöpfe, damit es sich abhebt */
 .chip--base { background: var(--primary-soft); color: var(--primary-press); font-weight: 700; }
 

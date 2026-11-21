@@ -31,7 +31,7 @@ import { recordSavings, type BonSavings } from '../domain/savings';
 import { addBon, bonFromImport, dropDayPrices, editBonLine, includeBonLine, sameBonOf, withdrawBonStock, dropUnsavedDay, type BonLine, type BonLinePatch } from '../domain/bons';
 import type { PriceEntry } from '../domain/cost';
 import { assignPrices, moveSort } from '../domain/sortRefs';
-import { donePartsOf, extractPart, extractToBase, forParts, partLabel, partOf, partsOf, REST, remainingContent } from '../domain/parts';
+import { donePartsOf, extractPart, partSource, extractToBase, forParts, partLabel, partOf, partsOf, REST, remainingContent } from '../domain/parts';
 import { withCategory, type FoodCategory } from '../domain/categories';
 import { relinkOldImport, renameFood, syncProductNames } from '../domain/renameFood';
 import { specialDays, type ShelfDays } from '../domain/shelfLife';
@@ -591,11 +591,11 @@ function consume(r: Recipe, servings: number, amounts: Record<string, number> = 
   const d = deductRecipe(pantry, remainingContent(cookingContent(r, recipes, without, coveredShare(supply)), done), servings, currentFoodTable(), amounts, variants);
   const eaten = supply.reduce((items, s) => eatBase(items, s.baseId, s.have), d.pantry.items);
   // eigene fertige Teile ganz weg (für genau dieses Gericht gekocht); ein Teil aus einem anderen Rezept (partsFrom: der
-  // Dip vom Wochenende) nur mit den Portionen von heute – der Rest bleibt für das nächste Mal
+  // Dip vom Wochenende; eingetauscht: deine Teriyaki-Sauce) nur mit den Portionen von heute – der Rest bleibt
   const ownDone = new Set(eaten.flatMap((it) => (it.recipeId === r.id && it.part ? [it.part] : [])));
-  const linked = done.filter((p) => !ownDone.has(p) && r.partsFrom?.[p]);
+  const linked = done.flatMap((p) => { const src = ownDone.has(p) ? undefined : partSource(r, p); return src ? [src] : []; });
   const rest = eaten.filter((it) => !(it.recipeId === r.id && it.part));
-  const after = { ...d.pantry, items: done.length ? linked.reduce((items, p) => eatBase(items, r.partsFrom![p], servings, p), rest) : eaten };
+  const after = { ...d.pantry, items: done.length ? linked.reduce((items, src) => eatBase(items, src.recipeId, servings, src.part), rest) : eaten };
   if (!d.used.length && !d.toCheck.length && !done.length && !supply.length) return { used: [], toCheck: [] };
   const taken = takenBetween(before, after);
   commitPantry(log ? { ...after, cookLog: { ...pruneCookLog(after.cookLog), [r.id]: taken } } : after);

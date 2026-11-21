@@ -59,6 +59,8 @@ Push auf `main` → GitHub Action (Tests + Build) → GitHub Pages: https://dsch
   - Plan: `PlanItem.amounts` („nur dieses Mal“-Mengen) und `variants` (Sorte); `asCooked` = Rezept, wie gekocht.
   - Reste/„läuft bald ab“: `leftoverSuggestions`; Vorgekochtes: `PantryItem.recipeId` + `cooked`.
 - Alles, was Daten ändert, bekommt in der Oberfläche ein „Rückgängig“ (Toast).
+- Neue sichtbare Funktion → ein Schritt in der geführten Tour (`src/ui/components/PageIntro.tsx`) mit dem nächsten
+  Stand (`added`). Wer die Seite schon kennt, sieht ihn einmal mit „Neu“. Neue Seite → eigene Tour (`intro` an der `TopBar`).
 
 ## Stil
 

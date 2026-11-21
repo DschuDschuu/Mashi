@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   DIRECTIONS, EMPTY_CRAVING, STAGES, chooseDirection, closeStep, cookbookMatches, cravingCooking, cravingMinutes, cravingPartsFrom, cravingSteps, cravingText, cravingTitle, currentStep,
-  coveredBy, halfOf, ownSteps, plateImage, cravingContent, directionOf, guessKind, matchingRecipes, optionsFor, pick, recipeChoiceId, recipeChoices, reopen, rollCraving, runsAlone, staleTrials, startLabel, stockMarks, understand, variantTargets, withoutGone, cravingTimeline,
-  type CravingState, type StockMark,
+  coveredBy, halfOf, ownSteps, plateImage, cravingContent, softPlate, directionOf, guessKind, matchingRecipes, optionsFor, pick, recipeChoiceId, recipeChoices, reopen, rollCraving, runsAlone, staleTrials, startLabel, stockMarks, understand, variantTargets, withoutGone, cravingTimeline,
+  type Choice, type CravingState, type StockMark,
 } from './craving';
 import { baseCraving, cravingCombo, ownComboSteps, weekCookSteps } from './weekCraving';
 import { cookingContent } from './homemade';
@@ -904,11 +904,58 @@ describe('Wie letztes Mal im Baukasten (Julia: „das Letzte gilt, je Richtung�
     expect(brokkoli(cravingSteps({ ...s, picks: { carb: ['reis'], veg: ['brokkoli'] }, direction: 'bowl' }, [], household))).toBe('gedaempft');
   });
 
+  it('die Uhr am Chip (Julia: „zuletzt“ sichtbar): markiert, was du zuletzt gekocht hast – auch wenn heute anderes gewählt ist', () => {
+    const option = (steps: readonly { options?: { id: string; last?: string }[] }[]) => steps.flatMap((x) => x.options ?? []).find((o) => o.id === 'brokkoli');
+    const household = { lastWays: { 'pasta:brokkoli': 'ofen' } };
+    expect(option(cravingSteps(s, [], household))?.last).toBe('ofen');
+    expect(option(cravingSteps({ ...s, ways: { brokkoli: 'gedaempft' } }, [], household))?.last).toBe('ofen'); // heute gedämpft gewählt
+    expect(option(cravingSteps(s))?.last).toBeUndefined(); // nichts gemerkt
+    const bolo = recipe('bo', 'Testbolo', [{ kind: 'protein', also: ['sauce'], directions: ['pasta'] }]);
+    expect(option(weekCookSteps('pasta,brokkoli,richtung:pasta', bolo, { household }))?.last).toBe('ofen');
+    // geht heute nicht (mit den Nudeln, aber keine Nudeln): keine Uhr
+    expect(option(cravingSteps({ ...s, picks: { carb: ['reis'], veg: ['brokkoli'] } }, [], { lastWays: { 'pasta:brokkoli': 'nudeln' } }))?.last).toBeUndefined();
+  });
+
   it('Wochenplan-Abend: dasselbe – deine Wahl am Abend geht vor', () => {
     const bolo = recipe('bo', 'Testbolo', [{ kind: 'protein', also: ['sauce'], directions: ['pasta'] }]);
     const household = { lastWays: { 'pasta:brokkoli': 'gedaempft' } };
     expect(brokkoli(weekCookSteps('pasta,brokkoli,richtung:pasta', bolo, { household }))).toBe('gedaempft');
     expect(brokkoli(weekCookSteps('pasta,brokkoli,richtung:pasta,weg:brokkoli:nudeln', bolo, { household }))).toBe('nudeln');
+  });
+});
+
+describe('Teller-Regel (Julia: ist alles weich, etwas Knuspriges vorschlagen)', () => {
+  const closed = [...STAGES];
+  it('weich: Pasta, Hack, gedämpfter Brokkoli – auch mit Gurke (roh zählt nicht als knusprig)', () => {
+    expect(softPlate({ picks: { carb: ['pasta'], protein: ['hack'], veg: ['brokkoli'] }, closed, direction: 'pasta', ways: { brokkoli: 'gedaempft' } })).toBe(true);
+    expect(softPlate({ picks: { carb: ['reis'], protein: ['haehnchen'], veg: ['gurke'] }, closed, direction: 'bowl' })).toBe(true);
+    expect(softPlate({ picks: { carb: ['reis'], protein: ['tofu'] }, closed, direction: 'bowl' })).toBe(false); // Tofu brät Mashi knusprig
+    expect(softPlate({ picks: { carb: ['reis'], protein: ['haehnchen'], veg: ['paprika'] }, closed, direction: 'bowl', ways: { paprika: 'roh' } })).toBe(true); // roh zählt nicht
+  });
+
+  it('knusprig: Röstzwiebeln, Cashews oder Sesam darauf – oder etwas geröstet bzw. knusprig gegart', () => {
+    const base = { picks: { carb: ['pasta'], protein: ['hack'], veg: ['brokkoli'] }, closed, direction: 'pasta', ways: { brokkoli: 'gedaempft' } };
+    expect(softPlate({ ...base, picks: { ...base.picks, topping: ['roestzwiebeln'] } })).toBe(false);
+    expect(softPlate({ ...base, ways: { brokkoli: 'ofen' } })).toBe(false); // geröstet
+    expect(softPlate({ picks: { carb: ['gnocchi'], veg: ['spinat'] }, closed, ways: { gnocchi: 'pfanne' } })).toBe(false); // knusprig gebraten
+  });
+
+  it('dein Rezept zählt nach seinem Namen („Knuspriges Hähnchen“); fast leerer Teller: noch kein Urteil', () => {
+    const own: Choice[] = [{ id: 'rezept:x:Knuspriges Hähnchen', name: 'Knuspriges Hähnchen', kind: 'protein', recipeId: 'x', directions: [] }];
+    expect(softPlate({ picks: { carb: ['reis'], protein: [own[0].id] }, closed }, own)).toBe(false);
+    expect(softPlate({ picks: { carb: ['reis'] }, closed })).toBe(false);
+  });
+
+  it('weicher Teller: beim Topping rückt Knuspriges vor – sonst bleibt alles in seiner Reihenfolge', () => {
+    // dieselben Bausteine, einmal weich (Brokkoli gedämpft), einmal knusprig (geröstet) – nur die Teller-Regel unterscheidet sie
+    const s: CravingState = { picks: { carb: ['pasta'], protein: ['hack'], veg: ['brokkoli'] }, closed: ['carb', 'protein', 'sauce', 'veg'], direction: 'pasta', ways: { brokkoli: 'gedaempft' } };
+    const soft = optionsFor(s, 'topping').map((c) => c.id);
+    const crisp = optionsFor({ ...s, ways: { brokkoli: 'ofen' } }, 'topping').map((c) => c.id);
+    const isCrunchy = (id: string) => ['sesam', 'cashews', 'roestzwiebeln'].includes(id);
+    expect(soft.some(isCrunchy)).toBe(true);
+    expect(soft).not.toEqual(crisp); // es rückt etwas vor
+    expect(soft.filter(isCrunchy).every((id) => soft.indexOf(id) <= crisp.indexOf(id))).toBe(true);
+    expect(soft.filter((id) => !isCrunchy(id))).toEqual(crisp.filter((id) => !isCrunchy(id))); // der Rest bleibt, wie er war
   });
 });
 

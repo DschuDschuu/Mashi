@@ -3,7 +3,7 @@ import type { PantryItem } from './pantry';
 import { currentContent } from './recipe';
 import { STAGES, EMPTY_CRAVING, allPicks, chooseDirection, closeStep, coversOf, guessKind, normDirection, ownMinutes, ownSteps, pick, readyPortions, readyPrep, recipeChoiceId, type Choice, type CravingState } from './craving';
 import { comboOf, ownEntry, ownOf, ownSidesOf, prepOf, sideOf, sidesOf, styleOf, type ComboStep, type SideKind } from './sides';
-import { OWN_WAY, composeSteps, coveredByServing, learnedFor, servingText, spiceOf, wayOf, waysOf, type StyleStep, type WayContext } from './cookStyle';
+import { OWN_WAY, composeSteps, coveredByServing, lastWayOf, learnedFor, servingText, spiceOf, wayOf, waysOf, type StyleStep, type WayContext } from './cookStyle';
 import type { Recipe, RecipeContent } from './types';
 
 /**
@@ -130,7 +130,7 @@ export function weekCookSteps(side: string | undefined, base: Recipe, opts: {
     return {
       ids: [x.id], kind: x.kind, name: x.name, text: prep?.text, minutes: prep?.minutes ?? 0, fixed: true, source,
       ...(way ? { way } : {}),
-      ...(ways.length > 1 ? { options: [{ id: x.id, name: x.name, ways, chosen: way?.id ?? OWN_WAY }] } : {}),
+      ...(ways.length > 1 ? { options: [{ id: x.id, name: x.name, ways, chosen: way?.id ?? OWN_WAY, ...lastWayOf(x.id, ctx, ways) }] } : {}),
     };
   });
   const own = ownComboSteps(side, recipes, items, portions, more)

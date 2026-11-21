@@ -79,10 +79,26 @@ export function doneParts(
 /**
  * Fertige Teile eines Rezepts – ohne die weggetauschten (Recipe.partSwaps, Rundgang: die Salsa ersetzt den Dip, trotzdem
  * wurde der vorgekochte Dip beim Kochen verbraucht und stand als „fertig“ da). Gibt es die Quelle des Tauschs nicht mehr,
- * gilt der Teil vorsichtshalber als nicht fertig – dann wird eher gekocht als etwas Falsches verbraucht.
+ * gilt der Teil vorsichtshalber als nicht fertig – dann wird eher gekocht als etwas Falsches verbraucht. Dafür ist ein
+ * eingetauschter Teil fertig, wenn seine Quelle vorgekocht dasteht (Julia: die Teriyaki-Sauce im Kühlschrank).
  */
-export const donePartsOf = (items: Parameters<typeof doneParts>[0], r: Pick<Recipe, 'id' | 'partsFrom' | 'partSwaps'>): string[] =>
-  doneParts(items, r.id, r.partsFrom).filter((p) => !r.partSwaps?.[p]);
+export function donePartsOf(items: Parameters<typeof doneParts>[0], r: Pick<Recipe, 'id' | 'partsFrom' | 'partSwaps'>): string[] {
+  const own = doneParts(items, r.id, r.partsFrom).filter((p) => !r.partSwaps?.[p]);
+  const swapped = Object.values(r.partSwaps ?? {}).filter((s) => s.recipeId && items.some((i) =>
+    i.recipeId === s.recipeId && (i.part || undefined) === (s.part || undefined) && (i.amount === undefined || i.amount > 0))).map((s) => s.name);
+  return [...new Set([...own, ...swapped])];
+}
+
+/**
+ * Woher ein fertiger Teil kommt, wenn nicht aus diesem Rezept: ein eingetauschter aus seiner Quelle (deine
+ * Teriyaki-Sauce, ganz oder als Teil), sonst aus partsFrom (der Dip vom Wochenende). Eigener Teil: undefined.
+ */
+export function partSource(r: Pick<Recipe, 'partsFrom' | 'partSwaps'>, part: string): { recipeId: string; part?: string } | undefined {
+  const swap = Object.values(r.partSwaps ?? {}).find((s) => s.name === part && s.recipeId);
+  if (swap) return { recipeId: swap.recipeId!, ...(swap.part ? { part: swap.part } : {}) };
+  const from = r.partsFrom?.[part];
+  return from ? { recipeId: from, part } : undefined;
+}
 
 /** vorübergehender Teil für „Grundlage daraus machen“ – kann kein echter Teilname sein */
 const AS_BASE = '\u0000grundlage';

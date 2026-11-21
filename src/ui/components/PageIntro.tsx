@@ -26,6 +26,7 @@ const TOURS: Record<IntroId, Step[]> = {
     { at: '[aria-label="Hauptnavigation"]', title: 'Unten wechselst du die Bereiche', text: 'Start, Kochbuch, Speisekammer und Plan. Das Plus legt Neues an: Rezept, Kassenbon oder Vorrat.' },
     { at: '.home-head__settings', title: 'Einstellungen', text: 'Farbthema, Haushalt, Sicherung und Abgleich mit deinen Geräten.' },
     { at: '.week-today', title: 'Heute aus der Woche', text: '„So geht’s“ mit Würze und Zubereitung zum Umschalten. „Gegessen“ merkt sich, wie du es gemacht hast – nächstes Mal ist das vorgewählt.', added: 2 },
+    { at: () => document.querySelector('.week-today .chip__last')?.closest('.chip'), title: 'Wie letztes Mal', text: 'Die kleine Uhr am Chip zeigt, wie du einen Baustein zuletzt gekocht hast. Ohne andere Wahl ist das vorgewählt.', added: 3 },
     { at: byText('main button', 'Lieber was anderes?'), title: 'Worauf hast du Lust?', text: 'Ein Gericht aus Bausteinen zusammenstellen – Tortilla, Bowl, Pasta … Stufe für Stufe, auch mit deinen eigenen Rezepten.', added: 2 },
     { title: 'Jede Seite erklärt sich selbst', text: 'Beim ersten Besuch zeigt dir jede Seite ihre Knöpfe. Noch mal ansehen: Einstellungen → „Alle Einführungen wieder zeigen“.' },
   ],
@@ -80,6 +81,8 @@ const TOURS: Record<IntroId, Step[]> = {
     { title: 'Stufe für Stufe', text: 'Kohlenhydrat, Protein, Sauce, Gemüse, Topping – antippen, was du magst. Deine Rezepte und ihre Teile sind auch Bausteine. „Neu“ oben fängt von vorn an.', added: 2 },
     { at: byText('main button', 'Würfeln'), title: 'Würfeln', text: 'Füllt, was noch offen ist. Nochmal würfeln tauscht nur das Gewürfelte.', added: 2 },
     { at: 'main .craving-done__how', title: 'So geht’s', text: 'Das Längste zuerst, mit Würze und Zubereitung zum Umschalten. Mashi merkt sich, wie du es zuletzt gekocht hast.', added: 2 },
+    { at: () => document.querySelector('main .chip__last')?.closest('.chip'), title: 'Wie letztes Mal', text: 'Die kleine Uhr am Chip zeigt, wie du einen Baustein zuletzt gekocht hast. Ohne andere Wahl ist das vorgewählt.', added: 3 },
+    { at: () => document.querySelector('main .crunch-tip, main .crunch-hint'), title: 'Etwas Knuspriges?', text: 'Ist dein Teller ganz weich, schlägt Mashi Röstzwiebeln, Cashews oder Sesam vor – beim Topping vorn und am fertigen Teller.', added: 3 },
     { at: 'main .craving-done__actions', title: 'Kochen, einplanen, behalten', text: 'Jetzt kochen, in die Woche legen oder gleich ins Kochbuch. Nach dem Kochen fragt die Startseite, wie es war.', added: 2 },
   ],
   kochen: [

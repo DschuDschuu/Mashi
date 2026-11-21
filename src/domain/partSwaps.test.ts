@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { cookingContent } from './homemade';
 import { sideContent } from './mix';
-import { FINISH, REST, donePartsOf, partLabel, stepPart } from './parts';
+import { FINISH, REST, donePartsOf, partLabel, partSource, stepPart } from './parts';
 import { withPartSwaps } from './partSwaps';
 import type { Ingredient, Recipe, RecipeContent } from './types';
 
@@ -120,6 +120,19 @@ describe('Sauce als ganzen Teil tauschen (Julia: Erdnuss-Sauce der Bowl gegen de
     const r = { id: 'b', partsFrom: { Testdip: 'platte' } };
     expect(donePartsOf(items, r)).toEqual(['Testdip', 'Knuspriges Hähnchen']);
     expect(donePartsOf(items, { ...r, partSwaps: { Testdip: { side: 'salsa', name: 'Tomatensalsa' } } })).toEqual(['Knuspriges Hähnchen']);
+  });
+
+  it('deine Ersatz-Sauce steht vorgekocht da: der getauschte Teil ist fertig – und weiß, woher er kommt', () => {
+    const r = { id: 'b', partSwaps: { [SAUCE]: { recipeId: 'teri', name: 'Teriyaki-Sauce' }, Dip: { recipeId: 'tb', part: 'Teriyaki-Sauce', name: 'Teriyaki-Dip' } } };
+    expect(donePartsOf([], r)).toEqual([]);
+    expect(donePartsOf([{ recipeId: 'teri', amount: 3 }], r)).toEqual(['Teriyaki-Sauce']); // ganzes Rezept vorgekocht
+    expect(donePartsOf([{ recipeId: 'teri', part: 'Glasur', amount: 3 }], r)).toEqual([]); // nur ein anderer Teil davon
+    expect(donePartsOf([{ recipeId: 'tb', part: 'Teriyaki-Sauce', amount: 2 }], r)).toEqual(['Teriyaki-Dip']); // Teil eines anderen Rezepts
+    expect(donePartsOf([{ recipeId: 'teri', amount: 0 }], r)).toEqual([]); // aufgebraucht
+    expect(partSource(r, 'Teriyaki-Sauce')).toEqual({ recipeId: 'teri' });
+    expect(partSource(r, 'Teriyaki-Dip')).toEqual({ recipeId: 'tb', part: 'Teriyaki-Sauce' });
+    expect(partSource({ partsFrom: { Testdip: 'platte' } }, 'Testdip')).toEqual({ recipeId: 'platte', part: 'Testdip' });
+    expect(partSource(r, 'Knuspriges Hähnchen')).toBeUndefined(); // eigener Teil
   });
 
   it('verknüpft (Julia: „immer aktuell“): auf der Rezeptseite und beim Kochen – und änderst du die Sauce, ändert es sich mit', () => {

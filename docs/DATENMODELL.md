@@ -20,7 +20,7 @@ Recipe  (Hülle – ändert sich selten)
 ├─ partSwaps?    getauschte Teile {Teilname: { recipeId? + part? (dein Rezept bzw. ein Teil davon) oder side (Mashis
 │                Sauce-Baustein, dazu grams? und food? aus deinen Einstellungen beim Tauschen), name }} – verknüpft: Zutaten
 │                und Schritte kommen beim Auflösen frisch aus der Quelle, in ihrer gewählten Variante (Quelle gelöscht →
-│                Original); ein weggetauschter Teil zählt nie als fertig (parts.ts: donePartsOf); nicht versioniert, siehe
+│                Original); ein weggetauschter Teil zählt nie als fertig, ein eingetauschter ist fertig, wenn seine Quelle vorgekocht dasteht – beim Kochen gehen dann deren Portionen (parts.ts: donePartsOf, partSource); nicht versioniert, siehe
 │                domain/partSwaps.ts
 ├─ salad?        Beilagensalat { items[{ side, name, grams (pro Portion) }], dressing?, topping?, keep? (immer dazu), at (ISO) } –
 │                ohne keep nur, bis das Rezept danach gekocht ist (lastCookedAt > at); nicht versioniert, siehe domain/sideSalad.ts

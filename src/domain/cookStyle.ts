@@ -279,7 +279,21 @@ export function forgetWays<T extends Readonly<Record<string, string>> | undefine
 }
 
 /** Zubereitung zum Umschalten (Chips in „So geht's“) – je Baustein mit mehreren Wegen */
-export interface WayOption { id: string; name: string; ways: readonly SideWay[]; chosen: string }
+/** `last`: so hast du es zuletzt gekocht (Uhr am Chip, Julia) – nur, wenn es den Weg heute gibt */
+export interface WayOption { id: string; name: string; ways: readonly SideWay[]; chosen: string; last?: string }
+
+/**
+ * Knusprig (Julia: „Nüsse, Kerne, Röstzwiebeln“ und „geröstet oder knusprig gegart“ – rohes Gemüse zählt nicht): die
+ * Toppings dafür und die Zubereitungen, die knusprig machen (erkannt an ihrem Namen am Chip)
+ */
+export const CRUNCHY_TOPPINGS: readonly string[] = ['roestzwiebeln', 'cashews', 'sesam'];
+export const crunchyWay = (w?: Pick<SideWay, 'label'>): boolean => !!w && (w.label === 'geröstet' || w.label === 'knusprig');
+
+/** Der zuletzt gekochte Weg dieses Bausteins, wenn er heute zur Wahl steht – für die Uhr am Chip */
+export const lastWayOf = (sideId: string, ctx: Pick<WayContext, 'learned'>, ways: readonly Pick<SideWay, 'id'>[]): { last: string } | Record<string, never> => {
+  const last = ctx.learned?.[sideId];
+  return last && ways.some((w) => w.id === last) ? { last } : {};
+};
 
 /** Ein Schritt im Baukasten – auch mehrere Bausteine zusammen (eine Pfanne). `fixed`: nur die werden gewürzt und zusammengeführt */
 export interface StyleStep {

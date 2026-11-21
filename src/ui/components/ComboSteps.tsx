@@ -72,7 +72,7 @@ export function ComboSteps({ side, base, household, carry, portions = 1, onStyle
                     {s.options!.length > 1 && <span className="small muted">{o.name}</span>}
                     {o.ways.map((w) => (
                       <button key={w.id} type="button" className={`chip chip--xs${o.chosen === w.id ? ' is-on' : ''}`} aria-pressed={o.chosen === w.id}
-                        onClick={() => onStyle({ ways: { [o.id]: w.id } })}>{w.label}</button>
+                        onClick={() => onStyle({ ways: { [o.id]: w.id } })}>{w.label}<LastMark on={o.last === w.id} /></button>
                     ))}
                   </span>
                 ))}</span>
@@ -84,6 +84,11 @@ export function ComboSteps({ side, base, household, carry, portions = 1, onStyle
       {edit && <PrepSheet sideId={edit} base={base} household={household} onClose={() => setEdit(null)} />}
     </>
   );
+}
+
+/** Die Uhr am Chip (Julia: „zuletzt“ sichtbar): so hast du diesen Baustein zuletzt gekocht – auch wenn heute anderes gewählt ist */
+export function LastMark({ on }: { on: boolean }) {
+  return on ? <><Icon name="clock" size={12} className="chip__last" /><span className="visually-hidden"> – zuletzt gekocht</span></> : null;
 }
 
 /**

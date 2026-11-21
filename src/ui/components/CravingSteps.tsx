@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  MULTI, STAGES, choiceOf, closeStep, coveredBy, coversOf, currentStep, directionOf, optionsFor, pick, reopen, type Choice, type CravingState,
+  MULTI, STAGES, choiceOf, closeStep, coveredBy, coversOf, currentStep, directionOf, optionsFor, pick, reopen, softPlate, type Choice, type CravingState,
 } from '../../domain/craving';
 import { FAMILIES, needsFamily, type Family } from '../../domain/cookStyle';
 import { SIDE_KINDS, customSideId, sideOf, type SideKind } from '../../domain/sides';
@@ -131,6 +131,8 @@ export function StageOptions({ state, step, own, set, mini = false }: {
 
   return (
     <>
+      {/* Teller-Regel (Julia): ist alles weich, steht Knuspriges vorn – und das sagt Mashi dazu */}
+      {step === 'topping' && softPlate(state, own, hh) && <p className="small muted crunch-hint"><Icon name="bulb" size={14} /> Dein Teller ist ganz weich – etwas Knuspriges?</p>}
       <div className="chips" role="group" aria-label={label}>
         {fixed.map((c) => (
           <button key={c.id} type="button" className={`chip${chosen.includes(c.id) ? ' is-on' : ''}`} aria-pressed={chosen.includes(c.id)} onClick={() => choose(c.id)}>
