@@ -1,4 +1,5 @@
 /// <reference types="pouchdb-core" />
+import { emptyAdvent, isAdventCalendar, merge3Advent, unionAdvent, type AdventCalendar } from '../domain/advent';
 import { emptyPlan, type MealPlan } from '../domain/mealplan';
 import { mergeRecipes } from '../domain/merge';
 import { merge3Pantry, merge3Plan, merge3Products, merge3Recipe, unionPantry, unionPlan, unionProducts } from '../domain/syncMerge';
@@ -13,17 +14,17 @@ export type RecipeDb = PouchDB.Database<RecipeDoc>;
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 
-/** „Meine Produkte“, Wochenplan und Speisekammer liegen je als EIN Dokument neben den Rezepten und werden mit abgeglichen. */
+/** „Meine Produkte“, Wochenplan, Speisekammer und Adventskalender liegen je als EIN Dokument neben den Rezepten und werden mit abgeglichen. */
 type SingleDoc = {
-  _id: string; _rev?: string; type: 'products' | 'plan' | 'pantry';
-  products?: MyProduct[]; plan?: MealPlan; pantry?: Pantry; updatedAt: string;
+  _id: string; _rev?: string; type: 'products' | 'plan' | 'pantry' | 'advent';
+  products?: MyProduct[]; plan?: MealPlan; pantry?: Pantry; advent?: AdventCalendar; updatedAt: string;
 };
 
 /** Je Einzel-Dokument: wo es liegt und wie man zwei Fassungen zusammenführt. */
 interface SingleKind<T> {
   id: string;
   type: SingleDoc['type'];
-  field: 'products' | 'plan' | 'pantry';
+  field: 'products' | 'plan' | 'pantry' | 'advent';
   merge3: (base: T, ours: T, theirs: T) => T;
   union: (a: T, b: T) => T;
   stamp: (data: T) => string;
@@ -34,6 +35,9 @@ const PRODUCTS: SingleKind<MyProduct[]> = {
 };
 const PLAN: SingleKind<MealPlan> = { id: 'wochenplan', type: 'plan', field: 'plan', merge3: merge3Plan, union: unionPlan, stamp: (p) => p.updatedAt };
 const PANTRY: SingleKind<Pantry> = { id: 'speisekammer', type: 'pantry', field: 'pantry', merge3: merge3Pantry, union: unionPantry, stamp: (p) => p.updatedAt };
+const ADVENT: SingleKind<AdventCalendar> = { id: 'adventskalender', type: 'advent', field: 'advent', merge3: merge3Advent, union: unionAdvent, stamp: (a) => a.updatedAt };
+/** Kaputtes Dokument (anderes Gerät mit Fehler) → leerer Kalender statt Absturz beim Öffnen */
+const pickAdvent = (d: SingleDoc) => (isAdventCalendar(d.advent) ? d.advent : emptyAdvent());
 
 /**
  * Rezepte in PouchDB (im Browser: IndexedDB). Ein Rezept = ein Dokument,
@@ -45,6 +49,8 @@ export class PouchRecipeRepository implements RecipeRepository {
   private queue: Promise<unknown> = Promise.resolve();
   /** Revisionen, die wir selbst geschrieben haben – deren Änderungsmeldung ist nicht „extern“. */
   private ownRevs = new Set<string>();
+  private external = new Set<() => void>();
+  private feed?: PouchDB.Core.Changes<RecipeDoc>;
 
   constructor(private db: RecipeDb) {}
 
@@ -115,6 +121,14 @@ export class PouchRecipeRepository implements RecipeRepository {
     return this.saveSingle(PANTRY, pantry, base, (d) => ({ ...emptyPantry(), ...d.pantry }));
   }
 
+  async loadAdvent(): Promise<AdventCalendar> {
+    return this.loadSingle(ADVENT, pickAdvent);
+  }
+
+  saveAdvent(calendar: AdventCalendar, base?: AdventCalendar): Promise<AdventCalendar> {
+    return this.saveSingle(ADVENT, calendar, base, pickAdvent);
+  }
+
   /**
    * Einzel-Dokument laden. Offline auf zwei Geräten geändert (Konflikt) → beide Fassungen
    * vereinen (union…) statt eine zu verwerfen; das Ergebnis wird gespeichert, die Konflikte gelöscht.
@@ -181,13 +195,23 @@ export class PouchRecipeRepository implements RecipeRepository {
     });
   }
 
+  /**
+   * EIN Änderungs-Feed für alle Abonnenten (Store, Adventskalender): Hätte jeder seinen eigenen, „verbrauchte“ der
+   * erste die eigene Revision aus ownRevs – und der zweite hielte sie für eine Änderung vom anderen Gerät.
+   */
   onExternalChange(callback: () => void): () => void {
-    const feed = this.db.changes({ since: 'now', live: true }).on('change', (change) => {
+    this.external.add(callback);
+    this.feed ??= this.db.changes({ since: 'now', live: true }).on('change', (change) => {
       const rev = change.changes[0]?.rev;
       if (rev && this.ownRevs.delete(rev)) return; // eigene Änderung – schon im Speicher
-      callback();
+      this.external.forEach((cb) => cb());
     });
-    return () => feed.cancel();
+    return () => {
+      this.external.delete(callback);
+      if (this.external.size) return;
+      this.feed?.cancel();
+      this.feed = undefined;
+    };
   }
 
   /**

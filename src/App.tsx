@@ -6,6 +6,7 @@ import { BottomNav } from './ui/components/BottomNav';
 import { StatusBanner } from './ui/components/StatusBanner';
 import { useToast } from './ui/toast';
 import { ToastBar } from './ui/components/ToastBar';
+import { AdventScreen } from './ui/screens/AdventScreen';
 import { AiCreateScreen } from './ui/screens/AiCreateScreen';
 import { ConnectScreen } from './ui/screens/ConnectScreen';
 import { CookbookScreen } from './ui/screens/CookbookScreen';
@@ -70,6 +71,7 @@ function resolve(route: Route): { screen: ReactElement; tab?: string; section?: 
       return { screen: <PantryScreen />, tab: '/speisekammer' };
     // „Einstellungen“ (früher Tab „Mehr“) – übers Zahnrad auf Start und Kochbuch, auf dem Tablet in der Seitenleiste
     case 'mehr': return { screen: <MoreScreen />, section: '/mehr' };
+    case 'advent': return { screen: <AdventScreen day={Number(route.query.get('tag')) || undefined} />, section: '/' };
     case 'produkte': return { screen: <ProductsScreen />, section: '/speisekammer' };
     case 'neu':
       if (b === 'ki') return { screen: <AiCreateScreen initialPrompt={route.query.get('text') ?? ''} /> };

@@ -982,6 +982,60 @@ p { margin: 0; }
 
 
 
+/* ── Adventskalender (advent.ts): Karte auf der Startseite, 24 Türchen, Rezept im Blatt ── */
+.advent-banner { display: flex; align-items: center; border-radius: var(--r); background: var(--rose); color: var(--ink); }
+.advent-banner__main { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 12px 14px; text-align: left; font-size: var(--fs-sm); color: inherit; }
+.advent-banner__main > svg:first-child { flex: none; color: var(--danger-ink); }
+.advent-banner__main > svg:last-child { flex: none; color: var(--ink-3); }
+.advent-banner__text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; overflow-wrap: anywhere; }
+.advent-banner__text strong { font-size: var(--fs-md); }
+.advent-banner__close { flex: none; margin-right: 4px; color: var(--ink-3); }
+
+.advent-lead { margin: 4px 0 12px; color: var(--ink-2); }
+/* 4 × 6 Türchen – auf 375 px je knapp 80 px im Quadrat */
+.advent-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-bottom: 16px; }
+.advent-door {
+  position: relative; aspect-ratio: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  padding: 6px; border-radius: var(--r-sm); border: 1px solid var(--line); background: var(--surface); color: var(--ink); text-align: center;
+}
+.advent-door__num { font-family: var(--script); font-size: 1.7rem; line-height: 1; }
+.advent-door__icon { flex: none; color: var(--art); }
+.advent-door.is-locked { background: var(--surface-2); color: var(--ink-3); }
+.advent-door.is-locked .advent-door__icon { color: var(--ink-3); }
+.advent-door.is-ready { background: var(--rose); border-color: transparent; }
+.advent-door.is-ready .advent-door__icon { color: var(--danger-ink); }
+.advent-door.is-today { box-shadow: 0 0 0 2px var(--danger-ink); }
+.advent-door__today { font-size: var(--fs-xs); font-weight: 700; color: var(--danger-ink); }
+.advent-door.is-open { background: var(--primary-soft); border-color: transparent; justify-content: flex-start; }
+.advent-door.is-open .advent-door__num { font-size: 1.2rem; }
+.advent-door__title {
+  font-size: var(--fs-xs); font-weight: 600; line-height: 1.2; overflow-wrap: anywhere; hyphens: auto;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
+.advent-door__saved { position: absolute; top: 5px; right: 5px; color: var(--primary-text); }
+.advent-door.is-empty { border-style: dashed; color: var(--ink-3); background: transparent; }
+@media (min-width: 600px) { .advent-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+
+.advent-sheet__day { display: flex; align-items: center; gap: 6px; margin: 4px 0 2px; font-size: var(--fs-sm); font-weight: 700; color: var(--danger-ink); }
+.advent-sheet .sheet__title { margin-bottom: 4px; }
+.advent-sheet__desc { margin: 0 0 4px; color: var(--ink-2); }
+.advent-sheet__head { margin: 18px 0 8px; font-size: var(--fs-md); }
+.advent-sheet__tip { display: flex; align-items: flex-start; gap: 8px; margin: 16px 0 0; padding: 10px 12px; border-radius: var(--r-sm); background: var(--butter); font-size: var(--fs-sm); }
+.advent-sheet__tip > svg { flex: none; color: var(--art); }
+/* „Speichern“ bleibt unten sichtbar, auch bei langen Rezepten */
+.advent-sheet__actions { position: sticky; bottom: calc(-24px - var(--safe-b)); margin: 18px 0 calc(-24px - var(--safe-b)); padding: 10px 0 calc(16px + var(--safe-b)); background: var(--bg); }
+
+.advent-fill__intro { display: flex; align-items: flex-start; gap: 14px; }
+.advent-fill__intro > svg { flex: none; color: var(--danger-ink); }
+.advent-fill__intro p { margin: 4px 0 0; }
+.advent-fill > p { margin: 0; }
+.advent-fill--quiet { background: transparent; border-style: dashed; }
+.advent-fill__buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+.advent-fill__list { margin: 6px 0 0; padding-left: 18px; }
+.advent-fill__format summary { cursor: pointer; color: var(--primary-text); font-weight: 600; }
+.advent-fill__format p { margin: 8px 0 0; }
+.advent-fill__format code { font-size: 0.9em; background: var(--surface-2); padding: 0 4px; border-radius: 4px; }
+
 /* ── MHD-Ware, Gefroren, Rezeptidee ─────────────────────────── */
 .savings__tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .savings__tiles .stat__value { font-size: clamp(1rem, 4.6vw, 1.35rem); }

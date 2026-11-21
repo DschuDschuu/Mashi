@@ -1,3 +1,4 @@
+import type { AdventCalendar } from '../domain/advent';
 import type { MealPlan } from '../domain/mealplan';
 import type { Pantry } from '../domain/pantry';
 import type { MyProduct } from '../domain/nutrition/myProducts';
@@ -27,6 +28,9 @@ export interface RecipeRepository {
   /** Speisekammer inkl. gelernter Bon-Artikel – auf allen Geräten gleich. */
   loadPantry(): Promise<Pantry>;
   savePantry(pantry: Pantry, base?: Pantry): Promise<Pantry | void>;
+  /** Adventskalender (advent.ts) – Türchen samt Rezepten, auf allen Geräten gleich; nie befüllt = emptyAdvent() */
+  loadAdvent(): Promise<AdventCalendar>;
+  saveAdvent(calendar: AdventCalendar, base?: AdventCalendar): Promise<AdventCalendar | void>;
   /**
    * Meldet Änderungen, die NICHT aus dieser App-Sitzung stammen –
    * z. B. Rezepte, die der Abgleich vom Handy auf den PC geholt hat.

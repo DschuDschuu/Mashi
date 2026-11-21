@@ -1,3 +1,4 @@
+import { emptyAdvent, isAdventCalendar, type AdventCalendar } from '../domain/advent';
 import { emptyPlan, type MealPlan } from '../domain/mealplan';
 import { emptyPantry, type Pantry } from '../domain/pantry';
 import type { MyProduct } from '../domain/nutrition/myProducts';
@@ -14,6 +15,7 @@ const KEY = 'mashi-recipes-v2';
 const PRODUCTS_KEY = 'mashi-products-v1';
 const PLAN_KEY = 'mashi-plan-v1';
 const PANTRY_KEY = 'mashi-pantry-v1';
+const ADVENT_KEY = 'mashi-advent-v1';
 
 export class LocalRecipeRepository implements RecipeRepository {
   private read(): Recipe[] {
@@ -87,6 +89,20 @@ export class LocalRecipeRepository implements RecipeRepository {
 
   async savePantry(pantry: Pantry) {
     localStorage.setItem(PANTRY_KEY, JSON.stringify(pantry));
+  }
+
+  /** Demo: anfangs leer – „Kalender befüllen“ bietet dort erfundene Beispielrezepte an (adventDemo.ts) */
+  async loadAdvent(): Promise<AdventCalendar> {
+    try {
+      const raw: unknown = JSON.parse(localStorage.getItem(ADVENT_KEY) ?? 'null');
+      return isAdventCalendar(raw) ? raw : emptyAdvent();
+    } catch {
+      return emptyAdvent();
+    }
+  }
+
+  async saveAdvent(calendar: AdventCalendar) {
+    localStorage.setItem(ADVENT_KEY, JSON.stringify(calendar));
   }
 
   /** Nur für den Prototyp: Beispieldaten wiederherstellen. */

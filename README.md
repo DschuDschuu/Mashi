@@ -57,6 +57,9 @@ Live: <https://dschudschuu.github.io/Mashi/> · installierbar als App (PWA), fun
 - **Kochmodus** Schritt für Schritt mit Timer, Mengen nur für dieses Mal, Hinweise an den Zutaten („gewürfelt“);
   **Rezept-Teile** (Sauce, Salat …): nur einen Teil kochen – er steht als Vorgekocht in der Speisekammer, Einkaufsliste
   und Rest richten sich danach (Teile auch aus „Für die Sauce:“ beim Import und von der KI)
+- **Adventskalender**: 24 Türchen mit Rezepten aus einer eigenen JSON-Datei (bleibt in deinen Daten, nicht im Repo);
+  jeden Tag im Dezember geht eins auf, „Zum Testen speichern“ legt das Rezept ins Kochbuch –
+  Format: [docs/ADVENTSKALENDER.md](docs/ADVENTSKALENDER.md)
 - **Abgleich** zwischen Geräten über eine eigene CouchDB (siehe `server/couchdb/ANLEITUNG.md`),
   Sicherung als Datei (alles: Rezepte, Lebensmittel, Speisekammer, Plan), geführte Tour je Seite beim ersten Besuch (kommt Neues dazu, zeigt sie einmal nur das Neue mit „Neu“), vier Farbthemen
 

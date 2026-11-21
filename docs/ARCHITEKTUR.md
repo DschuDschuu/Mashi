@@ -116,6 +116,7 @@ aus den Zutaten berechnet (gecacht je Version).
  #/preise                 Preise und Ersparnis – Regalpreis/Bezahlt, je Sorte eine Farbe, je Packungsgröße eine Linienart
  #/reste                  Bald verbrauchen
  #/mehr                   Einstellungen (Zahnrad): Über Mashi, Archiv, Makro-Ziel, Sicherung (vollständig, Einspielen führt zusammen), Sync
+ #/advent?tag=5           Adventskalender: 24 Türchen, befüllen per JSON-Datei (docs/ADVENTSKALENDER.md); ?tag= öffnet gleich ein Türchen
  #/rezept/:id             Rezeptdetail
  #/rezept/:id/kochen?p=3  Kochmodus (ohne Navigation)
  #/rezept/:id/test        Testfeedback

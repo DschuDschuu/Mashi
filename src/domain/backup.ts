@@ -1,3 +1,4 @@
+import { isAdventCalendar, type AdventCalendar } from './advent';
 import { isValidProduct, type MyProduct } from './nutrition/myProducts';
 import type { MealPlan } from './mealplan';
 import type { Pantry } from './pantry';
@@ -17,11 +18,16 @@ export interface BackupFile {
   pantry?: Pantry;
   /** Wochenplan samt Haken und eigenen Einkaufslisten-Einträgen – ab 2026-09 */
   plan?: MealPlan;
+  /** Adventskalender mit seinen Rezepten, geöffneten und gespeicherten Türchen – ab 2026-11 */
+  advent?: AdventCalendar;
 }
 
 /** Alles, was Mashi weiß – eine Sicherung, die unabhängig vom Server ist. */
-export function createBackup(recipes: Recipe[], products: MyProduct[] = [], now = new Date().toISOString(), pantry?: Pantry, plan?: MealPlan): BackupFile {
-  return { app: 'mashi', exportedAt: now, recipes, products, ...(pantry ? { pantry } : {}), ...(plan ? { plan } : {}) };
+export function createBackup(recipes: Recipe[], products: MyProduct[] = [], now = new Date().toISOString(), pantry?: Pantry, plan?: MealPlan, advent?: AdventCalendar): BackupFile {
+  return {
+    app: 'mashi', exportedAt: now, recipes, products, ...(pantry ? { pantry } : {}), ...(plan ? { plan } : {}),
+    ...(advent?.doors.length ? { advent } : {}),
+  };
 }
 
 export interface ParsedBackup {
@@ -32,6 +38,7 @@ export interface ParsedBackup {
   /** nur, wenn die Datei sie enthält und sie gültig aussehen */
   pantry?: Pantry;
   plan?: MealPlan;
+  advent?: AdventCalendar;
 }
 
 const STATUSES: RecipeStatus[] = ['ki_entwurf', 'zum_testen', 'bewaehrt', 'kochbuch'];
@@ -112,7 +119,11 @@ export function parseBackup(input: unknown): ParsedBackup {
   const products = rawProducts.filter(isValidProduct);
   const pantry = isObj(input) && isValidPantry(input.pantry) ? input.pantry : undefined;
   const plan = isObj(input) && isValidPlan(input.plan) ? input.plan : undefined;
-  return { recipes: unique, rejected: list.length - unique.length + rawProducts.length - products.length, products, ...(pantry ? { pantry } : {}), ...(plan ? { plan } : {}) };
+  const advent = isObj(input) && isAdventCalendar(input.advent) && input.advent.doors.length ? input.advent : undefined;
+  return {
+    recipes: unique, rejected: list.length - unique.length + rawProducts.length - products.length, products,
+    ...(pantry ? { pantry } : {}), ...(plan ? { plan } : {}), ...(advent ? { advent } : {}),
+  };
 }
 
 /** fehlt – oder eine Liste, deren Einträge alle passen */

@@ -8,7 +8,7 @@ import { createPortal } from 'react-dom';
  * Kommt Neues dazu (Julia: „neue Schritte, auch für mich“), bekommen die Schritte einen höheren Stand (`added`): Wer die
  * Seite schon kennt, sieht einmal nur sie, mit „Neu“; wer neu ist, die ganze Tour.
  */
-export type IntroId = 'start' | 'kochbuch' | 'rezept' | 'plan' | 'woche' | 'einkauf' | 'speisekammer' | 'produkte' | 'kochen' | 'lust';
+export type IntroId = 'start' | 'kochbuch' | 'rezept' | 'plan' | 'woche' | 'einkauf' | 'speisekammer' | 'produkte' | 'kochen' | 'lust' | 'advent';
 
 /**
  * Ziel als Selektor oder Suche; fehlt es gerade (leere Woche, noch nichts gewählt), steht die Blase mittig.
@@ -28,6 +28,7 @@ const TOURS: Record<IntroId, Step[]> = {
     { at: '.week-today', title: 'Heute aus der Woche', text: '„So geht’s“ mit Würze und Zubereitung zum Umschalten. „Gegessen“ merkt sich, wie du es gemacht hast – nächstes Mal ist das vorgewählt.', added: 2 },
     { at: () => document.querySelector('.week-today .chip__last')?.closest('.chip'), title: 'Wie letztes Mal', text: 'Die kleine Uhr am Chip zeigt, wie du einen Baustein zuletzt gekocht hast. Ohne andere Wahl ist das vorgewählt.', added: 3 },
     { at: byText('main button', 'Lieber was anderes?'), title: 'Worauf hast du Lust?', text: 'Ein Gericht aus Bausteinen zusammenstellen – Tortilla, Bowl, Pasta … Stufe für Stufe, auch mit deinen eigenen Rezepten.', added: 2 },
+    { at: 'main .advent-banner', title: 'Adventskalender', text: 'Vom 1. bis 24. Dezember hier jeden Tag ein Türchen mit einem Rezept. Befüllen und nachholen geht auch über die Einstellungen.', added: 4 },
     { title: 'Jede Seite erklärt sich selbst', text: 'Beim ersten Besuch zeigt dir jede Seite ihre Knöpfe. Noch mal ansehen: Einstellungen → „Alle Einführungen wieder zeigen“.' },
   ],
   kochbuch: [
@@ -84,6 +85,11 @@ const TOURS: Record<IntroId, Step[]> = {
     { at: () => document.querySelector('main .chip__last')?.closest('.chip'), title: 'Wie letztes Mal', text: 'Die kleine Uhr am Chip zeigt, wie du einen Baustein zuletzt gekocht hast. Ohne andere Wahl ist das vorgewählt.', added: 3 },
     { at: () => document.querySelector('main .crunch-tip, main .crunch-hint'), title: 'Etwas Knuspriges?', text: 'Ist dein Teller ganz weich, schlägt Mashi Röstzwiebeln, Cashews oder Sesam vor – beim Topping vorn und am fertigen Teller.', added: 3 },
     { at: 'main .craving-done__actions', title: 'Kochen, einplanen, behalten', text: 'Jetzt kochen, in die Woche legen oder gleich ins Kochbuch. Nach dem Kochen fragt die Startseite, wie es war.', added: 2 },
+  ],
+  advent: [
+    { at: 'main .advent-fill', title: 'Befüllen', text: 'Spiel eine Datei mit 24 Rezepten ein – eins pro Türchen. Sie bleiben in deinen Daten und werden mit deinen Geräten abgeglichen.' },
+    { at: 'main .advent-grid', title: 'Jeden Tag ein Türchen', text: 'Ein Türchen geht an seinem Tag auf. Verpasste holst du jederzeit nach.' },
+    { title: 'Gefällt dir ein Rezept?', text: '„Zum Testen speichern“ legt es ins Kochbuch, mit dem Schlagwort „Adventskalender“. Wie immer: erst testen, dann entscheiden.' },
   ],
   kochen: [
     { at: '.cook__progress', title: 'Schritt für Schritt', text: 'Der Bildschirm bleibt an, solange du kochst.' },

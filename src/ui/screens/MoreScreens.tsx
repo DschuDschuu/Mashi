@@ -6,6 +6,9 @@ import { currentContent } from '../../domain/recipe';
 import { isInCookbook } from '../../domain/status';
 import { disconnect, leaveDemo, savedSyncConfig, uploadPending, useSyncState } from '../../data/backend';
 import { deleteRecipe, importPantry, importPlan, importProducts, importRecipes, isDemo, resetDemoData, restoreRecipe, usePantry, usePlan, useProducts, useRecipes } from '../../data/store';
+import { importAdvent, useAdvent } from '../../data/adventStore';
+import { navigate } from '../../router';
+import type { AdventCalendar } from '../../domain/advent';
 import type { MealPlan } from '../../domain/mealplan';
 import type { Pantry } from '../../domain/pantry';
 import type { Recipe } from '../../domain/types';
@@ -57,6 +60,15 @@ export function MoreScreen() {
           </div>
         </div>
         <SpecialThemes />
+        {/* den Rest des Jahres steht der Kalender nicht auf der Startseite – hier ist er immer erreichbar (befüllen, nachholen) */}
+        <button type="button" className="panel link-row" onClick={() => navigate('/advent')}>
+          <Icon name="gift" size={20} />
+          <span className="link-row__text">
+            <strong>Adventskalender</strong>
+            <small className="muted">24 Türchen mit deinen Rezepten – befüllen und öffnen</small>
+          </span>
+          <Icon name="chevron" size={18} />
+        </button>
         <MacroGoalSettings />
         <TasteSettings />
         <HouseholdSettings />
@@ -160,9 +172,9 @@ function DemoPanel() {
   );
 }
 
-/** Alles als JSON-Datei – Rezepte, Lebensmittel, Speisekammer, Plan: eine Sicherung, die unabhängig vom Server ist. */
-function downloadBackup(recipes: Recipe[], products: MyProduct[], pantry: Pantry, plan: MealPlan) {
-  const blob = new Blob([JSON.stringify(createBackup(recipes, products, undefined, pantry, plan), null, 2)], { type: "application/json" });
+/** Alles als JSON-Datei – Rezepte, Lebensmittel, Speisekammer, Plan, Adventskalender: eine Sicherung, die unabhängig vom Server ist. */
+function downloadBackup(recipes: Recipe[], products: MyProduct[], pantry: Pantry, plan: MealPlan, advent?: AdventCalendar) {
+  const blob = new Blob([JSON.stringify(createBackup(recipes, products, undefined, pantry, plan, advent), null, 2)], { type: "application/json" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
   a.download = `mashi-sicherung-${new Date().toISOString().slice(0, 10)}.json`;
@@ -219,6 +231,7 @@ function BackupPanel({ recipes }: { recipes: Recipe[] }) {
   const products = useProducts();
   const pantry = usePantry();
   const plan = usePlan();
+  const advent = useAdvent();
   const input = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<(ParsedBackup & { fileName: string }) | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -249,6 +262,7 @@ function BackupPanel({ recipes }: { recipes: Recipe[] }) {
     const prods = importProducts(preview.products);
     if (preview.pantry) importPantry(preview.pantry, replaceStock);
     if (preview.plan && replaceStock) importPlan(preview.plan);
+    if (preview.advent) importAdvent(preview.advent);
     const stock = (preview.pantry || preview.plan) ? (replaceStock ? ' · Vorräte & Plan ersetzt' : ' · Preise & Bons ergänzt') : '';
     toast(`${recipeCount(added)} neu${merged ? `, ${merged} zusammengeführt` : ''}${prods ? ` · ${prods} Produkt${prods === 1 ? '' : 'e'}` : ''}${stock}`);
     setPreview(null);
@@ -256,9 +270,9 @@ function BackupPanel({ recipes }: { recipes: Recipe[] }) {
 
   return (
     <div className="panel stack">
-      <p className="muted small">Alles als Datei auf diesem Gerät speichern – Rezepte, Meine Lebensmittel, Speisekammer (mit Preisen und gelernten Bon-Artikeln) und Plan. Beim Einspielen gewinnt je Rezept und Lebensmittel das Neuere; Preise und Bons werden ergänzt.</p>
+      <p className="muted small">Alles als Datei auf diesem Gerät speichern – Rezepte, Meine Lebensmittel, Speisekammer (mit Preisen und gelernten Bon-Artikeln), Plan und Adventskalender. Beim Einspielen gewinnt je Rezept und Lebensmittel das Neuere; Preise und Bons werden ergänzt.</p>
       <div className="row-2">
-        <button className="btn btn--ghost" onClick={() => downloadBackup(recipes, products, pantry, plan)}>Herunterladen</button>
+        <button className="btn btn--ghost" onClick={() => downloadBackup(recipes, products, pantry, plan, advent)}>Herunterladen</button>
         <button className="btn btn--ghost" onClick={() => input.current?.click()}>Einspielen …</button>
       </div>
       {/* geteilte Rezepte kommen je nach Handy als .json oder .txt an (Chrome teilt kein .json) */}
@@ -278,6 +292,7 @@ function BackupPanel({ recipes }: { recipes: Recipe[] }) {
             {preview.products.length > 0 && <> · dazu {preview.products.length} von „Meine Lebensmittel“</>}
             {preview.pantry && <> · Speisekammer mit {preview.pantry.items.length} Vorräten</>}
             {preview.plan && <> · Plan mit {preview.plan.items.length} Gerichten</>}
+            {preview.advent && <> · Adventskalender mit {preview.advent.doors.length} Türchen</>}
             {preview.rejected > 0 && <> · {preview.rejected} unvollständig, werden übersprungen</>}
           </p>
           {/* Vereinen brächte Gegessenes als Geister-Vorrat zurück (Code-Review #5) – darum eine klare Wahl */}
@@ -297,7 +312,7 @@ function BackupPanel({ recipes }: { recipes: Recipe[] }) {
             {preview.recipes.length > 8 && <li className="muted">… und {preview.recipes.length - 8} weitere</li>}
           </ul>
           <div className="row-gap">
-            <button className="btn btn--primary" disabled={!preview.recipes.length && !preview.products.length && !preview.pantry && !preview.plan} onClick={apply}>Einspielen</button>
+            <button className="btn btn--primary" disabled={!preview.recipes.length && !preview.products.length && !preview.pantry && !preview.plan && !preview.advent} onClick={apply}>Einspielen</button>
             <button className="btn btn--ghost" onClick={() => setPreview(null)}>Abbrechen</button>
           </div>
         </div>

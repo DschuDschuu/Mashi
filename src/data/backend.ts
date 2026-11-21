@@ -3,6 +3,7 @@ import { useSyncExternalStore } from 'react';
 import { LocalRecipeRepository } from './localRepository';
 import { PouchRecipeRepository, type RecipeDb } from './pouchRepository';
 import { initStore } from './store';
+import { initAdvent } from './adventStore';
 import { pushAll, remoteDb, startSync, testConnection, type SyncConfig, type SyncState } from './sync';
 import { currentMode, MODE_KEY, savedSyncConfig, SYNC_KEY, type Mode } from './connection';
 
@@ -51,12 +52,16 @@ export async function boot(): Promise<Mode | null> {
     void local.compact().catch(() => {});
     // Den Browser bitten, die Daten nicht bei Platzmangel wegzuräumen
     void navigator.storage?.persist?.().catch(() => false);
-    await initStore(new PouchRecipeRepository(local));
+    const repo = new PouchRecipeRepository(local);
+    await initStore(repo);
+    void initAdvent(repo); // ein Extra – lädt im Hintergrund, hält den Start nicht auf
     startSync(local, remoteDb(remoteFactory, cfg), setState);
     return 'sync';
   }
   if (mode === 'demo') {
-    await initStore(new LocalRecipeRepository());
+    const repo = new LocalRecipeRepository();
+    await initStore(repo);
+    void initAdvent(repo);
     return 'demo';
   }
   return null;

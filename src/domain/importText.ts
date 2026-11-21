@@ -69,7 +69,8 @@ function toNumber(s: string): number {
   return (whole ? Number(whole.replace(',', '.')) : 0) + (frac ? FRACTIONS[frac] : 0);
 }
 
-function toUnit(s: string | undefined): Unit | undefined {
+/** „Stk.“, „Liter“, „Zehen“ … → Mashis Einheit (auch für den Adventskalender, advent.ts) */
+export function toUnit(s: string | undefined): Unit | undefined {
   if (!s) return undefined;
   return UNIT_WORDS.find(([re]) => re.test(s))?.[1];
 }
@@ -122,7 +123,7 @@ export function parseIngredientLine(raw: string): Ingredient {
 }
 
 /** Timer aus dem Schritttext: die erste Angabe „8 Min.“ (Sekunden werden ignoriert). */
-function timerFrom(text: string): number | undefined {
+export function timerFrom(text: string): number | undefined {
   const m = text.match(/(\d+)\s*(?:–|-)?\s*(?:\d+\s*)?Min(?:\.|uten)?\b/i);
   return m ? Number(m[1]) : undefined;
 }
