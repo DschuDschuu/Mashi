@@ -8,7 +8,7 @@ import { createPortal } from 'react-dom';
  * Kommt Neues dazu (Julia: „neue Schritte, auch für mich“), bekommen die Schritte einen höheren Stand (`added`): Wer die
  * Seite schon kennt, sieht einmal nur sie, mit „Neu“; wer neu ist, die ganze Tour.
  */
-export type IntroId = 'start' | 'kochbuch' | 'rezept' | 'plan' | 'woche' | 'einkauf' | 'speisekammer' | 'produkte' | 'kochen' | 'lust';
+export type IntroId = 'start' | 'kochbuch' | 'rezept' | 'plan' | 'woche' | 'einkauf' | 'speisekammer' | 'produkte' | 'kochen' | 'lust' | 'angebote';
 
 /**
  * Ziel als Selektor oder Suche; fehlt es gerade (leere Woche, noch nichts gewählt), steht die Blase mittig.
@@ -28,6 +28,7 @@ const TOURS: Record<IntroId, Step[]> = {
     { at: '.week-today', title: 'Heute aus der Woche', text: '„So geht’s“ mit Würze und Zubereitung zum Umschalten. „Gegessen“ merkt sich, wie du es gemacht hast – nächstes Mal ist das vorgewählt.', added: 2 },
     { at: () => document.querySelector('.week-today .chip__last')?.closest('.chip'), title: 'Wie letztes Mal', text: 'Die kleine Uhr am Chip zeigt, wie du einen Baustein zuletzt gekocht hast. Ohne andere Wahl ist das vorgewählt.', added: 3 },
     { at: byText('main button', 'Lieber was anderes?'), title: 'Worauf hast du Lust?', text: 'Ein Gericht aus Bausteinen zusammenstellen – Tortilla, Bowl, Pasta … Stufe für Stufe, auch mit deinen eigenen Rezepten.', added: 2 },
+    { at: '.shop-day', title: 'Einkauf planen', text: 'Freitags und samstags steht hier „Einkauf planen“: Angebote deiner Märkte einfügen, Mashi findet passende Rezepte.', added: 4 },
     { title: 'Jede Seite erklärt sich selbst', text: 'Beim ersten Besuch zeigt dir jede Seite ihre Knöpfe. Noch mal ansehen: Einstellungen → „Alle Einführungen wieder zeigen“.' },
   ],
   kochbuch: [
@@ -64,6 +65,13 @@ const TOURS: Record<IntroId, Step[]> = {
     { title: 'Deine Einkaufsliste', text: 'Sie entsteht aus dem Plan – was im Vorrat ist, ist schon abgezogen. „Immer im Haus“ steht unter Basics.' },
     { at: 'input[aria-label="Eigener Eintrag"]', title: 'Eigene Einträge', text: 'Was sonst noch fehlt, schreibst du hier dazu.' },
     { title: 'Abhaken', text: 'Im Laden abhaken – oder der Kassenbon hakt für dich ab.' },
+    { at: '[aria-label="Einkauf planen"]', title: 'Einkauf planen', text: 'Angebote der Woche einfügen: Mashi findet passende Rezepte, und hier steht dann, was im Angebot ist.', added: 2 },
+  ],
+  angebote: [
+    { title: 'Einkauf planen', text: 'Füg die Angebote deiner Märkte ein – Mashi sucht Rezepte aus deinem Kochbuch, deren Zutaten gerade günstig sind.' },
+    { at: 'main .offer-add', title: 'Angebote einfügen', text: 'Markt wählen, Text aus dem Prospekt oder von der Markt-Seite einfügen – oder kurz tippen. Versteht Mashi etwas nicht, liest auf Tipp die KI.' },
+    { at: 'main .offer-matches', title: 'Passt zu den Angeboten', text: 'Hähnchen im Angebot zählt mehr als eine Zwiebel, was schon da ist, zählt mit. Ein Tipp plant das Rezept ein.' },
+    { at: byText('main button', 'Neue Idee'), title: 'Neue Idee', text: 'Die KI macht aus Angeboten und deinen Vorlieben ein neues Rezept – erst testen, dann ins Kochbuch.' },
   ],
   speisekammer: [
     { at: () => document.querySelector('main [role="tab"]')?.parentElement, title: 'Vorräte, Preise, Einkäufe', text: 'Was da ist, was es gekostet hat und deine Kassenbons.' },

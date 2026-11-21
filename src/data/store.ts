@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react';
-import { localNoon } from '../domain/dates';
+import { localDay, localNoon } from '../domain/dates';
+import { addOffers, type Offer, type OfferDraft } from '../domain/offers';
 import { normalizeName } from '../domain/nutrition/localFoods';
 import { reverseKeyed, reverseList, reverseRecord } from '../domain/undo';
 import { EXTRA_PREFIX, RESTOCK_PREFIX, shoppingList, type RestockRule } from '../domain/restock';
@@ -2028,4 +2029,55 @@ export function setPantryShelfDays(shelfDays: ShelfDays) {
 /** Gelernten Bon-Artikel vergessen (z. B. falsch zugeordnet). */
 export function forgetReceiptRule(key: string) {
   commitPantry({ ...pantry, rules: pantry.rules.filter((r) => r.key !== key) });
+}
+
+// ── Angebote (Einkauf planen) ──────────────────────────────────────
+
+/** Angebote ohne Liste speichern, wenn keine mehr da sind – alte Speisekammern bleiben so, wie sie waren */
+function commitOffers(offers: Offer[]) {
+  const { offers: _old, ...rest } = pantry;
+  commitPantry(offers.length ? { ...rest, offers } : rest);
+}
+
+/**
+ * Gelesene Angebote übernehmen (siehe offers.ts: addOffers – Abgelaufenes geht, Gleiches desselben Markts wird ersetzt).
+ * „Rückgängig“ nimmt nur diese wieder heraus und holt Ersetztes zurück – kam inzwischen etwas vom Handy, bleibt es.
+ */
+export function saveOffers(drafts: readonly OfferDraft[], store: string, until: string, source: Offer['source'] = 'text'): () => void {
+  const before = pantry.offers ?? [];
+  const next = addOffers(before, drafts, store, until, localDay(), now(), () => newId('a'), source);
+  commitOffers(next);
+  const added = new Set(next.filter((o) => !before.some((b) => b.id === o.id)).map((o) => o.id));
+  const removed = before.filter((b) => !next.some((o) => o.id === b.id));
+  return () => {
+    const kept = (pantry.offers ?? []).filter((o) => !added.has(o.id));
+    commitOffers([...kept, ...removed.filter((r) => !kept.some((o) => o.id === r.id))]);
+  };
+}
+
+/** Welches Lebensmittel ein Angebot ist, wenn Mashi es falsch oder gar nicht zuordnet – leer = wieder Mashis Wahl */
+export function setOfferFood(id: string, food: string): () => void {
+  const before = (pantry.offers ?? []).find((o) => o.id === id)?.food;
+  const set = (value: string | undefined) => commitOffers((pantry.offers ?? []).map((o) => {
+    if (o.id !== id) return o;
+    const { food: _old, ...rest } = o;
+    return value?.trim() ? { ...rest, food: value.trim() } : rest;
+  }));
+  set(food);
+  return () => set(before);
+}
+
+/** Ein Angebot entfernen – „Rückgängig“ legt es an dieselbe Stelle zurück */
+export function removeOffer(id: string): () => void {
+  const list = pantry.offers ?? [];
+  const index = list.findIndex((o) => o.id === id);
+  const removed = list[index];
+  commitOffers(list.filter((o) => o.id !== id));
+  return () => {
+    const current = pantry.offers ?? [];
+    if (!removed || current.some((o) => o.id === removed.id)) return;
+    const restored = [...current];
+    restored.splice(Math.min(index, restored.length), 0, removed);
+    commitOffers(restored);
+  };
 }

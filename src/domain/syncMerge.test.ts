@@ -298,6 +298,24 @@ describe('Bons und Kategorien abgleichen', () => {
   });
 });
 
+describe('Angebote abgleichen (Einkauf planen)', () => {
+  const offer = (id: string, name: string, store = 'Lidl') => ({ id, store, name, until: '2026-09-26', addedAt: T });
+
+  it('je Angebot: am Handy Prospekt eingelesen, am Tablet eins entfernt → beides gilt', () => {
+    const base = pantry([], { offers: [offer('a1', 'Brokkoli', 'Rewe'), offer('a2', 'Paprika', 'Rewe')] });
+    const handy = pantry([], { offers: [...base.offers!, offer('a3', 'Hähnchenbrust')] });
+    const tablet = pantry([], { offers: [offer('a1', 'Brokkoli', 'Rewe')] });
+    expect(merge3Pantry(base, handy, tablet).offers!.map((o) => o.id)).toEqual(['a1', 'a3']);
+  });
+
+  it('offline ohne gemeinsamen Stand: Angebote beider Seiten', () => {
+    const a = pantry([], { offers: [offer('a1', 'Brokkoli')], updatedAt: '2026-09-25T12:00:00.000Z' });
+    const b = pantry([], { offers: [offer('a2', 'Paprika')] });
+    expect(unionPantry(a, b).offers!.map((o) => o.id)).toEqual(['a1', 'a2']);
+    expect(unionPantry(pantry([]), pantry([])).offers).toBeUndefined();
+  });
+});
+
 describe('Code-Review #1: gleiche Schlüssel gehen beim Zusammenführen nicht verloren', () => {
   const quark = { name: 'Magerquark', perUnit: 0.002, unit: 'g' as const, date: '2026-03-01' };
   const alt = { name: 'Magerquark', perUnit: 0.003, unit: 'g' as const, date: '2026-01-01' };

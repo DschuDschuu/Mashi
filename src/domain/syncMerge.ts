@@ -125,6 +125,8 @@ export function merge3Pantry(base: Pantry, ours: Pantry, theirs: Pantry): Pantry
     ...(base.bons || ours.bons || theirs.bons ? { bons: merge3Keyed(base.bons ?? [], ours.bons ?? [], theirs.bons ?? [], (b) => b.id, (_b, o, t) => (o && t ? (o.updatedAt >= t.updatedAt ? o : t) : o ?? t)) } : {}),
     // Kategorien je Lebensmittel: am Handy Kimchi umgestellt, am Laptop Tofu → beides gilt
     ...(base.categories || ours.categories || theirs.categories ? { categories: mergeRecord(base.categories, ours.categories, theirs.categories) } : {}),
+    // Angebote je Angebot: am Handy den Lidl-Prospekt eingelesen, am Tablet ein Rewe-Angebot entfernt → beides gilt
+    ...(base.offers || ours.offers || theirs.offers ? { offers: merge3Keyed(base.offers ?? [], ours.offers ?? [], theirs.offers ?? [], (o) => o.id) } : {}),
     renameDismissed: merge3Set(base.renameDismissed, ours.renameDismissed, theirs.renameDismissed),
     cookLog: Object.keys(cookLog).length ? cookLog : undefined,
     updatedAt: later(ours.updatedAt, theirs.updatedAt)!,
@@ -284,6 +286,7 @@ export function unionPantry(a: Pantry, b: Pantry): Pantry {
     restock: newer.restock || older.restock ? unionKeyed(newer.restock ?? [], older.restock ?? [], (r) => normalizeName(r.name)) : undefined,
     ...(newer.bons || older.bons ? { bons: unionKeyed(newer.bons ?? [], older.bons ?? [], (b) => b.id).sort((a, b) => a.date.localeCompare(b.date)) } : {}),
     ...(newer.categories || older.categories ? { categories: { ...older.categories, ...newer.categories } } : {}),
+    ...(newer.offers || older.offers ? { offers: unionKeyed(newer.offers ?? [], older.offers ?? [], (o) => o.id) } : {}),
     cookLog: Object.keys(cookLog).length ? cookLog : undefined,
   };
 }

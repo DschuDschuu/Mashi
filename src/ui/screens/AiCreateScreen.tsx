@@ -3,6 +3,8 @@ import { currentMode } from '../../data/connection';
 import { createRecipe, deleteRecipe, useMacroGoal, usePantry, useRecipes } from '../../data/store';
 import { basicsOf } from '../../domain/mealplan';
 import { isPrepared } from '../../domain/pantry';
+import { activeOffers, type Offer } from '../../domain/offers';
+import { localDay } from '../../domain/dates';
 import { currentContent } from '../../domain/recipe';
 import { navigate } from '../../router';
 import { recipeAi } from '../../services';
@@ -26,7 +28,11 @@ function tastesPreview(t: string): string {
   return short + (short.length < t.trim().length ? ' …' : '');
 }
 
-export function AiCreateScreen({ initialPrompt = '' }: { initialPrompt?: string }) {
+/** Angebote für den KI-Auftrag: das Lebensmittel und der Markt („Hähnchenbrust (Lidl)“), jedes nur einmal */
+const offerNames = (offers: readonly Offer[]) => [...new Set(offers.map((o) => `${o.food ?? o.name} (${o.store})`))];
+
+/** @param offers von „Einkauf planen“: die Angebote der Woche gleich einbeziehen */
+export function AiCreateScreen({ initialPrompt = '', offers: fromOffers = false }: { initialPrompt?: string; offers?: boolean }) {
   // „Neu überlegen“ / „Auftrag anpassen“: der Auftrag der alten Idee (nur gelesen – gelöscht wird im Effekt)
   const [again] = useState(peekAgain);
   const start = again?.form;
@@ -48,6 +54,9 @@ export function AiCreateScreen({ initialPrompt = '' }: { initialPrompt?: string 
   const pantry = usePantry();
   const recipes = useRecipes();
   const { rest } = useUseUp();
+  // Angebote der Woche (Einkauf planen) – an, wenn du von dort kommst
+  const offers = activeOffers(pantry.offers, localDay());
+  const [withOffers, setWithOffers] = useState(start?.withOffers ?? fromOffers);
 
   // „Überrasch mich“ (Julia): der Knopf geht immer – auch nur mit Zeit, nur mit Chips oder ganz leer
   const empty = !prompt.trim() && !wishes.length && !devices.length && !time.length;
@@ -55,7 +64,7 @@ export function AiCreateScreen({ initialPrompt = '' }: { initialPrompt?: string 
   const generate = async () => {
     setBusy(true);
     setError(null);
-    const form: KiForm = { prompt, servings, devices, wishes, time, withPantry, withTastes, withMacros };
+    const form: KiForm = { prompt, servings, devices, wishes, time, withPantry, withTastes, withMacros, withOffers };
     // die letzten Ideen (auch die, die gerade ersetzt wird) – damit die KI sich nicht wiederholt
     const recent = recipes
       .filter((r) => r.source === 'ki')
@@ -72,6 +81,7 @@ export function AiCreateScreen({ initialPrompt = '' }: { initialPrompt?: string 
             ...(withPantry ? { pantry: rest.items.filter((i) => !isPrepared(i)).map((i) => i.name), basics: [...basicsOf(pantry)] } : {}),
             ...(withTastes && pantry.tastes ? { tastes: pantry.tastes } : {}),
             ...(withMacros ? { macros: goal } : {}),
+            ...(withOffers && offers.length ? { offers: offerNames(offers) } : {}),
           },
         } : {}),
       });
@@ -141,6 +151,10 @@ export function AiCreateScreen({ initialPrompt = '' }: { initialPrompt?: string 
         {real && (
           <Switch checked={withPantry} onChange={setWithPantry} label="Meinen Vorrat einbeziehen"
             hint="Die KI nutzt gern, was du schon hast – dann musst du weniger einkaufen." />
+        )}
+        {real && offers.length > 0 && (
+          <Switch checked={withOffers} onChange={setWithOffers} label="Angebote der Woche einbeziehen"
+            hint={`${offers.length} Angebote – die KI nimmt ein, zwei davon als Hauptzutaten.`} />
         )}
         {real && (
           <Switch checked={withMacros} onChange={setWithMacros} label="Mein Makro-Ziel einbeziehen"

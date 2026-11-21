@@ -42,6 +42,13 @@ Live: <https://dschudschuu.github.io/Mashi/> · installierbar als App (PWA), fun
   „Gekocht“-Haken und **Vorgekocht**: übrige Portionen in der Speisekammer mit Erinnerung, einfrierbar, „1 gegessen“
 - **Einkaufsliste** aus dem Plan, zieht den Vorrat ab, Basics, „Doch kaufen“, eigene Einträge, Kassenbon hakt ab,
   „Nachkaufen“ bei Vorratsware unter dem Mindestbestand (z. B. passierte Tomaten unter 4 Dosen)
+- **Einkauf planen** (freitags und samstags auf der Startseite, sonst über die Einkaufsliste): Angebote deiner Märkte
+  (Lidl, Rewe, Edeka, Kaufland oder ein anderer) als Text einfügen oder kurz tippen – Mashi liest sie selbst
+  (Packung, „statt“-Preis, Gültigkeit; Grundpreise und Prozente zählen nicht), was es nicht versteht, liest auf Tipp
+  die KI; ordnet sie deinen Lebensmitteln zu (auch „Hähnchen-Innenbrustfilets“ → Hähnchenbrust, „Rispentomaten“ →
+  Tomaten; korrigierbar), zeigt Rezepte aus deinem Kochbuch, deren Zutaten gerade im Angebot sind (Hähnchen zählt mehr
+  als eine Zwiebel, Vorrat und Favoriten zählen mit, diese Woche Gekochtes hinten), „Neue Idee mit den Angeboten“ über
+  die KI, und auf der Einkaufsliste Markt und Angebotspreis am Eintrag
 - **Speisekammer**: Vorrat per Kassenbon oder von Hand (mit Marke/Sorte), Packungen („4 × 500 g“,
   „750 ml offen“ – Angebrochenes hält kürzer), „Ganze Packung verwenden?“ beim Kochen, **Inventur** (Speisekammer, Keller, Tiefkühler, Gewürze), Haltbarkeit (bis 10 Jahre oder „hält unbegrenzt“),
   „Bald verbrauchen“, Einfrieren, Reste verwerten

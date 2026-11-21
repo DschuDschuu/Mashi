@@ -109,6 +109,7 @@ aus den Zutaten berechnet (gecacht je Version).
  #/neu?aus=<id>           Verwandlung einer Grundlage anlegen
  #/rezept/<id>/kochen?vorkochen=1 · ?meal=<id>   Kochtag (auf Vorrat) · Abendessen aus der Woche
  #/einkauf                Einkaufsliste (zieht den Vorrat ab, eigene Einträge) – Wagen oben rechts in der Speisekammer
+ #/angebote               Einkauf planen: Angebote einfügen, passende Rezepte, „Neue Idee“ (Startseite Fr/Sa, Tasche in der Einkaufsliste)
  #/speisekammer/inventur  Inventur (wann du willst): Speisekammer & Keller, Tiefkühler, Immer im Haus/Gewürze abhaken
  #/speisekammer           Vorräte, Bald verbrauchen, Verwalten (Haltbarkeit, gelernte Bon-Artikel)
  #/speisekammer/bon       Kassenbon importieren

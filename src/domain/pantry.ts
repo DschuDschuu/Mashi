@@ -7,6 +7,7 @@ import type { ReceiptLine } from './receipt';
 import type { ReceiptSavings } from './savings';
 import type { SavedBon } from './bons';
 import type { FoodCategory } from './categories';
+import type { Offer } from './offers';
 import { specialDays, useByOf, type ShelfDays } from './shelfLife';
 import { cookingContent } from './homemade';
 import { baseSupply, coveredShare } from './baseStock';
@@ -114,6 +115,8 @@ export interface Pantry {
   bons?: SavedBon[];
   /** deine Kategorie je Lebensmittel (Schlüssel: categoryKey) – fehlt einer, ordnet Mashi selbst zu */
   categories?: Record<string, FoodCategory>;
+  /** Angebote aus den Prospekten (Einkauf planen, siehe offers.ts) – Abgelaufenes räumt das nächste Einlesen weg */
+  offers?: Offer[];
   updatedAt: string;
 }
 
