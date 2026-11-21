@@ -30,7 +30,8 @@ export function AdventTreeButton({ className = '' }: { className?: string }) {
 
 /**
  * Adventskalender auf der Startseite (advent.ts: adventHint): vom 1. bis 24. Dezember das Türchen des Tages, ab dem
- * 15. November die Erinnerung, ihn zu befüllen – die lässt sich wegklicken. Den Rest des Jahres: nichts.
+ * 15. November die Erinnerung, ihn zu befüllen – die lässt sich wegklicken; befüllt bis zum 1. Dezember der
+ * Countdown. Den Rest des Jahres: nichts.
  */
 export function AdventBanner() {
   const cal = useAdvent();
@@ -63,6 +64,24 @@ export function AdventBanner() {
         </button>
         <button type="button" className="iconbtn advent-banner__close" aria-label="Dieses Jahr nicht mehr erinnern" onClick={hide}>
           <Icon name="close" size={16} />
+        </button>
+      </div>
+    );
+  }
+
+  // Vorfreude vor dem 1. Dezember (Julia): jeden Tag einer weniger – führt zu den (noch geschlossenen) Türchen
+  if (hint.kind === 'countdown') {
+    const n = cal.doors.length;
+    return (
+      <div className="advent-banner">
+        <button type="button" className="advent-banner__main" onClick={() => navigate('/advent')}>
+          <Icon name="gift" size={22} />
+          <span className="advent-banner__text">
+            {/* kurz gehalten: passt auf 375 px in eine Zeile */}
+            <strong>{hint.days === 1 ? 'Morgen geht Türchen 1 auf' : `Noch ${hint.days} Tage bis zum 1. Türchen`}</strong>
+            <span>{n === 1 ? 'Ein Adventsrezept wartet auf dich' : `${n} Adventsrezepte warten auf dich`}</span>
+          </span>
+          <Icon name="chevron" size={16} />
         </button>
       </div>
     );

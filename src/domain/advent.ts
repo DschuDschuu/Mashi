@@ -310,13 +310,20 @@ export const doorNotes = (door: AdventDoor): string => (door.tip ? `Tipp: ${door
 
 /**
  * Was die Startseite zeigt: vom 1. bis 24. Dezember das Türchen des Tages; ist der Kalender ab dem 15. November
- * (bis Heiligabend) noch leer oder vom letzten Jahr, die Erinnerung „befüllen“. Sonst nichts – der Kalender
- * drängt sich den Rest des Jahres nicht auf.
+ * (bis Heiligabend) noch leer oder vom letzten Jahr, die Erinnerung „befüllen“. Ist er für dieses Jahr befüllt,
+ * zählt die Karte bis zum 1. Dezember die Tage (Julia: „es ist erst der 21. – da fehlt mir noch Vorfreude“). Sonst
+ * nichts – der Kalender drängt sich den Rest des Jahres nicht auf.
  */
-export type AdventHint = { kind: 'door'; day: number; opened: boolean } | { kind: 'fill' };
+export type AdventHint = { kind: 'door'; day: number; opened: boolean } | { kind: 'fill' } | { kind: 'countdown'; days: number };
 
 export function adventHint(cal: AdventCalendar, now: Date): AdventHint | undefined {
   const m = now.getMonth(), d = now.getDate();
+  // befüllt, aber noch vor Dezember: Tage bis zum ersten Türchen. Kalendertage zählen (nicht 24-h-Blöcke), gerundet
+  // – sonst wäre es um 23 Uhr schon „einer weniger“ bzw. verrutschte es bei der Zeitumstellung.
+  if (m < 11 && !needsFilling(cal, now)) {
+    const days = Math.round((new Date(now.getFullYear(), 11, 1).getTime() - new Date(now.getFullYear(), m, d).getTime()) / 86_400_000);
+    return { kind: 'countdown', days };
+  }
   const season = (m === 10 && d >= 15) || (m === 11 && d <= ADVENT_DAYS);
   if (!season) return undefined;
   if (needsFilling(cal, now)) return { kind: 'fill' };

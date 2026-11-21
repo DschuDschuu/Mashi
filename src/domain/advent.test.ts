@@ -206,8 +206,16 @@ describe('Hinweis auf der Startseite', () => {
     expect(needsFilling(filled(), on(2026, 11, 20))).toBe(false);
   });
 
-  it('befüllt im November: noch kein Türchen', () => {
-    expect(adventHint(filled(), on(2026, 11, 28))).toBeUndefined();
+  it('befüllt vor Dezember: Tage bis zum ersten Türchen', () => {
+    expect(adventHint(filled(), on(2026, 11, 21))).toEqual({ kind: 'countdown', days: 10 });
+    expect(adventHint(filled(), on(2026, 11, 30, 23))).toEqual({ kind: 'countdown', days: 1 }); // spät abends: Kalendertag
+    expect(adventHint(filled(on(2026, 10, 5)), on(2026, 10, 30))).toEqual({ kind: 'countdown', days: 32 }); // früh befüllt
+    expect(adventHint(filled(), on(2026, 12, 1))).toEqual({ kind: 'door', day: 1, opened: false });
+  });
+
+  it('kein Countdown für einen leeren Kalender oder einen vom letzten Jahr', () => {
+    expect(adventHint(emptyAdvent(), on(2026, 11, 10))).toBeUndefined();
+    expect(adventHint(filled(on(2025, 11, 20)), on(2026, 11, 10))).toBeUndefined();
   });
 
   it('1. bis 24. Dezember: das Türchen des Tages, danach nichts mehr', () => {

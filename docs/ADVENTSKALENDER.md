@@ -3,7 +3,8 @@
 Vom 1. bis 24. Dezember öffnet sich in Mashi jeden Tag ein Türchen mit einem Rezept. Gefällt es, legt
 „Zum Testen speichern“ es ins Kochbuch (Status „Zum Testen“, Schlagwort „Adventskalender“, der Tipp als Notiz).
 
-- **Wo:** Startseite (1.–24.12. „Türchen 5 öffnen“; ab 15.11. die Erinnerung „befüllen“, wegklickbar), oben neben
+- **Wo:** Startseite (1.–24.12. „Türchen 5 öffnen“; befüllt davor der Countdown „Noch 10 Tage bis zum 1.
+  Türchen“; leer ab 15.11. die Erinnerung „befüllen“, wegklickbar), oben neben
   dem Zahnrad ein kleiner Baum (vom Befüllen bis zum 6. Januar) und `#/advent`.
   **Befüllen, Neu befüllen und Fotos ergänzen stehen in den Einstellungen** unter „Adventskalender“ (`#/mehr?advent`
   springt dorthin) – die Adventsseite zeigt nur die Türchen.
