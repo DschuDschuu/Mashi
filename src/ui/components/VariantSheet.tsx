@@ -1,10 +1,9 @@
 import { useState } from 'react';
 import { macroShares, needsAsking, pickFor, type VariantChoice } from '../../domain/nutrition/variants';
 import type { RecipeContent } from '../../domain/types';
-import { assignPantrySorts, setFavoriteVariant, useMacroGoal, usePantry } from '../../data/store';
+import { assignPantrySorts, setFavoriteVariant, usePantry } from '../../data/store';
 import type { PantryItem } from '../../domain/pantry';
 import { stockLabels } from '../format';
-import { toast } from '../toast';
 import { Icon } from './Icon';
 import { choicesFor } from '../useNutrition';
 import { useSheet } from '../useSheet';
@@ -26,7 +25,6 @@ export function VariantSheet({ choices, pick, title = 'Welche Sorte nimmst du?',
   onClose: () => void;
 }) {
   const ref = useSheet(onClose);
-  const goal = useMacroGoal();
   const items = usePantry().items;
   /** „Im Vorrat: 1 × 500 g + 200 g offen“ je Sorte (Julia) – Gefrorenes für sich, Vorgekochtes zählt nicht */
   const stockOf = (match: (i: PantryItem) => boolean) => {
@@ -40,20 +38,17 @@ export function VariantSheet({ choices, pick, title = 'Welche Sorte nimmst du?',
   /** Favoriten im Blatt sofort sichtbar – gespeichert wird direkt (gilt für alle Rezepte) */
   const [favs, setFavs] = useState<Record<string, string | null>>(() => Object.fromEntries(choices.map((c) => [c.ingredientId, c.all.find((v) => v.favorite)?.id ?? null])));
   const complete = asking.every((c) => value[c.ingredientId]);
-  const unsorted = asking.some((c) => c.unsortedItemIds.length);
-  const toggleFavorite = (c: VariantChoice, id: string, name: string) => {
+  const toggleFavorite = (c: VariantChoice, id: string) => {
     const next = favs[c.ingredientId] === id ? null : id;
     setFavoriteVariant(c.all, next);
     setFavs({ ...favs, [c.ingredientId]: next });
     if (next) setValue({ ...value, [c.ingredientId]: id });
-    toast(next ? `★ „${name}“ ist dein Favorit – gilt für alle Rezepte mit ${c.name}` : `Favorit zurückgenommen – Rezepte rechnen wieder mit dem Durchschnitt`);
   };
   return (
     <div className="sheet-backdrop" onClick={onClose}>
       <div className="sheet variants" role="dialog" aria-modal="true" aria-label={title} onClick={(e) => e.stopPropagation()} ref={ref}>
         <div className="sheet__grip" />
         <h2 className="sheet__title">{title}</h2>
-        <p className="small muted">{unsorted ? 'Im Vorrat steht die Zutat ohne Sorte – welche ist es? Mashi merkt es sich beim Vorrat.' : 'Mehrere Sorten liegen im Vorrat.'} Vorgeschlagen ist die Sorte, die näher an deinem Ziel liegt ({goal.carbs} / {goal.protein} / {goal.fat} – Kohlenhydrate / Eiweiß / Fett). Mit ★ machst du eine Sorte zum Favoriten: Dann rechnen alle Rezepte damit und Mashi fragt nicht mehr.</p>
         {asking.map((c) => (
           <fieldset key={c.ingredientId} className="variants__group">
             <legend>{c.name}</legend>
@@ -81,7 +76,7 @@ export function VariantSheet({ choices, pick, title = 'Welche Sorte nimmst du?',
                     <span className="small muted">{Math.round(o.per100g.kcal)} kcal · KH {pct(s.carbs)} · Eiweiß {pct(s.protein)} · Fett {pct(s.fat)} %</span>
                     <button type="button" className={`variants__star${favs[c.ingredientId] === o.id ? ' is-on' : ''}`}
                       aria-pressed={favs[c.ingredientId] === o.id} aria-label={favs[c.ingredientId] === o.id ? `${o.name}: Favorit zurücknehmen` : `${o.name} als Favorit`}
-                      onClick={(e) => { e.preventDefault(); toggleFavorite(c, o.id, o.name); }}>
+                      onClick={(e) => { e.preventDefault(); toggleFavorite(c, o.id); }}>
                       <Icon name="star" size={20} filled={favs[c.ingredientId] === o.id} />
                     </button>
                     </span>

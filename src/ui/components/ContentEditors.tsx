@@ -212,7 +212,6 @@ export function ChoiceEditor({ content, onChange }: { content: RecipeContent; on
   return (
     <div className="panel editor">
       <h3 className="small muted">Varianten</h3>
-      <p className="small muted">Zutaten und Schritte gehören zu einer Variante oder zu allen. Im Rezept wählst du, welche du kochst.</p>
       {list.map((name) => (
         <div key={name} className="editor__choicerow">
           <input defaultValue={name} aria-label={`Variante ${name} umbenennen`}
@@ -230,7 +229,6 @@ export function ChoiceEditor({ content, onChange }: { content: RecipeContent; on
           <Icon name="plus" size={18} />
         </button>
       </div>
-      {list.length === 1 && <p className="small muted">Noch eine dazu – ab zwei Varianten kannst du im Rezept wählen.</p>}
     </div>
   );
 }

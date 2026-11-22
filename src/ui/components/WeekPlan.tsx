@@ -196,19 +196,17 @@ export function WeekPlan({ week, onPickDish }: { week: Week; onPickDish?: (slot:
 
       <section className="week__days" aria-label={hh.lunchDays.length ? 'Mittags und abends' : 'Abends'}>
         <h2 className="h3">{hh.lunchDays.length ? 'Mittags & abends' : 'Abends'}</h2>
-        {swapFrom !== null
-          ? (
-            <div className="week__swapbar" role="status">
-              <Icon name="shuffle" size={16} />
-              <span><b>{mealText(at(swapFrom))}</b> – mit welchem Platz tauschen?</span>
-              <button type="button" className="link small" onClick={() => setSwapFrom(null)}>Abbrechen</button>
-            </div>
-          )
-          : !picked && <p className="small muted">Antippen: ändern, tauschen oder zurück in den Kühlschrank. Lange drücken: Portionen und Kochtag.</p>}
+        {swapFrom !== null && (
+          <div className="week__swapbar" role="status">
+            <Icon name="shuffle" size={16} />
+            <span><b>{mealText(at(swapFrom))}</b> – mit welchem Platz tauschen?</span>
+            <button type="button" className="link small" onClick={() => setSwapFrom(null)}>Abbrechen</button>
+          </div>
+        )}
         {/* Gerichte einer Grundlage im Wechsel (Julia: „besser hintereinander, dann ist das Vorkochen der Extras leichter“) */}
         {mixedBases(week).map((id) => (
           <p key={id} className="small week__hint">
-            <Icon name="shuffle" size={14} /> {title(recipes.find((x) => x.id === id))}: Gerichte im Wechsel – hintereinander lassen sich die Extras leichter vorbereiten.
+            <Icon name="shuffle" size={14} /> {title(recipes.find((x) => x.id === id))}: Gerichte im Wechsel.
             <button type="button" className="link small" onClick={() => change(groupMeals(week, id), `${title(recipes.find((x) => x.id === id))}: hintereinander gelegt`)}>Hintereinander legen</button>
           </p>
         ))}
@@ -256,7 +254,7 @@ export function WeekPlan({ week, onPickDish }: { week: Week; onPickDish?: (slot:
         return (
           <DishSheet m={m} view={view} recipes={recipes} asks={asks(m.meal.baseId)} servings={servingsOf(m.meal, hh)} onClose={() => setDish(null)}
             onCook={go && (() => navigate(go.prep ? `/rezept/${go.baseId}/kochen?p=${go.portions}&vorkochen=1` : `/rezept/${go.recipeId}/kochen?p=${go.portions}&meal=${go.mealId}`))}
-            cookNote={go?.prep ? `${title(base?.recipe)} vorkochen (${go.portions} Portionen) – das Frische für heute kommt mit`
+            cookNote={go?.prep ? `${title(base?.recipe)} vorkochen (${go.portions} Portionen)`
               : !go && base && !base.base.cooked ? `Kochen geht nach dem Vorkochen am ${DAY_LONG[base.base.day]}.` : undefined}
             onPut={(recipeId, side) => put(dish, recipeId, m.meal.baseId, side)}
             onPortions={(v) => portions(m, v)}
@@ -511,7 +509,7 @@ function Fridge({ items, order, pick, household, tone, onPick, onCookDay, onFree
           ? <span className="small fridge__left is-left">{portionText(left)} übrig</span>
           : <button type="button" className="link small" aria-expanded onClick={() => setOpen(false)}>zuklappen</button>}
       </div>
-      <p className="small muted">{picked ? `${title(picked.recipe)} gewählt – tippe einen freien Platz ab ${DAY_LONG[picked.base.day]} oder friere es ein.` : left ? 'Kärtchen antippen, dann einen freien Platz – oder einfrieren.' : 'Alles, was gekocht wird, hat einen Platz.'}</p>
+      {(picked || !left) && <p className="small muted">{picked ? `${title(picked.recipe)} gewählt.` : 'Alles, was gekocht wird, hat einen Platz.'}</p>}
       {items.map((f) => {
         const id = f.base.recipeId;
         const name = title(f.recipe);
@@ -558,7 +556,6 @@ function Fridge({ items, order, pick, household, tone, onPick, onCookDay, onFree
             {pick === id && f.cards > 0 && (
               <div className="fridge__pickbar">
                 <button type="button" className="btn btn--soft btn--sm" onClick={() => onFreezeCard(f)}><Icon name="snow" size={14} /> Einfrieren</button>
-                <span className="small muted">oder einen freien Platz antippen</span>
               </div>
             )}
             {(f.base.freeze ?? 0) > 0 && (
@@ -687,7 +684,7 @@ function MealRow({ slot, m, swapFrom, week, onTap, onHold, cookNote, pickTarget,
   }
   const base = m.meal.recipeId === m.meal.baseId;
   const note = m.meal.done ? <span className="tag tag--done"><Icon name="check" size={12} /> gegessen</span>
-    : m.tooOld ? <span className="tag tag--warn">hält nicht so lange – lange drücken</span>
+    : m.tooOld ? <span className="tag tag--warn">hält nicht so lange</span>
     : m.frost ? <span className="tag tag--frost"><Icon name="snow" size={12} /> am Vortag auftauen</span>
     : m.age === 0 ? <span className="tag tag--eat">frisch vom Kochtag</span>
     : <span className="tag tag--eat">{base ? 'aufwärmen' : `vom ${DAY_LONG[m.cookDay]}`}</span>;
@@ -716,7 +713,7 @@ function MhdFinds({ finds, week, change }: { finds: MhdFind[]; week: Week; chang
           <Icon name="cart" size={18} />
           <div className="find__text">
             <strong>{f.item.name} · MHD</strong>
-            {f.kind === 'covered' && <span className="small">Steckt schon in <b>{title(f.recipe)}</b> – wird beim Kochen zuerst verbraucht.</span>}
+            {f.kind === 'covered' && <span className="small">Steckt schon in <b>{title(f.recipe)}</b>.</span>}
             {f.kind === 'match' && <span className="small">Passt zu <b>{title(f.recipe)}</b> – am {DAY_LONG[first]} mitkochen?</span>}
             {f.kind === 'free' && <span className="small">In eine Grundlage geben?</span>}
             <span className="find__actions">

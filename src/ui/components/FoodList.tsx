@@ -14,7 +14,7 @@ import { purchasesOf } from '../../domain/bons';
 import { spiceName, zeroOf } from '../../domain/nutrition/noNutrition';
 import { averageNutrients } from '../../domain/nutrition/variants';
 import type { Nutrients } from '../../domain/nutrition/types';
-import { currentPantry, currentProducts, dismissRename, productUndo, removeProduct, setPantryShelfDays, renameFoodEverywhere, saveProducts, setFavoriteVariant, setFoodStage, useFoodTable, usePantry, useProducts, useRecipes } from '../../data/store';
+import { currentPantry, currentProducts, productUndo, removeProduct, setPantryShelfDays, renameFoodEverywhere, saveProducts, setFavoriteVariant, setFoodStage, useFoodTable, usePantry, useProducts, useRecipes } from '../../data/store';
 import { stageOf } from '../../domain/stage';
 import { sortUses } from '../../domain/sortRefs';
 import { StagePicker } from './StagePicker';
@@ -32,7 +32,6 @@ import { FoodGaps } from './FoodGaps';
 import { ExistsNote, titleOf } from './ExistsNote';
 
 const fmt = (n: number) => n.toLocaleString('de-DE', { maximumFractionDigits: 1 });
-const cap = (s: string) => s.replace(/(^|[\s-])(\p{L})/gu, (_m, sep: string, ch: string) => sep + ch.toLocaleUpperCase('de-DE'));
 /** Tabs: Schlüssel, kurzer Name, voller Name (für Screenreader) – Reihenfolge = Wischrichtung */
 // Ein Tab je Stufen-Knopf (gleiches Symbol, gleicher Name): Produkte = was du pflegst (normal, 🔄 nachkaufen),
 // dahinter, was du einmal einstellst: 🏠 immer im Haus, 🍃 Gewürze (zählen in Rezepten nicht mit)
@@ -125,20 +124,11 @@ export function FoodList({ adding, onAdding }: {
       {/* eigener Schlüssel – „produkte“ trägt schon der Tab-Inhalt daneben (doppelt: React räumt nicht auf) */}
       {adding && <AddFood key={`neu-${filter}`} tab={filter} rows={rows} onDone={addDone} />}
       <div key={filter} className={`stack ${slide}`} role="tabpanel" {...swipe}>
-      <p className="small muted">
-        {/* dieselben Linien-Symbole wie an den Karten, keine bunten Emojis */}
-        {filter === 'produkte'
-          ? <>Was du pflegst: Sorten, Marken, Nährwerte – und <Icon name="refresh" size={13} /> Nachkaufen mit Grenze. Antippen für Details.</>
-          : filter === 'haus'
-            ? <>Was du immer da hast: wird nicht gezählt, bei Rezepten nie „fehlt“, auf der Einkaufsliste unter „Basics“.</>
-            : <>Gewürze & Co.: immer da und zählen in Rezepten nicht mit (keine Nährwerte). Auf der Einkaufsliste unter „Basics“.</>}
-      </p>
-
       {filter === 'produkte' && <AdoptFoods />}
 
       {shown.length === 0 && (
         <p className="small muted">
-          {filter === 'produkte' ? 'Noch keine Produkte – oben mit ＋ hinzufügen, oder bei einem Rezept unter „Nährwerte“ eigene Werte eintragen.'
+          {filter === 'produkte' ? 'Noch keine Produkte – oben mit ＋ hinzufügen.'
             : filter === 'haus' ? 'Noch nichts „immer im Haus“ – oben mit ＋ hinzufügen.' : 'Noch keine Gewürze – oben mit ＋ hinzufügen.'}
         </p>
       )}
@@ -151,7 +141,6 @@ export function FoodList({ adding, onAdding }: {
 
       </div>
 
-      {filter === 'produkte' && <DismissedRenames keys={pantry.renameDismissed ?? []} />}
     </div>
   );
 }
@@ -205,14 +194,14 @@ function FoodLine({ row, open, weigh = false, onWeighed, onToggle, products, onT
     setEditing(null);
     setAddingSort(false);
     // wie beim Hinzufügen oben: sagen, was passiert ist – und „Rückgängig“
-    toast(`${!added ? 'Gespeichert' : ps.length ? `Weitere Sorte von „${title}“ angelegt` : `Werte für „${title}“ gespeichert`} – alle Rezepte rechnen neu`,
+    toast(`${!added ? 'Gespeichert' : ps.length ? `Weitere Sorte von „${title}“ angelegt` : `Werte für „${title}“ gespeichert`}`,
       { label: 'Rückgängig', run: productUndo(before) });
   };
   /** Name oder „gilt für“ für alle Sorten – sofort gespeichert, mit „Rückgängig“ (wie die Stufen darunter) */
-  const saveShared = (s: SharedMatch, what: string, recalc = true) => {
+  const saveShared = (s: SharedMatch, what: string) => {
     const old = new Map(ps.map((p) => [p.id, p]));
     store([], s);
-    toast(recalc ? `${what} – alle Rezepte rechnen neu` : what, { label: 'Rückgängig', run: () => saveProducts(currentProducts().map((x) => old.get(x.id) ?? x)) });
+    toast(what, { label: 'Rückgängig', run: () => saveProducts(currentProducts().map((x) => old.get(x.id) ?? x)) });
   };
   const rename = () => {
     const n = renaming?.trim();
@@ -242,7 +231,7 @@ function FoodLine({ row, open, weigh = false, onWeighed, onToggle, products, onT
       });
       if (answer === null) return;
       to = answer || undefined;
-    } else if (!(await ask({ title: `„${productLabel(p)}“ entfernen?`, text: 'Die Rezepte rechnen dann wieder mit Richtwerten.', confirm: 'Entfernen', danger: true }))) return;
+    } else if (!(await ask({ title: `„${productLabel(p)}“ entfernen?`, confirm: 'Entfernen', danger: true }))) return;
     onTouch();
     toast(`„${productLabel(p)}“ entfernt`, { label: 'Rückgängig', run: removeProduct(p.id, to) });
   };
@@ -306,7 +295,6 @@ function FoodLine({ row, open, weigh = false, onWeighed, onToggle, products, onT
 
       {open && zeroRow && (
         <div className="foods__body">
-          {ps.some((p) => !p.noValues) && <p className="small muted">Deine eigenen Werte bleiben gespeichert und zählen wieder, sobald du eine andere Stufe wählst.</p>}
           {/* Julia: Gewürze auch mit Preis – zuletzt gekauft (Bon) und die eigene Packung */}
           <LastPurchase name={row.ingredient} title={title} productIds={ps.map((p) => p.id)} />
           <SpicePack name={title} product={ps.length === 1 ? ps[0] : undefined} />
@@ -316,7 +304,7 @@ function FoodLine({ row, open, weigh = false, onWeighed, onToggle, products, onT
       )}
       {open && !zeroRow && (
         <div className="foods__body">
-          {nothing && <p className="small"><strong>Nichts mehr festgelegt.</strong> Die Zeile verschwindet, wenn du die Seite verlässt – oder schalte unten wieder etwas ein.</p>}
+          {nothing && <p className="small"><strong>Nichts mehr festgelegt.</strong></p>}
           {ps.length === 0 && (
             <p className="small muted">
               {row.table ? <>Rechnet mit dem Richtwert der Tabelle: {Math.round(row.table.per100g.kcal)} kcal · {macros(row.table.per100g)} pro 100 g.</> : 'Mashi kennt hierfür keine Werte.'}
@@ -333,7 +321,7 @@ function FoodLine({ row, open, weigh = false, onWeighed, onToggle, products, onT
                 {ps.length > 1 && (
                   <button type="button" className={`variants__star${p.favorite ? ' is-on' : ''}`} aria-pressed={!!p.favorite}
                     aria-label={p.favorite ? `${p.name}: Favorit zurücknehmen` : `${p.name} als Favorit`}
-                    onClick={() => { setFavoriteVariant(ps, p.favorite ? null : p.id); toast(p.favorite ? 'Favorit zurückgenommen – Rezepte rechnen wieder mit dem Durchschnitt' : `★ „${productLabel(p)}“ ist dein Favorit`); }}>
+                    onClick={() => setFavoriteVariant(ps, p.favorite ? null : p.id)}>
                     <Icon name="star" size={18} filled={!!p.favorite} />
                   </button>
                 )}
@@ -397,7 +385,7 @@ function FoodLine({ row, open, weigh = false, onWeighed, onToggle, products, onT
           {shared ? (
             // key: nach „Rückgängig“ (oder vom anderen Gerät) zeigt das Feld wieder den gespeicherten Wert
             <ShelfField key={shared.shelfDays ?? 'leer'} value={shared.shelfDays} estimate={estimate.days} onSave={(d) => saveShared({ ...shared, shelfDays: d },
-              `${shelfText(d)}${d !== undefined && ps.length > 1 ? ` – alle ${ps.length} Sorten` : ''}`, false)} />
+              `${shelfText(d)}${d !== undefined && ps.length > 1 ? ` – alle ${ps.length} Sorten` : ''}`)} />
           ) : estimate.id && (
             <ShelfField key={pantry.shelfDays?.foods?.[estimate.id] ?? 'leer'} value={pantry.shelfDays?.foods?.[estimate.id]} estimate={estimate.days}
               onSave={(d) => saveFoodShelf(estimate.id!, d)} />
@@ -419,7 +407,7 @@ const shelfText = (d: number | undefined) => (d === undefined ? 'Haltbarkeit sch
   : d === FOREVER ? 'hält unbegrenzt – keine Erinnerung' : `hält ${d === 1 ? '1 Tag' : `${d} Tage`} ab Kauf`);
 
 /**
- * „Hält ab Kauf“ in der Kachel; leer = Mashis Schätzung (steht grau im Feld und darunter).
+ * „Hält ab Kauf“ in der Kachel; leer = Mashis Schätzung (steht grau im Feld).
  * Bis 10 Jahre; „Hält unbegrenzt“ schaltet die Schätzung ab (Julia: Salz, Zucker – nie „läuft bald ab“).
  * Gespeichert beim Verlassen des Felds bzw. beim Haken.
  */
@@ -434,7 +422,6 @@ function ShelfField({ value, estimate, onSave }: { value?: number; estimate?: nu
     setError(false);
     if (d !== value && !(forever && d === undefined)) onSave(d);
   };
-  const guess = estimate === undefined ? 'lange (ohne Erinnerung)' : estimate === 1 ? '1 Tag' : `${estimate} Tage`;
   return (
     <div className="stage shelf-shared">
       <label className="shelf-shared__row">
@@ -448,7 +435,6 @@ function ShelfField({ value, estimate, onSave }: { value?: number; estimate?: nu
         <input type="checkbox" checked={forever} onChange={(e) => { setText(''); setError(false); onSave(e.target.checked ? FOREVER : undefined); }} />
         Hält unbegrenzt – nicht schätzen
       </label>
-      <p className="small muted">{forever ? 'Keine Erinnerung – Mashi schätzt nicht' : value ? `Dein Wert – Mashi schätzt ${guess}` : `Leer = Mashis Schätzung: ${guess}`}</p>
       {error && <p className="small error" role="alert">Bitte ganze Tage von 1 bis {MAX_SHELF_DAYS} (10 Jahre) – oder leer lassen.</p>}
     </div>
   );
@@ -478,7 +464,7 @@ function AddFood({ tab, rows, onDone }: { tab: FoodFilter; rows: FoodRow[]; onDo
     saveProducts([...before, p]);
     const undoProduct = productUndo(before);
     const undoStage = stage === 'haus' ? setFoodStage(p.name, 'haus') : undefined;
-    toast(`„${p.name}“ angelegt${stage === 'haus' ? ' – immer im Haus' : ''} – alle Rezepte rechnen neu`, {
+    toast(`„${p.name}“ angelegt${stage === 'haus' ? ' – immer im Haus' : ''}`, {
       label: 'Rückgängig', run: () => { undoStage?.(); undoProduct(); },
     });
     onDone();
@@ -489,7 +475,7 @@ function AddFood({ tab, rows, onDone }: { tab: FoodFilter; rows: FoodRow[]; onDo
     if (!row.products.length) {
       // nur „Immer im Haus“, noch keine Sorte: das ist die erste – unter dem Namen der Zeile, damit sie dort landet
       saveProducts([...before, p]);
-      toast(`Werte für „${title}“ gespeichert – alle Rezepte rechnen neu`, { label: 'Rückgängig', run: productUndo(before) });
+      toast(`Werte für „${title}“ gespeichert`, { label: 'Rückgängig', run: productUndo(before) });
       onDone(row);
       return;
     }
@@ -499,7 +485,7 @@ function AddFood({ tab, rows, onDone }: { tab: FoodFilter; rows: FoodRow[]; onDo
     // die einzige Sorte hat noch keine Werte? Dann füllt sich die (siehe fillOrAdd)
     const { products: next, saved } = fillOrAdd(before.map((x) => (group.has(x.id) ? withShared(x, s) : x)), withShared(p, s), row.products);
     saveProducts(next);
-    toast(saved.id === p.id ? `Weitere Sorte von „${s.name}“ angelegt – alle Rezepte rechnen neu` : `Werte für „${s.name}“ eingetragen – alle Rezepte rechnen neu`,
+    toast(saved.id === p.id ? `Weitere Sorte von „${s.name}“ angelegt` : `Werte für „${s.name}“ eingetragen`,
       { label: 'Rückgängig', run: productUndo(before) });
     onDone(row);
   };
@@ -545,8 +531,7 @@ function AddFood({ tab, rows, onDone }: { tab: FoodFilter; rows: FoodRow[]; onDo
             <>
               {hit && (hit.same ? (
                 <ExistsNote hit={hit} here={tab}
-                  ask={!canSort ? (hit.row.zero ? 'Stufe und Packung stellst du in der Kachel ein.' : 'Zum Gewürz machst du es in der Kachel.')
-                    : hit.row.products.length ? 'Ist das eine weitere Sorte, z. B. leicht oder eine andere Marke?' : 'Werte dafür trägst du gleich hier oder in der Kachel ein.'}>
+                  ask={canSort && hit.row.products.length ? 'Ist das eine weitere Sorte?' : undefined}>
                   {canSort && (
                     <button type="button" className="btn btn--primary btn--sm" onClick={() => setSortOf({ row: hit.row, typed: n })}>
                       {hit.row.products.length ? 'Als weitere Sorte' : 'Werte eintragen'}
@@ -573,8 +558,6 @@ function AddFood({ tab, rows, onDone }: { tab: FoodFilter; rows: FoodRow[]; onDo
                   <Icon name="leaf" size={14} /> Gewürz
                 </button>
               </div>
-              {stage === 'ohne' && <p className="small muted">Gewürze & Co. zählen in Rezepten nicht mit – darum ohne Nährwerte.</p>}
-              {stage === 'haus' && <p className="small muted">Nährwerte sind hier freiwillig – leer lassen merkt es nur als „immer im Haus“.</p>}
             </>
           );
         }} />
@@ -654,7 +637,7 @@ function AdoptFoods() {
   const names = candidates.map((p) => p.name);
   const adopt = async () => {
     const list = names.length > 12 ? `${names.slice(0, 12).join(', ')} und ${names.length - 12} weitere` : names.join(', ');
-    if (!(await ask({ title: `${names.length} Lebensmittel übernehmen?`, text: `${list}. Nährwerte kommen aus der Tabelle (wo sie es kennt) – eigene Werte, Haltbarkeit, Packung und Sorten stellst du dann in der Kachel ein.`, confirm: 'Übernehmen' }))) return;
+    if (!(await ask({ title: `${names.length} Lebensmittel übernehmen?`, text: `${list}.`, confirm: 'Übernehmen' }))) return;
     const ids = new Set(candidates.map((p) => p.id));
     saveProducts([...currentProducts(), ...candidates]);
     toast(`${names.length} Lebensmittel übernommen`, { label: 'Rückgängig', run: () => saveProducts(currentProducts().filter((p) => !ids.has(p.id))) });
@@ -664,23 +647,5 @@ function AdoptFoods() {
       <p className="small"><strong>{names.length === 1 ? '1 Lebensmittel' : `${names.length} Lebensmittel`} aus Vorrat & Bons</strong> {names.length === 1 ? 'hat' : 'haben'} noch keine Kachel – z. B. {names.slice(0, 3).join(', ')}.</p>
       <button type="button" className="btn btn--soft btn--sm" onClick={adopt}><Icon name="plus" size={16} /> Alle übernehmen</button>
     </div>
-  );
-}
-
-/** Ausgeblendete Namensvorschläge – antippen, um sie wieder vorzuschlagen */
-function DismissedRenames({ keys }: { keys: string[] }) {
-  if (!keys.length) return null;
-  return (
-    <details className="panel fold">
-      <summary className="small"><strong>Ausgeblendete Namensvorschläge ({keys.length})</strong></summary>
-      <p className="small muted">Für diese Schreibweisen schlägt Mashi keinen einheitlichen Namen mehr vor. Antippen holt den Vorschlag zurück.</p>
-      <div className="chips">
-        {keys.map((k) => (
-          <button key={k} type="button" className="afilter" onClick={() => dismissRename(k, true)} aria-label={`${cap(k)} wieder vorschlagen`}>
-            {cap(k)} <Icon name="refresh" size={14} />
-          </button>
-        ))}
-      </div>
-    </details>
   );
 }

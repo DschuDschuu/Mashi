@@ -55,8 +55,8 @@ export function WeekSetupScreen() {
   // „Reicht für die Woche?“ – ein Abend = die Portionen des Haushalts
   const covered = Math.floor(total / Math.max(1, hh.portions));
   const over = covered - EVENINGS;
-  const coverHint = over < 0 ? `Noch ${-over} ${over === -1 ? 'Abend' : 'Abende'} ohne Essen – oder bewusst frei lassen.`
-    : over > 0 ? `${over} ${over === 1 ? 'Abend' : 'Abende'} mehr als die Woche – zum Einfrieren.` : 'Genau ein Essen für jeden Abend.';
+  const coverHint = over < 0 ? `Noch ${-over} ${over === -1 ? 'Abend' : 'Abende'} ohne Essen.`
+    : over > 0 ? `${over} ${over === 1 ? 'Abend' : 'Abende'} mehr als die Woche.` : 'Genau ein Essen für jeden Abend.';
 
   const save = async () => {
     if (old && weekStarted(old) && !(await ask({ title: 'Neue Woche?', text: 'In der jetzigen Woche ist schon etwas gekocht. Die neue ersetzt sie – Vorgekochtes bleibt in der Speisekammer.', confirm: 'Neue Woche' }))) return;
@@ -68,7 +68,6 @@ export function WeekSetupScreen() {
     <main className="screen screen--cta">
       <TopBar title="Woche planen" backTo="/plan" intro="woche" />
       <h1 className="week-setup__title">Was kochst du vor?</h1>
-      <p className="muted">Rezepte in den Topf tippen – verteilt wird danach im Wochenplan.</p>
 
       <section className="pot" aria-label="Diese Woche kochen">
         <div className="pot__head">
@@ -76,7 +75,7 @@ export function WeekSetupScreen() {
           <h2 className="h3">Diese Woche kochen</h2>
           <span className="small muted">{total ? portionText(total) : 'noch leer'}</span>
         </div>
-        {!items.length && <p className="small muted">Tippe unten ein Rezept an – es kommt mit seinen Portionen in den Topf.</p>}
+        {!items.length && <p className="small muted">Tippe unten ein Rezept an.</p>}
         {items.map((x, i) => {
           const r = recipes.find((y) => y.id === x.recipeId)!;
           const t = currentContent(r).title;
@@ -113,7 +112,7 @@ export function WeekSetupScreen() {
       </div>
       {groups.filter(([label]) => label === tab).map(([label, list]) => (
         <section key={label} className="week-setup__group" role="tabpanel" aria-label={label}>
-          {!list.length && <p className="small muted">{label === 'Grundlagen' ? 'Noch keine Grundlage – ein Rezept wird zur Grundlage, sobald ein Gericht daraus entsteht.' : 'Keine Rezepte.'}</p>}
+          {!list.length && <p className="small muted">{label === 'Grundlagen' ? 'Noch keine Grundlage.' : 'Keine Rezepte.'}</p>}
           <div className="pot-tiles">
             {list.map(({ r, made, title }) => {
               const on = inPot(r.id);

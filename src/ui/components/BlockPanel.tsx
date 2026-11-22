@@ -65,7 +65,6 @@ export function BlockPanel({ recipe }: { recipe: Recipe }) {
         <button type="button" role="switch" aria-checked={on} aria-labelledby="blocks-title" className={`switch${on ? ' is-on' : ''}`}
           onClick={() => save(on ? [] : [add()], on ? 'Kein Baustein mehr' : 'Als Baustein')}><span /></button>
       </div>
-      {!on && <p className="small muted blocks__hint">Dann taucht es bei „Worauf hast du Lust?“ als Stufe auf – zum Beispiel als Protein beim Taco.</p>}
       {on && parts.length > 0 && (
         <div className="blocks__row">
           <span className="small muted">Was davon?</span>
@@ -81,7 +80,7 @@ export function BlockPanel({ recipe }: { recipe: Recipe }) {
         <div key={b.part ?? '-'} className="blocks__card">
           {parts.length > 0 && <strong className="blocks__name">{nameOf(b.part)}</strong>}
           <div className="blocks__row">
-            <span className="small muted">Stufe <span className="blocks__more">– auch mehrere, z. B. Protein und Sauce</span></span>
+            <span className="small muted">Stufe</span>
             <div className="chips" role="group" aria-label={`Stufe für ${nameOf(b.part)}`}>
               {SIDE_KINDS.map(({ kind, label }) => (
                 <button key={kind} type="button" className={`chip chip--sm${covers(b).includes(kind) ? ' is-on' : ''}`} aria-pressed={covers(b).includes(kind)}
@@ -100,7 +99,7 @@ export function BlockPanel({ recipe }: { recipe: Recipe }) {
             </div>
           </div>
           <label className="blocks__row">
-            <span className="small muted">Ersetzt festen Baustein <span className="blocks__more">– dann steht deiner statt des festen zur Wahl</span></span>
+            <span className="small muted">Ersetzt festen Baustein</span>
             <select className="blocks__select" value={b.replaces ?? ''} onChange={(e) => setReplaces(b, e.target.value)}>
               <option value="">– keinen –</option>
               {sidesOfKind(b.kind).filter((x) => !x.id.startsWith('eigen:')).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
@@ -109,7 +108,7 @@ export function BlockPanel({ recipe }: { recipe: Recipe }) {
         </div>
       ))}
       <div className="blocks__row blocks__pairs">
-        <span className="small muted">Passt gut zu <span className="blocks__more">– steht im Baukasten dann vorn</span></span>
+        <span className="small muted">Passt gut zu</span>
         <div className="chips" role="group" aria-label="Passt gut zu">
           {pairs.map((id) => (
             <button key={id} type="button" className="chip chip--sm is-on" aria-label={`${sideOf(id)?.name ?? id} entfernen`}

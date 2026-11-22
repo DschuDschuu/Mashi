@@ -4,7 +4,7 @@ import { suggestPantryUnit } from '../../domain/packs';
 import { daysLabel, daysLeft, frozenSince, specialDays, useByOf } from '../../domain/shelfLife';
 import {
   eatPreparedPortions,
-  addPantryItem, answerPantryCheck, addProduct, assignPantrySorts, currentPantry, currentProducts, freezePantryItem, productUndo, saveProducts, removePantryItem, setPantryAmount, thawPantryItem, updatePantryItem,
+  addPantryItem, answerPantryCheck, addProduct, currentPantry, currentProducts, freezePantryItem, productUndo, saveProducts, removePantryItem, setPantryAmount, thawPantryItem, updatePantryItem,
   useFoodTable, usePantry, usePlan, useProducts, useRecipes,
 } from '../../data/store';
 import { currentContent } from '../../domain/recipe';
@@ -29,11 +29,10 @@ import { toast } from '../toast';
 import { BarcodeScanner } from '../components/BarcodeScanner';
 import { SortPicker, useSortOptions } from '../components/SortPicker';
 import { BrandNames } from '../components/BrandNames';
-import { NewProduct } from '../components/NewProduct';
 import type { FoodEntry } from '../../domain/nutrition/types';
 import { newId } from '../../domain/recipe';
 import { forParts, partLabel as partName } from '../../domain/parts';
-import { brandOf, nameOf, productLabel, sharedOf, sortTags, withShared, type MyProduct } from '../../domain/nutrition/myProducts';
+import { brandOf, nameOf, sharedOf, sortTags, withShared, type MyProduct } from '../../domain/nutrition/myProducts';
 import { FOOD_CHOICES, normalizeName, PROVIDER } from '../../domain/nutrition/localFoods';
 
 const UNITS: PantryUnit[] = ['g', 'ml', 'Stück', 'Glas'];
@@ -274,7 +273,14 @@ export function PantryScreen() {
     <main className="screen screen--tabbed" {...swipe}>
       <header className="page-head">
         <h1>Speisekammer</h1>
-        <FoodsButton />
+        {/* Vorrat eintragen auch hier, nicht nur über das Plus unten (Julia) – offen wird es zum Schließen */}
+        <span className="page-head__right">
+          <button type="button" className="iconbtn iconbtn--box" onClick={() => setAdding(!adding)}
+            aria-label={adding ? 'Vorrat eintragen schließen' : 'Vorrat eintragen'} aria-expanded={adding}>
+            <Icon name={adding ? 'close' : 'plus'} size={22} />
+          </button>
+          <FoodsButton />
+        </span>
       </header>
       <PageIntro id="speisekammer" />
       <PantryTabs active="pantry" />
@@ -287,7 +293,6 @@ export function PantryScreen() {
 
           {toCheck.length > 0 && (
             <Section icon="info" title="Noch da?">
-              <p className="muted small">Beim Kochen verwendet – ohne Menge weiß Mashi nicht, ob noch etwas übrig ist.</p>
               <ul className="list">
                 {toCheck.map((i) => (
                   <li key={i.id} className="list__item pantry-check">
@@ -304,7 +309,7 @@ export function PantryScreen() {
           )}
 
           {pantry.items.length === 0 ? (
-            <Empty icon="archive">Noch leer. Tippe auf ＋ – „Kassenbon importieren“ oder „Vorrat eintragen“. Mashi zeigt dir dann, was du damit kochen kannst.</Empty>
+            <Empty icon="archive">Noch leer.</Empty>
           ) : (
             groups.map(({ title, icon, items }) => {
               return (
@@ -388,9 +393,6 @@ function AddForm({ onDone }: { onDone: () => void }) {
   const packHint = chosen?.packageAmount && chosen.packageUnit !== 'Stück' && (unit === 'Stück' || unit === 'Glas')
     ? packLabel({ amount: chosen.packageAmount, unit: chosen.packageUnit === 'ml' ? 'ml' : 'g' }) : undefined;
   useEffect(() => { if (!unitTouched) setUnit(suggestedUnit); }, [suggestedUnit, unitTouched]);
-  /** Nach dem Eintragen: „… zu Meine Lebensmittel hinzufügen?“ */
-  const [offer, setOffer] = useState<{ name: string; brand: string } | null>(null);
-  const [withValues, setWithValues] = useState(false);
   const [scanning, setScanning] = useState(false);
   const onCode = (code: string) => {
     setScanning(false);
@@ -413,48 +415,32 @@ function AddForm({ onDone }: { onDone: () => void }) {
       setUnitTouched(true);
     }
   };
-  // Richtwert der Tabelle fürs Angebot – kennt sie die Zutat nicht, geht nur „Mit Nährwerten“
-  const offerTable = offer ? foodTable.matchName(offer.name)?.food : undefined;
-  /** dem gerade eingetragenen Vorrat die Sorte geben – das Produkt ist schon gespeichert */
-  const assign = (p: MyProduct) => {
-    const ids = currentPantry().items.filter((it) => !it.productId && normalizeName(it.name) === normalizeName(offer!.name)).map((it) => it.id);
-    assignPantrySorts([{ itemIds: ids, productId: p.id }]);
-    setOffer(null);
-  };
-  /** Sorten, die es fürs Angebotene schon gibt – „Nur hinzufügen“ legt dann nichts doppelt an (wie „Mit Nährwerten“) */
-  const offerSorts = useSortOptions(offer?.name ?? '');
   /**
-   * Produkt (Werte aus der Tabelle) speichern und dem Vorrat die Sorte geben. Gibt es die Marke schon (über „Andere Marke“
-   * nochmal getippt): nur zuordnen. Gibt es andere Sorten: eine weitere – mit demselben Gemeinsamen wie überall.
+   * Neue Marke beim Vorrat (Julia: ohne Rückfrage): gibt es sie schon als Sorte, nur zuordnen; sonst still als Sorte
+   * ohne eigene Werte anlegen (rechnet mit der Tabelle) – mit demselben Gemeinsamen wie die anderen Sorten.
+   * undo nimmt nur die neue Sorte zurück; der Vorrat bleibt, dann ohne Sorte.
    */
-  const adopt = (p: MyProduct) => {
+  const brandSort = (n: string, b: string): { product: MyProduct; undo?: () => void } => {
     const before = currentProducts();
-    const sorts = offerSorts.map((o) => before.find((x) => x.id === o.id)).filter((x): x is MyProduct => !!x);
-    const b = offer!.brand.trim().toLocaleLowerCase('de-DE');
-    const same = sorts.find((x) => brandOf(x)?.toLocaleLowerCase('de-DE') === b);
-    if (same) {
-      assign(same);
-      toast(`„${productLabel(same)}“ gibt es schon – zugeordnet`);
-      return;
-    }
-    let saved = p;
+    const sorts = options.map((o) => before.find((x) => x.id === o.id)).filter((x): x is MyProduct => !!x);
+    const same = sorts.find((x) => brandOf(x)?.toLocaleLowerCase('de-DE') === b.toLocaleLowerCase('de-DE'));
+    if (same) return { product: same };
+    const fresh = fromTable({ name: n, brand: b }, foodTable.matchName(n)?.food);
+    let saved = fresh;
     if (sorts.length) {
-      const s = sharedOf(sorts);
+      const sh = sharedOf(sorts);
       const group = new Set(sorts.map((x) => x.id));
-      saved = withShared(p, s);
-      saveProducts([...before.map((x) => (group.has(x.id) ? withShared(x, s) : x)), saved]);
-    } else saved = addProduct(p, offer!.name);
-    const undo = productUndo(before);
-    assign(saved);
-    toast(sorts.length ? `Weitere Sorte „${productLabel(saved)}“ angelegt` : `„${productLabel(saved)}“ steht jetzt unter „Meine Lebensmittel“`, { label: 'Rückgängig', run: undo });
+      saved = withShared(fresh, sh);
+      saveProducts([...before.map((x) => (group.has(x.id) ? withShared(x, sh) : x)), saved]);
+    } else saved = addProduct(fresh, n);
+    return { product: saved, undo: productUndo(before) };
   };
   const submit = () => {
     if (!name.trim()) return;
     const a = parseAmount(amount);
-    addPantryItem(name, a, a === undefined ? undefined : unit, chosen?.id);
-    toast(`„${name.trim()}“ in der Speisekammer`);
-    // Marke eingetragen, aber noch kein Produkt → anbieten, es aufzunehmen
-    if (askBrand && brand.trim()) setOffer({ name: name.trim(), brand: brand.trim() });
+    const fresh = askBrand && brand.trim() ? brandSort(name.trim(), brand.trim()) : undefined;
+    addPantryItem(name, a, a === undefined ? undefined : unit, fresh?.product.id ?? chosen?.id);
+    if (fresh?.undo) toast(`Sorte „${brand.trim()}“ angelegt`, { label: 'Rückgängig', run: fresh.undo });
     setName('');
     setAmount('');
     setProduct(undefined);
@@ -462,30 +448,14 @@ function AddForm({ onDone }: { onDone: () => void }) {
     setOtherBrand(false);
     setUnitTouched(false);
   };
-  if (offer && withValues) {
-    return (
-      // dasselbe Formular wie unter „Meine Lebensmittel“ (Julia) – speichert selbst, hier nur noch die Sorte am Vorrat
-      <NewProduct name={offer.name} pack={{ brand: offer.brand }} onDone={(p) => { if (p) assign(p); else setOffer(null); setWithValues(false); }} />
-    );
-  }
   return (
     <div className="panel stack">
-      {offer && (
-        <div className="pantry-offer" role="status">
-          <p className="small"><strong>„{offer.name} · {offer.brand}“</strong> zu „Meine Lebensmittel“ hinzufügen? Dann kennt Mashi die Marke beim nächsten Mal.</p>
-          <div className="row-gap">
-            <button type="button" className="btn btn--primary btn--sm" onClick={() => setWithValues(true)}>Mit Nährwerten</button>
-            {offerTable && <button type="button" className="btn btn--soft btn--sm" onClick={() => adopt(fromTable(offer, offerTable))}>Nur hinzufügen, Nährwerte später</button>}
-            <button type="button" className="btn btn--ghost btn--sm" onClick={() => setOffer(null)}>Nein</button>
-          </div>
-        </div>
-      )}
       <label className="field"><span>Was?</span>
         <input value={name} onChange={(e) => setName(e.target.value)} list="ingredient-names" placeholder="z. B. Hähnchenbrust" autoFocus
           onKeyDown={(e) => e.key === 'Enter' && submit()} />
       </label>
       <AmountFields amount={amount} unit={unit} onAmount={setAmount} onUnit={(u) => { setUnit(u); setUnitTouched(true); }} />
-      {packHint && <p className="small muted">Packung à {packHint}{chosen?.packageCount ? ` (${chosen.packageCount} Stück im Pack)` : ''} – aus „Meine Lebensmittel“</p>}
+      {packHint && <p className="small muted">Packung à {packHint}{chosen?.packageCount ? ` (${chosen.packageCount} Stück im Pack)` : ''}</p>}
       {/* vorgeschlagene Sorte (nur eine da) antippen = bestätigen, nicht abwählen (Julia: „Chip wird deaktiviert“) */}
       <SortPicker options={options} value={chosen?.id} onChange={(id) => setProduct(id ? products.find((p) => p.id === id) ?? null : product === undefined ? chosen : null)}
         onOther={() => { setProduct(null); setOtherBrand(true); }} />
@@ -495,7 +465,6 @@ function AddForm({ onDone }: { onDone: () => void }) {
           <BrandNames />
         </label>
       )}
-      <p className="small muted">Menge leer lassen = einfach „vorhanden“.</p>
       <div className="row-gap">
         <button className="btn btn--primary" onClick={submit} disabled={!name.trim()}>Hinzufügen</button>
         <button type="button" className="btn btn--soft" onClick={() => setScanning(true)}><Icon name="camera" size={16} /> Barcode</button>
@@ -624,9 +593,6 @@ function EditRow({ item, estimate, onDone }: { item: PantryItem; estimate?: Date
   const freeze = () => {
     const part = freezing ? parseAmount(freezing) : undefined;
     freezePantryItem(item.id, part);
-    toast(part !== undefined && item.amount !== undefined && part < item.amount
-      ? `${quantityLabel({ amount: part, unit: item.unit, recipeId: item.recipeId })} ${item.name} eingefroren`
-      : `„${item.name}“ eingefroren`);
     onDone();
   };
   const thaw = () => {
@@ -689,7 +655,7 @@ function EditRow({ item, estimate, onDone }: { item: PantryItem; estimate?: Date
             </span>
           </label>
           {!item.frozenAt && (
-            <Switch checked={!!item.reduced} label="MHD-Ware (reduziert)" hint={item.reduced ? 'hält nur noch kurz' : undefined}
+            <Switch checked={!!item.reduced} label="MHD-Ware (reduziert)"
               onChange={(on) => updatePantryItem(item.id, { reduced: on || undefined })} />
           )}
           {item.frozenAt && <p className="pantry-set__row small muted">Eingefroren am {new Date(item.frozenAt).toLocaleDateString('de-DE')}</p>}
@@ -732,8 +698,10 @@ function EditRow({ item, estimate, onDone }: { item: PantryItem; estimate?: Date
  * Neues Produkt mit Name + Marke, noch ohne eigene Nährwerte – es rechnet mit dem Richtwert der Tabelle
  * (Eintrag aus der Tabelle: über „ersetzt“; sonst wie früher mit einer Kopie der Werte)
  */
-function fromTable(offer: { name: string; brand: string }, food: FoodEntry): MyProduct {
+function fromTable(offer: { name: string; brand: string }, food: FoodEntry | undefined): MyProduct {
   const base = { id: newId('p'), name: offer.name, brand: offer.brand, names: [normalizeName(offer.name)], updatedAt: new Date().toISOString() };
+  // kennt die Tabelle die Zutat nicht: ohne Werte, wie „nur hinzufügen“ – Werte trägst du in der Kachel nach
+  if (!food) return { ...base, replaces: [], per100g: { kcal: 0, protein: 0, carbs: 0, fat: 0 }, noValues: true };
   return food.ref.provider === PROVIDER
     ? { ...base, replaces: [food.ref.foodId], per100g: { kcal: 0, protein: 0, carbs: 0, fat: 0 }, noValues: true }
     : { ...base, replaces: [], per100g: food.per100g };

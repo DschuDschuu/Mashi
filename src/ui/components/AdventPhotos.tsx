@@ -36,7 +36,6 @@ export function AdventPhotosSheet({ cal, onClose }: { cal: AdventCalendar; onClo
         <div className="sheet sheet--tall advent-photos" role="dialog" aria-modal="true" aria-labelledby="advent-photos-title" onClick={(e) => e.stopPropagation()} ref={ref}>
           <div className="sheet__grip" />
           <h2 className="sheet__title" id="advent-photos-title">Fotos ergänzen</h2>
-          <p className="small muted">Ist ein Rezept schon im Kochbuch und hat noch kein eigenes Foto, bekommt es das neue mit.</p>
           <ul className="advent-photos__list">
             {cal.doors.map((d) => (
               <li key={d.day} className="advent-photos__row">

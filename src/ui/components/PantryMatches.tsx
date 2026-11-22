@@ -1,6 +1,6 @@
 import type { PantryMatch } from '../../domain/pantry';
 import { currentContent } from '../../domain/recipe';
-import { addToPlan, usePlan } from '../../data/store';
+import { addToPlan, removeFromPlan, usePlan } from '../../data/store';
 import { navigate } from '../../router';
 import { toast } from '../toast';
 import { openRecipeIdea } from '../useUseUp';
@@ -28,7 +28,7 @@ export function PantryMatchList({ matches }: { matches: PantryMatch[] }) {
             </button>
             {!inPlan && (
               // eigene Zeile unter dem Text, damit Titel und „fehlt: …“ die volle Breite behalten
-              <button className="btn btn--soft btn--sm suggestion__plan" onClick={() => { addToPlan(m.recipe.id); toast('Eingeplant'); }} aria-label={`${currentContent(m.recipe).title} zum Wochenplan hinzufügen`}>
+              <button className="btn btn--soft btn--sm suggestion__plan" onClick={() => { if (addToPlan(m.recipe.id)) toast('Eingeplant', { label: 'Rückgängig', run: () => { removeFromPlan(m.recipe.id); } }); }} aria-label={`${currentContent(m.recipe).title} zum Wochenplan hinzufügen`}>
                 <Icon name="plus" size={16} /> Zum Wochenplan hinzufügen
               </button>
             )}

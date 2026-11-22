@@ -28,7 +28,7 @@ import { DishNutrition } from '../components/DishNutrition';
 import { pickFor } from '../../domain/nutrition/variants';
 import { choicesFor } from '../useNutrition';
 import { useSheet } from '../useSheet';
-import { amountsText, stockText, untilLabel, UseMoreSheet } from '../components/UseMoreSheet';
+import { amountsText, UseMoreSheet } from '../components/UseMoreSheet';
 import { newId } from '../../domain/recipe';
 import { byUrgency, isDone, isRunning, newlyDone, pauseTimer, remainingOf, removeTimer, resumeTimer, startTimer, type CookTimer } from '../../domain/timers';
 
@@ -56,8 +56,8 @@ export function CookModeScreen({ id, servings: asked, variants, prep, mealId }: 
   const [editing, setEditing] = useState<string | null>(null);
   const [noLeftovers, setNoLeftovers] = useState(false);
   const [noPacks, setNoPacks] = useState(false);
-  /** Blatt offen: für noch offene Reste („Menge wählen“) oder für schon gewählte („Anpassen“) */
-  const [pickLeftovers, setPickLeftovers] = useState<'open' | 'chosen' | null>(null);
+  /** Blatt für schon gewählte Reste offen („Anpassen“) – die offenen fragt das Blatt vor dem ersten Schritt */
+  const [pickLeftovers, setPickLeftovers] = useState<'chosen' | null>(null);
   const pantry = usePantry();
   const plan = usePlan();
   const recipes = useRecipes();
@@ -172,7 +172,7 @@ export function CookModeScreen({ id, servings: asked, variants, prep, mealId }: 
   // Kochtag: erst die Grundlage, dann das Frische für heute
   const all = [...cook.steps, ...(fresh && freshN ? fresh.steps : [])];
   // nur „zusammenstellen“ ohne eigene Schritte: ein Schritt, damit „Fertig“ erreichbar bleibt
-  const steps = all.length ? all : [{ id: 'nur-fertig', text: 'Für diese Auswahl gibt es keine eigenen Schritte – tippe auf „Fertig“.' }];
+  const steps = all.length ? all : [{ id: 'nur-fertig', text: 'Für diese Auswahl gibt es keine eigenen Schritte.' }];
   const todayTitle = todayMeal ? mealTitle(todayMeal, recipes.find((r) => r.id === todayMeal.recipeId)) : '';
   const toggleToday = () => {
     setTodayN(freshN ? null : plannedN);
@@ -318,7 +318,7 @@ export function CookModeScreen({ id, servings: asked, variants, prep, mealId }: 
         <PartsAskSheet parts={open} done={done} initial={pre.parts} onDone={startParts}
           today={fresh ? { title: todayTitle, portions: plannedN } : undefined} prep={prep ? { title: c.title, portionsFor: prepFor } : undefined}
           along={along.map((m) => ({ id: m.id, label: slotLabel(m), portions: servingsOf(m, hh), note: eatNow && alongNote(m, eatNow) }))} freshUntil={offer ? DAY_SHORT[offer.until] : ''}
-          hint={pre.fromLast ? 'Wie letztes Mal' : prep && pre.parts.length < open.length ? '„Frisch“ kochst du am Abend' : undefined} />
+          hint={pre.fromLast ? 'Wie letztes Mal' : undefined} />
       )}
       {/* Julia: welche Teile heute – fertige (Vorgekocht) stehen mit Haken da; am Kochtag auch das Essen von heute */}
       {(parts.length > 0 || fresh || along.length > 0) && (
@@ -377,7 +377,6 @@ export function CookModeScreen({ id, servings: asked, variants, prep, mealId }: 
               );
             })}
           </ul>
-          <p className="small muted">Menge antippen, um sie nur für dieses Mal zu ändern.</p>
         </div>
       )}
 
@@ -388,24 +387,12 @@ export function CookModeScreen({ id, servings: asked, variants, prep, mealId }: 
         </div>
       )}
 
-      {openLeftovers.length > 0 && (
-        <div className="cook__leftovers" role="status">
-          <p><Icon name="sparkles" size={16} /> <strong>{openLeftovers.every((l) => l.until) ? 'Läuft bald ab – mehr verwenden?' : 'Reste mitverbrauchen?'}</strong> Nur für dieses Mal – das Rezept bleibt.</p>
-          <p className="small">
-            {openLeftovers.map((l) => `${l.name}: ${stockText(l.have, l)} da${l.until ? `, ${untilLabel(l.until)}` : ''}`).join(' · ')}
-          </p>
-          <div className="cook__leftover-list">
-            <button className="btn btn--soft btn--sm" onClick={() => setPickLeftovers('open')}>Menge wählen</button>
-          </div>
-          <button className="link link--muted" onClick={() => setNoLeftovers(true)}>Nein danke</button>
-        </div>
-      )}
-      {pickLeftovers === 'open' && (
-        <UseMoreSheet uses={openLeftovers} onClose={() => setPickLeftovers(null)} onDone={(more) => {
-          setPickLeftovers(null);
-          if (!Object.keys(more).length) return setNoLeftovers(true);
+      {/* „Läuft bald ab – mehr verwenden?“ einmal vor dem ersten Schritt, als Blatt (Julia: nicht im Schritt – der Kasten
+          schob ihn nach unten). Zuklappen heißt „Nein danke“; danach fragt Mashi beim Kochen nicht noch einmal. */}
+      {!pre && step === 0 && openLeftovers.length > 0 && !pickLeftovers && (
+        <UseMoreSheet uses={openLeftovers} onClose={() => setNoLeftovers(true)} onDone={(more) => {
           setAmounts({ ...amounts, ...more });
-          toast('Nur für dieses Mal geändert');
+          setNoLeftovers(true);
         }} />
       )}
       {pickLeftovers === 'chosen' && (
@@ -413,18 +400,16 @@ export function CookModeScreen({ id, servings: asked, variants, prep, mealId }: 
         <UseMoreSheet uses={chosenLeftovers} initial={amounts} onClose={() => setPickLeftovers(null)} onDone={(next) => {
           setPickLeftovers(null);
           setAmounts(next);
-          toast(linked ? 'Geändert – auch im Wochenplan' : 'Nur für dieses Mal geändert');
         }} />
       )}
 
-      {openPacks.length > 0 && (
+      {step === 0 && openPacks.length > 0 && (
         <div className="cook__leftovers" role="status">
-          <p><Icon name="archive" size={16} /> <strong>Ganze Packung verwenden?</strong> Nur für dieses Mal – das Rezept bleibt.</p>
+          <p><Icon name="archive" size={16} /> <strong>Ganze Packung verwenden?</strong></p>
           <div className="cook__leftover-list">
             {openPacks.map((p) => (
               <button key={p.ingredientId} className="btn btn--soft btn--sm" onClick={() => {
                 setAmounts({ ...amounts, [p.ingredientId]: p.amount });
-                toast(`${formatUnitAmount(p.amount, p.unit)} ${p.name} – nur dieses Mal`);
               }}>
                 {formatUnitAmount(p.amount, p.unit)} {p.name} statt {formatAmount(p.planned, p.unit)}
               </button>

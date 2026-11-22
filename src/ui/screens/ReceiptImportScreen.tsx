@@ -181,10 +181,6 @@ export function ReceiptImportScreen({ shared }: { shared: boolean }) {
 
       {stage === 'pick' && (
         <div className="stack">
-          <div className="tip tint-sky">
-            <Icon name="info" size={20} />
-            <p>In <strong>Lidl Plus</strong> den Kassenbon öffnen, Screenshot machen und über <strong>Teilen → Mashi</strong> schicken – oder den Screenshot hier auswählen. Das Bild bleibt auf deinem Gerät.</p>
-          </div>
           <button className="btn btn--primary btn--block btn--lg" onClick={() => file.current?.click()}>
             <Icon name="image" size={20} /> Screenshot auswählen
           </button>
@@ -196,7 +192,6 @@ export function ReceiptImportScreen({ shared }: { shared: boolean }) {
           {error && <p className="error" role="alert">{error}</p>}
           <details className="panel" open={!!text}>
             <summary>Oder Text einfügen</summary>
-            <p className="muted small">Z. B. mit Google Lens „Text kopieren“ – oder den erkannten Text hier korrigieren.</p>
             <textarea className="import-text" rows={10} value={text} onChange={(e) => setText(e.target.value)}
               placeholder={'EUR\nSpaghetti 0,99 A\nSpeisequark mager 0,79 x 3 2,37 A\nZu zahlen …'} aria-label="Bon-Text" />
             <button className="btn btn--soft" disabled={!text.trim()} onClick={() => evaluate(text)}>Auswerten</button>
@@ -211,7 +206,7 @@ export function ReceiptImportScreen({ shared }: { shared: boolean }) {
           <div className="progress" role="progressbar" aria-valuenow={Math.round(progress * 100)} aria-valuemin={0} aria-valuemax={100}>
             <span style={{ width: `${Math.round(progress * 100)}%` }} />
           </div>
-          <p className="muted small">{progress === 0 ? 'Texterkennung wird geladen – beim ersten Mal dauert das etwas.' : `${Math.round(progress * 100)} %`}</p>
+          <p className="muted small">{progress === 0 ? 'Texterkennung wird geladen …' : `${Math.round(progress * 100)} %`}</p>
         </div>
       )}
 
@@ -226,29 +221,24 @@ export function ReceiptImportScreen({ shared }: { shared: boolean }) {
           {!replacing && (
             <label className="bonrow__mhd">
               <input type="checkbox" checked={historyOnly} onChange={(e) => setHistoryOnly(e.target.checked)} />
-              <span><strong>Nur für den Preisverlauf</strong> – nichts in die Speisekammer (z. B. ein alter Bon)</span>
+              <span><strong>Nur für den Preisverlauf</strong></span>
             </label>
           )}
           {duplicate && (
             <div className="scan-note" role="alert">
               {exact
                 ? <p>Diesen Bon ({paidAt && new Date(paidAt).toLocaleDateString('de-DE')}, {savings?.total !== undefined && euro(savings.total)}) hast du schon importiert.</p>
-                : <p>Vom <strong>{paidAt && new Date(paidAt).toLocaleDateString('de-DE')}</strong> hast du schon einen Bon importiert. Ist das <strong>derselbe</strong>? Dann ersetzen – sonst kommt alles doppelt in die Speisekammer.</p>}
+                : <p>Vom <strong>{paidAt && new Date(paidAt).toLocaleDateString('de-DE')}</strong> hast du schon einen Bon importiert. Ist das <strong>derselbe</strong>?</p>}
               <label className="bonrow__mhd">
                 <input type="checkbox" checked={replace} onChange={(e) => setReplace(e.target.checked)} />
-                <span><strong>Alten Import ersetzen</strong> – die Preise dieses Tages kommen neu, der Vorrat bleibt, wie er ist</span>
+                <span><strong>Alten Import ersetzen</strong></span>
               </label>
               {!replace && <p className="small error">Ohne Ersetzen zählen die Mengen doppelt – überspringe dann, was schon in der Speisekammer ist.</p>}
             </div>
           )}
           <p className="muted">
             {paidAt && <>Einkauf vom <strong>{new Date(paidAt).toLocaleDateString('de-DE')}</strong> · </>}
-            {savings && (savings.lidlPlus > 0 || savings.offers > 0 || savings.mhd > 0) && (
-              <>Gespart: {([['Lidl Plus', savings.lidlPlus], ['Angebote', savings.offers], ['MHD-Ware', savings.mhd]] as const)
-                .filter(([, v]) => v > 0)
-                .map(([label, v], n) => <span key={label}>{n > 0 && ' · '}{label} <strong>{euro(v)}</strong></span>)} · </>
-            )}
-            {rows.length} Artikel gefunden. Prüfe Name und Menge – <strong>Name wie im Rezept</strong> (z. B. „Hähnchenbrust“), damit Mashi den Vorrat beim Kochen findet. Mengen leer lassen = „vorhanden“.
+            {rows.length} Artikel gefunden.
           </p>
           <ul className="bonrows">
             {rows.map((r, i) => (
@@ -358,7 +348,6 @@ export function ReceiptImportScreen({ shared }: { shared: boolean }) {
           <button className="btn btn--primary btn--block btn--lg" onClick={apply} disabled={!rows.length}>
             {replacing ? 'Alten Import ersetzen' : onlyHistory ? 'Nur in den Preisverlauf' : taking ? `${taking} in die Speisekammer` : 'Nur merken, nichts übernehmen'}
           </button>
-          <p className="muted small center">Übersprungenes merkt sich Mashi auch – der nächste Bon fragt nicht wieder.</p>
         </div>
       )}
     </main>

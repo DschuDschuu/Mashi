@@ -6,7 +6,7 @@ import { useSpecial } from '../settings';
 import { ChefGhost } from '../components/HalloweenDeko';
 import { LogoStars, SantaHat, schneegestoeber } from '../components/WeihnachtsDeko';
 import type { Recipe } from '../../domain/types';
-import { addToPlan, useFoodTable, usePantry, usePlan, useRecipes } from '../../data/store';
+import { addToPlan, removeFromPlan, useFoodTable, usePantry, usePlan, useRecipes } from '../../data/store';
 import { navigate } from '../../router';
 import { Empty } from '../components/Controls';
 import { CravingAsk } from '../components/CravingAsk';
@@ -128,7 +128,7 @@ export function StartScreen() {
             <CravingAsk />
           </section>
           <Empty icon="book">
-            Noch keine Rezepte im Kochbuch. Leg über ＋ eins an oder spiel eine Sicherung ein (Zahnrad oben → Sicherung).
+            Noch keine Rezepte im Kochbuch.
           </Empty>
         </>
       )}
@@ -275,7 +275,7 @@ function BigCard({ recipe, servings, daily = false, hint, badge, stock }: {
             <Icon name="play" size={16} filled /> Kochen
           </button>
           {daily && (
-            <button className="btn btn--soft btn--sm" onClick={() => { addToPlan(recipe.id); toast('Eingeplant'); }}>
+            <button className="btn btn--soft btn--sm" onClick={() => { if (addToPlan(recipe.id)) toast('Eingeplant', { label: 'Rückgängig', run: () => { removeFromPlan(recipe.id); } }); }}>
               <Icon name="calendar" size={16} /> Einplanen
             </button>
           )}

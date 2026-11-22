@@ -94,11 +94,13 @@ export function RecipeFormScreen({ editId, draft, onBack, fromBase }: {
         else void regenerateImage(existing.id);
       }
       const changed = saveContent(existing.id, content);
-      toast(changed ? `Gespeichert als Version ${existing.versions.length + 1}` : photoChanged ? 'Foto gespeichert' : 'Keine Änderungen');
+      // nur sagen, wenn nichts passiert ist – Gespeichertes sieht man im Rezept
+      if (!changed && !photoChanged) toast('Keine Änderungen');
       goBack(`/rezept/${existing.id}`);
     } else {
       const id = createRecipe(content, { source: draft ? 'import' : 'selbst', status: tested === 'ja' ? 'kochbuch' : 'zum_testen', image, notes, ...(base ? { fromBase: base.id } : {}) });
-      toast(base ? `Gespeichert – steht unter ${currentContent(base).title}` : 'Rezept gespeichert');
+      // die Verwandlung landet bei ihrer Grundlage – das sieht man sonst nicht
+      if (base) toast(`Steht unter ${currentContent(base).title}`);
       navigate(`/rezept/${id}`, { replace: true });
     }
   };
@@ -112,13 +114,13 @@ export function RecipeFormScreen({ editId, draft, onBack, fromBase }: {
           <div className="tip tint-butter">
             <Icon name="info" size={20} />
             <div>
-              <p><strong>Bitte kurz prüfen.</strong> Mashi hat den Text gelesen – gespeichert wird erst, wenn du unten auf „Rezept speichern“ tippst.</p>
+              <p><strong>Bitte kurz prüfen.</strong></p>
               {draft.warnings.length > 0 && <ul className="small">{draft.warnings.map((w) => <li key={w}>{w}</li>)}</ul>}
             </div>
           </div>
         )}
         <div className="photo-pick">
-          {image ? <RecipeImageView image={image} size="md" /> : <div className="photo-pick__empty">Kein Foto – Mashi erzeugt nach dem Speichern ein Bild.</div>}
+          {image ? <RecipeImageView image={image} size="md" /> : <div className="photo-pick__empty">Kein Foto</div>}
           <div className="stack stack--tight">
             <FileButton className="btn btn--soft" onFile={(f) => setCropping({ src: f })}>
               {image?.kind === 'url' ? 'Anderes Foto' : 'Eigenes Foto wählen'}

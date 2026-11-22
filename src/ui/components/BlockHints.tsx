@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { blockHints, hintBlock, type BlockHint } from '../../domain/blockHints';
+import { blockHints, hintBlock, hintDetails, type BlockHint } from '../../domain/blockHints';
 import { currentContent } from '../../domain/recipe';
 import { SIDE_KINDS, type SideKind } from '../../domain/sides';
 import type { Recipe } from '../../domain/types';
@@ -10,6 +10,14 @@ import { Icon } from './Icon';
 
 const labelOf = (k: SideKind) => SIDE_KINDS.find((x) => x.kind === k)?.label ?? k;
 const stagesOf = (h: BlockHint) => [h.kind, ...(h.also ?? [])].map(labelOf).join(' und ');
+
+/** „Ähnlich: Satay-Sauce (Erdnussbutter)“ – teilt keiner Zutaten: was es von der Stufe schon gibt */
+function similarText(similar: ReturnType<typeof hintDetails>['similar']): string {
+  const close = similar.filter((x) => x.shared.length > 0).slice(0, 2);
+  if (close.length) return `Ähnlich: ${close.map((x) => `${x.name} (${x.shared.join(', ')})`).join(' · ')}`;
+  const names = similar.slice(0, 3).map((x) => x.name);
+  return `Schon im Baukasten: ${names.join(', ')}${similar.length > 3 ? ` und ${similar.length - 3} weitere` : ''}`;
+}
 
 /**
  * Bausteine vorschlagen (Julia: Weg B, „Beides“): im Kochbuch für alle Rezepte, auf der Rezeptseite für dieses – je
@@ -58,20 +66,25 @@ function HintSheet({ hints, recipes, all, onClose }: { hints: BlockHint[]; recip
       <div className="sheet renames" role="dialog" aria-modal="true" aria-label="Bausteine gefunden" onClick={(e) => e.stopPropagation()} ref={ref}>
         <div className="sheet__grip" />
         <h2 className="sheet__title">Bausteine gefunden</h2>
-        <p className="small muted">Übernommen tauchen sie bei „Worauf hast du Lust?“ und im Wochenplan auf – mit deinen Schritten. Stufe und Richtung kannst du später am Rezept ändern.</p>
         <ul className="renames__list">
-          {hints.map((h) => (
+          {hints.map((h) => {
+            // was drin ist und was du schon hast (Julia: „wusste gar nicht, was drin war“)
+            const d = hintDetails(h, recipes);
+            return (
             <li key={`${h.recipeId}|${h.part ?? ''}`}>
               <span className="block-hints__what">
                 <strong>{h.name}</strong> als {stagesOf(h)}
                 {all && h.part && <span className="small muted"> · aus „{titleOf(h.recipeId)}“</span>}
+                {d.ingredients.length > 0 && <span className="small muted block-hints__detail">Drin: {d.ingredients.join(', ')}</span>}
+                {d.similar.length > 0 && <span className="small muted block-hints__detail">{similarText(d.similar)}</span>}
               </span>
               <span className="block-hints__actions">
                 <button type="button" className="link link--muted" onClick={() => skip(h)}>Nein</button>
                 <button type="button" className="btn btn--soft btn--sm" onClick={() => take(h)}><Icon name="check" size={14} /> Übernehmen</button>
               </span>
             </li>
-          ))}
+            );
+          })}
         </ul>
         <div className="variants__actions">
           <button type="button" className="btn btn--ghost" onClick={onClose}>Später</button>

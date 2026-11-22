@@ -17,7 +17,7 @@ import { DAY_LONG, DAY_SHORT, keepsOf, weekdayOf } from '../../domain/week';
 import { specialDays } from '../../domain/shelfLife';
 import { describeChange, diffContent } from '../../domain/versions';
 import {
-  addToPlan, adoptToCookbook, archiveRecipe, deleteRecipe, keepTrial, makeBase, restoreRecipe, scheduleRecipe, markCooked, regenerateImage, setChoice, setHomemade, setPlanVariants, setStatus, toggleFavorite, togglePlanCooked, uncookRecipe, updateNotes, usePantry, usePlan, useRecipe, useRecipes,
+  addToPlan, adoptToCookbook, archiveRecipe, removeFromPlan, deleteRecipe, keepTrial, makeBase, restoreRecipe, scheduleRecipe, markCooked, regenerateImage, setChoice, setHomemade, setPlanVariants, setStatus, toggleFavorite, togglePlanCooked, uncookRecipe, updateNotes, usePantry, usePlan, useRecipe, useRecipes,
 } from '../../data/store';
 import { cookedToast } from '../cookedToast';
 import { shareMessage, shareRecipes } from '../shareRecipes';
@@ -33,7 +33,6 @@ import { SaladPanel } from '../components/SaladPanel';
 import { SwapPanel } from '../components/SwapPanel';
 import { RecipeImage } from '../components/RecipeImage';
 import { StepIngredients } from '../components/StepIngredients';
-import { StatusBadge } from '../components/StatusBadge';
 import { euro, formatMinutes, portionCount, relativeDay } from '../format';
 import { useRecipeCost } from '../useCosts';
 import { splitBrand } from '../../domain/nutrition/myProducts';
@@ -43,9 +42,7 @@ import { useIsTablet } from '../useMediaQuery';
 import { useNutrition, useVariants } from '../useNutrition';
 import { useSwipe } from '../useSwipe';
 import { useSlide } from '../useSlide';
-import { RenamePanel } from '../components/RenamePanel';
 import { FromBaseLink, PrepPanel } from '../components/PrepPanel';
-import { BlockHints } from '../components/BlockHints';
 import { BlockPanel } from '../components/BlockPanel';
 import { amountsText, useMorePrompt } from '../components/UseMoreSheet';
 import { useVariantPrompt } from '../components/VariantSheet';
@@ -135,7 +132,6 @@ function Detail({ recipe }: { recipe: Recipe }) {
     setImgBusy(true);
     await regenerateImage(recipe.id);
     setImgBusy(false);
-    toast('Neues Bild erzeugt');
   };
 
   const hero = (
@@ -177,14 +173,9 @@ function Detail({ recipe }: { recipe: Recipe }) {
 const header = (
     <>
       <PageIntro id="rezept" />
-      <div className="row-gap">
-        <StatusBadge status={recipe.status} withIcon />
-        {recipe.source === 'ki' && recipe.status === 'kochbuch' && <span className="muted small">Ursprünglich mit KI erstellt</span>}
-        <FromBaseLink recipe={recipe} recipes={recipes} />
-      </div>
+      {/* Status, Herkunft und Tags stehen unter „Notizen“ (Julia: nicht doppelt) – oben nur der Weg zur Grundlage */}
+      <FromBaseLink recipe={recipe} recipes={recipes} />
       <h1 className="detail__title">{c.title}</h1>
-      {(c.tags ?? []).length > 0 && <p className="detail__tags">{c.tags.join(' · ')}</p>}
-      {c.description && <p className="detail__desc">{c.description}</p>}
 
       <div className="facts">
         <span><Icon name="clock" size={16} /> {formatMinutes(c.prepMinutes + c.cookMinutes)}</span>
@@ -233,7 +224,7 @@ const header = (
       {recipe.trial && (
         <div className="trial-note">
           <Icon name="info" size={18} />
-          <span className="small">Probiergericht – kommt erst ins Kochbuch, wenn du es willst. Nach dem Kochen fragt dich die Startseite, wie es war.</span>
+          <span className="small">Probiergericht</span>
           <button type="button" className="btn btn--soft btn--sm" onClick={() => toast('Im Kochbuch', { label: 'Rückgängig', run: keepTrial(recipe.id) })}>Ins Kochbuch</button>
         </div>
       )}
@@ -244,7 +235,6 @@ const header = (
   const prepFold = !recipe.archivedAt && !recipe.trial && recipe.status !== 'ki_entwurf' && (
     <>
       {/* Mashi hat hier Bausteine gefunden (Julia: Weg B) – direkt über dem Ort, an dem man sie sonst von Hand markiert */}
-      <BlockHints recipes={[recipe]} />
       <PrepFold recipe={recipe} recipes={recipes} />
     </>
   );
@@ -267,7 +257,6 @@ const header = (
         <Stepper small value={servings} onChange={setServings} label="Portionen" />
       </div>
       {stock && <p className="ingredients__stock"><StockLine content={c} stock={stock} max={Infinity} /* in der Rezeptansicht alle aufzählen */ /></p>}
-      <RenamePanel recipe={recipe} />
       {/* Zutat gekauft oder selbst gemacht (Julia: Gnocchi) – gilt auch für Plan, Einkauf und Kochmodus */}
       {homemade.map(({ ingredient: i, recipe: base, chosen }) => (
         <div key={i.id} className="homemade" role="group" aria-label={`${i.name}: gekauft oder selbst gemacht`}>
@@ -451,7 +440,6 @@ function CostLine({ content, servings, pick }: { content: RecipeContent; serving
           <li key={`fehlt-${m}`} className="muted"><span>{plainName(m)}</span><span className="small">Preis unbekannt</span></li>
         ))}
       </ul>
-      <p className="small muted">pro Portion · mit den zuletzt bezahlten Regalpreisen</p>
     </details>
   );
 }
@@ -514,8 +502,7 @@ function PlanButton({ recipe, content, servings }: { recipe: Recipe; content: Re
   // „irgendwann“: wie bisher mit Sorte und „mehr davon verwenden“
   const someday = (n: number) => prompt.ask(content, undefined, (pick) =>
     more.ask(content, n, (amounts) => {
-      addToPlan(recipe.id, n, pick, amounts);
-      toast(`Eingeplant: ${portionCount(n)} – irgendwann diese Woche`);
+      if (addToPlan(recipe.id, n, pick, amounts)) toast(`Eingeplant: ${portionCount(n)} – irgendwann diese Woche`, { label: 'Rückgängig', run: () => { removeFromPlan(recipe.id); } });
     }));
   return (
     <>
@@ -582,7 +569,6 @@ function StatusAction({ recipe }: { recipe: Recipe }) {
       return (
         <div className="status-card tint-sky">
           <p className="status-card__title"><Icon name="sparkles" size={18} />Das ist eine KI-Idee</p>
-          <p>Sie ist noch nicht in deinem Kochbuch. Möchtest du sie ausprobieren?</p>
           {/* gefällt nicht? (Julia) – derselbe Auftrag nochmal oder angepasst; die neue Idee ersetzt diese.
               Nur, solange Mashi den Auftrag kennt (diese Sitzung, dieses Gerät) */}
           {formOf(recipe.id) && (
@@ -592,7 +578,7 @@ function StatusAction({ recipe }: { recipe: Recipe }) {
             </div>
           )}
           <div className="row-gap">
-            <button className="btn btn--primary" onClick={() => { setStatus(recipe.id, 'zum_testen'); toast('Zum Testen vorgemerkt'); }}>Zum Testen vormerken</button>
+            <button className="btn btn--primary" onClick={() => setStatus(recipe.id, 'zum_testen')}>Zum Testen vormerken</button>
             <button className="btn btn--ghost" onClick={() => { const undo = deleteRecipe(recipe.id); toast('Idee verworfen', { label: 'Rückgängig', run: undo }); goBack('/kochbuch'); }}>Verwerfen</button>
           </div>
         </div>
@@ -601,7 +587,6 @@ function StatusAction({ recipe }: { recipe: Recipe }) {
       return (
         <div className="status-card tint-peach">
           <p className="status-card__title"><Icon name="flask" size={18} />Zum Testen</p>
-          <p>Koch es und sag danach, wie es war – Anpassungen inklusive.</p>
           <button className="btn btn--primary" onClick={() => navigate(`/rezept/${recipe.id}/test`)}>Rezept testen</button>
         </div>
       );
@@ -609,9 +594,8 @@ function StatusAction({ recipe }: { recipe: Recipe }) {
       return (
         <div className="status-card tint-rose">
           <p className="status-card__title"><Icon name="heart" size={18} />Bewährt!</p>
-          <p>Wenn alles passt, wird diese Fassung deine persönliche Kochbuch-Version.</p>
           <div className="row-gap">
-            <button className="btn btn--primary" onClick={() => { adoptToCookbook(recipe.id); toast('Ins Kochbuch übernommen'); }}>Ins Kochbuch übernehmen</button>
+            <button className="btn btn--primary" onClick={() => adoptToCookbook(recipe.id)}>Ins Kochbuch übernehmen</button>
             <button className="btn btn--ghost" onClick={() => navigate(`/rezept/${recipe.id}/test`)}>Nochmal testen</button>
           </div>
         </div>
@@ -714,7 +698,6 @@ function MakeBaseSheet({ recipe, onClose }: { recipe: Recipe; onClose: () => voi
       <div className="sheet" role="dialog" aria-modal="true" aria-label="Grundlage daraus machen" onClick={(e) => e.stopPropagation()} ref={ref}>
         <div className="sheet__grip" />
         <h2 className="sheet__title">Grundlage daraus machen</h2>
-        <p className="small muted">Die Grundlage kochst du vor, „{c.title}“ verweist dann darauf. Was jeden Abend frisch dazukommt, bleibt im Gericht.</p>
         {parts.length > 0 && (
           <div className="chips" role="group" aria-label="Schnellwahl">
             <button type="button" className={`chip${!fresh.length ? ' is-on' : ''}`} aria-pressed={!fresh.length} onClick={() => pickPart(null)}>Ganzes Rezept</button>

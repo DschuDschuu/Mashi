@@ -130,7 +130,7 @@ export function NewProduct({ name, bonName = name, pack = {}, ingredient = false
               );
             }
             // nur „Immer im Haus“ oder Gewürz, noch ohne Sorte: das Produkt kommt einfach dazu
-            if (!sorts.length) return <ExistsNote hit={hit} ask={hit.row.zero ? 'Das Produkt kommt dazu – als Gewürz zählt es in Rezepten nicht mit.' : 'Das Produkt kommt dazu.'} />;
+            if (!sorts.length) return <ExistsNote hit={hit} ask="Das Produkt kommt dazu." />;
             // die Marke vom Vorrat/Bon zuerst – ist sie schon da, ist es wohl genau diese Sorte
             const brand = pack.brand?.trim().toLocaleLowerCase('de-DE');
             const fits = (p: MyProduct) => !!brand && brandOf(p)?.toLocaleLowerCase('de-DE') === brand;
@@ -165,8 +165,7 @@ export function UnknownIngredients({ n }: { n: NutritionResult }) {
   return (
     <div className="panel stack unknown-ings">
       <p className="small">
-        <strong>{unknown.length === 1 ? '1 Zutat kennt' : `${unknown.length} Zutaten kennt`} Mashi noch nicht.</strong>{' '}
-        Leg sie unter „Meine Lebensmittel“ an – dann rechnet jedes Rezept damit.
+        <strong>{unknown.length === 1 ? '1 Zutat kennt' : `${unknown.length} Zutaten kennt`} Mashi noch nicht.</strong>
       </p>
       {unknown.map((name) =>
         open === name ? (

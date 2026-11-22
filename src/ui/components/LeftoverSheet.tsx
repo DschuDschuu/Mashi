@@ -21,7 +21,6 @@ function Sheet({ title, servings }: { title: string; servings: number }) {
       <div className="sheet leftover" role="dialog" aria-modal="true" aria-label="Portionen übrig" onClick={(e) => e.stopPropagation()} ref={ref}>
         <div className="sheet__grip" />
         <h2 className="sheet__title">{title} gekocht – was ist übrig?</h2>
-        <p className="small muted">Übrige Portionen kommen als „Vorgekocht“ in die Speisekammer: Mashi erinnert dich, bevor sie weg müssen, und du kannst sie einfrieren.</p>
         {/* derselbe Regler wie bei den Portionen im Rezept */}
         <div className="leftover__stepper">
           <Stepper value={left} min={0} max={servings} onChange={setLeft} label="Portionen übrig" />

@@ -183,7 +183,6 @@ export function ImageCropper({ src, initial, onDone, onCancel, aspect = CARD_ASP
               <span className="muted small">Zoom</span>
               <input type="range" min={1} max={MAX_ZOOM} step={0.01} value={v.zoom} onChange={(e) => zoomAt(Number(e.target.value))} aria-label="Zoom" />
             </label>
-            <p className="muted small">Bild mit dem Finger verschieben, mit zwei Fingern oder dem Regler zoomen. So erscheint es im Kochbuch.</p>
           </>
         )}
         <div className="cropper__actions">

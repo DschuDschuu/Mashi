@@ -90,14 +90,13 @@ export function InventoryScreen() {
     if (changed) {
       const undo = applyInventory({ amounts, remove, refill, units });
       toast(`Inventur übernommen${refill.length ? ` – ${refill.length} auf der Einkaufsliste` : ''}`, { label: 'Rückgängig', run: undo });
-    } else toast('Alles stimmt – nichts geändert');
+    }
     navigate('/speisekammer', { replace: true });
   };
 
   return (
     <main className="screen inventory">
       <TopBar title="Inventur" backTo="/speisekammer" />
-      <p className="muted small">Einmal durchgehen, was im Schrank, im Keller und im Tiefkühler steht – und welche Gewürze zur Neige gehen. Übernommen wird erst mit „Fertig“.</p>
       <label className="inventory__toggle small">
         <input type="checkbox" checked={fridge} onChange={(e) => setFridge(e.target.checked)} /> Auch Kühlschrank
       </label>

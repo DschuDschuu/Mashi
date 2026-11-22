@@ -150,7 +150,7 @@ export function PrepSheet({ sideId, base, household, onClose }: { sideId: string
         <h2 className="sheet__title">{side?.name}: so bereitest du es zu</h2>
         <label className="field">Zubereitung<input value={text} onChange={(e) => setText(e.target.value)} placeholder="z. B. halbieren und kurz mitbraten" maxLength={120} /></label>
         <div className="row-between">
-          <span>Minuten <small className="muted">0 = nur dazu/drüber</small></span>
+          <span>Minuten</span>
           <Stepper small min={0} max={90} value={minutes} onChange={setMinutes} label="Minuten" />
         </div>
         {base && (
@@ -161,7 +161,6 @@ export function PrepSheet({ sideId, base, household, onClose }: { sideId: string
         {/* gilt überall, nicht nur bei dieser Grundlage – darum unter dem Haken */}
         <label className="field">Kaufst du als
           <input value={food} onChange={(e) => setFood(e.target.value)} placeholder={standard} list="ingredient-names" maxLength={60} />
-          <small className="muted">Für Einkauf, Vorrat und Nährwerte, überall – leer: {standard}</small>
         </label>
         <IngredientNames />
         <div className="variants__actions">

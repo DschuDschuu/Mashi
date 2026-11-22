@@ -56,10 +56,7 @@ export function OffersScreen() {
   return (
     <main className="screen screen--tabbed">
       <TopBar title="Einkauf planen" backTo="/plan" intro="angebote" />
-      <p className="muted small">
-        {hint === 'morgen' ? 'Morgen ist Einkaufstag. ' : hint === 'heute' ? 'Heute ist Einkaufstag. ' : ''}
-        Füg die Angebote deiner Märkte ein – Mashi sucht passende Rezepte aus deinem Kochbuch.
-      </p>
+      {hint && <p className="muted small">{hint === 'morgen' ? 'Morgen ist Einkaufstag.' : 'Heute ist Einkaufstag.'}</p>}
       {/* sind schon Angebote da, steht das Ergebnis vorn – Einfügen klappt auf */}
       <AddOffers key={offers.length ? 'zu' : 'auf'} startOpen={!offers.length} />
       {offers.length > 0 && <OfferMatches offers={offers} />}
@@ -179,7 +176,7 @@ function AddOffers({ startOpen }: { startOpen: boolean }) {
                   : 'Darin hat Mashi keine Angebote gefunden.'}
                 {preview.unread.length > 0 && <span className="muted"> – {preview.unread.slice(0, 3).join(' · ')}{preview.unread.length > 3 ? ' …' : ''}</span>}
               </p>
-              {text.length > MAX_OFFER_TEXT && <p className="small muted">Der Text ist lang – die KI liest nur den Anfang. Lange Prospekte besser in Teilen einfügen.</p>}
+              {text.length > MAX_OFFER_TEXT && <p className="small muted">Der Text ist lang – die KI liest nur den Anfang.</p>}
               <button className="btn btn--soft btn--sm" disabled={busy} onClick={() => void readWithKi()}>
                 <Icon name="sparkles" size={16} /> {busy ? 'Die KI liest …' : 'Mit KI lesen'}
               </button>
@@ -216,7 +213,7 @@ function OfferMatches({ offers }: { offers: Offer[] }) {
     <Section title="Passt zu den Angeboten" icon="sparkles">
       <div className="offer-matches">
         {matches.length === 0
-          ? <p className="muted small">Noch nutzt kein Rezept aus deinem Kochbuch diese Angebote – vielleicht eine neue Idee?</p>
+          ? <p className="muted small">Noch nutzt kein Rezept aus deinem Kochbuch diese Angebote.</p>
           : <ul className="list">{matches.map((m) => <MatchRow key={m.recipe.id} match={m} inPlan={plan.items.some((i) => i.recipeId === m.recipe.id)} />)}</ul>}
         <button className="btn btn--soft btn--block" onClick={() => navigate('/neu/ki?angebote=1')}>
           <Icon name="sparkles" size={18} /> Neue Idee mit den Angeboten

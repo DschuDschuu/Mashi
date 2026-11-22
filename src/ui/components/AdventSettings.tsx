@@ -12,7 +12,7 @@ import { shrinkPhoto } from './ImageCropper';
 
 /**
  * Adventskalender in den Einstellungen (Julia: „Hochladen und Ändern nicht beim Adventskalender“): befüllen (Julias
- * JSON-Datei, Vorschau mit Fehlern/Hinweisen, dann übernehmen – mit Rückgängig), neu befüllen, Fotos ergänzen, Format.
+ * JSON-Datei, Vorschau mit Fehlern/Hinweisen, dann übernehmen – mit Rückgängig), neu befüllen, Fotos ergänzen.
  * Die Adventsseite selbst zeigt nur noch die Türchen.
  */
 export function AdventSettings() {
@@ -35,7 +35,6 @@ export function AdventSettings() {
   const apply = async (doors: AdventDoor[], images: Record<number, string>) => {
     if (filled && !stale && !(await ask({
       title: 'Kalender neu befüllen?',
-      text: 'Die Türchen bekommen die Rezepte aus der neuen Datei. Was du schon geöffnet oder gespeichert hast, bleibt.',
       confirm: 'Neu befüllen',
     }))) return;
     setBusy(true);
@@ -56,10 +55,8 @@ export function AdventSettings() {
     try {
       const json = JSON.stringify(exportAdvent(cal, await loadDoorImages()), null, 2);
       const year = cal.year || new Date().getFullYear();
-      const res = await shareJsonFile(json, `mashi-adventskalender-${year}`, `Adventskalender ${year} aus Mashi`,
+      await shareJsonFile(json, `mashi-adventskalender-${year}`, `Adventskalender ${year} aus Mashi`,
         'So kommt er in dein Mashi: Einstellungen → Adventskalender → „Kalender befüllen …“ → diese Datei wählen.');
-      if (res === 'geteilt') toast('Adventskalender geteilt');
-      else if (res === 'heruntergeladen') toast('Datei gespeichert – weiterschicken z. B. per WhatsApp; eingespielt wird unter Einstellungen → Adventskalender');
     } finally {
       setBusy(false);
     }
@@ -67,13 +64,7 @@ export function AdventSettings() {
 
   return (
     <div className="panel advent-fill" id="adventskalender">
-      <p className="small muted">
-        {!filled
-          ? 'Spiel eine Datei mit 24 Rezepten ein – eins pro Türchen. Vom 1. bis 24. Dezember geht jeden Tag eins auf; ins Kochbuch kommt ein Rezept erst, wenn du es am Türchen speicherst.'
-          : stale
-            ? 'Der Kalender ist vom letzten Jahr – spiel die Rezepte für diesen Dezember ein.'
-            : `${cal.doors.length} Türchen befüllt. Eine neue Datei ersetzt die Rezepte – Geöffnetes und Gespeichertes bleibt.`}
-      </p>
+      {filled && <p className="small muted">{stale ? 'Der Kalender ist vom letzten Jahr.' : `${cal.doors.length} Türchen befüllt.`}</p>}
       <div className="advent-fill__buttons">
         <button type="button" className={`btn ${filled && !stale ? 'btn--ghost' : 'btn--primary'}`} disabled={busy} onClick={() => input.current?.click()}>
           <Icon name="file" size={18} /> {filled ? 'Neu befüllen …' : 'Kalender befüllen …'}
@@ -124,6 +115,7 @@ export function AdventSettings() {
         </div>
       ))}
 
+      {/* eingeklappt und nur zum Nachschlagen (wie bei der Rezept-Datei) – ohne sie lässt sich keine Datei bauen */}
       <details className="advent-fill__format small">
         <summary>Wie muss die Datei aussehen?</summary>
         <p>Eine JSON-Liste mit einem Eintrag je Tag: <code>tag</code> (1–24), <code>titel</code>, <code>portionen</code>,

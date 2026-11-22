@@ -14,7 +14,7 @@ const DetectorImpl = (globalThis as { BarcodeDetector?: DetectorClass }).Barcode
  */
 export function BarcodeScanner({ onCode, onClose }: { onCode: (ean: string) => void; onClose: () => void }) {
   const video = useRef<HTMLVideoElement>(null);
-  const [status, setStatus] = useState<string>(DetectorImpl ? 'Kamera wird gestartet …' : 'Dieses Gerät kann Barcodes nicht direkt lesen – tippe die Nummer unter dem Strichcode ab.');
+  const [status, setStatus] = useState<string>(DetectorImpl ? 'Kamera wird gestartet …' : 'Dieses Gerät kann Barcodes nicht direkt lesen.');
   const [typed, setTyped] = useState('');
   // Immer die aktuelle Rückmeldung nutzen, ohne die Kamera bei jedem Neuzeichnen neu zu starten
   const report = useRef(onCode);
@@ -46,7 +46,7 @@ export function BarcodeScanner({ onCode, onClose }: { onCode: (ean: string) => v
           }
         }, 250);
       } catch {
-        setStatus('Die Kamera ließ sich nicht öffnen (Zugriff erlaubt?). Du kannst die Nummer auch abtippen.');
+        setStatus('Die Kamera ließ sich nicht öffnen (Zugriff erlaubt?).');
       }
     })();
     return () => {

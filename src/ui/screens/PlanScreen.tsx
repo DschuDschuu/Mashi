@@ -89,7 +89,7 @@ export function PlanScreen() {
     const c = cookingContent(r, recipes);
     setPicking(false);
     more.ask(c, c.servings, (amounts) => {
-      if (addToPlan(r.id, c.servings, {}, amounts)) toast(`„${c.title}“ eingeplant`);
+      addToPlan(r.id, c.servings, {}, amounts);
     });
   };
 
@@ -97,7 +97,7 @@ export function PlanScreen() {
   const weekPart = plan.week ? <WeekPlan week={plan.week} onPickDish={(slot, replace) => setDayPick({ ...slot, replace })} /> : (
     <section className="week-start">
       <h2 className="h3">Diese Woche</h2>
-      <p className="small muted">Noch keine Abende geplant. Plan die Woche mit Grundlagen zum Vorkochen – oder leg ein Gericht auf einen Tag (im Kochbuch: „Zum Wochenplan“).</p>
+      <p className="small muted">Noch keine Abende geplant.</p>
       <button type="button" className="btn btn--primary" onClick={() => navigate('/plan/woche')}><Icon name="calendar" size={18} /> Woche planen</button>
     </section>
   );
@@ -109,7 +109,7 @@ export function PlanScreen() {
       {(items.length > 0 || plan.cooked.length > 0) && (
       <Section icon="calendar" title={`Ohne festen Tag · ${items.length} ${items.length === 1 ? 'Gericht' : 'Gerichte'} · ${portionCount(portions)}`}>
         {items.length === 0 ? (
-          <p className="small muted">Gerichte ohne festen Tag stehen hier – leg sie später auf einen freien Abend.</p>
+          <p className="small muted">Gerichte ohne festen Tag stehen hier.</p>
         ) : (
           <ul className="list plan-list">
             {items.map(({ recipe, servings, cooked, variants, amounts }) => (
@@ -275,7 +275,6 @@ function RecipePicker({ title = 'Gericht auswählen', recipes, planned, suggesti
         <Icon name="book" size={26} />
         <div className="stack stack--tight">
           <p>Noch keine Rezepte, die du einplanen kannst.</p>
-          <p className="small muted">Leg eins an oder spiel eine Sicherung ein (Einstellungen → Sicherung). KI-Ideen zuerst „Zum Testen“ vormerken.</p>
           <button className="btn btn--soft btn--sm" onClick={() => { onClose(); navigate('/neu/manuell'); }}>Rezept anlegen</button>
         </div>
       </div>
@@ -525,7 +524,7 @@ function BaseSupplyLine({ list, recipeId, servings }: { list?: BaseSupply[]; rec
         const fit = Math.floor((servings * s.have) / s.need + 1e-9);
         return (
           <span key={s.baseId} className="small plan-base--short" role="note">
-            <span><Icon name="info" size={13} /> Nur {formatAmount(s.have)} von {portions(s.need)} {s.name} vorgekocht – der Rest kommt auf die Einkaufsliste.</span>
+            <span><Icon name="info" size={13} /> Nur {formatAmount(s.have)} von {portions(s.need)} {s.name} vorgekocht.</span>
             {fit >= 1 && (
               <button type="button" className="link small" onClick={() => {
                 setPlanServings(recipeId, fit);

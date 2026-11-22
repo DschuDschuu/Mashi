@@ -32,12 +32,7 @@ function Feedback({ recipe }: { recipe: Recipe }) {
     if (!rating) return;
     if (photo) setImage(recipe.id, photo);
     submitTest(recipe.id, { rating, note, content: draft, nextStatus: next === 'kochbuch' ? 'bewaehrt' : next });
-    if (next === 'kochbuch') {
-      adoptToCookbook(recipe.id);
-      toast('Ins Kochbuch übernommen');
-    } else {
-      toast(next === 'bewaehrt' ? 'Als bewährt markiert' : 'Gespeichert – bleibt zum Testen');
-    }
+    if (next === 'kochbuch') adoptToCookbook(recipe.id);
     navigate(`/rezept/${recipe.id}`, { replace: true });
   };
 
@@ -72,7 +67,6 @@ function Feedback({ recipe }: { recipe: Recipe }) {
           </FileButton>
           {cropping && <ImageCropper src={cropping} onCancel={() => setCropping(null)}
             onDone={({ url, original, crop }) => { setPhoto({ kind: 'url', url, original, crop }); setCropping(null); }} />}
-          {!photo && <p className="muted small">Optional. Wird zum Bild des Rezepts – so sieht es bei dir aus.</p>}
         </div>
       </section>
 
@@ -81,7 +75,6 @@ function Feedback({ recipe }: { recipe: Recipe }) {
           <h2 className="h3">Rezept anpassen</h2>
           <button className="link" onClick={() => setEditing(!editing)}>{editing ? 'Fertig' : 'Mengen & Schritte ändern'}</button>
         </div>
-        {!editing && changes.length === 0 && <p className="muted small">Hast du etwas anders gemacht? Halte es hier fest – die Ursprungsversion bleibt erhalten.</p>}
         {editing && (
           <>
             <IngredientEditor

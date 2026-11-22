@@ -115,7 +115,6 @@ export function AiCreateScreen({ initialPrompt = '', offers: fromOffers = false 
         <div className="thinking">
           <LineArt motif="bowl" />
           <p className="handwritten">{again?.auto ? 'Ich überlege neu …' : 'Aus deinen Zutaten wird ein Rezept …'}</p>
-          <p className="muted small">Das Bild entsteht gleich danach.</p>
         </div>
       </main>
     );
@@ -124,8 +123,6 @@ export function AiCreateScreen({ initialPrompt = '', offers: fromOffers = false 
   return (
     <main className="screen">
       <TopBar title="Rezept mit KI erstellen" confirmBack={servings || devices.length || wishes.length || time.length ? 'Verwerfen? Deine Auswahl geht verloren.' : undefined} />
-
-      {again && !again.auto && <p className="small muted">Dein Auftrag von eben – ändere, was du möchtest. Die neue Idee ersetzt die alte.</p>}
 
       <label className="field">
         <span className="field__label-lg">Beschreibe deine Zutaten oder deinen Wunsch</span>
@@ -149,12 +146,11 @@ export function AiCreateScreen({ initialPrompt = '', offers: fromOffers = false 
         <h3 className="small muted">Wünsche</h3>
         <ChipSelect options={WISHES.map((w) => ({ value: w, label: w }))} selected={wishes} onChange={setWishes} />
         {real && (
-          <Switch checked={withPantry} onChange={setWithPantry} label="Meinen Vorrat einbeziehen"
-            hint="Die KI nutzt gern, was du schon hast – dann musst du weniger einkaufen." />
+          <Switch checked={withPantry} onChange={setWithPantry} label="Meinen Vorrat einbeziehen" />
         )}
         {real && offers.length > 0 && (
           <Switch checked={withOffers} onChange={setWithOffers} label="Angebote der Woche einbeziehen"
-            hint={`${offers.length} Angebote – die KI nimmt ein, zwei davon als Hauptzutaten.`} />
+            hint={`${offers.length} Angebote`} />
         )}
         {real && (
           <Switch checked={withMacros} onChange={setWithMacros} label="Mein Makro-Ziel einbeziehen"
@@ -174,14 +170,8 @@ export function AiCreateScreen({ initialPrompt = '', offers: fromOffers = false 
         <Icon name="sparkles" size={20} /> {empty ? 'Überrasch mich' : 'Rezeptidee generieren'}
       </button>
 
-      <div className="tip tint-sky">
-        <Icon name="bulb" size={20} />
-        <p><strong>Tipp:</strong> Je genauer du Zutaten und Vorlieben beschreibst, desto besser passt die Idee. Nährwerte berechnet Mashi anschließend selbst aus den Zutaten.</p>
-      </div>
-
       <div className="ai-art" aria-hidden="true">
         <LineArt motif="bowl" />
-        <p className="handwritten">Aus deinen Zutaten wird ein Rezept – mit Bild!</p>
       </div>
     </main>
   );

@@ -58,7 +58,7 @@ export function ShoppingScreen() {
       {all.length === 0 ? (
         <Empty icon="cart">
           <span>
-            Noch nichts einzukaufen – plane Gerichte oder schreib oben selbst etwas auf.{' '}
+            Noch nichts einzukaufen.{' '}
             <button className="link" onClick={() => navigate('/plan', { replace: true })}>Zum Wochenplan</button>
           </span>
         </Empty>
@@ -72,7 +72,6 @@ export function ShoppingScreen() {
               </button>
             ))}
           </div>
-          {view === 'basics' && <p className="muted small">Öl, „Immer im Haus“ und „Gewürze“ (einstellbar unter Speisekammer → Meine Lebensmittel) – hast du meist da. Abhaken, falls doch etwas fehlt.</p>}
           {open.length === 0 && (
             <p className="muted">
               Alles erledigt.{' '}
@@ -114,7 +113,6 @@ export function ShoppingScreen() {
           {open.length > 0 && view === 'liste' && (
             <p className="muted small center">
               <button className="link" onClick={() => navigate('/speisekammer/bon')}>Eingekauft? Kassenbon importieren</button>
-              <br />Das hakt Gekauftes hier ab.
             </p>
           )}
         </>

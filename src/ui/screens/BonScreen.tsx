@@ -35,24 +35,18 @@ export function BonScreen({ id }: { id: string }) {
     return (
       <main className="screen">
         <TopBar title="Kassenbon" backTo="/einkaeufe" />
-        <Empty icon="cart"><span>Diesen Bon gibt es nicht mehr – Mashi hebt die letzten 100 auf.</span></Empty>
+        <Empty icon="cart"><span>Diesen Bon gibt es nicht mehr.</span></Empty>
       </main>
     );
   }
   const taken = bon.lines.filter((l) => !l.skip).length;
-  const saved = bon.savings ? bon.savings.offers + bon.savings.lidlPlus + bon.savings.mhd : 0;
   return (
     <main className="screen">
       <TopBar title={`Einkauf vom ${bonTitle(bon)}`} backTo="/einkaeufe" />
       <IngredientNames />
-      {/* wie auf der Preise-Seite (Julia): Lidl Plus, Angebote, MHD-Ware – für diesen einen Einkauf */}
-      <div className="savings__tiles">
-        <div className="stat tint-mint"><span className="stat__label">Lidl Plus</span><strong className="stat__value">{euro(bon.savings?.lidlPlus ?? 0)}</strong></div>
-        <div className="stat tint-butter"><span className="stat__label">Angebote</span><strong className="stat__value">{euro(bon.savings?.offers ?? 0)}</strong></div>
-        <div className="stat tint-peach"><span className="stat__label">MHD-Ware</span><strong className="stat__value">{euro(bon.savings?.mhd ?? 0)}</strong></div>
-      </div>
+      {/* die Ersparnis steht nur noch auf der Preise-Seite (Julia: nicht an vier Stellen) */}
       <p className="muted small">
-        {taken} Artikel{bon.total !== undefined && <> · zu zahlen <strong>{euro(bon.total)}</strong></>}{saved > 0 && <> · zusammen gespart <strong>{euro(saved)}</strong></>}
+        {taken} Artikel{bon.total !== undefined && <> · zu zahlen <strong>{euro(bon.total)}</strong></>}
       </p>
       <ul className="bonview">
         {/* Übersprungenes unten (Julia) – i bleibt die Stelle im Bon (für Korrekturen) */}
@@ -83,7 +77,7 @@ export function BonScreen({ id }: { id: string }) {
                 </span>
                 <span className="bonview__price">{linePrice(l)}</span>
                 <span className="small muted bonview__sub">
-                  {l.skip ? 'übersprungen – antippen zum Aufnehmen'
+                  {l.skip ? 'übersprungen'
                     : [l.bon, lineAmount(l), perKg(l), l.freeze ? 'eingefroren' : '', l.reduced ? 'MHD-Ware' : '', l.priceOnly ? 'nur Preis' : ''].filter(Boolean).join(' · ')}
                 </span>
                 <Icon name={l.skip ? 'plus' : 'pencil'} size={14} />
@@ -94,7 +88,7 @@ export function BonScreen({ id }: { id: string }) {
       </ul>
       {/* Julia: Bon doppelt eingelesen (nicht wiedererkannt) – die Mengen wieder raus, ohne selbst zu rechnen */}
       {bon.noStock ? (
-        <p className="small muted">Doppelt eingelesen – die Mengen dieses Bons sind nicht im Vorrat. Korrekturen ändern nur Preise.</p>
+        <p className="small muted">Doppelt eingelesen – die Mengen dieses Bons sind nicht im Vorrat.</p>
       ) : (
         <button type="button" className="link small" onClick={async () => {
           if (!(await ask({
@@ -256,7 +250,7 @@ function LineEdit({ line, include, onDone }: {
       {include?.stockable && (
         <label className="bonrow__mhd">
           <input type="checkbox" checked={toStock} onChange={(e) => setToStock(e.target.checked)} />
-          <span><strong>Auch in die Speisekammer</strong> – sonst nur der Preis (bei älteren Bons meist schon verbraucht)</span>
+          <span><strong>Auch in die Speisekammer</strong></span>
         </label>
       )}
       {error && <p className="error" role="alert">{error}</p>}

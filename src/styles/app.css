@@ -346,8 +346,6 @@ p { margin: 0; }
 
 .detail { position: relative; margin-top: -24px; background: var(--bg); border-radius: 24px 24px 0 0; padding: 20px var(--gutter) 8px; display: flex; flex-direction: column; gap: 12px; }
 .detail__title { font-size: var(--fs-xl); line-height: 1.2; }
-.detail__tags { color: var(--primary-text); font-weight: 600; font-size: var(--fs-sm); margin-top: -6px; }
-.detail__desc { color: var(--ink-2); font-size: var(--fs-md); }
 .facts { display: flex; flex-wrap: wrap; gap: 6px 18px; color: var(--ink-2); font-size: var(--fs-sm); }
 .facts span { display: inline-flex; align-items: center; gap: 6px; }
 .facts svg { color: var(--ink-3); }
@@ -1091,7 +1089,6 @@ p { margin: 0; }
 .advent-sheet__photo { display: block; width: 100%; aspect-ratio: 4 / 3; max-height: 260px; object-fit: cover; border-radius: var(--r); margin: 6px 0 10px; }
 .advent-sheet__day { display: flex; align-items: center; gap: 6px; margin: 4px 0 2px; font-size: var(--fs-sm); font-weight: 700; color: var(--danger-ink); }
 .advent-sheet .sheet__title { margin-bottom: 4px; }
-.advent-sheet__desc { margin: 0 0 4px; color: var(--ink-2); }
 .advent-sheet__head { margin: 18px 0 8px; font-size: var(--fs-md); }
 .advent-sheet__tip { display: flex; align-items: flex-start; gap: 8px; margin: 16px 0 0; padding: 10px 12px; border-radius: var(--r-sm); background: var(--butter); font-size: var(--fs-sm); }
 .advent-sheet__tip > svg { flex: none; color: var(--art); }
@@ -2119,6 +2116,7 @@ p { margin: 0; }
 /* Bausteine gefunden (BlockHints) – wie „Zutaten vereinheitlichen“, die Knöpfe rechts, auf 375 px darunter */
 .block-hints__cta { margin: 8px auto 12px; }
 .block-hints__what { flex: 1 1 12rem; min-width: 0; overflow-wrap: anywhere; }
+.block-hints__detail { display: block; margin-top: 2px; }
 .block-hints__actions { display: flex; align-items: center; gap: 14px; margin-left: auto; }
 .foods-panel .panel > .favchip { align-self: flex-start; }
 
@@ -2153,8 +2151,6 @@ p { margin: 0; }
 
 /* Vorrat: Sorte wählen */
 .sortpick { display: flex; flex-direction: column; gap: 6px; }
-.pantry-offer { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: var(--r-sm); background: var(--primary-soft); }
-.pantry-offer p { margin: 0; }
 
 /* Plan-Karte: Nährwerte in EINER Zeile, die Sorte/Marke als eigene Zeile darunter */
 .plan-list__meta .dishnut { flex-direction: column; align-items: flex-start; flex-wrap: nowrap; row-gap: 0; }
@@ -2476,7 +2472,10 @@ details.cost-line[open] > summary::after { transform: rotate(-90deg); }
 /* lange drücken: kein Text markieren, kein Kontextmenü des Browsers */
 .card { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
 .quick-sheet__actions { display: flex; flex-direction: column; gap: 8px; }
-.price-view { margin-bottom: 4px; }
+.price-view { margin-bottom: 4px; display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.price-view__sort { flex: none; }
+/* in der gemeinsamen Zeile ohne die Rand-Ausbuchtung von .segments – sonst rutscht der Sortier-Knopf über den Rand */
+.price-view .segments { margin-inline: 0; padding-inline: 0; min-width: 0; }
 
 /* „Reste mitverbrauchen / Läuft bald ab – mehr verwenden?“ */
 .use-more__item { padding: 10px 0; border-top: 1px solid var(--line); }

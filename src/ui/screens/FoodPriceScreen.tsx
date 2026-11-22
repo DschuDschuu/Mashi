@@ -179,10 +179,6 @@ export function FoodPriceScreen({ name, title }: { name: string; title: string }
                       <span className="price-legend__ring" aria-hidden="true" /> mit Rabatt · <span className="price-legend__diamond" aria-hidden="true" /> MHD-Ware
                     </p>
                   )}
-                  {/* je Stück neben je kg: mit Packungsgröße an der Sorte wird es vergleichbar */}
-                  {u === 'Stück' && unitCount('g') > 0 && (
-                    <p className="small muted">Je Stück, weil Mashi die Packungsgröße nicht kennt – trag sie bei der Sorte ein, dann ist der Preis je kg vergleichbar.</p>
-                  )}
                 </div>
               </Section>
             );
@@ -191,7 +187,6 @@ export function FoodPriceScreen({ name, title }: { name: string; title: string }
           {unsorted.length > 0 && sorts.length > 0 && (
             <Section title="Ältere Preise ohne Sorte" icon="clock">
               <div className="price-card stack stack--tight">
-                <p className="small muted">Eingelesen, bevor Mashi Bons gespeichert hat. Welche Sorte war das?</p>
                 {unsorted.length > 1 && (
                   <div className="old-prices__all">
                     <span className="small">Alle zu</span>
@@ -231,10 +226,6 @@ export function FoodPriceScreen({ name, title }: { name: string; title: string }
                 })}
               </ul>
             </Section>
-          )}
-          {/* ältere Einkäufe (vor dem Speichern der Bons) gibt es nur als Regalpreis */}
-          {!purchases.length && (
-            <p className="small muted">Ältere Einkäufe kennt Mashi nur mit dem Regalpreis – ab dem nächsten Bon steht hier jeder Einkauf mit Rabatt.</p>
           )}
         </>
       )}

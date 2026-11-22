@@ -3,7 +3,6 @@ import { normalizeName } from '../../domain/nutrition/localFoods';
 import { MY_PRODUCTS_PROVIDER } from '../../domain/nutrition/myProducts';
 import { setFavoriteVariant, setNoNutrition, useNoNutrition } from '../../data/store';
 import { Icon } from './Icon';
-import { toast } from '../toast';
 import type { MatchStatus, NutritionResult } from '../../domain/nutrition/types';
 import { gram } from '../format';
 import { noticeableRange } from '../../domain/nutrition/variants';
@@ -36,7 +35,7 @@ export function NutritionTiles({ n }: { n: NutritionResult }) {
         <div className="tile"><strong>{gram(p.protein)}</strong><span>Eiweiß</span></div>
         <div className="tile"><strong>{gram(p.fat)}</strong><span>Fett</span></div>
       </div>
-      {partial && <p className="small muted">Nur die {partial.known} von {partial.of} Zutaten, bei denen Mashi die Werte kennt – bei den übrigen fehlen sie.</p>}
+      {partial && <p className="small muted">Nur die {partial.known} von {partial.of} Zutaten, bei denen Mashi die Werte kennt.</p>}
       {/* unter dem Kasten, nicht darin (Julia: wirkte im weißen Rahmen fehl am Platz) */}
       <VariantRange n={n} />
     </>
@@ -95,13 +94,11 @@ export function NutritionDetails({ n, servings }: { n: NutritionResult; servings
           </tbody>
         </table>
       ) : (
-        <p className="muted">Zu viele Zutaten konnten nicht zugeordnet werden. Mashi zeigt lieber keine Werte als erfundene.</p>
+        <p className="muted">Zu viele Zutaten konnten nicht zugeordnet werden.</p>
       )}
       {partial && <p className="small muted">Mindestwerte: nur die {partial.known} von {partial.of} Zutaten, bei denen Mashi die Werte kennt.</p>}
 
       <PerIngredient n={n} />
-
-      <p className="hint small">Nährwerte sind abhängig von den verwendeten Produkten und können abweichen.</p>
     </div>
   );
 }
@@ -134,7 +131,6 @@ function FavoriteChips({ item }: { item: NutritionResult['items'][number] }) {
             aria-label={on ? `${v.name}: Favorit zurücknehmen` : `${v.name} als Favorit`}
             onClick={() => {
               setFavoriteVariant(all, on ? null : v.id);
-              toast(on ? 'Favorit zurückgenommen – Rezepte rechnen wieder mit dem Durchschnitt' : `★ „${v.name}“ ist dein Favorit – gilt für alle Rezepte`);
             }}>
             <Icon name="star" size={13} filled={on} /> {v.name} · {Math.round(v.per100g.kcal)} kcal
           </button>

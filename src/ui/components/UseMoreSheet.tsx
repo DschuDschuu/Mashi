@@ -48,7 +48,6 @@ export function UseMoreSheet({ uses, initial = {}, onDone, onClose }: {
       <div className="sheet use-more" role="dialog" aria-modal="true" aria-label="Mehr davon verwenden" onClick={(e) => e.stopPropagation()} ref={ref}>
         <div className="sheet__grip" />
         <h2 className="sheet__title">{adjusting ? 'Wie viel verwendest du?' : uses.every((u) => u.until) ? 'Läuft bald ab – mehr davon verwenden?' : 'Reste mitverbrauchen?'}</h2>
-        <p className="small muted">Nur für dieses Mal – das Rezept bleibt, wie es ist.</p>
         {uses.map((u) => {
           const step = stepOf(u);
           const min = Math.ceil(u.need / step - 1e-6) * step;

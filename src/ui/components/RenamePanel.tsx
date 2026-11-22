@@ -1,42 +1,76 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import { blockHints } from '../../domain/blockHints';
 import { applyRenames, renameKey, renameSuggestions, type Rename } from '../../domain/renames';
 import type { Recipe } from '../../domain/types';
 import { currentContent } from '../../domain/recipe';
-import { dismissRename, saveContent } from '../../data/store';
-import { toast } from '../toast';
+import { dismissRename, saveContent, usePantry } from '../../data/store';
 import { useRenameOptions } from '../useRenames';
 import { useSheet } from '../useSheet';
+import { toast } from '../toast';
+import { BlockHints } from './BlockHints';
 import { Icon } from './Icon';
 
-/**
- * „Zutaten vereinheitlichen“: alle Namensvorschläge eines Rezepts auf einen Blick – abhaken,
- * übernehmen, eine neue Version. Nur sichtbar, wenn es etwas vorzuschlagen gibt.
- */
-export function RenamePanel({ recipe }: { recipe: Recipe }) {
+const cap = (s: string) => s.replace(/(^|[\s-])(\p{L})/gu, (_m, sep: string, ch: string) => sep + ch.toLocaleUpperCase('de-DE'));
+
+type Group = { recipe: Recipe; list: Rename[] };
+
+/** Namensvorschläge je Rezept – archivierte nicht */
+function useRenameGroups(recipes: readonly Recipe[]): Group[] {
   const options = useRenameOptions();
-  const list = renameSuggestions(currentContent(recipe), options);
+  return useMemo(() => recipes.filter((r) => !r.archivedAt)
+    .map((recipe) => ({ recipe, list: renameSuggestions(currentContent(recipe), options) }))
+    .filter((g) => g.list.length > 0), [recipes, options]);
+}
+
+/**
+ * „Rezepte aufräumen“ in den Einstellungen (Julia: nicht mehr als Knopf in jedem Rezept und im Kochbuch): Zutaten
+ * vereinheitlichen über alle Rezepte, gefundene Bausteine (mit „Drin“ und „Ähnlich“) und die ausgeblendeten Namensvorschläge.
+ */
+export function RecipeTidy({ recipes }: { recipes: readonly Recipe[] }) {
+  const groups = useRenameGroups(recipes);
+  const hints = useMemo(() => blockHints(recipes), [recipes]);
+  const dismissed = usePantry().renameDismissed ?? [];
+  if (!groups.length && !hints.length && !dismissed.length) return <p className="small muted">Nichts aufzuräumen.</p>;
+  return (
+    <div className="stack">
+      <RenameAll groups={groups} />
+      <BlockHints recipes={recipes} all />
+      <DismissedRenames keys={dismissed} />
+    </div>
+  );
+}
+
+/** Alle Namensvorschläge auf einen Blick – abhaken, übernehmen; je Rezept eine neue Version */
+function RenameAll({ groups }: { groups: Group[] }) {
   const [open, setOpen] = useState(false);
-  if (!list.length) return null;
+  if (!groups.length) return null;
+  const n = groups.reduce((t, g) => t + g.list.length, 0);
   return (
     <>
       <button type="button" className="rename-cta" onClick={() => setOpen(true)}>
-        <Icon name="sparkles" size={16} /> {list.length === 1 ? '1 Zutat vereinheitlichen' : `${list.length} Zutaten vereinheitlichen`}
+        <Icon name="sparkles" size={16} /> {n === 1 ? '1 Zutat' : `${n} Zutaten`} vereinheitlichen{groups.length > 1 ? ` – in ${groups.length} Rezepten` : ''}
       </button>
-      {open && <RenameSheet recipe={recipe} list={list} onClose={() => setOpen(false)} />}
+      {open && <RenameSheet groups={groups} onClose={() => setOpen(false)} />}
     </>
   );
 }
 
-function RenameSheet({ recipe, list, onClose }: { recipe: Recipe; list: Rename[]; onClose: () => void }) {
+const keyOf = (g: Group, r: Rename) => `${g.recipe.id}|${r.ingredientId}`;
+
+function RenameSheet({ groups, onClose }: { groups: Group[]; onClose: () => void }) {
   const ref = useSheet(onClose);
-  const [picked, setPicked] = useState(() => new Set(list.map((r) => r.ingredientId)));
-  const toggle = (id: string) => setPicked((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const [picked, setPicked] = useState(() => new Set(groups.flatMap((g) => g.list.map((r) => keyOf(g, r)))));
+  const toggle = (k: string) => setPicked((s) => { const n = new Set(s); if (n.has(k)) n.delete(k); else n.add(k); return n; });
   const apply = () => {
-    const chosen = list.filter((r) => picked.has(r.ingredientId));
-    if (chosen.length) {
-      saveContent(recipe.id, applyRenames(currentContent(recipe), chosen), 'Zutaten vereinheitlicht');
-      toast(`${chosen.length === 1 ? '1 Zutat' : `${chosen.length} Zutaten`} vereinheitlicht – neue Version`);
+    let count = 0;
+    for (const g of groups) {
+      const chosen = g.list.filter((r) => picked.has(keyOf(g, r)));
+      if (!chosen.length) continue;
+      saveContent(g.recipe.id, applyRenames(currentContent(g.recipe), chosen), 'Zutaten vereinheitlicht');
+      count += chosen.length;
     }
+    // hier sieht man die Rezepte nicht – darum sagen, was passiert ist
+    if (count) toast(`${count === 1 ? '1 Zutat' : `${count} Zutaten`} vereinheitlicht`);
     onClose();
   };
   return (
@@ -44,23 +78,44 @@ function RenameSheet({ recipe, list, onClose }: { recipe: Recipe; list: Rename[]
       <div className="sheet renames" role="dialog" aria-modal="true" aria-label="Zutaten vereinheitlichen" onClick={(e) => e.stopPropagation()} ref={ref}>
         <div className="sheet__grip" />
         <h2 className="sheet__title">Zutaten vereinheitlichen</h2>
-        <p className="small muted">Einheitliche Namen helfen Einkaufsliste, Vorrat und deinen Produkten. Die bisherige Fassung bleibt als Version erhalten.</p>
-        <ul className="renames__list">
-          {list.map((r) => (
-            <li key={r.ingredientId}>
-              <label>
-                <input type="checkbox" checked={picked.has(r.ingredientId)} onChange={() => toggle(r.ingredientId)} />
-                <span><s>{r.from}</s> → <strong>{r.to}</strong></span>
-              </label>
-              <button type="button" className="link link--muted" onClick={() => { dismissRename(renameKey(r.from)); toggle(r.ingredientId); }}>Nicht mehr vorschlagen</button>
-            </li>
-          ))}
-        </ul>
+        {groups.map((g) => (
+          <section key={g.recipe.id} className="renames__group">
+            {groups.length > 1 && <h3 className="h3">{currentContent(g.recipe).title}</h3>}
+            <ul className="renames__list">
+              {g.list.map((r) => (
+                <li key={r.ingredientId}>
+                  <label>
+                    <input type="checkbox" checked={picked.has(keyOf(g, r))} onChange={() => toggle(keyOf(g, r))} />
+                    <span><s>{r.from}</s> → <strong>{r.to}</strong></span>
+                  </label>
+                  <button type="button" className="link link--muted" onClick={() => { dismissRename(renameKey(r.from)); toggle(keyOf(g, r)); }}>Nicht mehr vorschlagen</button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))}
         <div className="variants__actions">
           <button type="button" className="btn btn--ghost" onClick={onClose}>Abbrechen</button>
           <button type="button" className="btn btn--primary" onClick={apply} disabled={!picked.size}>Übernehmen</button>
         </div>
       </div>
     </div>
+  );
+}
+
+/** Ausgeblendete Namensvorschläge – antippen, um sie wieder vorzuschlagen (früher unten in „Meine Lebensmittel“) */
+function DismissedRenames({ keys }: { keys: string[] }) {
+  if (!keys.length) return null;
+  return (
+    <details className="panel fold">
+      <summary className="small"><strong>Ausgeblendete Namensvorschläge ({keys.length})</strong></summary>
+      <div className="chips">
+        {keys.map((k) => (
+          <button key={k} type="button" className="afilter" onClick={() => dismissRename(k, true)} aria-label={`${cap(k)} wieder vorschlagen`}>
+            {cap(k)} <Icon name="refresh" size={14} />
+          </button>
+        ))}
+      </div>
+    </details>
   );
 }

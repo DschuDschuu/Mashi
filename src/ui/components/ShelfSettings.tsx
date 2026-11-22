@@ -43,7 +43,6 @@ export function ShelfSettings() {
     <details className="panel fold shelf">
       <TileSummary icon="clock" title="Haltbarkeit"
         text={own ? `Wie lange Frisches hält · ${own} eigene ${own === 1 ? 'Wert' : 'Werte'}` : 'Wie lange Frisches hält – für „Bald verbrauchen“'} />
-      <p className="muted small">Gilt ab dem Kauf, wenn am Vorrat kein Datum steht. Leer lassen = Mashis Richtwert (grau).</p>
 
       <div className="shelf__special">
         {SPECIAL.map((s) => (
@@ -60,10 +59,7 @@ export function ShelfSettings() {
             onSave={(v) => save({ kind: g.kind }, v)} />
         ))}
       </div>
-      <p className="small muted">
-        Gilt für alles dieser Art ohne eigenen Richtwert. Einzelne Lebensmittel stellst du in ihrer Kachel ein
-        {ownFoods > 0 && <> – {ownFoods === 1 ? '1 hat' : `${ownFoods} haben`} einen eigenen Wert</>}.
-      </p>
+      {ownFoods > 0 && <p className="small muted">{ownFoods === 1 ? '1 Lebensmittel hat' : `${ownFoods} Lebensmittel haben`} einen eigenen Wert.</p>}
       <button type="button" className="btn btn--soft btn--sm" onClick={() => navigate('/produkte')}>
         <Icon name="apple" size={16} /> Meine Lebensmittel
       </button>

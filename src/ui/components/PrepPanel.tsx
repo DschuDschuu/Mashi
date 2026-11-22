@@ -73,7 +73,7 @@ export function PrepPanel({ recipe, recipes }: { recipe: Recipe; recipes: readon
                 })}
               </ul>
             )
-            : <p className="small muted">Was machst du daraus? Spaghetti, Wraps, Ofenkartoffel … – leg die Abendessen hier an, dann plant Mashi sie in der Woche.</p>}
+            : <p className="small muted">Was machst du daraus? Spaghetti, Wraps, Ofenkartoffel …</p>}
           <button type="button" className="btn btn--soft btn--sm" onClick={() => navigate(`/neu?aus=${recipe.id}`)}>
             <Icon name="plus" size={16} /> Verwandlung anlegen
           </button>

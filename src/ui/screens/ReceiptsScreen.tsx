@@ -31,7 +31,6 @@ export function ReceiptsScreen() {
       {pantry.rules.length > 0 && (
         <details className="panel fold learned">
           <TileSummary icon="clipboard" title={`Gelernte Bon-Artikel (${pantry.rules.length})`} text="So übersetzt Mashi deine Kassenbons" />
-          <p className="muted small">Falsch gelernt? „Vergessen“ – beim nächsten Bon fragt Mashi wieder.</p>
           <ul className="learned__list">
             {[...pantry.rules].sort((a, b) => a.key.localeCompare(b.key, 'de')).map((r) => (
               <li key={r.key}>
@@ -63,13 +62,12 @@ function BonList({ bons }: { bons: SavedBon[] }) {
     <Section title={`Gespeicherte Kassenbons (${bons.length})`} icon="clipboard">
       <ul className="bonview">
         {shown.map((b) => {
-          const saved = b.savings ? b.savings.offers + b.savings.lidlPlus + b.savings.mhd : 0;
           return (
             <li key={b.id} className="bonview__line">
               <button type="button" className="bonview__open" onClick={() => navigate(`/preise/bon/${b.id}`)}>
                 <span className="bonview__name">{bonTitle(b)}</span>
                 <span className="bonview__price">{b.total !== undefined ? euro(b.total) : ''}</span>
-                <span className="small muted bonview__sub">{b.lines.filter((l) => !l.skip).length} Artikel{saved > 0 ? ` · gespart ${euro(saved)}` : ''}</span>
+                <span className="small muted bonview__sub">{b.lines.filter((l) => !l.skip).length} Artikel</span>
                 <Icon name="chevron" size={14} />
               </button>
             </li>

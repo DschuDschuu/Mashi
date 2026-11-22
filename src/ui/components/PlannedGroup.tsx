@@ -16,7 +16,7 @@ export function PlannedGroup({ dishes, urgent, open = false }: { dishes: DishRes
   const anyUrgent = dishes.some((d) => urgent.has(d.recipeId));
   return (
     <details className="panel fold planned" open={open}>
-      <TileSummary icon="archive" title={`Aus der Speisekammer (${dishes.length})`} text="Schon reserviert – wird beim Kochen abgezogen"
+      <TileSummary icon="archive" title={`Aus der Speisekammer (${dishes.length})`}
         alert={anyUrgent ? 'Enthält etwas, das bald weg muss' : undefined} />
       <ul className="planned__list">
         {dishes.map((d) => {

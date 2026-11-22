@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { DEFAULT_MACRO_GOAL, type MacroGoal } from '../../domain/nutrition/variants';
 import { setMacroGoal, useMacroGoal } from '../../data/store';
-import { toast } from '../toast';
 
 // kurz wie sonst in Mashi („KH“) – „Kohlenhydrate %“ bricht auf dem Handy um und verschiebt die Felder
 const FIELDS: [keyof MacroGoal, string, string][] = [['carbs', 'KH', 'Kohlenhydrate'], ['protein', 'Eiweiß', 'Eiweiß'], ['fat', 'Fett', 'Fett']];
@@ -20,14 +19,10 @@ export function MacroGoalSettings() {
   const save = () => {
     const [carbs, protein, fat] = nums;
     setMacroGoal({ carbs, protein, fat });
-    toast(`Ziel ${carbs} / ${protein} / ${fat} gespeichert`);
   };
   return (
     <div className="panel stack macrogoal">
-      <div>
-        <strong>Makro-Ziel</strong>
-        <p className="small muted">Anteil an den Kalorien. Hast du mehrere Sorten derselben Zutat im Vorrat (z. B. zwei Pestos), schlägt Mashi beim Planen und Kochen die vor, die näher dran liegt. Gilt auf allen Geräten.</p>
-      </div>
+      <strong>Makro-Ziel</strong>
       <div className="macrogoal__fields">
         {FIELDS.map(([k, label, full]) => (
           <label key={k} className="field">

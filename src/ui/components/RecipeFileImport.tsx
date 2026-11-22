@@ -70,7 +70,6 @@ export function RecipeFileImport() {
   return (
     <section className="panel recipe-file" aria-labelledby="recipe-file-title">
       <h2 className="recipe-file__title" id="recipe-file-title">Viele Rezepte auf einmal</h2>
-      <p className="small muted">Eine Rezept-Datei (JSON), z. B. von einer KI erstellt. Du siehst erst eine Vorschau – die Rezepte kommen nach „Zum Testen“.</p>
       <FileButton className="btn btn--ghost btn--block import-file" accept="application/json,.json,text/plain,.txt" disabled={busy} onFile={(f) => void onFile(f)}>
         <Icon name="file" size={18} /> Rezept-Datei wählen
       </FileButton>

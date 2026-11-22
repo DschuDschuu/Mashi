@@ -28,11 +28,9 @@ export function FoodGaps({ onOpen }: {
   const gaps = useMemo(() => nutritionGaps(recipes, table, { household: householdOf(plan), week: plan.week }), [recipes, table, plan]);
   const [adding, setAdding] = useState<string | null>(null);
   if (!gaps.length) return null;
-  const unknown = gaps.filter((g) => g.kind === 'unbekannt').length;
   return (
     <details className="panel fold food-gaps">
-      <TileSummary icon="info" title={`Fehlen Werte (${gaps.length})`}
-        text={unknown === gaps.length ? 'Mashi kennt sie nicht – dort steht nur „mind. … kcal“' : 'Unbekannt oder ohne Gewicht – dort steht nur „mind. … kcal“'} />
+      <TileSummary icon="info" title={`Fehlen Werte (${gaps.length})`} />
       <ul className="food-gaps__list">
         {gaps.map((g) => (
           <li key={g.name} className="food-gaps__item">

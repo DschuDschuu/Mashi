@@ -64,10 +64,9 @@ export function CravingScreen({ q }: { q: string }) {
             <>
               <p className="muted">„{q}“ kann ich nicht zusammenbauen – aber in deinem Kochbuch steht:</p>
               <RecipeLinks list={hits} />
-              <p className="muted">Oder fang mit einer Richtung an.</p>
             </>
           )
-          : q && <p className="muted">Zu „{q}“ fällt mir noch nichts ein – fang mit einer Richtung an.</p>}
+          : q && <p className="muted">Zu „{q}“ fällt mir noch nichts ein.</p>}
         <CravingAsk replace />
       </main>
     );
@@ -247,8 +246,8 @@ function Finished({ q, state, own, set }: { q: string; state: CravingState; own:
   const toPlan = () => {
     const id = ensure(true);
     if (addToPlan(id, servings)) toast(`„${title.trim() || 'Dein Gericht'}“ im Wochenplan`, { label: 'Rückgängig', run: undo(id) });
-    // eben neu gefasst (Würze/Zubereitung geändert) – das sagen, nicht „steht schon“
-    else toast(updated.current ? `„${title.trim() || 'Dein Gericht'}“ im Wochenplan aktualisiert` : 'Steht schon im Wochenplan');
+    // eben neu gefasst (Würze/Zubereitung geändert): das sieht man – nur „steht schon“ sagen, sonst passiert scheinbar nichts
+    else if (!updated.current) toast('Steht schon im Wochenplan');
   };
   const save = () => {
     const id = ensure(false);
@@ -263,7 +262,7 @@ function Finished({ q, state, own, set }: { q: string; state: CravingState; own:
         <span className="small muted">Name</span>
         <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={80} />
       </label>
-      {text ? <p className="muted">{text}</p> : <p className="muted">Noch nichts gewählt – tipp oben auf „Ändern“.</p>}
+      {text ? <p className="muted">{text}</p> : <p className="muted">Noch nichts gewählt.</p>}
       <CrunchTip state={state} set={set} own={own} />
       {steps.length > 0 && (
         <>
@@ -314,7 +313,6 @@ function Finished({ q, state, own, set }: { q: string; state: CravingState; own:
               <button type="button" className="btn btn--soft" onClick={toPlan}><Icon name="calendar" size={16} /> Einplanen</button>
               <button type="button" className="btn btn--soft" onClick={save}><Icon name="book" size={16} /> Ins Kochbuch</button>
             </div>
-            <p className="small muted craving-done__note">Nach dem Kochen fragt dich die Startseite, wie es war – dann entscheidest du, ob es ins Kochbuch kommt.</p>
           </div>
         </>
       )}

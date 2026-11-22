@@ -66,7 +66,6 @@ function SaladSheet({ recipe, household, onClose }: { recipe: Recipe; household:
       <div className="sheet salad-sheet" role="dialog" aria-modal="true" aria-label="Beilagensalat" onClick={(e) => e.stopPropagation()} ref={ref}>
         <div className="sheet__grip" />
         <h2 className="sheet__title">Beilagensalat</h2>
-        <p className="small muted">Kommt mit auf die Einkaufsliste, in die Nährwerte und als letzter Schritt in den Kochmodus.</p>
         <div className="salad-sheet__group">
           <span className="small muted">Gemüse</span>
           <div className="chips" role="group" aria-label="Gemüse">
@@ -91,7 +90,7 @@ function SaladSheet({ recipe, household, onClose }: { recipe: Recipe; household:
             ))}
           </div>
         </div>
-        <Switch checked={keep} onChange={setKeep} label="Immer dazu" hint={keep ? 'Bleibt bei diesem Rezept, bis du ihn wegnimmst.' : 'Nur fürs nächste Kochen – danach ist er wieder weg.'} />
+        <Switch checked={keep} onChange={setKeep} label="Immer dazu" />
         <div className="variants__actions">
           {active ? <button type="button" className="btn btn--ghost" onClick={remove}>Weglassen</button> : <button type="button" className="btn btn--ghost" onClick={onClose}>Abbrechen</button>}
           <button type="button" className="btn btn--primary" onClick={save} disabled={!items.length}>{active ? 'Übernehmen' : 'Dazu'}</button>

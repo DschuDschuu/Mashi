@@ -64,11 +64,10 @@ export function ImportScreen() {
     <main className="screen">
       <TopBar title="Rezept importieren" intro="import" confirmBack={text.trim() ? 'Import abbrechen? Der eingefügte Text geht verloren.' : undefined} />
       <div className="stack">
-        <p className="muted">Fotografiere ein Rezept (Kochbuch, Zettel, Screenshot) – oder kopiere es von einer Webseite, aus einem Chat oder einer Notiz. Mashi erkennt Zutaten, Schritte, Portionen und Zeiten.</p>
         <FileButton className="btn btn--primary btn--block import-photo" disabled={reading !== null} onFile={(f) => void readPhoto(f)}>
           <Icon name="camera" size={18} /> {reading !== null ? `Lese Foto … ${Math.round(reading * 100)} %` : 'Rezept fotografieren oder Bild wählen'}
         </FileButton>
-        {fromPhoto && <p className="scan-note" role="status">Text aus dem Foto erkannt. Prüf ihn kurz – Texterkennung verliest sich gern bei Brüchen (½) und Einheiten – und tippe dann auf „Erkennen“.</p>}
+        {fromPhoto && <p className="scan-note" role="status">Text aus dem Foto erkannt.</p>}
         <label className="field"><span>Rezepttext</span>
           <textarea className="import-text" rows={12} value={text} onChange={(e) => { setText(e.target.value); setError(null); }}
             placeholder={'Tomatensuppe\n4 Portionen\n\nZutaten:\n800 g Tomaten\n1 Zwiebel\n…\n\nZubereitung:\n1. Zwiebel würfeln.\n…'} />
@@ -77,10 +76,6 @@ export function ImportScreen() {
         <div className="row-2">
           <button className="btn btn--ghost" type="button" onClick={paste}><Icon name="clipboard" size={18} /> Einfügen</button>
           <button className="btn btn--primary" type="button" disabled={!text.trim() || reading !== null} onClick={recognize}>Erkennen</button>
-        </div>
-        <div className="tip tint-sky">
-          <Icon name="info" size={20} />
-          <p>Erkannte Zutaten und Mengen siehst du <strong>immer erst zur Prüfung</strong> – gespeichert wird erst, wenn du es sagst. Das Foto verlässt dein Gerät nicht.</p>
         </div>
         {/* mehrere Rezepte als Datei (Julia: „so wie beim Adventskalender“) */}
         <RecipeFileImport />

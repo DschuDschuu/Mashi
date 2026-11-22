@@ -100,3 +100,28 @@ export const blockHints = (recipes: readonly Recipe[]): BlockHint[] => recipes.f
 
 /** Der Vorschlag als Markierung – „überall“ (keine Richtung), wie ein neuer Baustein im BlockPanel */
 export const hintBlock = (h: BlockHint): RecipeBlock => ({ ...(h.part ? { part: h.part } : {}), kind: h.kind, ...(h.also ? { also: h.also } : {}), directions: [] });
+
+
+/** Zutaten eines Bausteins: die seines Teils, ohne Teil die des ganzen Rezepts */
+function blockIngredients(r: Recipe, part: string | undefined): string[] {
+  const c = currentContent(r);
+  return (part ? c.ingredients.filter((i) => partOf(i) === part) : c.ingredients).map((i) => i.name);
+}
+
+/**
+ * Was steckt im vorgeschlagenen Baustein – und welche deiner Bausteine derselben Stufe ähneln ihm? (Julia: „Sauce
+ * hinzufügen und wusste gar nicht, was drin war – vielleicht auch Vergleich mit aktuellen Bausteinen“.)
+ * similar: deine Bausteine dieser Stufe (auch „deckt mit ab“), die meisten gemeinsamen Zutaten zuerst.
+ */
+export function hintDetails(h: BlockHint, recipes: readonly Recipe[]): { ingredients: string[]; similar: { name: string; shared: string[] }[] } {
+  const own = recipes.find((r) => r.id === h.recipeId);
+  const ingredients = own ? blockIngredients(own, h.part) : [];
+  const mine = new Set(ingredients.map(norm));
+  const similar = recipes
+    .filter((r) => !r.archivedAt)
+    .flatMap((r) => (r.blocks ?? [])
+      .filter((b) => (b.kind === h.kind || b.also?.includes(h.kind)) && !(r.id === h.recipeId && (b.part ?? '') === (h.part ?? '')))
+      .map((b) => ({ name: b.part ?? currentContent(r).title, shared: [...new Set(blockIngredients(r, b.part).filter((n) => mine.has(norm(n))))] })))
+    .sort((a, b) => b.shared.length - a.shared.length || a.name.localeCompare(b.name, 'de'));
+  return { ingredients, similar };
+}

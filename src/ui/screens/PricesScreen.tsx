@@ -78,23 +78,24 @@ export function PricesScreen() {
           {trends.length === 0 ? (
             <Empty icon="cart">
               <span>
-                Noch kein Verlauf. Sobald du einen Artikel zum zweiten Mal per Kassenbon importierst, siehst du hier,
-                wie sich sein Preis entwickelt.{' '}
+                Noch kein Verlauf.{' '}
                 <button className="link" onClick={() => navigate('/speisekammer/bon')}>Kassenbon importieren</button>
               </span>
             </Empty>
           ) : (
             <>
-              {/* Julia: derselbe Umschalter wie auf der Preis-Seite eines Lebensmittels – gemerkt für beide */}
-              <div className="segments price-view" role="tablist" aria-label="Welcher Preis">
-                {PRICE_MODES.map(([v, label]) => (
-                  <button key={v} role="tab" aria-selected={mode === v} className={`segment${mode === v ? ' is-on' : ''}`} onClick={() => setMode(v)}>{label}</button>
-                ))}
-              </div>
-              <div className="segments price-view" role="tablist" aria-label="Preise sortieren">
-                {([['aenderung', 'nach Preisänderung'], ['kategorie', 'nach Kategorie']] as const).map(([v, label]) => (
-                  <button key={v} role="tab" aria-selected={view === v} className={`segment${view === v ? ' is-on' : ''}`} onClick={() => pickView(v)}>{label}</button>
-                ))}
+              {/* eine Zeile statt zwei (Julia: zu viele Umschalter): welcher Preis wie auf der Preis-Seite eines
+                  Lebensmittels (gemerkt für beide), daneben ein Knopf, der die Sortierung wechselt */}
+              <div className="price-view">
+                <div className="segments" role="tablist" aria-label="Welcher Preis">
+                  {PRICE_MODES.map(([v, label]) => (
+                    <button key={v} role="tab" aria-selected={mode === v} className={`segment${mode === v ? ' is-on' : ''}`} onClick={() => setMode(v)}>{label}</button>
+                  ))}
+                </div>
+                <button type="button" className="chip chip--sm price-view__sort" onClick={() => pickView(view === 'kategorie' ? 'aenderung' : 'kategorie')}
+                  aria-label={view === 'kategorie' ? 'Nach Kategorie sortiert – nach Preisänderung sortieren' : 'Nach Preisänderung sortiert – nach Kategorie sortieren'}>
+                  <Icon name="list" size={14} /> {view === 'kategorie' ? 'Kategorie' : 'Änderung'}
+                </button>
               </div>
               {groups.map(({ key, title, list }) => {
                 if (!list.length) return null;
@@ -115,9 +116,8 @@ export function PricesScreen() {
                   </section>
                 );
               })}
-              <p className="muted small center">{mode === 'bezahlt'
-                ? 'Bezahlte Preise vom Kassenbon – mit Angeboten, Lidl Plus und MHD-Ware (Ring = Rabatt, Raute = MHD).'
-                : 'Regalpreise vom Kassenbon – Rabatte und Coupons zählen nicht mit, damit du echte Preiserhöhungen siehst.'}</p>
+              {/* Legende, keine Erklärung: ohne sie sind die Zeichen im Diagramm nicht lesbar */}
+              {mode === 'bezahlt' && <p className="muted small center">Ring = Rabatt · Raute = MHD-Ware</p>}
             </>
           )}
         </div>

@@ -63,7 +63,6 @@ export function HouseholdSettings() {
     <div className="panel stack">
       <Switch
         label="Mittagessen mitplanen"
-        hint="Meist der Rest vom Vorabend – lässt der sich schlecht mitnehmen, eine Box aus deinen Grundlagen. Portionen und Einkauf rechnen mit. Gilt auf allen Geräten."
         checked={lunch}
         onChange={(on) => set({ lunchDays: on ? [...WORKDAYS] : [] }, on ? 'Mittagessen wird mitgeplant' : 'Mittagessen nicht mehr mitgeplant')}
       />
@@ -75,17 +74,14 @@ export function HouseholdSettings() {
         </div>
       )}
       <div className="row-between">
-        <span>
-          <strong>Portionen pro Mahlzeit</strong>
-          <small className="muted" style={{ display: 'block' }}>Für wie viele Personen die Woche rechnet</small>
-        </span>
+        <strong>Portionen pro Mahlzeit</strong>
         <Stepper small value={hh.portions} min={1} max={8} label="Portionen pro Mahlzeit"
           onChange={(portions) => set({ portions }, `${portions} ${portions === 1 ? 'Portion' : 'Portionen'} pro Mahlzeit`)} />
       </div>
       {/* Beilagen der Woche (Julia: feste Mengen, einmal hier anpassen statt bei jedem Abend) */}
       <details className="household__sides disclosure">
         <summary>
-          <span><strong>Bausteine pro Portion</strong> <small className="muted">für den Baukasten in der Woche</small></span>
+          <span><strong>Bausteine pro Portion</strong></span>
           <Icon name="chevron" size={18} />
         </summary>
         {/* nach Kategorien eingeklappt (Julia: „sonst ist das ja crazy lang“) – die Zeile sagt, wie viele vom Standard abweichen */}

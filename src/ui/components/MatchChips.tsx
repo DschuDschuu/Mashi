@@ -60,7 +60,6 @@ export function MatchChips({ name, value, onChange }: { name: string; value: Mat
           <button type="button" className="chip chip--sm" onClick={() => setAdding(true)}><Icon name="plus" size={14} /> Zutat</button>
         )}
       </div>
-      {replaces.some((id) => appliesAliases(name, id).some((a) => excludes.includes(a))) && <p className="small muted">Durchgestrichen = ausgenommen: dort rechnet Mashi mit dem Richtwert. Antippen holt es zurück.</p>}
       {adding && (
         <>
           <label className="search">

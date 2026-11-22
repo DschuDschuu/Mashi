@@ -10,7 +10,6 @@ import { Icon } from '../components/Icon';
 import { PageIntro } from '../components/PageIntro';
 import { deviceIcon } from '../catalogIcons';
 import { RecipeCard } from '../components/RecipeCard';
-import { BlockHints } from '../components/BlockHints';
 import { recipeCount } from '../format';
 import { recipeNutrition } from '../useNutrition';
 
@@ -77,7 +76,6 @@ export function CookbookScreen({ route }: { route: Route }) {
       </header>
       <PageIntro id="kochbuch" />
       {/* Bausteine in deinen Rezepten (Julia: Weg B) – einmal durchgehen, danach nur, wenn ein neues Rezept etwas hat */}
-      <BlockHints recipes={recipes} all />
 
       <div className="search-row">
         <label className="search">
@@ -169,11 +167,11 @@ function FilterGroup({ title, children }: { title: string; children: ReactNode }
   );
 }
 
-/** Leer – aber warum? Mit Filter: weniger Filter. Ohne: sagen, wie etwas hineinkommt. */
+/** Leer: ein kurzer Satz (Julia: keine Erklärtexte) – mit Filter oder Suche „nichts gefunden“, sonst, was hier noch fehlt */
 function emptyText(segment: Segment, filtered: boolean): string {
-  if (filtered) return 'Keine Rezepte gefunden. Probier weniger Filter oder eine andere Suche.';
-  if (segment === 'favoriten') return 'Noch keine Favoriten – tippe auf einem Rezept auf das Herz.';
-  if (segment === 'zum_testen') return 'Nichts zum Testen. Neue Ideen kommen über ＋ → „Mit KI erstellen“ oder „Eigenes Rezept“.';
-  if (segment === 'grundlagen') return 'Noch keine Grundlagen. Lös in einem Rezept einen Teil (z. B. die Sauce) als Grundlage heraus – oder leg auf einem Rezept eine Verwandlung an.';
-  return 'Noch keine Rezepte im Kochbuch. Leg über ＋ eins an.';
+  if (filtered) return 'Keine Rezepte gefunden.';
+  if (segment === 'favoriten') return 'Noch keine Favoriten.';
+  if (segment === 'zum_testen') return 'Nichts zum Testen.';
+  if (segment === 'grundlagen') return 'Noch keine Grundlagen.';
+  return 'Noch keine Rezepte im Kochbuch.';
 }

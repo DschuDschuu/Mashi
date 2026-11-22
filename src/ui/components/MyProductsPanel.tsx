@@ -157,7 +157,7 @@ export function ProductForm({ initial, onSave, onCancel, shared, afterName, name
   );
 
   /** Werte von Open Food Facts ins Formular übernehmen (bei bestehenden Produkten nur auf Wunsch) */
-  const applyScan = (found: ScannedProduct, note = 'Werte von Open Food Facts (von der Community gepflegt) – bitte kurz mit dem Etikett vergleichen.') => {
+  const applyScan = (found: ScannedProduct, note = 'Werte von Open Food Facts.') => {
     const { kcal, protein, carbs, fat, ...rest } = found.per100g;
     // weitere Sorte: der Name gilt für alle Sorten – von Open Food Facts nur die Marke
     if (!sortOnly) setName(found.name);
@@ -189,17 +189,17 @@ export function ProductForm({ initial, onSave, onCancel, shared, afterName, name
     }
     setEan(code);
     const existing = !!own;
-    setScanNote(existing ? 'Barcode hinterlegt – deine Werte bleiben, wie sie sind.' : 'Suche bei Open Food Facts …');
+    setScanNote(existing ? 'Barcode hinterlegt.' : 'Suche bei Open Food Facts …');
     try {
       const found = await barcodeLookup.find(code);
       if (!found) {
-        if (!existing) setScanNote('Bei Open Food Facts nicht gefunden – bitte die Werte vom Etikett abtippen. Der Barcode wird gemerkt.');
+        if (!existing) setScanNote('Bei Open Food Facts nicht gefunden.');
         return;
       }
       if (existing) setOffer(found);
       else applyScan(found);
     } catch {
-      if (!existing) setScanNote('Open Food Facts ist gerade nicht erreichbar (offline?). Du kannst die Werte auch abtippen.');
+      if (!existing) setScanNote('Open Food Facts ist gerade nicht erreichbar (offline?).');
     }
   };
 
@@ -211,7 +211,7 @@ export function ProductForm({ initial, onSave, onCancel, shared, afterName, name
       setHits(await barcodeLookup.search(q));
       setScanNote(null);
     } catch {
-      setScanNote('Open Food Facts ist gerade nicht erreichbar (offline?). Du kannst die Werte auch abtippen.');
+      setScanNote('Open Food Facts ist gerade nicht erreichbar (offline?).');
     }
   };
 
@@ -251,12 +251,12 @@ export function ProductForm({ initial, onSave, onCancel, shared, afterName, name
                   aria-label="Bei Open Food Facts suchen" placeholder="z. B. Kimchi" autoFocus />
                 <button type="button" className="btn btn--primary btn--sm" disabled={!query.trim()} onClick={() => void search()}>Suchen</button>
               </div>
-              {hits && hits.length === 0 && <p className="small muted">Nichts mit vollständigen Nährwerten gefunden. Anderes Wort probieren – oder abtippen.</p>}
+              {hits && hits.length === 0 && <p className="small muted">Nichts mit vollständigen Nährwerten gefunden.</p>}
               {hits && hits.length > 0 && (
                 <ul className="quicknut__hits">
                   {hits.map((h) => (
                     <li key={h.ean}>
-                      <button type="button" onClick={() => applyScan(h, 'Werte von Open Food Facts (von der Community gepflegt) – passt die Sorte? Sonst anderen Treffer wählen.')}>
+                      <button type="button" onClick={() => applyScan(h)}>
                         <span>{h.name}{h.brand ? ` · ${h.brand}` : ''}</span>
                         <span className="small muted">{Math.round(h.per100g.kcal)} kcal · {fmt(h.per100g.protein)} g Eiweiß</span>
                       </button>
@@ -296,17 +296,17 @@ export function ProductForm({ initial, onSave, onCancel, shared, afterName, name
             <span>Zusatz (optional)</span>
             <input value={detail} onChange={(e) => setDetail(e.target.value)} placeholder="z. B. leicht" />
           </label>
-          <p className="small muted">Werte vom Etikett, pro 100 g bzw. 100 ml – oder leer lassen{onNoValues ? '' : ', dann rechnet Mashi mit der Tabelle'}:</p>
+          {/* keine Erklärung, sondern die Einheit der Felder – sonst trägt man Werte pro Portion ein */}
+          <p className="small muted">Pro 100 g bzw. 100 ml</p>
           <div className="row-2">{numField('kcal', 'kcal')}{numField('carbs', 'Kohlenhydrate (g)')}</div>
           <div className="row-2">{numField('protein', 'Eiweiß (g)')}{numField('fat', 'Fett (g)')}</div>
           {levelName && (
             <div className="scan-note">
-              <p>{fmt(parseNum(values.fat) ?? 0)} g Fett – klingt nach <strong>{levelName}</strong>. „{name.trim()}“ allein rechnet Mashi als niedrigste Stufe.</p>
+              <p>{fmt(parseNum(values.fat) ?? 0)} g Fett – klingt nach <strong>{levelName}</strong>.</p>
               <button type="button" className="btn btn--ghost btn--sm" onClick={() => setName(levelName)}>Name anpassen</button>
             </div>
           )}
 
-          <p className="small muted">Packung (optional) – füllt beim Kassenbon die Menge aus und rechnet Kosten:</p>
           <div className="row-2 product-form__pack">
             <label className="field"><span>Packungsgröße</span>
               <span className="pantry-amount">
@@ -318,7 +318,7 @@ export function ProductForm({ initial, onSave, onCancel, shared, afterName, name
             </label>
             {/* schon vom Bon gekauft: der echte Preis steht in der Kachel („Zuletzt gekauft“) – das Feld braucht es dann nicht */}
             {bought ? (
-              <div className="field"><span>Preis</span><span className="small muted product-form__bought">kommt vom Bon – siehe „Zuletzt gekauft“</span></div>
+              <div className="field"><span>Preis</span><span className="small muted product-form__bought">kommt vom Bon</span></div>
             ) : (
               <label className="field"><span>Preis je Packung (€)</span>
                 <input inputMode="decimal" value={packPrice} onChange={(e) => setPackPrice(e.target.value)} placeholder="z. B. 1,99" />
@@ -329,7 +329,6 @@ export function ProductForm({ initial, onSave, onCancel, shared, afterName, name
           {parseNum(packAmount) && packUnit !== 'Stück' ? (
             <label className="field"><span>Stück im Pack (optional)</span>
               <input inputMode="numeric" value={packCount} onChange={(e) => setPackCount(e.target.value)} placeholder="z. B. 2" />
-              <small className="muted">Nur wenn es das nur im Mehrfachpack gibt: die Größe oben ist EIN Stück, der Preis gilt fürs ganze Pack.</small>
             </label>
           ) : null}
           {/* je weitere Größe eine Zeile (Julia: Hähnchen gibt es in 400 g und 1 kg) – gleiche Einheit wie oben */}
@@ -358,7 +357,6 @@ export function ProductForm({ initial, onSave, onCancel, shared, afterName, name
               <input inputMode="decimal" value={piece} onChange={(e) => setPiece(e.target.value)} placeholder="z. B. 40" />
               <span className="product-form__unit">g</span>
             </span>
-            <small className="muted">Für Zutaten in Stück – 2 Tortillas, 1 Scheibe Cheddar. Leer: Mashi nimmt die Packung oder seinen Wert.</small>
           </label>
           {/* Sorte: Haltbarkeit gilt für alle Sorten – steht in der Kachel */}
           {!sortOnly && (
@@ -373,9 +371,7 @@ export function ProductForm({ initial, onSave, onCancel, shared, afterName, name
             </>
           )}
 
-          {sortOnly
-            ? <p className="small muted">Name (Stift oben), Haltbarkeit und „gilt für“ (unten) stellst du direkt in der Kachel ein – für alle Sorten.</p>
-            : <MatchChips name={name || initial?.name || ''} value={match} onChange={setOwnMatch} />}
+          {!sortOnly && <MatchChips name={name || initial?.name || ''} value={match} onChange={setOwnMatch} />}
         </>
       )}
 

@@ -96,7 +96,6 @@ export function AdventScreen({ day, preview }: { day?: number; preview?: number 
         <div className="advent-preview" role="status">
           <p className="advent-preview__text">
             <strong>Vorschau: {previewDay}. Dezember</strong>
-            <span>Zum Ausprobieren – Mashi merkt sich hier nichts.</span>
           </p>
           <div className="advent-preview__controls">
             <Stepper value={previewDay} min={1} max={ADVENT_DAYS} onChange={setPreviewDay} label="Tag der Vorschau" small />
@@ -117,8 +116,7 @@ export function AdventScreen({ day, preview }: { day?: number; preview?: number 
         <div className="panel advent-empty">
           <Icon name="gift" size={32} />
           <p>
-            <strong>{cal.doors.length ? 'Neues Jahr, neue Türchen' : 'Dein Adventskalender ist noch leer'}</strong><br />
-            <span className="small muted">Befüllen kannst du ihn in den Einstellungen unter „Adventskalender“.</span>
+            <strong>{cal.doors.length ? 'Neues Jahr, neue Türchen' : 'Dein Adventskalender ist noch leer'}</strong>
           </p>
           <button type="button" className="btn btn--primary" onClick={() => navigate('/mehr?advent')}>Zu den Einstellungen</button>
         </div>
@@ -134,7 +132,7 @@ function leadText(cal: AdventCalendar, now: Date): string {
   if (now.getFullYear() > cal.year) return 'Der Kalender ist vom letzten Jahr – alle Türchen sind offen.';
   if (now.getMonth() < 11) return 'Ab dem 1. Dezember geht jeden Tag ein Türchen auf.';
   if (now.getDate() <= ADVENT_DAYS) return `Heute ist Türchen ${now.getDate()} dran.`;
-  return 'Frohe Weihnachten! Verpasste Türchen kannst du jederzeit nachholen.';
+  return 'Frohe Weihnachten!';
 }
 
 function Door({ day, cal, now, opened, swinging, onTap }: {
@@ -239,7 +237,6 @@ function DoorSheet({ day, door, savedId, preview = false, onClose }: { day: numb
         {photo && <img className="advent-sheet__photo" src={photo} alt="" />}
         <p className="advent-sheet__day"><Icon name="gift" size={16} /> Türchen {day}</p>
         <h2 className="sheet__title" id="advent-sheet-title">{c.title}</h2>
-        {c.description && <p className="advent-sheet__desc">{c.description}</p>}
         <p className="small muted">{portionCount(c.servings)}{minutes > 0 && ` · ${formatMinutes(minutes)}`}</p>
 
         <h3 className="advent-sheet__head">Zutaten</h3>
@@ -284,7 +281,7 @@ function DoorSheet({ day, door, savedId, preview = false, onClose }: { day: numb
             </button>
           ) : preview ? (
             // Vorschau: nichts speichern – sonst stünde das Rezept schon vor dem Dezember im Kochbuch
-            <p className="advent-sheet__note">Vorschau – hier wird nichts gespeichert. „Zum Testen speichern“ gibt es am {day}. Dezember.</p>
+            null
           ) : (
             <button type="button" className="btn btn--primary btn--block" disabled={saving} onClick={save}>
               <Icon name="bookmark" size={18} /> Zum Testen speichern

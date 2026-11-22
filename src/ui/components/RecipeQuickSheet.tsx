@@ -1,4 +1,4 @@
-import { addToPlan, setPlanVariants, toggleFavorite, usePlan, useRecipes } from '../../data/store';
+import { addToPlan, removeFromPlan, setPlanVariants, toggleFavorite, usePlan, useRecipes } from '../../data/store';
 import { cookingContent } from '../../domain/homemade';
 import type { Recipe } from '../../domain/types';
 import { navigate } from '../../router';
@@ -22,8 +22,7 @@ export function RecipeQuickSheet({ recipe, onClose }: { recipe: Recipe; onClose:
   const more = useMorePrompt();
 
   const plan = () => prompt.ask(c, undefined, (pick) => more.ask(c, c.servings, (amounts) => {
-    addToPlan(recipe.id, c.servings, pick, amounts);
-    toast(`„${c.title}“ eingeplant: ${portionCount(c.servings)}`);
+    if (addToPlan(recipe.id, c.servings, pick, amounts)) toast(`„${c.title}“ eingeplant: ${portionCount(c.servings)}`, { label: 'Rückgängig', run: () => { removeFromPlan(recipe.id); } });
     onClose();
   }));
   const cook = () => {
@@ -53,7 +52,7 @@ export function RecipeQuickSheet({ recipe, onClose }: { recipe: Recipe; onClose:
               <Icon name="calendar" size={18} /> Zum Wochenplan ({portionCount(c.servings)})
             </button>
           )}
-          <button type="button" className="btn btn--soft btn--block" onClick={() => { toggleFavorite(recipe.id); toast(recipe.favorite ? 'Aus den Favoriten genommen' : 'Zu den Favoriten'); onClose(); }}>
+          <button type="button" className="btn btn--soft btn--block" onClick={() => { toggleFavorite(recipe.id); onClose(); }}>
             <Icon name="heart" size={18} filled={!recipe.favorite} /> {recipe.favorite ? 'Aus den Favoriten' : 'Zu den Favoriten'}
           </button>
           <button type="button" className="btn btn--soft btn--block" onClick={cook}>

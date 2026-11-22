@@ -15,6 +15,7 @@ import type { Recipe } from '../../domain/types';
 import { Empty, Section, Switch } from '../components/Controls';
 import { TopBar } from '../components/TopBar';
 import { MacroGoalSettings } from '../components/MacroGoalSettings';
+import { RecipeTidy } from '../components/RenamePanel';
 import { TasteSettings } from '../components/TasteSettings';
 import { HouseholdSettings } from '../components/HouseholdSettings';
 import { Icon } from '../components/Icon';
@@ -45,16 +46,12 @@ export function MoreScreen({ focus }: { focus?: 'advent' }) {
         <div className="panel">
           <Switch
             label="Zutaten bei jedem Schritt anzeigen"
-            hint="Über jedem Zubereitungsschritt stehen die Zutaten, die du dafür brauchst – auch im Kochmodus. Gilt nur für dieses Gerät."
             checked={settings.showStepIngredients}
             onChange={(showStepIngredients) => updateSettings({ showStepIngredients })}
           />
         </div>
         <div className="panel stack">
-          <div>
-            <strong>Farbthema</strong>
-            <p className="small muted">Gilt nur für dieses Gerät.</p>
-          </div>
+          <strong>Farbthema</strong>
           <div className="themes" role="radiogroup" aria-label="Farbthema">
             {THEMES.map((t) => (
               <button key={t.id} type="button" role="radio" aria-checked={settings.theme === t.id}
@@ -73,7 +70,6 @@ export function MoreScreen({ focus }: { focus?: 'advent' }) {
           <Icon name="help" size={20} />
           <span className="link-row__text">
             <strong>Alle Einführungen wieder zeigen</strong>
-            <small className="muted">Die kurzen Touren durch jede Seite – auf diesem Gerät</small>
           </span>
           <Icon name="refresh" size={18} />
         </button>
@@ -92,6 +88,11 @@ export function MoreScreen({ focus }: { focus?: 'advent' }) {
         {isDemo() ? <DemoPanel /> : <SyncPanel />}
       </Section>
 
+      {/* Vorschläge aus deinen Rezepten gesammelt hier – nicht mehr als Knopf in jedem Rezept und im Kochbuch (Julia) */}
+      <Section title="Rezepte aufräumen" icon="sparkles">
+        <RecipeTidy recipes={all} />
+      </Section>
+
       {/* Archiv und „Über Mashi“ ans Ende: die Seite heißt „Einstellungen“ und beginnt jetzt auch damit (UX-Rundgang) */}
       <Section title={`Archiv (${archived.length})`} icon="archive">
         {archived.length === 0 ? (
@@ -102,7 +103,7 @@ export function MoreScreen({ focus }: { focus?: 'advent' }) {
               <li key={r.id} className="list__item">
                 <RecipeImage image={r.image} size="sm" />
                 <span className="list__title">{currentContent(r).title}</span>
-                <button className="btn btn--soft btn--sm" onClick={() => { restoreRecipe(r.id); toast('Wiederhergestellt'); }}>Zurückholen</button>
+                <button className="btn btn--soft btn--sm" onClick={() => restoreRecipe(r.id)}>Zurückholen</button>
                 <button className="iconbtn iconbtn--sm iconbtn--danger" aria-label="Endgültig löschen"
                   onClick={async () => {
                     if (await ask({ title: `„${currentContent(r).title}“ endgültig löschen?`, text: 'Es verschwindet auf allen deinen Geräten und kann nicht wiederhergestellt werden.', confirm: 'Endgültig löschen', danger: true })) deleteRecipe(r.id);
@@ -163,10 +164,10 @@ function SyncPanel() {
 function DemoPanel() {
   return (
     <div className="panel stack">
-      <p className="muted small">Du siehst die <strong>Demo</strong>: Beispieldaten, die nur in diesem Browser liegen und nie hochgeladen werden.</p>
+      <p className="muted small">Du siehst die <strong>Demo</strong>.</p>
       <button className="btn btn--primary" onClick={leaveDemo}>Mit meinem Server verbinden</button>
       <button className="btn btn--ghost" onClick={async () => {
-        if (await ask({ title: 'Beispieldaten neu laden?', text: 'Alle Änderungen in der Demo gehen verloren.', confirm: 'Neu laden', danger: true })) { await resetDemoData(); toast('Beispieldaten geladen'); }
+        if (await ask({ title: 'Beispieldaten neu laden?', text: 'Alle Änderungen in der Demo gehen verloren.', confirm: 'Neu laden', danger: true })) await resetDemoData();
       }}>
         Beispieldaten zurücksetzen
       </button>
@@ -216,7 +217,6 @@ function SharePicker({ recipes, onClose }: { recipes: Recipe[]; onClose: () => v
           </li>
         ))}
       </ul>
-      <p className="small muted">Komplett mit Versionen, Bewertungen und Notizen. Beim anderen: Einstellungen → Sicherung → Einspielen – seine Rezepte bleiben erhalten.</p>
       <div className="row-gap">
         <button className="btn btn--primary" disabled={!picked.size} onClick={share}><Icon name="share" size={18} /> Teilen{picked.size ? ` (${picked.size})` : ''}</button>
         <button className="btn btn--ghost" onClick={onClose}>Abbrechen</button>
@@ -272,7 +272,6 @@ function BackupPanel({ recipes }: { recipes: Recipe[] }) {
 
   return (
     <div className="panel stack">
-      <p className="muted small">Alles als Datei auf diesem Gerät speichern – Rezepte, Meine Lebensmittel, Speisekammer (mit Preisen und gelernten Bon-Artikeln), Plan und Adventskalender. Beim Einspielen gewinnt je Rezept und Lebensmittel das Neuere; Preise und Bons werden ergänzt.</p>
       <div className="row-2">
         <button className="btn btn--ghost" onClick={() => downloadBackup(recipes, products, pantry, plan, advent)}>Herunterladen</button>
         <button className="btn btn--ghost" onClick={() => input.current?.click()}>Einspielen …</button>
@@ -290,7 +289,7 @@ function BackupPanel({ recipes }: { recipes: Recipe[] }) {
           <p><strong>{preview.fileName}</strong></p>
           <p className="small">
             {recipeCount(preview.recipes.length)} gefunden
-            {known > 0 && <> · davon {known} schon vorhanden (werden zusammengeführt, nichts geht verloren)</>}
+            {known > 0 && <> · davon {known} schon vorhanden</>}
             {preview.products.length > 0 && <> · dazu {preview.products.length} von „Meine Lebensmittel“</>}
             {preview.pantry && <> · Speisekammer mit {preview.pantry.items.length} Vorräten</>}
             {preview.plan && <> · Plan mit {preview.plan.items.length} Gerichten</>}
@@ -304,10 +303,9 @@ function BackupPanel({ recipes }: { recipes: Recipe[] }) {
               <button type="button" role="radio" aria-checked={replaceStock} className={`segment${replaceStock ? ' is-on' : ''}`} onClick={() => setReplaceStock(true)}>Aus der Sicherung</button>
             </div>
           )}
-          {(preview.pantry || preview.plan) && (
-            <p className="small muted">{replaceStock
-              ? 'Vorräte und Wochenplan werden genau wie in der Sicherung – was seitdem dazukam oder gegessen wurde, gilt nicht mehr.'
-              : 'Deine jetzigen Vorräte und dein Wochenplan bleiben. Aus der Sicherung kommen nur Preise, Bons und Gelerntes dazu.'}</p>
+          {/* Warnung vor dem Ersetzen – ohne Rückgängig */}
+          {(preview.pantry || preview.plan) && replaceStock && (
+            <p className="small muted">Vorräte und Wochenplan werden genau wie in der Sicherung – was seitdem dazukam oder gegessen wurde, gilt nicht mehr.</p>
           )}
           <ul className="backup-preview__list">
             {preview.recipes.slice(0, 8).map((r) => <li key={r.id}>{currentContent(r).title}</li>)}
@@ -337,7 +335,7 @@ function SpecialThemes() {
         <Icon name={active === 'weihnachten' ? 'snow' : 'pumpkin'} size={22} />
         <span className="special__head">
           <strong>Spezial</strong>
-          <small className="muted">{label ? `${label} ist an` : 'Themen für Feiertage'}</small>
+          {label && <small className="muted">{label} ist an</small>}
         </span>
         <Icon name="chevron" size={18} />
       </summary>
@@ -355,7 +353,6 @@ function SpecialThemes() {
           );
         })}
       </div>
-      <p className="small muted">Halloween vom 15. Oktober bis 2. November, Weihnachten vom 1. Advent (spätestens 1. Dezember) bis 26. Dezember – jeweils von selbst an. Gilt nur für dieses Gerät.</p>
     </details>
   );
 }

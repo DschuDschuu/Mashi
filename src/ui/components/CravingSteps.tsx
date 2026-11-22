@@ -156,7 +156,7 @@ export function StageOptions({ state, step, own, set, mini = false }: {
       {/* Garfamilie für einen neuen eigenen Baustein, den Mashi nicht kennt – davon hängen seine Zubereitungen ab */}
       {askFamily && (
         <div className="family-ask" role="group" aria-label={`Wie gart ${sideOf(askFamily)?.name}?`} ref={askRef}>
-          <span className="small">Wie gart <b>{sideOf(askFamily)?.name}</b>? <span className="muted">Dann weiß Mashi, wie man es zubereitet.</span></span>
+          <span className="small">Wie gart <b>{sideOf(askFamily)?.name}</b>?</span>
           <div className="chips">
             {FAMILIES.map((f) => <button key={f.id} type="button" className="chip chip--sm" onClick={() => setFamily(askFamily, f.id)}>{f.label}</button>)}
             <button type="button" className="link small" onClick={() => setAskFamily(null)}>später</button>

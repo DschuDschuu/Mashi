@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { blockHints, blockHintsOf, hintBlock, sureKind } from './blockHints';
+import { blockHints, blockHintsOf, hintBlock, hintDetails, sureKind } from './blockHints';
 import type { Ingredient, Recipe, RecipeContent } from './types';
 
 // erfundene Rezepte – keine echten (das Repo ist öffentlich)
@@ -95,5 +95,28 @@ describe('Vorschläge eines Rezepts', () => {
     expect(hintBlock({ recipeId: 'o', part: 'Sauce', name: 'Sauce', kind: 'sauce', also: ['protein'] })).toEqual({ part: 'Sauce', kind: 'sauce', also: ['protein'], directions: [] });
     expect(hintBlock({ recipeId: 'g', name: 'Guacamole', kind: 'sauce' })).toEqual({ kind: 'sauce', directions: [] });
     expect(blockHintsOf({ ...bowl, blocks: [hintBlock(chicken), hintBlock(sauce)] })).toEqual([]);
+  });
+});
+
+describe('Was ist drin – und was hast du schon? (Julia: Sauce übernommen, ohne zu wissen, was drin ist)', () => {
+  const sauce = { recipeId: 'b', part: 'Erdnuss-Sauce', name: 'Erdnuss-Sauce', kind: 'sauce' as const };
+  const satay = recipe('s', 'Testsatay', [ing('e2', 'Erdnussbutter', 'Satay-Sauce'), ing('l', 'Limette', 'Satay-Sauce'), ing('n', 'Nudeln')],
+    { blocks: [{ part: 'Satay-Sauce', kind: 'sauce', directions: [] }] });
+  const bolo = recipe('o', 'Testbolo', [ing('h2', 'Hackfleisch'), ing('t', 'Passierte Tomaten')], { blocks: [{ kind: 'protein', also: ['sauce'], directions: [] }] });
+  const dip = recipe('d', 'Testdip', [ing('q', 'Quark')], { blocks: [{ kind: 'sauce', directions: [] }] });
+  const gone = recipe('x', 'Archiviert', [ing('e3', 'Erdnussbutter')], { archivedAt: '2026-01-01', blocks: [{ kind: 'sauce', directions: [] }] });
+
+  it('zeigt die Zutaten des Teils – nicht die des ganzen Rezepts', () => {
+    expect(hintDetails(sauce, [bowl]).ingredients).toEqual(['Erdnussbutter', 'Sojasauce']);
+    expect(hintDetails({ recipeId: 'd', name: 'Testdip', kind: 'sauce' }, [dip]).ingredients).toEqual(['Quark']);
+  });
+
+  it('vergleicht mit deinen Bausteinen derselben Stufe – gemeinsame Zutaten zuerst, Archiviertes nicht', () => {
+    const { similar } = hintDetails(sauce, [bowl, satay, bolo, dip, gone]);
+    expect(similar).toEqual([
+      { name: 'Satay-Sauce', shared: ['Erdnussbutter'] },
+      { name: 'Testbolo', shared: [] }, // Bolognese deckt die Sauce mit ab
+      { name: 'Testdip', shared: [] },
+    ]);
   });
 });
