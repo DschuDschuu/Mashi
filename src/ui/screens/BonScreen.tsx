@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { DISCOUNT_LABEL, type BonLine, type SavedBon } from '../../domain/bons';
 import { productLabel, sortTags, type MyProduct } from '../../domain/nutrition/myProducts';
-import { NewProduct } from '../components/NewProduct';
+import { addedText, NewProduct } from '../components/NewProduct';
 import type { PantryUnit } from '../../domain/pantry';
 import type { DiscountKind, LineDiscount } from '../../domain/receipt';
 import { editBon, includeBon, useFoodTable, usePantry, useProducts, withdrawBon } from '../../data/store';
@@ -196,12 +196,16 @@ function LineEdit({ line, include, onDone }: {
       {/* nachträglich ein eigenes Lebensmittel (oder eine weitere Sorte) anlegen – Julia; Speichern übernimmt es,
           auch ins Gelernte für den nächsten Bon */}
       {creating ? (
-        <NewProduct name={name.trim() || line.bon} bonName={line.bon} pack={packOfLine(line)} onDone={(p) => {
+        <NewProduct name={name.trim() || line.bon} bonName={line.bon} pack={packOfLine(line)} quiet onDone={(p, done) => {
           setCreating(false);
           if (!p) return;
+          const was = name;
           setProductId(p.id);
           setName(p.name);
-          toast(`„${productLabel(p)}“ angelegt – mit „Speichern“ hängt die Zeile daran`);
+          // sagen, was wirklich passiert ist (angelegt, weitere Sorte, gewählt …) – „Rückgängig“ nimmt die Zeile wieder ab
+          const undo = done?.undo;
+          toast(`${addedText(p, done?.how ?? 'neu')} – mit „Speichern“ hängt die Zeile daran`,
+            undo && { label: 'Rückgängig', run: () => { undo(); setProductId(''); setName(was); } });
         }} />
       ) : !productId && (
         <button type="button" className="link small bonedit__add" onClick={() => setCreating(true)}>

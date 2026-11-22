@@ -7,7 +7,7 @@ import { DISCOUNT_LABEL, discountOf, importedOnDay } from '../../domain/bons';
 import { formatAmount } from '../../domain/scaling';
 import { boughtAmountOf, packSizesOf, productLabel, type MyProduct } from '../../domain/nutrition/myProducts';
 import { importReceipt, usePantry, useProducts } from '../../data/store';
-import { NewProduct } from '../components/NewProduct';
+import { addedText, NewProduct } from '../components/NewProduct';
 import { takeSharedReceipt } from '../../pwa';
 import { navigate } from '../../router';
 import { Icon } from '../components/Icon';
@@ -335,7 +335,14 @@ export function ReceiptImportScreen({ shared }: { shared: boolean }) {
                   </div>
                 )}
                 {creating === i && (
-                  <NewProduct name={r.name.trim() || r.line.name} bonName={r.line.name} pack={packOf(r)} onDone={(p) => { if (p) assign(i, p); setCreating(null); }} />
+                  <NewProduct name={r.name.trim() || r.line.name} bonName={r.line.name} pack={packOf(r)} quiet onDone={(p, done) => {
+                    setCreating(null);
+                    if (!p) return;
+                    assign(i, p);
+                    // „Rückgängig“ nimmt die Zeile auch wieder ab – sonst hinge sie an einem Produkt, das es nicht mehr gibt
+                    const undo = done?.undo;
+                    toast(addedText(p, done?.how ?? 'neu'), undo && { label: 'Rückgängig', run: () => { undo(); assign(i); } });
+                  }} />
                 )}
                 <button className="link bonrow__skip" onClick={() => update(i, { skip: !r.skip })}>
                   {r.skip ? 'Doch übernehmen' : 'Überspringen'}

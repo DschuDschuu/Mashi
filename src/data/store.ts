@@ -1083,6 +1083,21 @@ export function addProduct(p: MyProduct, forName = p.name): MyProduct {
 }
 
 /**
+ * „Rückgängig“ nach dem Anlegen unter „Meine Lebensmittel“ – direkt NACH dem Speichern aufrufen (vorher = before):
+ * neu angelegte Sorten kommen wieder weg wie beim Entfernen (Vorrat und Bons verlieren nur die Sorte), geänderte
+ * (aufgefüllt, Gemeinsames angeglichen) werden wie vorher. Was seitdem sonst geändert wurde, bleibt.
+ */
+export function productUndo(before: readonly MyProduct[]): () => void {
+  const old = new Map(before.map((p) => [p.id, p]));
+  const changed = products.filter((p) => old.get(p.id) !== p);
+  return () => {
+    for (const p of changed) if (!old.has(p.id)) removeProduct(p.id, undefined);
+    const back = new Set(changed.filter((p) => old.has(p.id)).map((p) => p.id));
+    if (back.size) saveProducts(products.map((x) => (back.has(x.id) ? old.get(x.id)! : x)));
+  };
+}
+
+/**
  * „Meine Produkte“ speichern. Danach bekommt die Rezeptliste bewusst eine NEUE Identität
  * (gleiche Rezepte): So rechnen auch alle Rezeptkarten ihre Nährwerte neu.
  */

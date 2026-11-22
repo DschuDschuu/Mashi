@@ -33,10 +33,12 @@ const fmt = (n: number) => n.toLocaleString('de-DE', { maximumFractionDigits: 1 
  * @param afterName unter dem Namen – z. B. „gibt es schon, weitere Sorte?“ und die Stufen-Chips
  * @param nameOnly nur der Name (Gewürz: keine Nährwerte), „Hinzufügen“ ruft onNameOnly
  * @param onNoValues ohne Werte speichern ist erlaubt (Immer im Haus: dann nur die Stufe)
+ * @param canSave false: Speichern gesperrt – z. B. solange „gibt es schon“ unter dem Namen steht und noch nicht gewählt ist
  */
-export function ProductForm({ initial, onSave, onCancel, shared, afterName, nameOnly, onNameOnly, onNoValues }: {
+export function ProductForm({ initial, onSave, onCancel, shared, afterName, nameOnly, onNameOnly, onNoValues, canSave }: {
   initial?: Partial<MyProduct>; onSave: (p: MyProduct) => void; onCancel: () => void; shared?: SharedMatch;
   afterName?: (name: string) => ReactNode; nameOnly?: boolean; onNameOnly?: (name: string) => void; onNoValues?: (name: string) => void;
+  canSave?: (name: string) => boolean;
 }) {
   const products = useProducts();
   const sortOnly = !!shared;
@@ -88,8 +90,10 @@ export function ProductForm({ initial, onSave, onCancel, shared, afterName, name
   // „Milch“ mit 3,5 g Fett: Stufe in den Namen? (nur Vorschlag – die Rezepte ordnen über den Namen zu)
   const levelName = sortOnly ? undefined : levelNameFromFat(name, parseNum(values.fat));
 
+  const blocked = !!canSave && !canSave(name.trim());
   const submit = () => {
     if (!name.trim()) return setError('Bitte einen Namen eingeben.');
+    if (blocked) return;
     if (nameOnly) return onNameOnly?.(name.trim());
     const kcal = parseNum(values.kcal);
     const protein = parseNum(values.protein);
@@ -377,7 +381,7 @@ export function ProductForm({ initial, onSave, onCancel, shared, afterName, name
 
       {error && <p className="error" role="alert">{error}</p>}
       <div className="row-gap">
-        <button className="btn btn--primary" onClick={submit}>{nameOnly ? 'Hinzufügen' : 'Speichern'}</button>
+        <button className="btn btn--primary" onClick={submit} disabled={blocked}>{nameOnly ? 'Hinzufügen' : 'Speichern'}</button>
         <button className="btn btn--ghost" onClick={onCancel}>Abbrechen</button>
       </div>
     </div>

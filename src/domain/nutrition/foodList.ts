@@ -1,4 +1,4 @@
-import { aliasesOf, normalizeName, PROVIDER } from './localFoods';
+import { aliasesOf, guessMatch, normalizeName, PROVIDER } from './localFoods';
 import { nameOf, type MyProduct } from './myProducts';
 import { isDried } from './noNutrition';
 import type { FoodEntry, FoodTable } from './types';
@@ -31,7 +31,7 @@ const cap = (s: string) => s.charAt(0).toLocaleUpperCase('de-DE') + s.slice(1);
  * eigener Zutatenname („grünes pesto“) – sonst der eigene Name. Die Tabelle zuerst, weil ein
  * zusätzlicher freier Name („Skyr-Dessert“) die Zeile sonst unter diesen Namen verschieben würde.
  */
-function keyOf(p: MyProduct, table: FoodTable, spelled: ReadonlyMap<string, string>): { key: string; label: string } {
+function keyOf(p: Pick<MyProduct, 'name' | 'replaces' | 'names'>, table: FoodTable, spelled: ReadonlyMap<string, string>): { key: string; label: string } {
   const replaced = p.replaces[0] ? table.byRef({ provider: PROVIDER, foodId: p.replaces[0] }) ?? table.matchName(p.replaces[0])?.food : undefined;
   if (replaced) {
     // Einträge mit Fettstufe („Milch 3,5 %“) haben meist auch den schlichten Namen („milch“) – den nehmen
@@ -99,25 +99,97 @@ export function matchesFilter(r: FoodRow, f: FoodFilter): boolean {
   return !r.zero && !r.basic;
 }
 
+/** In welchem Tab die Zeile steht – für „gibt es schon unter …“ und um dorthin zu springen */
+export const tabOf = (r: FoodRow): FoodFilter => (r.zero ? 'ohne' : r.basic ? 'haus' : 'produkte');
+
 /**
- * Gibt es dieses Lebensmittel schon (mit Sorten)? Für „weitere Sorte?“ beim Anlegen – auch vom Bon (Julia: Name
- * „Rinderhack leicht 500g“ fand „Rinderhack“ nicht). Der Reihe nach: gleicher Name; der Name enthält einen
- * vorhandenen als ganze Wörter (der längste gewinnt); dasselbe Lebensmittel laut Tabelle („Hackfleisch“).
- * @param skip ausgeschlossen („Nein, neu anlegen“ gewählt)
+ * Unter welchem Schlüssel ein neues Produkt mit diesem Namen in der Liste stünde – genau wie beim Speichern:
+ * das Formular füllt „gilt für“ aus dem Namen (guessMatch), die Liste ordnet über keyOf zu.
  */
-export function findFoodRow(rows: readonly FoodRow[], name: string, table: FoodTable, skip = ''): FoodRow | undefined {
+export function rowKeyOf(name: string, table: FoodTable): string {
+  const m = guessMatch(name);
+  return keyOf({ name: name.trim(), replaces: m.replaces, ...(m.names.length ? { names: m.names } : {}) }, table, new Map()).key;
+}
+
+/**
+ * Grob angeglichene Schreibweisen eines Namens: ae/oe/ue wie ä/ö/ü, ß wie ss, ohne Leerzeichen und Bindestriche –
+ * und dazu je eine ohne Plural-Endung (en, n, s, e). Zwei Namen gelten als gleich geschrieben, wenn sich ihre Formen
+ * treffen: Haferflocke = Haferflocken, Kimchis = Kimchi, Gruene Bohnen = Grüne Bohnen, Rinder-Hack = Rinderhack.
+ * Endungen nur ab 4 Buchstaben Rest – sonst wäre „Eis“ ein „Ei“ und „Reis“ ein „Rei“.
+ */
+function spellings(name: string): string[] {
+  const s = normalizeName(name).replace(/ae/g, 'ä').replace(/oe/g, 'ö').replace(/ue/g, 'ü').replace(/ß/g, 'ss').replace(/[\s\-/]/g, '');
+  return [s, ...['en', 'n', 's', 'e'].filter((e) => s.endsWith(e) && s.length - e.length >= 4).map((e) => s.slice(0, -e.length))];
+}
+export function sameSpelling(a: string, b: string): boolean {
+  const as = spellings(a);
+  return !!as[0] && spellings(b).some((x) => as.includes(x));
+}
+
+/** Was gefunden wurde – siehe findExisting */
+export interface ExistingFood {
+  row: FoodRow;
+  /**
+   * dasselbe Lebensmittel: Speichern landete in genau dieser Zeile (als zweite, gleichnamige Sorte) oder doppelt daneben.
+   * Dann gibt es kein „Nein, eigenes Lebensmittel“ (Julia: nicht doppelt anlegen) – false: nur ähnlich („Rinderhack leicht“).
+   */
+  same: boolean;
+  /** nur an der Schreibweise erkannt („Kimchis“) – Rezepte mit dieser Schreibweise fänden die Zeile noch nicht */
+  spelling?: boolean;
+}
+
+/**
+ * Gibt es dieses Lebensmittel schon – mit Sorten, nur „Immer im Haus“ oder als Gewürz? Für den Hinweis beim Anlegen,
+ * überall gleich (Liste, Bon, Rezept, Vorrat). Der Reihe nach:
+ * 1. derselbe Schlüssel wie beim Speichern oder genau dieser Name (auch der einer Sorte, „Immer im Haus“, Gewürz)
+ * 2. dasselbe Lebensmittel laut Tabelle (Hackfleisch → dein Rinderhack)
+ * 3. andere Schreibweise (siehe sameSpelling)
+ * 4. nur ähnlich: der Name enthält einen vorhandenen als ganze Wörter (Julia: „Rinderhack leicht 500g“ vom Bon) –
+ *    der längste gewinnt; nur Zeilen mit Sorten, ein Gewürz hat keine
+ * @param skip ausgeschlossen („Nein, eigenes Lebensmittel“ gewählt)
+ */
+export function findExisting(rows: readonly FoodRow[], name: string, table: FoodTable, skip = ''): ExistingFood | undefined {
   const k = normalizeName(name);
   if (!k || k === skip) return undefined;
-  const withSorts = rows.filter((r) => r.products.length > 0);
-  const namesOf = (r: FoodRow) => [r.name, r.ingredient, ...r.products.map((p) => nameOf(p))].map(normalizeName).filter(Boolean);
-  const exact = withSorts.find((r) => namesOf(r).includes(k));
-  if (exact) return exact;
+  const namesOf = (r: FoodRow) => [r.key, r.name, r.ingredient, r.basic, r.zero, ...r.products.flatMap((p) => [nameOf(p), ...(p.names ?? [])])]
+    .filter((n): n is string => !!n).map(normalizeName).filter(Boolean);
+  const key = rowKeyOf(name, table);
+  const exact = rows.find((r) => r.key === key) ?? rows.find((r) => namesOf(r).includes(k));
+  if (exact) return { row: exact, same: true };
+  // nur ein sicherer Treffer – ein ungefährer („Rinderhack leicht 500g“) bekäme beim Speichern eine eigene Zeile
+  const hit = table.matchName(name);
+  if (hit?.quality === 'exact') {
+    // eigene Produkte stehen auch in der Tabelle – dann ist der Treffer die Sorte selbst
+    const ids = new Set([hit.food.ref.foodId, ...(hit.food.variants?.map((v) => v.id) ?? [])]);
+    const byTable = rows.find((r) => r.products.some((p) => ids.has(p.id) || p.replaces.some((x) => ids.has(x))));
+    if (byTable) return { row: byTable, same: true };
+  }
+  const loose = rows.find((r) => namesOf(r).some((n) => sameSpelling(n, k)));
+  if (loose) return { row: loose, same: true, spelling: true };
   const words = ` ${k.replace(/[-/]/g, ' ')} `;
-  const contained = withSorts
+  const contained = rows
+    .filter((r) => r.products.length > 0 && !r.zero)
     .map((r) => ({ r, len: Math.max(0, ...namesOf(r).filter((n) => words.includes(` ${n.replace(/[-/]/g, ' ')} `)).map((n) => n.length)) }))
     .filter((x) => x.len > 0)
     .sort((a, b) => b.len - a.len)[0];
-  if (contained) return contained.r;
-  const key = table.matchName(name)?.food.ref.foodId;
-  return key ? withSorts.find((r) => r.products.some((p) => p.replaces.includes(key))) : undefined;
+  return contained ? { row: contained.r, same: false } : undefined;
+}
+
+/** Die Zeile mit Sorten zu diesem Namen (Nährwert-Lücken: „1 Stück wiegt“ in deren Kachel) – siehe findExisting */
+export function findFoodRow(rows: readonly FoodRow[], name: string, table: FoodTable, skip = ''): FoodRow | undefined {
+  return findExisting(rows.filter((r) => r.products.length > 0), name, table, skip)?.row;
+}
+
+/**
+ * Was an einem Namen über den vorhandenen hinausgeht – als Zusatz der neuen Sorte: „Milch 1,5 %“ zu „Milch“ → „1,5 %“,
+ * „Rinderhack leicht“ → „leicht“. Steht der vorhandene Name nicht als ganze Wörter darin: nichts.
+ */
+export function extraWords(typed: string, base: string): string | undefined {
+  const b = base.trim();
+  if (!b) return undefined;
+  const at = typed.toLocaleLowerCase('de-DE').search(new RegExp(`(^|\\s)${b.toLocaleLowerCase('de-DE').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?=\\s|$)`));
+  if (at < 0) return undefined;
+  const start = at === 0 && !/^\s/.test(typed) ? 0 : at + 1;
+  const rest = `${typed.slice(0, start)} ${typed.slice(start + b.length)}`.replace(/\s+/g, ' ').trim();
+  return rest || undefined;
 }

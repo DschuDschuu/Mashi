@@ -36,7 +36,7 @@ export function FoodGaps({ onOpen }: {
       <ul className="food-gaps__list">
         {gaps.map((g) => (
           <li key={g.name} className="food-gaps__item">
-            {adding === g.name ? <NewProduct name={g.name} onDone={() => setAdding(null)} /> : (
+            {adding === g.name ? <NewProduct name={g.name} ingredient onDone={() => setAdding(null)} /> : (
               <>
                 <span className="food-gaps__text">
                   <strong>{g.name}</strong>

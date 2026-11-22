@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildFoodList, findFoodRow, matchesFilter } from './foodList';
+import { buildFoodList, extraWords, findExisting, findFoodRow, matchesFilter, sameSpelling, tabOf } from './foodList';
 import { localFoodTable } from './localFoods';
 import type { MyProduct } from './myProducts';
 
@@ -81,5 +81,62 @@ describe('Gibt es das Lebensmittel schon? (weitere Sorte)', () => {
   it('nur ganze Wörter – Kokosmilch ist keine Milch-Sorte; „Nein, neu anlegen“ gilt', () => {
     expect(find('Kokosmilch')).toBeUndefined();
     expect(findFoodRow(rows, 'Rinderhack', localFoodTable, 'rinderhack')).toBeUndefined();
+  });
+});
+
+describe('Gibt es das schon? – überall dieselbe Prüfung (findExisting)', () => {
+  const p = (id: string, name: string, extra: Partial<MyProduct> = {}): MyProduct => ({ id, name, replaces: [], per100g: { kcal: 1, protein: 0, carbs: 0, fat: 0 }, updatedAt: '2026-11-22T12:00:00.000Z', ...extra });
+  const rows = buildFoodList(
+    [p('h', 'Rinderhack', { replaces: ['rinderhack'] }), p('k', 'Testkimchi', { names: ['kimchi'] }), p('f', 'Haferflocken', { replaces: ['haferflocken'] }), p('b', 'Grüne Bohnen', { names: ['grüne bohnen'] })],
+    ['Reis'], ['Zimt'], localFoodTable,
+  );
+  const hit = (n: string) => {
+    const h = findExisting(rows, n, localFoodTable);
+    return h && { name: h.row.name, same: h.same, spelling: !!h.spelling };
+  };
+
+  it('gleicher Name, auch klein geschrieben oder mit Leerzeichen – dasselbe Lebensmittel', () => {
+    expect(hit('Rinderhack')).toEqual({ name: 'Rinderhack', same: true, spelling: false });
+    expect(hit('  rinderhack ')).toMatchObject({ name: 'Rinderhack', same: true });
+    // der eigene Name einer Sorte zählt auch
+    expect(hit('Testkimchi')).toMatchObject({ name: 'Testkimchi', same: true });
+  });
+
+  it('findet auch, was es nur „Immer im Haus“ oder als Gewürz gibt (Julia: Hinweis fehlte)', () => {
+    expect(hit('Reis')).toMatchObject({ name: 'Reis', same: true });
+    expect(hit('Zimt')).toMatchObject({ name: 'Zimt', same: true });
+  });
+
+  it('andere Schreibweise: Plural, ae statt ä, Bindestrich, Leerzeichen', () => {
+    expect(hit('Haferflocke')).toEqual({ name: 'Haferflocken', same: true, spelling: true });
+    expect(hit('Kimchis')).toMatchObject({ name: 'Testkimchi', same: true, spelling: true });
+    expect(hit('Gruene Bohnen')).toMatchObject({ name: 'Grüne Bohnen', same: true });
+    expect(hit('Rinder-Hack')).toMatchObject({ name: 'Rinderhack', same: true });
+  });
+
+  it('nur ähnlich: enthält einen vorhandenen Namen – dann darf es auch etwas Eigenes sein', () => {
+    expect(hit('Rinderhack scharf')).toMatchObject({ name: 'Rinderhack', same: false });
+    expect(findExisting(rows, 'Rinderhack scharf', localFoodTable, 'rinderhack scharf')).toBeUndefined();
+  });
+
+  it('keine falschen Treffer bei kurzen Wörtern und Wortteilen', () => {
+    expect(sameSpelling('Eis', 'Ei')).toBe(false);
+    expect(sameSpelling('Reis', 'Rei')).toBe(false);
+    expect(sameSpelling('Pasta', 'Paste')).toBe(false);
+    expect(hit('Zimtschnecke')).toBeUndefined();
+    expect(hit('')).toBeUndefined();
+  });
+
+  it('der Zusatz einer neuen Sorte ist, was über den vorhandenen Namen hinausgeht', () => {
+    expect(extraWords('Milch 1,5 %', 'Milch')).toBe('1,5 %');
+    expect(extraWords('Rinderhack leicht', 'rinderhack')).toBe('leicht');
+    expect(extraWords('Bio Rinderhack leicht', 'Rinderhack')).toBe('Bio leicht');
+    expect(extraWords('Rinderhack', 'Rinderhack')).toBeUndefined();
+    expect(extraWords('Kokosmilch', 'Milch')).toBeUndefined();
+  });
+
+  it('die Zeile kennt ihren Tab', () => {
+    const tab = (n: string) => tabOf(rows.find((r) => r.name === n)!);
+    expect([tab('Rinderhack'), tab('Reis'), tab('Zimt')]).toEqual(['produkte', 'haus', 'ohne']);
   });
 });

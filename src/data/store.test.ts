@@ -3,7 +3,7 @@ import PouchDB from 'pouchdb-core';
 import memory from 'pouchdb-adapter-memory';
 import { describe, expect, it, vi } from 'vitest';
 import { PouchRecipeRepository, type RecipeDb } from './pouchRepository';
-import { importProducts, saveProducts, currentProducts, clearChecked, cookParts, setPlanAmounts, addExtra, addPantryItem, dropPriceDay, editBon, setCategory, addToPlan, answerLeftover, applyInventory, clearDoneExtras, deleteRecipe, importPantry, importReceipt, importRecipes, regenerateImage, markCooked, uncookRecipe, clearCooked, createRecipe, currentLeftoverAsk, currentPantry, eatPreparedPortions, freezePantryItem, initStore, thawPantryItem, togglePlanCooked, removeFromPlan, removePantryItem, setFoodStage, setPantryAmount, toggleShoppingItem, updatePantryItem, whenSaved, saveOffers, removeOffer } from './store';
+import { importProducts, productUndo, saveProducts, currentProducts, clearChecked, cookParts, setPlanAmounts, addExtra, addPantryItem, dropPriceDay, editBon, setCategory, addToPlan, answerLeftover, applyInventory, clearDoneExtras, deleteRecipe, importPantry, importReceipt, importRecipes, regenerateImage, markCooked, uncookRecipe, clearCooked, createRecipe, currentLeftoverAsk, currentPantry, eatPreparedPortions, freezePantryItem, initStore, thawPantryItem, togglePlanCooked, removeFromPlan, removePantryItem, setFoodStage, setPantryAmount, toggleShoppingItem, updatePantryItem, whenSaved, saveOffers, removeOffer } from './store';
 import { buildShoppingList, keyOfName } from '../domain/mealplan';
 import { emptyPantry } from '../domain/pantry';
 import { EXTRA_PREFIX, RESTOCK_PREFIX } from '../domain/restock';
@@ -470,6 +470,21 @@ describe('Store: Sicherung einspielen überschreibt nichts Neueres (Code-Review 
     expect(currentProducts()[0].per100g.kcal).toBe(70);
     expect(importProducts([prod('2026-10-09T10:00:00.000Z', 80)])).toBe(1);
     expect(currentProducts()[0].per100g.kcal).toBe(80);
+  });
+
+  it('Rückgängig nach dem Anlegen: neue Sorte weg, aufgefüllte wie vorher, anderes bleibt', async () => {
+    await freshStore('anlegen-rueckgaengig');
+    const quark = prod('2026-10-05T10:00:00.000Z', 70);
+    const other = { ...prod('2026-10-05T10:00:00.000Z', 10), id: 'p-gurke', name: 'Gurke' };
+    saveProducts([quark, other]);
+    const before = currentProducts();
+    // eine Sorte mehr und die vorhandene angeglichen (wie „weitere Sorte“)
+    saveProducts([{ ...quark, shelfDays: 9 }, other, { ...prod('2026-11-22T10:00:00.000Z', 60), id: 'p-quark-2', brand: 'Testmarke' }]);
+    const undo = productUndo(before);
+    // dazwischen etwas anderes geändert – das bleibt
+    saveProducts(currentProducts().map((p) => (p.id === 'p-gurke' ? { ...p, per100g: { ...p.per100g, kcal: 12 } } : p)));
+    undo();
+    expect(currentProducts().map((p) => [p.id, p.shelfDays, p.per100g.kcal])).toEqual([['p-quark', undefined, 70], ['p-gurke', undefined, 12]]);
   });
 
   it('Rezepte: der Zeitstempel aus der Datei bleibt (nicht „jetzt“)', async () => {

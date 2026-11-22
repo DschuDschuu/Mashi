@@ -4,7 +4,7 @@ import { suggestPantryUnit } from '../../domain/packs';
 import { daysLabel, daysLeft, frozenSince, specialDays, useByOf } from '../../domain/shelfLife';
 import {
   eatPreparedPortions,
-  addPantryItem, answerPantryCheck, addProduct, assignPantrySorts, currentPantry, freezePantryItem, removePantryItem, setPantryAmount, thawPantryItem, updatePantryItem,
+  addPantryItem, answerPantryCheck, addProduct, assignPantrySorts, currentPantry, currentProducts, freezePantryItem, productUndo, saveProducts, removePantryItem, setPantryAmount, thawPantryItem, updatePantryItem,
   useFoodTable, usePantry, usePlan, useProducts, useRecipes,
 } from '../../data/store';
 import { currentContent } from '../../domain/recipe';
@@ -33,7 +33,7 @@ import { NewProduct } from '../components/NewProduct';
 import type { FoodEntry } from '../../domain/nutrition/types';
 import { newId } from '../../domain/recipe';
 import { forParts, partLabel as partName } from '../../domain/parts';
-import { nameOf, sortTags, type MyProduct } from '../../domain/nutrition/myProducts';
+import { brandOf, nameOf, productLabel, sharedOf, sortTags, withShared, type MyProduct } from '../../domain/nutrition/myProducts';
 import { FOOD_CHOICES, normalizeName, PROVIDER } from '../../domain/nutrition/localFoods';
 
 const UNITS: PantryUnit[] = ['g', 'ml', 'Stück', 'Glas'];
@@ -421,10 +421,32 @@ function AddForm({ onDone }: { onDone: () => void }) {
     assignPantrySorts([{ itemIds: ids, productId: p.id }]);
     setOffer(null);
   };
-  /** Produkt (Werte aus der Tabelle) speichern und dem Vorrat die Sorte geben */
+  /** Sorten, die es fürs Angebotene schon gibt – „Nur hinzufügen“ legt dann nichts doppelt an (wie „Mit Nährwerten“) */
+  const offerSorts = useSortOptions(offer?.name ?? '');
+  /**
+   * Produkt (Werte aus der Tabelle) speichern und dem Vorrat die Sorte geben. Gibt es die Marke schon (über „Andere Marke“
+   * nochmal getippt): nur zuordnen. Gibt es andere Sorten: eine weitere – mit demselben Gemeinsamen wie überall.
+   */
   const adopt = (p: MyProduct) => {
-    assign(addProduct(p, offer!.name));
-    toast(`„${offer!.name} · ${offer!.brand}“ steht jetzt unter „Meine Lebensmittel“`);
+    const before = currentProducts();
+    const sorts = offerSorts.map((o) => before.find((x) => x.id === o.id)).filter((x): x is MyProduct => !!x);
+    const b = offer!.brand.trim().toLocaleLowerCase('de-DE');
+    const same = sorts.find((x) => brandOf(x)?.toLocaleLowerCase('de-DE') === b);
+    if (same) {
+      assign(same);
+      toast(`„${productLabel(same)}“ gibt es schon – zugeordnet`);
+      return;
+    }
+    let saved = p;
+    if (sorts.length) {
+      const s = sharedOf(sorts);
+      const group = new Set(sorts.map((x) => x.id));
+      saved = withShared(p, s);
+      saveProducts([...before.map((x) => (group.has(x.id) ? withShared(x, s) : x)), saved]);
+    } else saved = addProduct(p, offer!.name);
+    const undo = productUndo(before);
+    assign(saved);
+    toast(sorts.length ? `Weitere Sorte „${productLabel(saved)}“ angelegt` : `„${productLabel(saved)}“ steht jetzt unter „Meine Lebensmittel“`, { label: 'Rückgängig', run: undo });
   };
   const submit = () => {
     if (!name.trim()) return;

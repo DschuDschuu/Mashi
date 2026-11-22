@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ask, choose } from '../confirm';
 import { basicsOf } from '../../domain/mealplan';
-import { buildFoodList, findFoodRow, matchesFilter, type FoodFilter, type FoodRow } from '../../domain/nutrition/foodList';
+import { buildFoodList, extraWords, findExisting, findFoodRow, matchesFilter, tabOf, type FoodFilter, type FoodRow } from '../../domain/nutrition/foodList';
 import { guessMatch, normalizeName, PROVIDER } from '../../domain/nutrition/localFoods';
 import { estimateDays, FOREVER, MAX_SHELF_DAYS, setShelfDays } from '../../domain/shelfLife';
 import { adoptCandidates } from '../../domain/adoptFoods';
@@ -14,7 +14,7 @@ import { purchasesOf } from '../../domain/bons';
 import { spiceName, zeroOf } from '../../domain/nutrition/noNutrition';
 import { averageNutrients } from '../../domain/nutrition/variants';
 import type { Nutrients } from '../../domain/nutrition/types';
-import { addProduct, currentPantry, currentProducts, dismissRename, removeProduct, setPantryShelfDays, renameFoodEverywhere, saveProducts, setFavoriteVariant, setFoodStage, useFoodTable, usePantry, useProducts, useRecipes } from '../../data/store';
+import { currentPantry, currentProducts, dismissRename, productUndo, removeProduct, setPantryShelfDays, renameFoodEverywhere, saveProducts, setFavoriteVariant, setFoodStage, useFoodTable, usePantry, useProducts, useRecipes } from '../../data/store';
 import { stageOf } from '../../domain/stage';
 import { sortUses } from '../../domain/sortRefs';
 import { StagePicker } from './StagePicker';
@@ -29,6 +29,7 @@ import { Icon } from './Icon';
 import { ProductForm } from './MyProductsPanel';
 import { MatchChips, visibleExcludes } from './MatchChips';
 import { FoodGaps } from './FoodGaps';
+import { ExistsNote, titleOf } from './ExistsNote';
 
 const fmt = (n: number) => n.toLocaleString('de-DE', { maximumFractionDigits: 1 });
 const cap = (s: string) => s.replace(/(^|[\s-])(\p{L})/gu, (_m, sep: string, ch: string) => sep + ch.toLocaleUpperCase('de-DE'));
@@ -68,10 +69,17 @@ export function FoodList({ adding, onAdding }: {
   const [open, setOpen] = useState<string | null>(null);
   /** über „Gewicht“ aus den Nährwert-Lücken geöffnet – die Kachel zeigt gleich das Formular mit „1 Stück wiegt“ */
   const [weigh, setWeigh] = useState<string | null>(null);
-  /** fertig hinzugefügt – als weitere Sorte gleich die Zeile aufklappen, damit man sie sieht */
-  const addDone = (openKey?: string) => {
+  /** Kachel zeigen: in ihren Tab wechseln (sie steht nicht immer unter „Produkte“), aufklappen, hinscrollen */
+  const reveal = (r: FoodRow) => {
+    setFilter(tabOf(r));
+    setOpen(r.key);
+    // erst nach dem Umschalten steht die Zeile da
+    setTimeout(() => document.querySelector(`[data-food="${CSS.escape(r.key)}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' }), 60);
+  };
+  /** fertig hinzugefügt – als weitere Sorte gleich die Zeile aufklappen, damit man sie sieht; „Zu …“ genauso */
+  const addDone = (show?: FoodRow) => {
     onAdding(false);
-    if (openKey) { setFilter('produkte'); setOpen(openKey); }
+    if (show) reveal(show);
   };
   const matches = matchesFilter;
   const shown = rows.filter((r) => matches(r, filter));
@@ -90,11 +98,8 @@ export function FoodList({ adding, onAdding }: {
   const openFood = (name: string): boolean => {
     const r = findFoodRow(rows, name, foodTable);
     if (!r) return false;
-    setFilter(TABS.find(([f]) => matches(r, f))?.[0] ?? 'produkte');
-    setOpen(r.key);
+    reveal(r);
     setWeigh(r.key);
-    // erst nach dem Umschalten steht die Zeile da
-    setTimeout(() => document.querySelector(`[data-food="${CSS.escape(r.key)}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' }), 60);
     return true;
   };
   const line = (r: FoodRow) => (
@@ -192,12 +197,16 @@ function FoodLine({ row, open, weigh = false, onWeighed, onToggle, products, onT
     saveProducts(s ? next.map((x) => (group.has(x.id) ? withShared(x, s) : x)) : next);
   };
   const save = (p: MyProduct) => {
+    const before = currentProducts();
+    const added = !ps.some((x) => x.id === p.id);
     // eine Sorte mehr oder eine bearbeitet: alle Sorten dieser Zutat bekommen dasselbe Gemeinsame
     const group = [...ps.filter((x) => x.id !== p.id), p];
     store([p], group.length > 1 ? sharedOf(group.map((x) => (x.id === p.id ? p : x))) : undefined);
     setEditing(null);
     setAddingSort(false);
-    toast('Gespeichert – alle Rezepte rechnen neu');
+    // wie beim Hinzufügen oben: sagen, was passiert ist – und „Rückgängig“
+    toast(`${!added ? 'Gespeichert' : ps.length ? `Weitere Sorte von „${title}“ angelegt` : `Werte für „${title}“ gespeichert`} – alle Rezepte rechnen neu`,
+      { label: 'Rückgängig', run: productUndo(before) });
   };
   /** Name oder „gilt für“ für alle Sorten – sofort gespeichert, mit „Rückgängig“ (wie die Stufen darunter) */
   const saveShared = (s: SharedMatch, what: string, recalc = true) => {
@@ -447,71 +456,114 @@ function ShelfField({ value, estimate, onSave }: { value?: number; estimate?: nu
 
 /**
  * Neues Lebensmittel – ein Formular: Name, darunter „Immer im Haus“ / „Gewürz“, dann Barcode oder
- * Open Food Facts und alle Felder. Gibt es das Lebensmittel schon, fragt Mashi gleich unter dem Namen,
- * ob es eine weitere Sorte ist. Gewürz: nur der Name (zählt nicht mit, keine Nährwerte).
- * @param onDone mit Schlüssel der Zeile, die danach aufgeklappt werden soll
+ * Open Food Facts und alle Felder. Gewürz: nur der Name (zählt nicht mit, keine Nährwerte).
+ * Gibt es das Lebensmittel schon (auch nur „Immer im Haus“ oder als Gewürz, auch anders geschrieben), steht das gleich
+ * unter dem Namen und Speichern ist gesperrt, bis du wählst (Julia: sonst stand es doppelt da): dasselbe →
+ * „Als weitere Sorte“ oder „Zu …“ (die Kachel, dort auch die Stufe mit „Rückgängig“); nur ähnlich → weitere Sorte
+ * oder wirklich ein eigenes Lebensmittel. Nichts wird still überschrieben, jedes Anlegen hat „Rückgängig“.
+ * @param onDone fertig – mit der Zeile, die danach aufgeklappt werden soll (auch „Zu …“)
  */
-function AddFood({ tab, rows, onDone }: { tab: FoodFilter; rows: FoodRow[]; onDone: (openKey?: string) => void }) {
-  const products = useProducts();
+function AddFood({ tab, rows, onDone }: { tab: FoodFilter; rows: FoodRow[]; onDone: (show?: FoodRow) => void }) {
   /** der Tab gibt die Stufe vor – umschaltbar, ohne den Tab zu wechseln */
   const [stage, setStage] = useState<'haus' | 'ohne' | null>(tab === 'produkte' ? null : tab);
-  /** „Ja, weitere Sorte“ gewählt: zu dieser Zeile */
-  const [sortOf, setSortOf] = useState<FoodRow | null>(null);
-  /** „Nein, neu anlegen“ für genau diesen Namen – dann nicht noch einmal fragen */
+  /** „Als weitere Sorte“ gewählt: zu dieser Zeile – mit dem getippten Namen (daraus der Zusatz, z. B. „leicht“) */
+  const [sortOf, setSortOf] = useState<{ row: FoodRow; typed: string } | null>(null);
+  /** „Nein, eigenes Lebensmittel“ für genau diesen Namen – dann nicht noch einmal fragen */
   const [notSort, setNotSort] = useState('');
-  const existing = (n: string) => findFoodRow(rows, n, foodTable, notSort);
+  const existing = (n: string) => findExisting(rows, n, foodTable, notSort);
 
   const saveNew = (p: MyProduct) => {
-    addProduct(p);
-    if (stage === 'haus') setFoodStage(p.name, 'haus');
-    toast(`„${p.name}“ gespeichert${stage === 'haus' ? ' – immer im Haus' : ''} – alle Rezepte rechnen neu`);
+    const before = currentProducts();
+    // hier ist sicher nichts Gleiches da (sonst wäre Speichern gesperrt) – also anhängen, nichts still auffüllen
+    saveProducts([...before, p]);
+    const undoProduct = productUndo(before);
+    const undoStage = stage === 'haus' ? setFoodStage(p.name, 'haus') : undefined;
+    toast(`„${p.name}“ angelegt${stage === 'haus' ? ' – immer im Haus' : ''} – alle Rezepte rechnen neu`, {
+      label: 'Rückgängig', run: () => { undoStage?.(); undoProduct(); },
+    });
     onDone();
   };
   const saveSort = (row: FoodRow, p: MyProduct) => {
+    const before = currentProducts();
+    const title = titleOf(row);
+    if (!row.products.length) {
+      // nur „Immer im Haus“, noch keine Sorte: das ist die erste – unter dem Namen der Zeile, damit sie dort landet
+      saveProducts([...before, p]);
+      toast(`Werte für „${title}“ gespeichert – alle Rezepte rechnen neu`, { label: 'Rückgängig', run: productUndo(before) });
+      onDone(row);
+      return;
+    }
     // wie „Weitere Sorte“ in der Kachel: alle Sorten bekommen dasselbe Gemeinsame
     const s = sharedOf(row.products);
     const group = new Set(row.products.map((x) => x.id));
     // die einzige Sorte hat noch keine Werte? Dann füllt sich die (siehe fillOrAdd)
-    const { products: next, saved } = fillOrAdd(products.map((x) => (group.has(x.id) ? withShared(x, s) : x)), withShared(p, s), row.products);
+    const { products: next, saved } = fillOrAdd(before.map((x) => (group.has(x.id) ? withShared(x, s) : x)), withShared(p, s), row.products);
     saveProducts(next);
-    toast(saved.id === p.id ? `Weitere Sorte von „${s.name}“ gespeichert – alle Rezepte rechnen neu` : `Nährwerte für „${s.name}“ gespeichert – alle Rezepte rechnen neu`);
-    onDone(row.key);
+    toast(saved.id === p.id ? `Weitere Sorte von „${s.name}“ angelegt – alle Rezepte rechnen neu` : `Werte für „${s.name}“ eingetragen – alle Rezepte rechnen neu`,
+      { label: 'Rückgängig', run: productUndo(before) });
+    onDone(row);
   };
   // über die Stufe – so steht es nie zugleich unter „Nachkaufen“ und hier
   const addStage = (n: string, s: 'haus' | 'ohne') => {
-    setFoodStage(n, s);
-    toast(s === 'haus' ? `„${n}“ ist jetzt immer im Haus` : `„${n}“ steht jetzt unter „Gewürze“`);
+    const undo = setFoodStage(n, s);
+    toast(s === 'haus' ? `„${n}“ ist jetzt immer im Haus` : `„${n}“ steht jetzt unter „Gewürze“`, { label: 'Rückgängig', run: undo });
     onDone();
   };
 
-  if (sortOf) {
-    const s = sharedOf(sortOf.products);
+  const sort = sortOf && (() => {
+    const { row, typed } = sortOf;
+    const s = row.products.length ? sharedOf(row.products) : undefined;
+    const detail = s && extraWords(typed, s.name);
     return (
       <div className="panel stack add-food">
-        <strong>Weitere Sorte von „{s.name}“</strong>
-        <ProductForm shared={s} onSave={(p) => saveSort(sortOf, p)} onCancel={() => onDone()} />
+        <strong>{s ? `Weitere Sorte von „${s.name}“` : `Werte für „${row.name}“`}</strong>
+        {/* Abbrechen: zurück zum Namen – das Getippte bleibt */}
+        <ProductForm shared={s} initial={s ? (detail ? { detail } : undefined) : { name: row.name }} onSave={(p) => saveSort(row, p)} onCancel={() => setSortOf(null)} />
       </div>
     );
-  }
+  })();
   return (
-    <div className="panel stack add-food">
+    <>
+    {sort}
+    {/* ausgeblendet statt weg – so bleibt das Getippte nach „Abbrechen“ (hidden wirkt gegen .stack nicht) */}
+    <div className="panel stack add-food" style={sortOf ? { display: 'none' } : undefined}>
       <strong>Lebensmittel hinzufügen</strong>
       <ProductForm key="neu" onSave={saveNew} onCancel={() => onDone()}
         nameOnly={stage === 'ohne'} onNameOnly={(n) => addStage(n, 'ohne')}
         onNoValues={stage === 'haus' ? (n) => addStage(n, 'haus') : undefined}
+        canSave={(n) => !existing(n)}
         afterName={(n) => {
-          const row = stage !== 'ohne' ? existing(n) : undefined;
+          const hit = existing(n);
+          // eine Sorte geht nicht als Gewürz (keine Werte) und nicht bei einem Gewürz – dann nur in die Kachel
+          const canSort = !!hit && stage !== 'ohne' && !hit.row.zero;
+          const show = hit && (
+            <button type="button" className={`btn btn--sm ${canSort && hit.same ? 'btn--soft' : 'btn--primary'}`} onClick={() => onDone(hit.row)}>
+              Zu „{titleOf(hit.row)}“
+            </button>
+          );
           return (
             <>
-              {row && (
-                <div className="scan-note add-food__exists" role="status">
-                  <p><strong>„{sharedOf(row.products).name}“</strong> gibt es schon{row.products.length > 1 ? ` (${row.products.length} Sorten)` : ''}. Ist das eine weitere Sorte, z. B. eine andere Marke?</p>
-                  <div className="row-gap">
-                    <button type="button" className="btn btn--primary btn--sm" onClick={() => setSortOf(row)}>Ja, weitere Sorte</button>
-                    <button type="button" className="btn btn--ghost btn--sm" onClick={() => setNotSort(normalizeName(n))}>Nein, neu anlegen</button>
-                  </div>
-                </div>
-              )}
+              {hit && (hit.same ? (
+                <ExistsNote hit={hit} here={tab}
+                  ask={!canSort ? (hit.row.zero ? 'Stufe und Packung stellst du in der Kachel ein.' : 'Zum Gewürz machst du es in der Kachel.')
+                    : hit.row.products.length ? 'Ist das eine weitere Sorte, z. B. leicht oder eine andere Marke?' : 'Werte dafür trägst du gleich hier oder in der Kachel ein.'}>
+                  {canSort && (
+                    <button type="button" className="btn btn--primary btn--sm" onClick={() => setSortOf({ row: hit.row, typed: n })}>
+                      {hit.row.products.length ? 'Als weitere Sorte' : 'Werte eintragen'}
+                    </button>
+                  )}
+                  {show}
+                </ExistsNote>
+              ) : (
+                <ExistsNote hit={hit} here={tab} ask={canSort ? `Ist „${n}“ eine weitere Sorte davon?` : `Oder ist „${n}“ etwas anderes?`}>
+                  {canSort
+                    ? <button type="button" className="btn btn--primary btn--sm" onClick={() => setSortOf({ row: hit.row, typed: n })}>Ja, weitere Sorte</button>
+                    : show}
+                  <button type="button" className="btn btn--ghost btn--sm" onClick={() => setNotSort(normalizeName(n))}>
+                    {canSort ? 'Nein, eigenes Lebensmittel' : 'Etwas anderes'}
+                  </button>
+                </ExistsNote>
+              ))}
               {/* genau eine Stufe oder keine – wie die Stufen-Chips in der Kachel */}
               <div className="chips">
                 <button type="button" className={`chip chip--sm${stage === 'haus' ? ' is-on' : ''}`} aria-pressed={stage === 'haus'} onClick={() => setStage(stage === 'haus' ? null : 'haus')}>
@@ -527,6 +579,7 @@ function AddFood({ tab, rows, onDone }: { tab: FoodFilter; rows: FoodRow[]; onDo
           );
         }} />
     </div>
+    </>
   );
 }
 
