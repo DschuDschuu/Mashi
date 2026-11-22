@@ -224,7 +224,6 @@ p { margin: 0; }
 .card__hit { position: absolute; inset: 0; z-index: 1; border-radius: inherit; }
 .card__hit:active { background: rgb(45 71 72 / 0.04); }
 .card__media { position: relative; }
-.card__status { position: absolute; left: 8px; bottom: 8px; }
 .card__fav { position: absolute; top: 8px; right: 8px; z-index: 2; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: rgb(255 255 255 / 0.92); color: var(--ink-2); }
 .card__fav.is-on { color: var(--heart); }
 .card__body { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 3px; flex: 1; }
@@ -1129,6 +1128,8 @@ p { margin: 0; }
 
 /* Einkauf planen (Angebote) – Zeilen wie die Einkaufsliste, lange Prospektnamen umbrechen statt herausragen */
 .offer-preview { display: flex; flex-direction: column; gap: 12px; }
+/* Rezept-Datei unter Plus → Importieren (RecipeFileImport) – Vorschau wie bei den Angeboten */
+.recipe-file__title { font-size: var(--fs-lg); }
 .offer-preview .shopping { padding: 0; }
 .offer-preview .shopping__name, .offer-group .shopping__name { overflow-wrap: anywhere; }
 .offer-unread { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 10px 12px; border-radius: var(--r-sm); background: var(--sky); }
@@ -1813,6 +1814,11 @@ p { margin: 0; }
    Platzhalterbilder (dunkle Tönung im eigenen Farbton, die Zeichnung ist hell: --art) */
 :root[data-theme="weihnachten"] :is(.iconbtn--glass, .card__fav) { background: rgb(20 36 28 / 0.86); color: var(--ink); box-shadow: 0 1px 6px rgb(0 0 0 / 0.3); }
 :root[data-theme="weihnachten"] .option__icon { background: rgb(255 255 255 / 0.08); }
+/* „Meine Lebensmittel“, aufgeklappt: das „neutrale Grau“ der Karten ist fest hell (#f1efeb) – auf Dunkel stand helle
+   Schrift auf Hellgrau, 1 : 1 (Julia: „die Karte ist nicht lesbar“). Hier die dunkle zweite Fläche statt Grau. */
+:root[data-theme="weihnachten"] .foods__body { --card-neutral: var(--surface-2); }
+/* Geöffnetes Türchen mit Foto: Zahl und Häkchen sitzen auf festem Weiß – dunkle Schrift statt der (hier hellen) Themenfarbe */
+:root[data-theme="weihnachten"] .advent-door.has-photo :is(.advent-door__num, .advent-door__saved) { color: #1f3a2c; }
 /* Abdunkeln hinter Blättern, Dialogen und Tour: Schwarz statt Blaugrau – das hellte den dunklen Grund sonst auf (Nebel) */
 :root[data-theme="weihnachten"] .sheet-backdrop { background: rgb(0 0 0 / 0.5); }
 :root[data-theme="weihnachten"] .tour__dim { background: rgb(0 0 0 / 0.6); }
@@ -2462,7 +2468,11 @@ details.cost-line[open] > summary::after { transform: rotate(-90deg); }
 .price-sorts-legend__name { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: var(--fs-sm); }
 .last-buy__alone { display: flex; justify-content: flex-end; margin-top: -4px; }
 /* Rezeptkarte: schon im Wochenplan (Julia) – Schild oben links auf dem Bild */
-.card__planned { position: absolute; top: 8px; left: 8px; z-index: 1; display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: 999px; background: var(--primary); color: var(--on-primary); font-size: var(--fs-xs); font-weight: 700; }
+/* oben links auf dem Kartenbild: „Neu“ (bis zum ersten Kochen) bzw. der Status („Zum Testen“), unten links „Geplant“ */
+.card__flags { position: absolute; top: 8px; left: 8px; z-index: 1; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+/* „Neu“ in festem Rot mit weißer Schrift (5,9 : 1) – hebt sich in jedem Farbschema ab, auch im dunklen Weihnachten */
+.card__new { padding: 3px 9px; border-radius: 999px; background: #b3322c; color: #fff; font-size: var(--fs-xs); font-weight: 800; letter-spacing: 0.02em; box-shadow: 0 1px 4px rgb(0 0 0 / 0.18); }
+.card__planned { position: absolute; left: 8px; bottom: 8px; z-index: 1; display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: 999px; background: var(--primary); color: var(--on-primary); font-size: var(--fs-xs); font-weight: 700; }
 /* lange drücken: kein Text markieren, kein Kontextmenü des Browsers */
 .card { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
 .quick-sheet__actions { display: flex; flex-direction: column; gap: 8px; }

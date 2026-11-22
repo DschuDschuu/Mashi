@@ -3,6 +3,7 @@ import { cleanOcrText, parseRecipeText, type TextImport } from '../../domain/imp
 import { navigate } from '../../router';
 import { FileButton } from '../components/Controls';
 import { Icon } from '../components/Icon';
+import { RecipeFileImport } from '../components/RecipeFileImport';
 import { TopBar } from '../components/TopBar';
 import { recognizeText } from '../ocr';
 import { RecipeFormScreen } from './RecipeFormScreen';
@@ -61,10 +62,10 @@ export function ImportScreen() {
 
   return (
     <main className="screen">
-      <TopBar title="Rezept importieren" confirmBack={text.trim() ? 'Import abbrechen? Der eingefügte Text geht verloren.' : undefined} />
+      <TopBar title="Rezept importieren" intro="import" confirmBack={text.trim() ? 'Import abbrechen? Der eingefügte Text geht verloren.' : undefined} />
       <div className="stack">
         <p className="muted">Fotografiere ein Rezept (Kochbuch, Zettel, Screenshot) – oder kopiere es von einer Webseite, aus einem Chat oder einer Notiz. Mashi erkennt Zutaten, Schritte, Portionen und Zeiten.</p>
-        <FileButton className="btn btn--primary btn--block" disabled={reading !== null} onFile={(f) => void readPhoto(f)}>
+        <FileButton className="btn btn--primary btn--block import-photo" disabled={reading !== null} onFile={(f) => void readPhoto(f)}>
           <Icon name="camera" size={18} /> {reading !== null ? `Lese Foto … ${Math.round(reading * 100)} %` : 'Rezept fotografieren oder Bild wählen'}
         </FileButton>
         {fromPhoto && <p className="scan-note" role="status">Text aus dem Foto erkannt. Prüf ihn kurz – Texterkennung verliest sich gern bei Brüchen (½) und Einheiten – und tippe dann auf „Erkennen“.</p>}
@@ -81,6 +82,8 @@ export function ImportScreen() {
           <Icon name="info" size={20} />
           <p>Erkannte Zutaten und Mengen siehst du <strong>immer erst zur Prüfung</strong> – gespeichert wird erst, wenn du es sagst. Das Foto verlässt dein Gerät nicht.</p>
         </div>
+        {/* mehrere Rezepte als Datei (Julia: „so wie beim Adventskalender“) */}
+        <RecipeFileImport />
         <button className="btn btn--soft btn--block" onClick={() => navigate('/neu/manuell', { replace: true })}>Stattdessen selbst eintragen</button>
       </div>
     </main>

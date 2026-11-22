@@ -1,5 +1,5 @@
 import { categoryInfo } from '../../domain/catalog';
-import { currentContent, totalMinutes } from '../../domain/recipe';
+import { currentContent, showsNew, totalMinutes } from '../../domain/recipe';
 import type { Recipe } from '../../domain/types';
 import { toggleFavorite, usePlan } from '../../data/store';
 import { useRef, useState } from 'react';
@@ -19,6 +19,8 @@ import { StatusBadge } from './StatusBadge';
 export function RecipeCard({ recipe, wide = false, made }: { recipe: Recipe; wide?: boolean; made?: number }) {
   const c = currentContent(recipe);
   const planned = usePlan().items.some((i) => i.recipeId === recipe.id);
+  const fresh = showsNew(recipe);
+  const showStatus = recipe.status !== 'kochbuch' && !(fresh && recipe.status === 'zum_testen');
   // lange drücken → kleines Menü (Julia: am Handy schnell einplanen); rechte Maustaste / Android-Langdruck ebenso
   const [menu, setMenu] = useState(false);
   const timer = useRef<number | undefined>(undefined);
@@ -46,11 +48,16 @@ export function RecipeCard({ recipe, wide = false, made }: { recipe: Recipe; wid
       {menu && <RecipeQuickSheet recipe={recipe} onClose={() => setMenu(false)} />}
       <div className="card__media">
         <RecipeImage image={recipe.image} size="md" />
-        {/* schon eingeplant (Julia) – oben links, der Status steht unten */}
-        {planned && <span className="card__planned"><Icon name="calendar" size={12} /> Im Wochenplan</span>}
-        {recipe.status !== 'kochbuch' && (
-          <span className="card__status"><StatusBadge status={recipe.status} /></span>
+        {/* Oben links, wo das Rezept steht (Julia): „Neu“ bis zum ersten Kochen – es ersetzt „Zum Testen“, danach steht
+            dort wieder der Status. Eine neue KI-Idee zeigt beides untereinander. Unten links, was du vorhast: „Geplant“
+            (statt „Im Wochenplan“ – das war auf der Handy-Karte 120 px breit und lief unter das Herz). */}
+        {(fresh || showStatus) && (
+          <span className="card__flags">
+            {fresh && <span className="card__new">Neu</span>}
+            {showStatus && <StatusBadge status={recipe.status} />}
+          </span>
         )}
+        {planned && <span className="card__planned" title="Im Wochenplan"><Icon name="calendar" size={12} /> Geplant</span>}
         <button
           className={`card__fav${recipe.favorite ? ' is-on' : ''}`}
           onClick={() => toggleFavorite(recipe.id)}

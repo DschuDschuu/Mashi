@@ -11,6 +11,7 @@ Recipe  (Hülle – ändert sich selten)
 ├─ archivedAt?   gesetzt = archiviert (Status bleibt erhalten)
 ├─ source        ki | selbst | import        ← ändert sich nie
 ├─ favorite, image, notes, lastCookedAt
+├─ isNew?        neu angelegt (createRecipe) – „Neu“ auf der Kochbuch-Karte, bis zum ersten Kochen (siehe domain/recipe.ts: showsNew)
 ├─ homemade?     Zutat-IDs, die gerade selbst gemacht statt gekauft werden (nicht versioniert, siehe domain/homemade.ts)
 ├─ blockPrep?    Zubereitung von Baukasten-Bausteinen nur bei dieser Grundlage {baustein-id: {text, minutes}} (nicht versioniert, siehe domain/sides.ts)
 ├─ choice?       gewählte Variante (fehlt oder gibt es nicht mehr: die erste; nicht versioniert, siehe domain/choices.ts)

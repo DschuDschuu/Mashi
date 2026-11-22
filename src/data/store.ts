@@ -40,6 +40,7 @@ import { withSpices, zeroOf } from '../domain/nutrition/noNutrition';
 import { DEFAULT_MACRO_GOAL, withFavorite, type MacroGoal } from '../domain/nutrition/variants';
 import { canTransition } from '../domain/status';
 import type { Rating, Recipe, RecipeBlock, RecipeContent, RecipeImage, RecipeSource, RecipeStatus } from '../domain/types';
+import type { FileRecipe } from '../domain/recipeFile';
 import { foodTable, imageProvider } from '../services';
 import { randomHue } from '../services/images/imageProvider';
 import { LocalRecipeRepository } from './localRepository';
@@ -692,6 +693,7 @@ export function createRecipe(content: RecipeContent, opts: CreateOptions, id = n
     status: opts.status,
     source: opts.source,
     favorite: false,
+    isNew: true, // „Neu“ auf der Karte, bis zum ersten Kochen (recipe.ts: showsNew)
     image: opts.image,
     notes: opts.notes ?? '',
     currentVersionId: versionId,
@@ -710,6 +712,20 @@ export function createRecipe(content: RecipeContent, opts: CreateOptions, id = n
   commit(recipe);
   if (!opts.image) void regenerateImage(recipe.id);
   return recipe.id;
+}
+
+/**
+ * Mehrere Rezepte auf einmal – aus der Rezept-Datei (recipeFile.ts, Plus → Importieren): „Zum Testen“, mit Notizen
+ * und Meal-Prep-Angaben. EIN „Rückgängig“ für alle, sonst müsste man nach einer Datei mit zehn Rezepten zehnmal tippen.
+ */
+export function createRecipes(list: readonly FileRecipe[]): { ids: string[]; undo: () => void } {
+  const ids = list.map((r) => {
+    // Foto aus der Datei (schon verkleinert) – eingebettet wie eigene Fotos, nie als Link
+    const id = createRecipe(structuredClone(r.content), { source: 'import', status: 'zum_testen', notes: r.notes, ...(r.image ? { image: { kind: 'url' as const, url: r.image } } : {}) });
+    if (r.keepsDays || r.freezable) setPrepInfo(id, { keepsDays: r.keepsDays, freezable: r.freezable });
+    return id;
+  });
+  return { ids, undo: () => ids.forEach((id) => deleteRecipe(id)) };
 }
 
 /**

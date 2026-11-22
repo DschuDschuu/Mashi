@@ -22,7 +22,9 @@ Live: <https://dschudschuu.github.io/Mashi/> · installierbar als App (PWA), fun
   (als eigenes Rezept oder als umschaltbare Variante eines bestehenden, z. B. „Original | mit Spätzle“).
   In der Liste darunter „Passt dazu aus deinem Kochbuch“. Ansicht umschaltbar: Teller (jede Stufe ein Feld, antippen öffnet sie) oder Liste
   (Stepper mit kleinem Karussell). Derselbe Baukasten steckt im Wochenplan (Grundlage schon gewählt, deine Bausteine stehen mit zur Wahl – vorgekocht aus dem Kühlschrank, sonst nach deinem Rezept; der Abend merkt sich die Richtung, Würze und Zubereitung lassen sich schon beim Zusammenstellen, im Fenster jedes Abends und auf der Heute-Karte umschalten, eine Grundlage als Sauce gart Gemüse oder Hähnchen mit)
-- **Kochbuch** mit Versionen: eigene Rezepte, Import aus Text oder Foto (Texterkennung im Browser),
+- **Kochbuch** mit Versionen: eigene Rezepte, Import aus Text oder Foto (Texterkennung im Browser) oder viele auf
+  einmal aus einer Rezept-Datei (JSON, Format: [docs/REZEPT-DATEI.md](docs/REZEPT-DATEI.md)); neue Rezepte
+  tragen „Neu“ (statt „Zum Testen“), bis sie zum ersten Mal gekocht sind,
   KI-Ideen erst testen, Bewertung, „Zutaten vereinheitlichen“ (eine Schreibweise je Zutat); Zutaten, die ein Baustein
   sind, lassen sich tauschen – jede Stufe in sich (Tofu statt Hähnchen, Quinoa statt Reis, Zucchini statt Brokkoli,
   Feta statt Parmesan; Gemüse gegart nur gegen Gargemüse, roh nur gegen Rohes – je nachdem, wie dein Rezept es nutzt;

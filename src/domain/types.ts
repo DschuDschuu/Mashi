@@ -158,6 +158,11 @@ export interface Recipe {
   archivedAt?: string;
   source: RecipeSource;
   favorite: boolean;
+  /**
+   * Neu angelegt (Julia: „Neu“ oben links auf der Karte, bis zum ersten Kochen) – setzt createRecipe. Ältere Rezepte
+   * und eingespielte Sicherungen haben es nicht; ob es noch „neu“ ist, sagt showsNew (recipe.ts).
+   */
+  isNew?: true;
   image?: RecipeImage;
   /** Persönliche, freie Notizen – unabhängig von Versionen. */
   notes: string;

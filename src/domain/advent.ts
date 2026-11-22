@@ -1,8 +1,6 @@
-import { isDataImage, MAX_IMAGE } from './dataImage';
 import { localDay } from './dates';
-import { timerFrom, toUnit } from './importText';
-import { newId } from './recipe';
-import type { Ingredient, RecipeContent, Step, Unit } from './types';
+import { contentOf, isObj, num } from './recipeFile';
+import type { RecipeContent } from './types';
 
 /**
  * Adventskalender (Julia: „jeden Tag im Dezember ein Rezept, das man speichern kann“): 24 Türchen, hinter jedem ein
@@ -56,61 +54,10 @@ export interface AdventImport {
   warnings: string[];
 }
 
-const UNITS: readonly Unit[] = ['g', 'kg', 'ml', 'l', 'EL', 'TL', 'Prise', 'Stück', 'Zehe', 'Dose', 'Glas', 'Bund', 'Handvoll', 'cm', 'Messlöffel', 'Portion'];
-
-const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
-const text = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
-
-/** Zahl aus der Datei – „1,5“ als Text geht auch (so schreibt man es in Deutschland), sonst undefined */
-function num(v: unknown): number | undefined {
-  if (typeof v === 'number') return Number.isFinite(v) ? v : undefined;
-  if (typeof v !== 'string' || !v.trim()) return undefined;
-  const n = Number(v.trim().replace(',', '.'));
-  return Number.isFinite(n) ? n : undefined;
-}
-
-/** Erst genau wie in Mashi („EL“), dann die Schreibweisen, die der Text-Import kennt („Stk.“, „Liter“) */
-const unitOf = (s: string): Unit | undefined => UNITS.find((u) => u === s) ?? UNITS.find((u) => u.toLowerCase() === s.toLowerCase()) ?? toUnit(s);
-
-function ingredientOf(raw: unknown, where: string, errors: string[], warnings: string[]): Ingredient | undefined {
-  const z = isObj(raw) ? raw : {};
-  const name = text(z.name);
-  if (!name) {
-    errors.push(`${where}: Zutat ohne „name“.`);
-    return undefined;
-  }
-  let amount = num(z.menge);
-  if (z.menge !== undefined && (amount === undefined || amount < 0)) {
-    warnings.push(`${where}: Menge „${String(z.menge)}“ bei ${name} ist keine Zahl – weggelassen.`);
-    amount = undefined;
-  }
-  const unitText = text(z.einheit);
-  const unit = unitText ? unitOf(unitText) : undefined;
-  // unbekannte Einheit („Päckchen“, „Becher“): nicht raten, sondern als Hinweis an der Zutat behalten
-  const notes = [unitText && !unit ? unitText : '', text(z.hinweis)].filter(Boolean);
-  if (unitText && !unit) warnings.push(`${where}: Einheit „${unitText}“ kennt Mashi nicht – steht bei ${name} als Hinweis.`);
-  const part = text(z.teil);
-  return {
-    id: newId('i'),
-    name,
-    ...(amount ? { amount } : {}),
-    ...(unit ? { unit } : {}),
-    ...(notes.length ? { note: notes.join(', ') } : {}),
-    ...(part ? { part: part.charAt(0).toLocaleUpperCase('de-DE') + part.slice(1) } : {}),
-  };
-}
-
-/** „bild“: ein eingebettetes Foto – sonst ohne Foto übernehmen und sagen, warum */
-function imageOf(v: unknown, where: string, warnings: string[]): string | undefined {
-  if (v === undefined || v === null || v === '') return undefined;
-  if (isDataImage(v)) return v;
-  const s = typeof v === 'string' ? v.trim() : '';
-  if (/^https?:/i.test(s)) warnings.push(`${where}: Links nimmt Mashi nicht – das Foto muss in der Datei stehen („data:image/jpeg;base64,…“). Ohne Foto übernommen.`);
-  else if (s.startsWith('data:image/') && s.length > MAX_IMAGE) warnings.push(`${where}: Das Foto ist größer als 4 MB – bitte vorher verkleinern. Ohne Foto übernommen.`);
-  else warnings.push(`${where}: „bild“ ist kein Foto (JPEG, PNG oder WebP als „data:image/…;base64,…“). Ohne Foto übernommen.`);
-  return undefined;
-}
-
+/**
+ * Ein Türchen aus der Datei: „tag“ plus das gemeinsame Grundformat (recipeFile.ts: contentOf – Titel, Portionen,
+ * Zeiten, Zutaten, Schritte, Beschreibung, Tipp, Foto). Im Kochbuch findet man es später über das Schlagwort.
+ */
 function doorOf(raw: unknown, index: number, errors: string[], warnings: string[]): (AdventDoor & { image?: string }) | undefined {
   const r = isObj(raw) ? raw : {};
   const day = num(r.tag);
@@ -118,55 +65,13 @@ function doorOf(raw: unknown, index: number, errors: string[], warnings: string[
   const where = validDay ? `Tag ${day}` : `Rezept ${index + 1}`;
   const before = errors.length;
   if (!validDay) errors.push(`${where}: „tag“ muss eine Zahl von 1 bis ${ADVENT_DAYS} sein.`);
-  const title = text(r.titel);
-  if (!title) errors.push(`${where}: „titel“ fehlt.`);
-  const servings = num(r.portionen);
-  if (!servings || servings <= 0) errors.push(`${where}: „portionen“ muss eine Zahl größer 0 sein.`);
-  const minutes = (key: string, v: unknown) => {
-    if (v === undefined) return 0;
-    const n = num(v);
-    if (n === undefined || n < 0) {
-      warnings.push(`${where}: „${key}“ ist keine Minutenzahl – 0 angenommen.`);
-      return 0;
-    }
-    return Math.round(n);
-  };
-  const prepMinutes = minutes('vorbereitung', r.vorbereitung);
-  // „backzeit“ steht im Format, „kochzeit“ ist dasselbe für Getränke und Festessen
-  const cookMinutes = minutes(r.backzeit !== undefined ? 'backzeit' : 'kochzeit', r.backzeit ?? r.kochzeit);
-
-  const rawIngredients = Array.isArray(r.zutaten) ? r.zutaten : [];
-  if (!rawIngredients.length) errors.push(`${where}: „zutaten“ fehlen.`);
-  const ingredients = rawIngredients.map((z) => ingredientOf(z, where, errors, warnings)).filter((i): i is Ingredient => !!i);
-
-  const rawSteps = Array.isArray(r.schritte) ? r.schritte : [];
-  const stepTexts = rawSteps.map(text).filter(Boolean);
-  if (!stepTexts.length) errors.push(`${where}: „schritte“ fehlen.`);
-  const steps: Step[] = stepTexts.map((t) => {
-    const timer = timerFrom(t);
-    return { id: newId('s'), text: t, ...(timer ? { timerMinutes: timer } : {}) };
-  });
-
-  if (errors.length > before) return undefined;
-  const tip = text(r.tipp);
-  const image = imageOf(r.bild, where, warnings);
+  const parsed = contentOf(r, where, errors, warnings);
+  if (!parsed || errors.length > before) return undefined;
   return {
     day: day!,
-    content: {
-      title,
-      description: text(r.beschreibung),
-      servings: servings!,
-      prepMinutes,
-      cookMinutes,
-      difficulty: 1,
-      ingredients,
-      steps,
-      categories: [],
-      tags: [ADVENT_TAG],
-      devices: [],
-    },
-    ...(tip ? { tip } : {}),
-    ...(image ? { image } : {}),
+    content: { ...parsed.content, tags: [ADVENT_TAG] },
+    ...(parsed.tip ? { tip: parsed.tip } : {}),
+    ...(parsed.image ? { image: parsed.image } : {}),
   };
 }
 

@@ -8,7 +8,7 @@ import { shareJsonFile } from '../shareRecipes';
 import { toast } from '../toast';
 import { AdventPhotosSheet } from './AdventPhotos';
 import { Icon } from './Icon';
-import { downscaled } from './ImageCropper';
+import { shrinkPhoto } from './ImageCropper';
 
 /**
  * Adventskalender in den Einstellungen (Julia: „Hochladen und Ändern nicht beim Adventskalender“): befüllen (Julias
@@ -140,14 +140,8 @@ export function AdventSettings() {
 async function shrinkAll(images: Record<number, string>): Promise<Record<number, string>> {
   const out: Record<number, string> = {};
   for (const [day, url] of Object.entries(images)) {
-    try {
-      const img = new Image();
-      img.src = url;
-      await img.decode();
-      out[Number(day)] = downscaled(img, 800);
-    } catch (e) {
-      console.warn(`Mashi: Foto für Türchen ${day} ließ sich nicht lesen`, e);
-    }
+    const small = await shrinkPhoto(url);
+    if (small) out[Number(day)] = small;
   }
   return out;
 }

@@ -8,7 +8,7 @@ import { createPortal } from 'react-dom';
  * Kommt Neues dazu (Julia: „neue Schritte, auch für mich“), bekommen die Schritte einen höheren Stand (`added`): Wer die
  * Seite schon kennt, sieht einmal nur sie, mit „Neu“; wer neu ist, die ganze Tour.
  */
-export type IntroId = 'start' | 'kochbuch' | 'rezept' | 'plan' | 'woche' | 'einkauf' | 'speisekammer' | 'produkte' | 'kochen' | 'lust' | 'advent' | 'angebote';
+export type IntroId = 'start' | 'kochbuch' | 'rezept' | 'plan' | 'woche' | 'einkauf' | 'speisekammer' | 'produkte' | 'kochen' | 'lust' | 'advent' | 'angebote' | 'import';
 
 /**
  * Ziel als Selektor oder Suche; fehlt es gerade (leere Woche, noch nichts gewählt), steht die Blase mittig.
@@ -40,6 +40,7 @@ const TOURS: Record<IntroId, Step[]> = {
     { at: byText('main [role="tab"]', 'Grundlagen'), title: 'Grundlagen und Gerichte', text: 'Grundlagen wie Soße, Teig oder Brühe machst du selbst und nutzt sie in vielen Gerichten.' },
     { at: 'main .card__hit', title: 'Rezept öffnen', text: 'Antippen öffnet das Rezept, das Herz merkt es als Favorit.' },
     { at: '[aria-label="Neu: Rezept, Kassenbon oder Vorrat"]', title: 'Neues Rezept', text: 'Selbst schreiben, Text oder Foto einlesen oder mit KI. KI-Ideen testest du erst, dann kommen sie ins Kochbuch.' },
+    { at: 'main .card__new', title: 'Neu', text: 'Neue Rezepte tragen oben links „Neu“, bis du sie zum ersten Mal gekocht hast – danach steht dort „Zum Testen“. Unten links: schon geplant.', added: 2 },
   ],
   rezept: [
     { at: () => document.querySelector('main [aria-label="Mehr"]')?.parentElement, title: 'Portionen', text: 'Hier stellst du die Portionen ein – Mengen, Nährwerte und Kosten rechnen mit.' },
@@ -102,6 +103,11 @@ const TOURS: Record<IntroId, Step[]> = {
     { title: 'Gefällt dir ein Rezept?', text: '„Zum Testen speichern“ legt es ins Kochbuch, mit dem Schlagwort „Adventskalender“. Wie immer: erst testen, dann entscheiden.' },
     { title: 'Was hab ich da?', text: 'Im geöffneten Türchen steht an jeder Zutat, ob sie da ist oder fehlt. Fehlendes kommt mit einem Tipp auf die Einkaufsliste.', added: 2 },
     { title: 'Befüllen und Fotos', text: 'Rezepte einspielen, neu befüllen und Fotos ergänzen: in den Einstellungen unter „Adventskalender“. Die Rezepte bleiben in deinen Daten.' },
+  ],
+  // Plus → Importieren: Foto/Text wie bisher, dazu die Rezept-Datei (Julia: „so wie beim Adventskalender“)
+  import: [
+    { at: '.import-photo', title: 'Foto oder Text', text: 'Fotografiere ein Rezept oder füge kopierten Text ein. Mashi erkennt Zutaten und Schritte, du prüfst vor dem Speichern.' },
+    { at: '.import-file', title: 'Viele Rezepte auf einmal', text: 'Eine Rezept-Datei, z. B. von einer KI erstellt: Vorschau ansehen, Häkchen setzen, einspielen. Die Rezepte kommen nach „Zum Testen“.' },
   ],
   kochen: [
     { at: '.cook__progress', title: 'Schritt für Schritt', text: 'Der Bildschirm bleibt an, solange du kochst.' },

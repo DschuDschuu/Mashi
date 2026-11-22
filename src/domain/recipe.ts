@@ -19,6 +19,12 @@ export function originalVersion(recipe: Recipe): RecipeVersion {
   return recipe.versions[0];
 }
 
+/**
+ * „Neu“ auf der Kochbuch-Karte (Julia: alle neuen Rezepte, bis zum ersten Kochen): neu angelegt und noch nie gekocht –
+ * weder „Gekocht“ noch eine Test-Bewertung. Beides steht im Rezept, gilt also auf allen Geräten.
+ */
+export const showsNew = (r: Recipe): boolean => !!r.isNew && !r.lastCookedAt && !r.feedback.length;
+
 export function totalMinutes(content: RecipeContent): number {
   return content.prepMinutes + content.cookMinutes;
 }

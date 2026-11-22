@@ -204,3 +204,19 @@ export function downscaled(img: HTMLImageElement, max: number): string {
   canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
   return canvas.toDataURL('image/jpeg', 0.75);
 }
+
+/**
+ * Foto aus einer Datei (data-URL) auf 800 px verkleinern – wie eigene Fotos (Adventskalender, Rezept-Datei).
+ * Lässt es sich nicht lesen, undefined: Das Rezept kommt dann eben ohne Foto.
+ */
+export async function shrinkPhoto(url: string, max = 800): Promise<string | undefined> {
+  try {
+    const img = new Image();
+    img.src = url;
+    await img.decode();
+    return downscaled(img, max);
+  } catch (e) {
+    console.warn('Mashi: Foto ließ sich nicht lesen', e);
+    return undefined;
+  }
+}
