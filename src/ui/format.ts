@@ -74,3 +74,9 @@ export function stockLabels(parts: readonly PantryItem[]): string[] {
   }));
   return [...openLabels, ...packLabels, ...rest.filter((p) => !packed.includes(p)).map((p) => quantityLabel(p))];
 }
+
+/** Änderung in Prozent – unter 0,5 % (Rundung auf dem Bon) „±0 %“, wie die Gruppe „gleich geblieben“ (Preise, Angebote) */
+export const percent = (n: number) => (Math.abs(n) < 0.005 ? '±0 %'
+  : `${n > 0 ? '+' : '−'}${Math.abs(n * 100).toLocaleString('de-DE', { maximumFractionDigits: 1 })} %`);
+/** ▲ teurer, ▼ günstiger, ■ gleich – mit der farbigen Pille .price-card__change */
+export const arrowOf = (d: 'teurer' | 'guenstiger' | 'gleich') => (d === 'teurer' ? '▲' : d === 'guenstiger' ? '▼' : '■');

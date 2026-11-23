@@ -1,13 +1,13 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { addToPlan, removeFromPlan, removeOffer, saveOffers, setOfferFood, useFoodTable, usePantry, usePlan, useRecipes } from '../../data/store';
 import { localDay } from '../../domain/dates';
 import {
-  activeOffers, ingredientKeys, lastPaid, latestPrices, matchOffer, MAX_OFFER_TEXT, offerFoods, offerPackLabel, offerPeriodLabel, offerRecipes,
+  activeOffers, commonFrom, commonPeriod, compareToLast, ingredientKeys, lastPaid, latestPrices, matchOffer, MAX_OFFER_TEXT, offerFoods, offerPackLabel, offerRecipes, offerStartLabel,
   offerUnitPrice, offerWeekEnd, parseOffersText, shopDayHint, STORES, type LastPaid, type Offer, type OfferDraft, type OfferMatch,
 } from '../../domain/offers';
 import { usePricing } from '../useCosts';
 import { currentContent } from '../../domain/recipe';
-import { ingredientsInLeaflet, ingredientsWithPrices, wantedIngredients, type LeafletClient } from '../../domain/leaflets';
+import { ingredientsInFlyer, wantedIngredients, type LeafletClient } from '../../domain/leaflets';
 import { priceRows } from '../../domain/leafletPrices';
 import { navigate } from '../../router';
 import { LeafletError, loadWeekFlyers, offersAi, readLeaflet } from '../../services';
@@ -17,7 +17,7 @@ import { Icon } from '../components/Icon';
 import { IngredientNames } from '../components/IngredientNames';
 import { RecipeImage } from '../components/RecipeImage';
 import { TopBar } from '../components/TopBar';
-import { euro } from '../format';
+import { arrowOf, euro, percent } from '../format';
 import { toast } from '../toast';
 import { useUseUp } from '../useUseUp';
 
@@ -40,30 +40,48 @@ function rememberStore(store: string) {
   }
 }
 
-/** „Sa., 28.11.“ */
-const dayLabel = (day: string) => new Date(`${day}T12:00:00`).toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric', month: 'numeric' });
+/**
+ * „500 g · → Pasta“, davor nur ein abweichender Anfang („ab Do. 26.11.“) – der Zeitraum steht oben (Julia: „nur das
+ * ab-Datum ist relevant“).
+ */
+const metaLine = (o: Pick<Offer, 'amount' | 'unit' | 'from'>, commonStart: string | undefined, food: string) =>
+  [offerStartLabel(o, commonStart), offerPackLabel(o), food].filter(Boolean).join(' · ');
 
 /**
- * „Mo. 23.11. – Sa. 28.11. · 500 g · 2,38 €/kg · statt 1,49 €“ – was unter dem Namen steht (Julia: „ab wann ein
- * Angebot gilt“ und „den Originalpreis“). Ohne gedruckten Statt-Preis der gedruckte Rabatt – ausgerechnet wird nichts.
+ * Unter dem Namen zwei Zeilen, links und rechts auf gleicher Höhe (Julia: „links und rechts verzogen, ich hätte das
+ * gerne gleich“) – ein Raster statt zweier Spalten:
+ *   500 g · → Pasta                ▼ −8,5 %  1,19 €
+ *   zuletzt 1,30 € · 2,60 €/kg              2,38 €/kg
+ * So steht der alte Kilopreis direkt neben dem neuen. Neben dem Preis genau EIN Vergleich: die Pille gegen deinen
+ * letzten Einkauf wie auf der Preise-Seite (▼ grün günstiger, ▲ rosa teurer) – nur ohne eigenen Preis der Prospekt als
+ * gestricheltes Schild „statt 4,99 €“ bzw. der gedruckte Rabatt (Julia: dein bezahlter Preis zählt mehr als Lidls
+ * Statt-Preis; ausgerechnet wird nichts). „zuletzt“ = Packung und alter Kilopreis aus Bons und Preisen von Hand, ohne
+ * Datum; passt die Einheit nicht, nur „zuletzt 0,30 €/Stück“; ohne Preis von dir „noch kein Kaufpreis“ (nicht „nie
+ * gekauft“ – vielleicht nur ohne Bon).
  */
-const details = (o: Pick<Offer, 'price' | 'amount' | 'unit' | 'regular' | 'discount' | 'from'> & { until?: string }) => {
+function OfferLines({ o, paid, meta }: { o: Pick<Offer, 'price' | 'amount' | 'unit' | 'regular' | 'discount'>; paid?: LastPaid; meta: ReactNode }) {
+  if (o.price === undefined) return <span className="shopping__from">{meta}</span>;
   const unit = offerUnitPrice(o);
-  return [
-    offerPeriodLabel(o), offerPackLabel(o), unit ? `${euro(unit.value)}/${unit.per}` : '',
-    o.regular !== undefined ? `statt ${euro(o.regular)}` : o.discount ? `−${o.discount} %` : '',
-  ].filter(Boolean);
-};
-
-/** „12.11.“ – mit Jahr, wenn es nicht dieses ist */
-const paidDay = (day: string) => {
-  const [y, m, d] = day.split('-');
-  return `${Number(d)}.${Number(m)}.${y === String(new Date().getFullYear()) ? '' : y.slice(2)}`;
-};
-
-/** „zuletzt 1,39 € · 2,78 €/kg (12.11.)“ – aus deinen Bons, zum Vergleichen (Julia: „den zuletzt gezahlten“) */
-const paidLabel = (p: LastPaid | undefined) =>
-  p ? `zuletzt ${[p.pack !== undefined ? euro(p.pack) : '', `${euro(p.unitPrice.value)}/${p.unitPrice.per}`].filter(Boolean).join(' · ')} (${paidDay(p.date)})` : '';
+  const cmp = compareToLast(o, paid);
+  const printed = o.regular !== undefined ? `statt ${euro(o.regular)}` : o.discount ? `−${o.discount} %` : '';
+  const last = !paid ? 'noch kein Kaufpreis'
+    : `zuletzt ${[cmp && paid.pack !== undefined ? euro(paid.pack) : '', `${euro(paid.unitPrice.value)}/${paid.unitPrice.per}`].filter(Boolean).join(' · ')}`;
+  return (
+    <span className="offer-lines">
+      <span className="shopping__from">{meta}</span>
+      <span className="offer-lines__price">
+        {cmp ? (
+          <span className={`price-card__change is-${cmp.direction}`}>
+            <span aria-hidden="true">{arrowOf(cmp.direction)}</span> {percent(cmp.change)}
+          </span>
+        ) : printed ? <span className="offer-price__tag">{printed}</span> : null}
+        <span className="offer-price__now">{euro(o.price)}</span>
+      </span>
+      <span className="offer-last">{last}</span>
+      <span className="offer-price__unit">{unit ? `${euro(unit.value)}/${unit.per}` : ''}</span>
+    </span>
+  );
+}
 
 /**
  * Einkauf planen (Julia: „samstags einkaufen, freitags oder morgens mit den Prospekten planen“):
@@ -168,15 +186,16 @@ function AddOffers({ startOpen }: { startOpen: boolean }) {
         setProgress(`Lese ${flyers.length > 1 ? `Prospekt ${n + 1} von ${flyers.length}` : 'den Prospekt'} …`);
         // Lidl: mit Lage auf der Seite – daraus kommen die Preise (Kaufland ist anders aufgebaut)
         const { pages, layout } = await readLeaflet(flyer.pdfUrl, { layout: client === 'lidl' });
-        const priced = layout ? ingredientsWithPrices(priceRows(layout), flyer, wanted) : [];
-        // jede Zutat nur einmal – Angebote mit Preis vor reinen Textfunden, sonst die erste Fundstelle
-        for (const d of [...priced, ...ingredientsInLeaflet(pages, flyer, wanted)]) if (!drafts.some((x) => x.food === d.food)) drafts.push(d);
+        // Lidl: nur echte Angebote mit Preis – der Text nur, wenn die Preiserkennung nichts lesen konnte (domain/leaflets.ts)
+        const found = ingredientsInFlyer(pages, layout ? priceRows(layout) : [], flyer, wanted);
+        // jede Zutat nur einmal – die erste Fundstelle gilt (Prospekte derselben Woche)
+        for (const d of found) if (!drafts.some((x) => x.food === d.food)) drafts.push(d);
       }
       if (!drafts.length) throw new LeafletError(`Im ${store}-Prospekt steht diese Woche keine deiner Zutaten.`);
       const end = flyers.map((f) => f.end).sort().pop()!;
       const withPrice = drafts.filter((d) => d.price != null).length;
       const prices = withPrice === drafts.length ? '' : withPrice ? ', nicht überall mit Preis' : ', ohne Preise';
-      setPreview({ rows: rowsOf(drafts), unread: [], until: end, source: 'prospekt', note: `Deine Zutaten im ${store}-Prospekt bis ${dayLabel(end)}${prices}.` });
+      setPreview({ rows: rowsOf(drafts), unread: [], until: end, source: 'prospekt', note: `Deine Zutaten im ${store}-Prospekt${prices}.` });
     } catch (e) {
       setError(e instanceof LeafletError ? e.message : 'Das hat gerade nicht geklappt. Versuch es bitte noch einmal.');
     }
@@ -267,27 +286,30 @@ function AddOffers({ startOpen }: { startOpen: boolean }) {
 
   /** Vorschau: ankreuzen, was übernommen wird */
   function previewBlock(preview: Preview) {
+    const withUntil = preview.rows.map((r) => ({ ...r, until: r.until ?? preview.until }));
+    // der Zeitraum, den die meisten haben, steht einmal oben (Julia: „ab wann ein Angebot gilt“); an der Zeile nur
+    // ein abweichender Anfang
+    const common = commonPeriod(withUntil);
+    const start = commonFrom(withUntil);
     return (
         <div className="offer-preview">
           {preview.note && <p className="small muted">{preview.note}</p>}
+          {common && preview.rows.length > 0 && <p className="small offer-period">Gilt {common}</p>}
           {preview.rows.length > 0 && (
             <ul className="shopping">
-              {preview.rows.map((r, i) => {
+              {withUntil.map((r, i) => {
                 // was die KI als Zutat erkannt hat, zeigt sie auch, wenn es in keinem Rezept steht
                 const match = matchOffer(r.food ?? r.name, table, keys);
                 const food = match?.name ?? r.food;
-                const paid = paidLabel(lastPaid(match?.key, r, paidByKey));
+                const paid = lastPaid(match?.key, r, paidByKey);
                 return (
-                  <li key={`${r.name}${i}`} className="shopping__item">
-                    <label>
+                  // wie die Angebotsliste: Häkchen und Name oben, darunter das Raster über die ganze Breite
+                  <li key={`${r.name}${i}`} className="shopping__item offer-row">
+                    <label className="offer-row__head offer-row__check">
                       <input type="checkbox" checked={r.on} onChange={() => setPreview({ ...preview, rows: preview.rows.map((x, j) => (j === i ? { ...x, on: !x.on } : x)) })} />
-                      <span className="shopping__text">
-                        <span className="shopping__name">{r.name}</span>
-                        <span className="shopping__from">{[...details({ ...r, until: r.until ?? preview.until }), food ? `→ ${food}` : 'nicht zugeordnet'].join(' · ')}</span>
-                        {paid && <span className="shopping__from">{paid}</span>}
-                      </span>
-                      {r.price !== undefined && <span className="shopping__qty">{euro(r.price)}</span>}
+                      <span className="shopping__name">{r.name}</span>
                     </label>
+                    <OfferLines o={r} paid={paid} meta={metaLine(r, start, food ? `→ ${food}` : 'nicht zugeordnet')} />
                   </li>
                 );
               })}
@@ -393,21 +415,27 @@ function OfferList({ offers }: { offers: Offer[] }) {
   return (
     <Section title={`Angebote (${offers.length})`} icon="bag">
       <IngredientNames />
-      {stores.map((s) => (
-        <div key={s} className="offer-group">
-          <h3 className="small muted">{s}</h3>
-          <ul className="shopping panel">
-            {offers.filter((o) => o.store === s).sort((a, b) => a.name.localeCompare(b.name, 'de')).map((o) => (
-              <OfferRow key={o.id} offer={o} food={foods.get(o.id)?.name} paid={lastPaid(foods.get(o.id)?.key, o, paidByKey)} />
-            ))}
-          </ul>
-        </div>
-      ))}
+      {stores.map((s) => {
+        const list = offers.filter((o) => o.store === s).sort((a, b) => a.name.localeCompare(b.name, 'de'));
+        // je Markt der Zeitraum, den die meisten haben, einmal oben – an der Zeile nur ein abweichender Anfang
+        const common = commonPeriod(list);
+        const start = commonFrom(list);
+        return (
+          <div key={s} className="offer-group">
+            <h3 className="small muted">{s}{common ? ` · ${common}` : ''}</h3>
+            <ul className="shopping panel">
+              {list.map((o) => (
+                <OfferRow key={o.id} offer={o} start={start} food={foods.get(o.id)?.name} paid={lastPaid(foods.get(o.id)?.key, o, paidByKey)} />
+              ))}
+            </ul>
+          </div>
+        );
+      })}
     </Section>
   );
 }
 
-function OfferRow({ offer, food, paid }: { offer: Offer; food?: string; paid?: LastPaid }) {
+function OfferRow({ offer, food, paid, start }: { offer: Offer; food?: string; paid?: LastPaid; start?: string }) {
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(offer.food ?? food ?? '');
   const save = () => {
@@ -416,28 +444,28 @@ function OfferRow({ offer, food, paid }: { offer: Offer; food?: string; paid?: L
     const undo = setOfferFood(offer.id, value);
     toast(`„${offer.name}“ zugeordnet`, { label: 'Rückgängig', run: undo });
   };
+  const meta = metaLine(offer, start, '');
+  // Julia: „links zu viele Zeilen“, „das mit dem Pfeil in eine Zeile“, „das ✕ oben rechts neben die Überschrift“ –
+  // der Name hat die ganze Breite mit dem ✕, darunter zwei Zeilen links und rechts auf gleicher Höhe (OfferLines)
   return (
-    <li className="shopping__item">
-      <div className="shopping__row">
-        <span className="shopping__text">
-          <span className="shopping__name">{offer.name}</span>
-          <span className="shopping__from">{details(offer).join(' · ')}</span>
-          {paid && <span className="shopping__from">{paidLabel(paid)}</span>}
-          {editing ? (
-            <form className="offer-food" onSubmit={(e) => { e.preventDefault(); save(); }}>
-              <input value={value} onChange={(e) => setValue(e.target.value)} list="ingredient-names" placeholder="z. B. Hähnchenbrust" aria-label={`Lebensmittel für ${offer.name}`} autoFocus />
-              <button type="submit" className="btn btn--soft btn--sm">OK</button>
-            </form>
-          ) : (
-            <button className="link small offer-food__link" onClick={() => setEditing(true)}>{food || offer.food ? `→ ${food ?? offer.food}` : 'Lebensmittel zuordnen'}</button>
-          )}
-        </span>
-        {offer.price !== undefined && <span className="shopping__qty">{euro(offer.price)}</span>}
+    <li className="shopping__item offer-row">
+      <div className="offer-row__head">
+        <span className="shopping__name">{offer.name}</span>
         <button className="iconbtn iconbtn--sm" aria-label={`${offer.name} entfernen`} onClick={() => {
           const undo = removeOffer(offer.id);
           toast(`„${offer.name}“ entfernt`, { label: 'Rückgängig', run: undo });
         }}><Icon name="close" size={16} /></button>
       </div>
+      {editing && (
+        <form className="offer-food" onSubmit={(e) => { e.preventDefault(); save(); }}>
+          <input value={value} onChange={(e) => setValue(e.target.value)} list="ingredient-names" placeholder="z. B. Hähnchenbrust" aria-label={`Lebensmittel für ${offer.name}`} autoFocus />
+          <button type="submit" className="btn btn--soft btn--sm">OK</button>
+        </form>
+      )}
+      <OfferLines o={offer} paid={paid} meta={<>
+        {meta && `${meta} · `}
+        <button className="link offer-food__link" onClick={() => setEditing(true)}>{food || offer.food ? `→ ${food ?? offer.food}` : 'Lebensmittel zuordnen'}</button>
+      </>} />
     </li>
   );
 }

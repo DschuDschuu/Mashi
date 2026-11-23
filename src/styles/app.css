@@ -1131,7 +1131,9 @@ p { margin: 0; }
 /* Rezept-Datei unter Plus → Importieren (RecipeFileImport) – Vorschau wie bei den Angeboten */
 .recipe-file__title { font-size: var(--fs-lg); }
 .offer-preview .shopping { padding: 0; }
-.offer-preview .shopping__name, .offer-group .shopping__name { overflow-wrap: anywhere; }
+/* Namen nur im Notfall umbrechen, dann mit deutscher Silbentrennung (lang="de") – „anywhere“ zerschnitt sie mitten im
+   Wort („Rinderhackfleisc|h“, Julia: „nicht so crazy gecuttet“) */
+.offer-preview .shopping__name, .offer-group .shopping__name { overflow-wrap: break-word; hyphens: auto; }
 .offer-unread { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 10px 12px; border-radius: var(--r-sm); background: var(--sky); }
 .offer-unread p { margin: 0; overflow-wrap: anywhere; }
 .offer-until input { max-width: 200px; }
@@ -1149,6 +1151,26 @@ p { margin: 0; }
 }
 .offer-food input:focus { border-color: var(--primary); }
 .offer-food__link { align-self: flex-start; padding: 2px 0; text-align: left; }
+/* Angebotsliste (Julia: „links zu viele Zeilen“): Name über die ganze Breite mit ✕ oben rechts, darunter OfferLines */
+.offer-row { padding-bottom: 10px; }
+.offer-row__head { display: flex; align-items: flex-start; gap: 8px; padding-top: 8px; }
+.offer-row__head .shopping__name { flex: 1; min-width: 0; padding-top: 2px; }
+.offer-row__head .iconbtn { flex: none; margin: -6px -8px -10px 0; }
+.offer-row .shopping__from .offer-food__link { display: inline; padding: 0; font-size: inherit; }
+/* Vorschau: Häkchen statt ✕ neben dem Namen – sonst wie die Liste */
+.shopping__item label.offer-row__check { align-items: center; gap: 10px; min-height: 0; }
+/* Zwei Zeilen links und rechts auf gleicher Höhe (Julia: „links und rechts verzogen, ich hätte das gerne gleich“):
+   „500 g · → Pasta“ neben Pille + Preis, „zuletzt … 2,60 €/kg“ neben dem neuen Kilopreis – ein Raster statt Spalten */
+.offer-lines { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 10px; row-gap: 3px; align-items: center; margin-top: 2px; font-variant-numeric: tabular-nums; }
+.offer-lines__price { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
+.offer-lines .price-card__change { padding: 1px 8px; font-size: var(--fs-xs); white-space: nowrap; }
+.offer-lines .offer-price__unit { justify-self: end; }
+.offer-price__now { font-weight: 700; color: var(--ink); white-space: nowrap; }
+/* Prospekt-Vergleich nur ohne eigenen Preis: gestricheltes Schild (Julias Wahl A3, nicht durchgestrichen) */
+.offer-price__tag { padding: 0 7px; border: 1.5px dashed var(--ink-3); border-radius: 6px; font-size: var(--fs-xs); color: var(--ink-2); white-space: nowrap; }
+.offer-price__unit { font-size: var(--fs-xs); color: var(--ink-3); white-space: nowrap; }
+.offer-last { font-size: var(--fs-xs); color: var(--ink-2); }
+.offer-period { margin: 0; color: var(--ink-2); font-weight: 600; }
 .shopping__offer { color: var(--ink-2); font-weight: 600; }
 .shopping__offer svg { vertical-align: -1px; }
 .stepper--sm button { width: 32px; height: 32px; }

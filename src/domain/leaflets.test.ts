@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createMockRecipes } from '../data/mockRecipes';
 import { localFoodTable } from './nutrition/localFoods';
 import type { PriceRow } from './leafletPrices';
-import { flyersFromOverview, ingredientsInLeaflet, ingredientsWithPrices, overviewUrl, pageValidity, wantedIngredients, weekFlyers, type WantedIngredient } from './leaflets';
+import { flyersFromOverview, ingredientsInFlyer, ingredientsInLeaflet, ingredientsWithPrices, overviewUrl, pageValidity, wantedIngredients, weekFlyers, type WantedIngredient } from './leaflets';
 import type { Recipe, RecipeContent } from './types';
 
 // Aufbau wie beim Prospekt-Dienst, Inhalt erfunden
@@ -189,5 +189,45 @@ describe('Rabatt aus dem Prospekt', () => {
       row({ name: 'Testkäse', price: 1.99, discount: '-1€' }),
     ], { start: '2026-11-23', end: '2026-11-28' }, [want('Testlachs'), want('Testkäse')]);
     expect(drafts.map((d) => [d.name, d.discount, d.regular])).toEqual([['Testlachs', 24, undefined], ['Testkäse', undefined, undefined]]);
+  });
+});
+
+describe('Ein Wort dahinter macht ein anderes Produkt daraus', () => {
+  const want = (name: string): WantedIngredient => ({ key: `name:${name.toLowerCase()}`, name, words: [name.toLowerCase()] });
+  const week3 = { start: '2026-11-23', end: '2026-11-28' };
+  const found = (text: string, ...names: string[]) => ingredientsInLeaflet([text], week3, names.map(want)).map((d) => d.food);
+  it('„Mozzarella Sticks“ ist kein Mozzarella, „Kartoffel Chips“ keine Kartoffeln (Julia)', () => {
+    expect(found('Mozzarella Sticks/Chilli-Cheese Nuggets XXL', 'Mozzarella')).toEqual([]);
+    expect(found('Kartoffel Chips Paprika', 'Kartoffel')).toEqual([]);
+  });
+  it('Größe, Sorte und Zuschnitt dahinter bleiben die Zutat', () => {
+    expect(found('Mozzarella XXL', 'Mozzarella')).toEqual(['Mozzarella']);
+    expect(found('Pesto Rosso 190 g', 'Pesto')).toEqual(['Pesto']);
+    expect(found('Gouda Scheiben', 'Gouda')).toEqual(['Gouda']);
+  });
+  it('auch bei den Lidl-Angeboten mit Preis', () => {
+    const row = (name: string): PriceRow => ({
+      page: 1, brand: '', name, variant: '', description: '', quantity: '', price: 4.49, priceFrom: false, plus: false,
+      regular: null, uvp: false, discount: '', promo: '', basePrice: '', validFrom: '', check: '', x: 0, y: 0,
+    });
+    expect(ingredientsWithPrices([row('Mozzarella Sticks/Chilli-Cheese Nuggets XXL'), row('Mozzarella')], week3, [want('Mozzarella')]).map((d) => d.name)).toEqual(['Mozzarella']);
+  });
+});
+
+describe('Lidl: nur echte Angebote mit Preis', () => {
+  const want = (name: string): WantedIngredient => ({ key: `name:${name.toLowerCase()}`, name, words: [name.toLowerCase()] });
+  const row = (name: string, price: number): PriceRow => ({
+    page: 1, brand: '', name, variant: '', description: '', quantity: '', price, priceFrom: false, plus: false,
+    regular: null, uvp: false, discount: '', promo: '', basePrice: '', validFrom: '', check: '', x: 0, y: 0,
+  });
+  const flyer = { start: '2026-11-23', end: '2026-11-28' };
+  // erfunden, wie im echten Prospekt: ein Cocktail-Tipp nennt Limettensaft, ist aber kein Angebot (Julia)
+  const pages = ['Feine Testnudeln 1.19* Cuba Libre: 10 cl Cola, frischer Limettensaft & Eiswürfel'];
+  const wanted = [want('Testnudeln'), want('Limettensaft')];
+  it('mit Preiszeilen zählen nur die – der Rezepttipp im Text nicht', () => {
+    expect(ingredientsInFlyer(pages, [row('Feine Testnudeln', 1.19)], flyer, wanted).map((d) => d.food)).toEqual(['Testnudeln']);
+  });
+  it('ohne Preiszeilen (Kaufland, älterer Server) der Text wie bisher', () => {
+    expect(ingredientsInFlyer(pages, [], flyer, wanted).map((d) => d.food)).toEqual(['Testnudeln', 'Limettensaft']);
   });
 });

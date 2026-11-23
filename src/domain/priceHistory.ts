@@ -26,6 +26,9 @@ export interface PriceTrend {
 /** Unter einem halben Prozent zählt als „gleich geblieben“ (Rundung auf dem Bon). */
 const SAME = 0.005;
 
+/** teurer, günstiger oder gleich – dieselbe Schwelle für Preisverlauf und Angebote (offers.ts: compareToLast) */
+export const priceDirection = (change: number): PriceTrend['direction'] => (change > SAME ? 'teurer' : change < -SAME ? 'guenstiger' : 'gleich');
+
 export function priceTrends(history: PriceEntry[], minPurchases = 2): PriceTrend[] {
   const groups = new Map<string, { name: string; unit: 'g' | 'Stück'; productId?: string; byDay: Map<string, PricePoint> }>();
   for (const e of history) {
@@ -44,7 +47,7 @@ export function priceTrends(history: PriceEntry[], minPurchases = 2): PriceTrend
       const latest = points[points.length - 1]?.perUnit ?? 0;
       const previous = points[points.length - 2]?.perUnit ?? latest;
       const change = previous ? (latest - previous) / previous : 0;
-      const direction: PriceTrend['direction'] = change > SAME ? 'teurer' : change < -SAME ? 'guenstiger' : 'gleich';
+      const direction = priceDirection(change);
       return { name: g.name, unit: g.unit, ...(g.productId ? { productId: g.productId } : {}), points, latest, change, direction };
     })
     .filter((t) => t.points.length >= minPurchases)

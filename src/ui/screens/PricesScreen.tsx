@@ -10,7 +10,7 @@ import { Empty } from '../components/Controls';
 import { Icon } from '../components/Icon';
 import { PantryTabs, usePantrySwipe } from '../components/PlanTabs';
 import { LineSample, PriceLines, SORT_COLORS } from '../components/PriceLines';
-import { euro, sizeLabel } from '../format';
+import { arrowOf, euro, percent, sizeLabel } from '../format';
 import { purchasesOf } from '../../domain/bons';
 import { mainSizeOf, overviewEntries, SIZE_DASHES } from '../../domain/foodPrices';
 import { PRICE_MODES, usePriceMode } from '../usePriceMode';
@@ -19,10 +19,6 @@ import { groupByCategory } from '../../domain/categories';
 import { useCategoryOf } from '../useCategory';
 import { foodPricePath } from '../components/LastPurchase';
 
-/** Änderung in Prozent – unter 0,5 % (Rundung auf dem Bon) „±0 %“, wie die Gruppe „gleich geblieben“ */
-const percent = (n: number) => (Math.abs(n) < 0.005 ? '±0 %'
-  : `${n > 0 ? '+' : '−'}${Math.abs(n * 100).toLocaleString('de-DE', { maximumFractionDigits: 1 })} %`);
-const arrowOf = (d: PriceTrend['direction']) => (d === 'teurer' ? '▲' : d === 'guenstiger' ? '▼' : '■');
 
 /** eingeklappte Gruppen (teurer / günstiger / gleich bzw. Kategorien) – nur auf diesem Gerät */
 const FOLD_KEY = 'mashi-prices-folded';

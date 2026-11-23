@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createMockRecipes } from '../data/mockRecipes';
 import { localFoodTable } from './nutrition/localFoods';
 import {
-  activeOffers, addOffers, buildOffersPrompt, ingredientKeys, lastPaid, latestPrices, matchOffer, MAX_OFFER_TEXT, offerFromLabel, offerPackLabel, offerPeriodLabel,
+  activeOffers, addOffers, buildOffersPrompt, commonFrom, commonPeriod, compareToLast, ingredientKeys, lastPaid, latestPrices, offerStartLabel, matchOffer, MAX_OFFER_TEXT, offerFromLabel, offerPackLabel, offerPeriodLabel,
   offerRecipes, offerUnitPrice, offerWeekEnd, parseOffersReply,
   parseOffersText, shopDayHint, OffersReplyError, type Offer,
 } from './offers';
@@ -255,5 +255,42 @@ describe('Was beim Angebot steht: Zeitraum, Kilopreis, Rabatt, zuletzt gezahlt',
     expect(lastPaid(matchOffer('Ei', table)?.key, { amount: 10, unit: 'Stück' }, byKey)?.pack).toBe(3);
     expect(lastPaid(undefined, {}, byKey)).toBeUndefined();
     expect(lastPaid(matchOffer('Paprika', table)?.key, {}, byKey)).toBeUndefined();
+  });
+});
+
+describe('Vergleichbar auf einen Blick', () => {
+  const paid = (value: number, per: 'kg' | 'l' | 'Stück', pack?: number) => ({ date: '2026-11-14', unitPrice: { value, per }, ...(pack !== undefined ? { pack } : {}) });
+
+  it('günstiger, teurer, gleich – über den Kilopreis, damit verschiedene Packungen fair sind', () => {
+    // 500 g für 1,19 € = 2,38 €/kg gegen zuletzt 2,60 €/kg
+    const cheaper = compareToLast({ price: 1.19, amount: 500, unit: 'g' }, paid(2.6, 'kg', 1.3));
+    expect(cheaper?.direction).toBe('guenstiger');
+    expect(cheaper?.change).toBeCloseTo(-0.0846, 3);
+    expect(compareToLast({ price: 3.29, amount: 500, unit: 'g' }, paid(6.2, 'kg'))?.direction).toBe('teurer');
+    // unter einem halben Prozent: gleich (wie auf der Preise-Seite)
+    expect(compareToLast({ price: 0.99, amount: 190, unit: 'g' }, paid(5.2, 'kg'))?.direction).toBe('gleich');
+  });
+
+  it('kein Urteil, wenn etwas fehlt oder die Einheit nicht passt', () => {
+    expect(compareToLast({ price: 1.19, amount: 500, unit: 'g' }, undefined)).toBeUndefined();
+    expect(compareToLast({ price: 1.19 }, paid(2.6, 'kg'))).toBeUndefined();
+    expect(compareToLast({ price: 2.99, amount: 10, unit: 'Stück' }, paid(2.6, 'kg'))).toBeUndefined();
+  });
+
+  it('der Zeitraum, den die meisten haben, steht einmal oben', () => {
+    const week = { from: '2026-11-23', until: '2026-11-28' };
+    expect(commonPeriod([week, week, { from: '2026-11-26', until: '2026-11-28' }])).toBe('Mo. 23.11. – Sa. 28.11.');
+    expect(commonPeriod([{ until: '2026-11-28' }])).toBe('bis Sa. 28.11.');
+    expect(commonPeriod([])).toBe('');
+  });
+});
+
+describe('An der Zeile nur ein abweichender Anfang', () => {
+  it('„ab Do. 26.11.“ nur, wenn es später (oder früher) anfängt als die meisten – das Ende steht oben', () => {
+    const list = [{ from: '2026-11-23' }, { from: '2026-11-23' }, { from: '2026-11-26' }, {}];
+    const start = commonFrom(list);
+    expect(start).toBe('2026-11-23');
+    expect(list.map((o) => offerStartLabel(o, start))).toEqual(['', '', 'ab Do. 26.11.', '']);
+    expect(commonFrom([{}, {}])).toBeUndefined();
   });
 });

@@ -219,6 +219,20 @@ function hits(word: string, wanted: readonly string[]): boolean {
 }
 
 /**
+ * Steht eins davon direkt hinter der Zutat, ist es ein anderes Produkt (Julia: „Mozzarella Sticks sind kein
+ * Mozzarella“) – getrennt geschrieben greift die Kopfwort-Regel nicht. Zuschnitte („Gouda Scheiben“) und Sorten
+ * („Pesto Rosso“) bleiben die Zutat.
+ */
+const PRODUCT_AFTER = /^(?:sticks?|nuggets?|chips|crisps|snacks?|riegel|bällchen|balls|bites|taler|burger|saucen?|soßen?|dressings?|aufstrich|suppen?|pizzen|pizza|cracker|waffeln?)$/;
+
+/** hits für das Wort an Stelle i – samt Blick auf das Wort dahinter („Mozzarella Sticks“) */
+function hitAt(words: readonly string[], i: number, wanted: readonly string[]): boolean {
+  if (!hits(words[i], wanted)) return false;
+  const next = (words[i + 1] ?? '').toLocaleLowerCase('de-DE').split(/[/-]/)[0];
+  return !PRODUCT_AFTER.test(next);
+}
+
+/**
  * Welche deiner Zutaten stehen im Prospekt? Je Zutat ein Angebot – mit dem Wort, wie es im Prospekt steht, und ab wann
  * es gilt (die Seite verrät es). Steht eine Zutat mehrfach drin, zählt die Seite, die am frühesten gilt.
  * Mehrwortige Namen („rote linsen“) werden als Ganzes im Text gesucht.
@@ -232,7 +246,7 @@ export function ingredientsInLeaflet(
     const words = wordsOf(text);
     const flat = ` ${normalizeName(text.replace(/­/g, '').replace(/-\s+/g, '-'))} `;
     for (const w of wanted) {
-      const word = words.find((t) => hits(t, w.words));
+      const word = words.find((_, k) => hitAt(words, k, w.words));
       const phrase = !word && w.words.find((p) => p.includes(' ') && flat.includes(` ${p} `));
       if (!word && !phrase) continue;
       const prev = best.get(w.key);
@@ -241,6 +255,18 @@ export function ingredientsInLeaflet(
     }
   });
   return [...best.values()];
+}
+
+/**
+ * Deine Zutaten in einem Prospekt: Gibt es Angebote mit Preis (Lidl, leafletPrices.ts), zählen nur die – im Text
+ * stehen auch Rezepttipps („Cuba Libre … frischer Limettensaft“, Julia: „warum steht bei Limettensaft nichts?“) und
+ * Snacks. Am Lidl-Prospekt KW 48 waren alle Funde ohne Preis solche Fehlgriffe. Der Text nur, wenn die Preiserkennung
+ * nichts lesen konnte (Kaufland, älterer Server, neuer Aufbau).
+ */
+export function ingredientsInFlyer(
+  pages: readonly string[], rows: readonly PriceRow[], flyer: Pick<LeafletFlyer, 'start' | 'end'>, wanted: readonly WantedIngredient[],
+): OfferDraft[] {
+  return rows.length ? ingredientsWithPrices(rows, flyer, wanted) : ingredientsInLeaflet(pages, flyer, wanted);
 }
 
 /** „Do. 26.11.“, „seit So. 15.11.“, „So. 15.11. bis Sa. 28.11.“ → erster gültiger Tag, nie vor dem Prospekt */
@@ -269,7 +295,7 @@ export function ingredientsWithPrices(
     // „−24%“ wie gedruckt; „−1€“ (Euro statt Prozent) bleibt weg
     const pct = r.discount.match(/^[-–](\d{1,2})%$/);
     for (const w of wanted) {
-      const word = words.some((t) => hits(t, w.words));
+      const word = words.some((_, k) => hitAt(words, k, w.words));
       if (!word && !w.words.some((p) => p.includes(' ') && flat.includes(` ${p} `))) continue;
       const prev = best.get(w.key);
       if (prev && (prev.from < from || (prev.from === from && prev.price <= r.price))) continue;

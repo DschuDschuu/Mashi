@@ -12,6 +12,7 @@
  * Preise erfindet Mashi nie: was weder Mashi noch die KI lesen kann, fehlt lieber.
  */
 import type { PriceEntry } from './cost';
+import { priceDirection, type PriceTrend } from './priceHistory';
 import { cookingContent } from './homemade';
 import { keyOfName, resolveIngredient, resolveName, type Resolved } from './mealplan';
 import type { FoodTable } from './nutrition/types';
@@ -403,6 +404,45 @@ export function lastPaid(key: string | undefined, o: Pick<Offer, 'amount' | 'uni
   const unitPrice: UnitPrice = weight ? { value: round2(p.perUnit * 1000), per: o.unit === 'ml' ? 'l' : 'kg' } : { value: round2(p.perUnit), per: 'Stück' };
   const fits = o.amount !== undefined && (weight ? o.unit === 'g' || o.unit === 'ml' : o.unit === 'Stück');
   return { date: p.date.slice(0, 10), unitPrice, ...(fits ? { pack: round2(p.perUnit * o.amount!) } : {}) };
+}
+
+/**
+ * Angebot gegen zuletzt gezahlt (Julia: „dass es vergleichbarer wirkt“) – über den Preis je kg, l oder Stück, damit
+ * verschieden große Packungen fair verglichen werden. Fehlt etwas oder passt die Einheit nicht: kein Urteil.
+ * @returns change: −0,08 = 8 % günstiger als zuletzt
+ */
+export function compareToLast(o: Pick<Offer, 'price' | 'amount' | 'unit'>, paid: LastPaid | undefined): { change: number; direction: PriceTrend['direction'] } | undefined {
+  const now = offerUnitPrice(o);
+  if (!now || !paid || paid.unitPrice.per !== now.per || !(paid.unitPrice.value > 0)) return undefined;
+  // ungerundet rechnen – die Cent-Rundung des Kilopreises verzerrt kleine Packungen
+  const exact = o.unit === 'Stück' ? o.price! / o.amount! : (o.price! / o.amount!) * 1000;
+  const change = exact / paid.unitPrice.value - 1;
+  return { change, direction: priceDirection(change) };
+}
+
+/**
+ * Der häufigste Anfang – an der Zeile steht nur ein abweichender Anfang („ab Do. 26.11.“); das Ende steht oben
+ * (Julia: „es ist nur das ab-Datum relevant, der Zeitraum steht ja schon oben drüber“)
+ */
+export function commonFrom(list: readonly { from?: string }[]): string | undefined {
+  const count = new Map<string, number>();
+  for (const o of list) if (o.from) count.set(o.from, (count.get(o.from) ?? 0) + 1);
+  return [...count].sort((a, b) => b[1] - a[1])[0]?.[0];
+}
+
+/** „ab Do. 26.11.“ an der Zeile – nur, wenn das Angebot anders anfängt als die meisten */
+export function offerStartLabel(o: { from?: string }, common: string | undefined): string {
+  return o.from && o.from !== common ? `ab ${shortDay(o.from)}` : '';
+}
+
+/** Der Zeitraum, den die meisten haben – steht einmal oben („Gilt Mo. 23.11. – Sa. 28.11.“) */
+export function commonPeriod(list: readonly { from?: string; until?: string }[]): string {
+  const count = new Map<string, number>();
+  for (const o of list) {
+    const label = offerPeriodLabel(o);
+    if (label) count.set(label, (count.get(label) ?? 0) + 1);
+  }
+  return [...count].sort((a, b) => b[1] - a[1])[0]?.[0] ?? '';
 }
 
 /**
