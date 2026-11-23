@@ -11,7 +11,7 @@ import { CATEGORY_ICONS } from '../catalogIcons';
 import { TopBar } from '../components/TopBar';
 import { groupByCategory } from '../../domain/categories';
 import { useCategoryOf } from '../useCategory';
-import { activeOffers, offerFoods, offerPackLabel, offersByKey, type Offer } from '../../domain/offers';
+import { activeOffers, offerFoods, offerFromLabel, offerPackLabel, offersByKey, type Offer } from '../../domain/offers';
 import { localDay } from '../../domain/dates';
 import { euro } from '../format';
 
@@ -137,7 +137,7 @@ function ShoppingRow({ item, checked, offer }: { item: ShoppingItem; checked: bo
           {/* im Angebot: wo und für wie viel – damit du im richtigen Markt zugreifst */}
           {offer && !checked && (
             <span className="shopping__from shopping__offer">
-              <Icon name="bag" size={12} /> Angebot {[offer.store, offer.price !== undefined ? euro(offer.price) : '', offerPackLabel(offer)].filter(Boolean).join(' · ')}
+              <Icon name="bag" size={12} /> Angebot {[offer.store, offerFromLabel(offer, localDay()), offer.price !== undefined ? euro(offer.price) : '', offerPackLabel(offer)].filter(Boolean).join(' · ')}
             </span>
           )}
         </span>

@@ -10,8 +10,13 @@
 // eigene Variable ersetzen, und der Code wäre still kaputt. Ein Test prüft das.
 // Nur Rezepte: feste Anweisung, Grenzen für Länge und Antwort, Anfragen je Person begrenzt.
 //
-// Wege: POST /rezept, GET /status – jeweils auch mit /ki davor (Coolify schneidet das Präfix standardmäßig
-// ab, ohne „Strip Prefixes“ kommt es mit). Folge: eine CouchDB-Datenbank namens „ki“ ist nicht möglich.
+// Wege: POST /rezept, POST /prospekttext, GET /status – jeweils auch mit /ki davor (Coolify schneidet das Präfix
+// standardmäßig ab, ohne „Strip Prefixes“ kommt es mit). Folge: eine CouchDB-Datenbank namens „ki“ ist nicht möglich.
+//
+// /prospekttext (Einkauf planen): holt ein Prospekt-PDF von Lidl/Kaufland (nur assets.leaflets.schwarz) und gibt den
+// Text je Seite zurück – ohne KI, mit poppler (pdftotext/pdftohtml, installiert die Compose-Datei beim Start). Auf
+// Wunsch (layout) dazu die Wörter mit Lage und Schrift: daraus liest die App die Lidl-Preise. So lädt das Handy
+// nur ~100 KB statt 20–60 MB PDF. Ausgewertet wird alles in der App.
 //
 // Umgebung (in Coolify unter Environment Variables, siehe ../coolify/ANLEITUNG.md):
 //   OPENROUTER_API_KEY   Schlüssel von openrouter.ai (Pflicht)
@@ -21,9 +26,14 @@
 //   KI_PER_HOUR / KI_PER_DAY   Anfragen je Person (Standard 20 / 60)
 //   PORT                 Standard 8080
 
+import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { gzipSync } from 'node:zlib';
 
 export const SYSTEM_PROMPT =
   'Du bist der Rezept-Assistent der Koch-App Mashi. Du hilfst ausschließlich beim Erstellen von Kochrezepten. ' +
@@ -183,14 +193,201 @@ export async function askModel({ fetch, apiKey, model, baseUrl = 'https://openro
   }
 }
 
+// ── Prospekte lesen (Einkauf planen) ─────────────────────────────
+
+/** Prospekt-PDFs nur von hier – der Server holt nichts anderes (sonst wäre er ein offener Abruf-Dienst) */
+export const PDF_PREFIX = 'https://assets.leaflets.schwarz/';
+/** größer ist kein Wochenprospekt (Kaufland „Familie“: 62 MB) */
+const MAX_PDF = 150 * 1024 * 1024;
+const MAX_PAGES = 200;
+const MAX_PAGE_CHARS = 20000;
+
+/** Adresse erlaubt? Nur https, nur PDF_PREFIX, nur .pdf, keine Anmeldedaten in der Adresse */
+export function pdfUrlOk(url) {
+  try {
+    const u = new URL(url);
+    return u.protocol === 'https:' && u.href.startsWith(PDF_PREFIX) && u.pathname.endsWith('.pdf') && !u.username && !u.password;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * PDF holen – ohne Weiterleitungen (die könnten woandershin führen), mit Zeit- und Größengrenze. Stückweise gelesen,
+ * damit eine falsche Längenangabe den Speicher nicht sprengt.
+ */
+export async function fetchPdf({ fetch, url, timeoutMs = 60_000, max = MAX_PDF }) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { signal: ctrl.signal, redirect: 'error' });
+    // 403/404: diese Fassung gibt es nicht mehr (Lidl lädt Prospekte unter neuem Namen neu hoch)
+    if (res.status === 403 || res.status === 404) return { status: 404 };
+    if (!res.ok || !res.body) return { status: 502 };
+    if (Number(res.headers.get('content-length') || 0) > max) return { status: 413 };
+    const reader = res.body.getReader();
+    const chunks = [];
+    let size = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.length;
+      if (size > max) {
+        ctrl.abort();
+        return { status: 413 };
+      }
+      chunks.push(value);
+    }
+    return { status: 200, data: Buffer.concat(chunks) };
+  } catch {
+    return { status: 504 };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** höchstens so viele Wörter je Seite (eine volle Lidl-Seite hat ~500) */
+const MAX_PAGE_WORDS = 4000;
+
+const run = (cmd, args, timeoutMs) => new Promise((resolve, reject) => {
+  execFile(cmd, args, { timeout: timeoutMs, maxBuffer: 64 * 1024 * 1024 }, (err, stdout) => (err ? reject(err) : resolve(String(stdout))));
+});
+
+/** Text aus XML/XHTML von poppler: Auszeichnungen weg, Zeichen-Ersetzungen zurück */
+const xmlText = (s) => s.replace(/<[^>]+>/g, '').replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)))
+  .replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+const r1 = (n) => Math.round(n * 10) / 10;
+
+/**
+ * Wörter mit Lage und Schrift – für die Lidl-Preise (die App ordnet Preis und Artikel über die Lage zu, siehe
+ * src/domain/leafletPrices.ts). Zwei poppler-Programme, weil keines allein alles richtig liefert:
+ * - pdftotext -bbox: Wörter mit genauen Grenzen („Leber|käse“ berühren sich = ein Wort mit Trennstelle),
+ * - pdftohtml -xml: Schriftart und -größe je Textstück (Preise, Statt-Preise, Überschriften unterscheiden sich daran).
+ * Beide rechnen mit derselben Textanalyse, die Lage stimmt darum genau überein.
+ * @returns {{fonts: [number, string][], pages: [string, number, number, number, number, number][][]}}
+ *   Wort = [Text, links, oben, Breite, Höhe, Schrift-Nr. (-1 = unbekannt)], alles in PDF-Punkten
+ */
+export function wordsWithFonts(bboxHtml, pdftohtmlXml) {
+  const fonts = [];
+  const fontIdx = new Map();
+  for (const m of pdftohtmlXml.matchAll(/<fontspec id="(\d+)" size="([\d.-]+)" family="([^"]*)"/g)) {
+    fontIdx.set(m[1], fonts.length);
+    fonts.push([Number(m[2]), m[3]]);
+  }
+  const runsOf = new Map();
+  for (const pm of pdftohtmlXml.matchAll(/<page number="(\d+)"[^>]*>([\s\S]*?)<\/page>/g)) {
+    const runs = [];
+    for (const m of pm[2].matchAll(/<text top="([\d.-]+)" left="([\d.-]+)" width="([\d.-]+)" height="([\d.-]+)" font="(\d+)">([\s\S]*?)<\/text>/g)) {
+      // leere Stücke (nur ein Leerzeichen) überspringen – sie liegen oft direkt vor einem Preis in kleiner Schrift
+      if (!xmlText(m[6]).trim()) continue;
+      runs.push({ top: Number(m[1]), left: Number(m[2]), right: Number(m[2]) + Number(m[3]), height: Number(m[4]), font: fontIdx.get(m[5]) ?? -1 });
+    }
+    runsOf.set(Number(pm[1]), runs);
+  }
+  const pages = [];
+  let n = 0;
+  for (const pm of bboxHtml.matchAll(/<page width="[\d.]+" height="[\d.]+">([\s\S]*?)<\/page>/g)) {
+    n++;
+    if (n > MAX_PAGES) break;
+    const runs = runsOf.get(n) ?? [];
+    const words = [];
+    for (const m of pm[1].matchAll(/<word xMin="([\d.-]+)" yMin="([\d.-]+)" xMax="([\d.-]+)" yMax="([\d.-]+)">([\s\S]*?)<\/word>/g)) {
+      const text = xmlText(m[5]);
+      if (!text.trim() || words.length >= MAX_PAGE_WORDS) continue;
+      const x0 = Number(m[1]), y0 = Number(m[2]), x1 = Number(m[3]), y1 = Number(m[4]);
+      // Schrift: das Stück derselben Zeile und Höhe, in dem das Wort beginnt
+      const hit = runs.find((r) => Math.abs(r.top - y0) < 0.6 && Math.abs(r.height - (y1 - y0)) < 0.6 && x0 >= r.left - 0.6 && x0 <= r.right + 0.6);
+      words.push([text, r1(x0), r1(y0), r1(x1 - x0), r1(y1 - y0), hit ? hit.font : -1]);
+    }
+    pages.push(words);
+  }
+  return { fonts, pages };
+}
+
+/**
+ * Prospekt lesen: Text je Seite (pdftotext trennt Seiten mit einem Seitenvorschub), auf Wunsch dazu die Wörter mit
+ * Lage und Schrift (für Preise, nur Lidl). Alles poppler – installiert die Compose-Datei beim Start.
+ */
+export async function readPdf(data, { layout = false, timeoutMs = 60_000 } = {}) {
+  const dir = await mkdtemp(join(tmpdir(), 'mashi-pdf-'));
+  const file = join(dir, 'prospekt.pdf');
+  try {
+    await writeFile(file, data);
+    const text = await run('pdftotext', ['-enc', 'UTF-8', '-q', file, '-'], timeoutMs);
+    const pages = text.split('\f');
+    // nach dem letzten Seitenvorschub steht nichts mehr
+    if (pages.length > 1 && !pages[pages.length - 1].trim()) pages.pop();
+    const out = { pages: pages.slice(0, MAX_PAGES).map((p) => p.slice(0, MAX_PAGE_CHARS)) };
+    if (layout) {
+      const [bbox, xml] = await Promise.all([
+        run('pdftotext', ['-bbox', '-enc', 'UTF-8', '-q', file, '-'], timeoutMs),
+        // -zoom 1: Punkte wie im PDF; -noroundcoord: genaue Lage (sonst ganze Zahlen)
+        run('pdftohtml', ['-xml', '-i', '-q', '-zoom', '1', '-noroundcoord', '-stdout', file], timeoutMs),
+      ]);
+      out.layout = wordsWithFonts(bbox, xml);
+    }
+    return out;
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+}
+
+/**
+ * Große Antworten gepackt schicken, wenn der Browser es kann (alle können) – die Wörter eines Lidl-Prospekts sind
+ * ~450 KB, gepackt ~80 KB. Kleine Antworten bleiben, wie sie sind.
+ */
+export function encodeBody(json, acceptEncoding) {
+  if (json.length < 16 * 1024 || !/\bgzip\b/.test(acceptEncoding || '')) return { data: json, headers: {} };
+  return { data: gzipSync(json), headers: { 'Content-Encoding': 'gzip' } };
+}
+
 /** Der ganze Ablauf einer Anfrage – ohne Netzwerk-Server, damit er sich testen lässt */
 /** „/ki/rezept“ und „/rezept“ sind derselbe Weg (Coolify schneidet /ki meist ab) */
 export const routeOf = (path) => path.replace(/^\/ki(?=\/|$)/, '').replace(/\/+$/, '') || '/';
 
-export function makeHandler({ fetch, env, limiter = new RateLimiter(Number(env.KI_PER_HOUR) || 20, Number(env.KI_PER_DAY) || 60), fails = new FailLimiter() }) {
+export function makeHandler({
+  fetch, env, limiter = new RateLimiter(Number(env.KI_PER_HOUR) || 20, Number(env.KI_PER_DAY) || 60), fails = new FailLimiter(),
+  // Prospekte: eigenes Kontingent (kostet keine KI, aber Bandbreite), das Lesen (poppler) austauschbar für die Tests
+  pdfLimiter = new RateLimiter(20, 40), pdfReader = readPdf, now = () => Date.now(),
+}) {
   const allowed = (env.KI_ALLOWED_ORIGINS || env.MASHI_APP_ORIGINS || 'https://dschudschuu.github.io,http://localhost:5173').split(',').map((s) => s.trim()).filter(Boolean);
   const userOf = makeAuth({ fetch, couchUrl: (env.COUCHDB_URL || 'http://couchdb:5984').replace(/\/+$/, '') });
   const configured = !!(env.OPENROUTER_API_KEY && env.OPENROUTER_MODEL);
+  /** gelesene Prospekte (Adresse → Seiten) – zweimal tippen lädt nicht zweimal 40 MB; wenige, nur einen halben Tag */
+  const pdfCache = new Map();
+  const PDF_CACHE_MS = 12 * 3600 * 1000;
+  const PDF_CACHE_SIZE = 8;
+
+  /** POST /prospekttext – {url, layout?} → {pages: string[], layout?: {fonts, pages}} (layout: Wörter mit Lage, für Preise) */
+  async function prospektText(user, body, reply) {
+    let url, layout;
+    try { ({ url, layout } = JSON.parse(body)); } catch { return reply(400, { error: 'kein JSON' }); }
+    if (typeof url !== 'string' || !pdfUrlOk(url)) return reply(400, { error: 'adresse', message: 'Nur Prospekte von Lidl und Kaufland.' });
+    layout = layout === true;
+    const key = (layout ? 'layout ' : '') + url;
+    const hit = pdfCache.get(key);
+    if (hit && hit.until > now()) return reply(200, hit.out);
+    if (!pdfLimiter.take(user)) return reply(429, { error: 'limit', message: 'Für heute sind genug Prospekte gelesen – später wieder.' });
+    const pdf = await fetchPdf({ fetch, url });
+    if (pdf.status !== 200) {
+      pdfLimiter.giveBack(user);
+      if (pdf.status === 404) return reply(404, { error: 'prospekt', message: 'Diesen Prospekt gibt es so nicht mehr – bitte noch einmal holen.' });
+      if (pdf.status === 413) return reply(413, { error: 'zu groß', message: 'Der Prospekt ist zu groß zum Lesen.' });
+      return reply(502, { error: 'laden', message: 'Der Prospekt ließ sich gerade nicht laden – später noch mal.' });
+    }
+    let out;
+    try {
+      out = await pdfReader(pdf.data, { layout });
+    } catch (e) {
+      pdfLimiter.giveBack(user);
+      // poppler fehlt: alte Compose-Datei (installiert es nicht beim Start) oder die Installation ist gescheitert
+      if (e && e.code === 'ENOENT') return reply(503, { error: 'pdftotext', message: 'Dein Server kann Prospekte noch nicht lesen (pdftotext fehlt) – siehe server/coolify/ANLEITUNG.md.' });
+      return reply(502, { error: 'lesen', message: 'Der Prospekt ließ sich nicht lesen.' });
+    }
+    pdfCache.set(key, { out, until: now() + PDF_CACHE_MS });
+    while (pdfCache.size > PDF_CACHE_SIZE) pdfCache.delete(pdfCache.keys().next().value);
+    return reply(200, out);
+  }
 
   /** @returns {Promise<{status: number, headers: Record<string,string>, body?: unknown}>} */
   async function handle({ method, path, headers, body, ip = '?' }) {
@@ -199,8 +396,9 @@ export function makeHandler({ fetch, env, limiter = new RateLimiter(Number(env.K
     const route = routeOf(path);
     if (method === 'OPTIONS') return { status: 204, headers: cors };
     if (method === 'GET' && route === '/status') return reply(200, { ok: true, configured });
-    if (method !== 'POST' || route !== '/rezept') return reply(404, { error: 'unbekannt' });
-    if (!configured) return reply(503, { error: 'nicht eingerichtet', message: 'Auf dem Server fehlt noch der KI-Schlüssel.' });
+    if (method !== 'POST' || (route !== '/rezept' && route !== '/prospekttext')) return reply(404, { error: 'unbekannt' });
+    // Prospekte lesen braucht keinen KI-Schlüssel
+    if (route === '/rezept' && !configured) return reply(503, { error: 'nicht eingerichtet', message: 'Auf dem Server fehlt noch der KI-Schlüssel.' });
 
     if (fails.blocked(ip)) return reply(429, { error: 'zu viele', message: 'Zu viele falsche Anmeldungen – bitte in einer Viertelstunde noch mal.' });
     let user;
@@ -214,6 +412,7 @@ export function makeHandler({ fetch, env, limiter = new RateLimiter(Number(env.K
       return reply(401, { error: 'anmeldung', message: 'Bitte in Mashi mit dem Server verbinden.' });
     }
     if (typeof body !== 'string' || body.length > MAX_BODY) return reply(413, { error: 'zu groß' });
+    if (route === '/prospekttext') return prospektText(user, body, reply);
     let prompt;
     try { prompt = JSON.parse(body).prompt; } catch { return reply(400, { error: 'kein JSON' }); }
     if (typeof prompt !== 'string' || !prompt.trim() || prompt.length > MAX_PROMPT) return reply(400, { error: 'auftrag' });
@@ -242,8 +441,14 @@ function start() {
       // Aufruf schon ruhten – die einer laufenden Anfrage bliebe danach offen (Keep-alive), und der Dienst wartete
       // bis zur Frist. „Connection: close“ sagt zugleich Traefik, dass es sie nicht wiederverwenden soll.
       if (stopping) res.setHeader('connection', 'close');
-      res.writeHead(out.status, out.headers);
-      res.end(out.body === undefined ? undefined : JSON.stringify(out.body));
+      if (out.body === undefined) {
+        res.writeHead(out.status, out.headers);
+        return res.end();
+      }
+      const { data, headers } = encodeBody(JSON.stringify(out.body), req.headers['accept-encoding']);
+      // Vary: Zwischenspeicher dürfen die gepackte Antwort nicht an jemanden geben, der sie nicht entpacken kann
+      res.writeHead(out.status, { ...out.headers, ...headers, Vary: 'Origin, Accept-Encoding' });
+      res.end(data);
     };
     const read = await readBody(req).catch(() => ({ tooBig: false, body: '' }));
     // auch hier mit CORS – sonst greift der „kürzer noch mal“-Versuch der App nie (Code-Review #13)

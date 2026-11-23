@@ -47,10 +47,14 @@ describe('Coolify-Compose', () => {
     expect(bind('ki', '/app/ki.mjs').content).toBe(ki.endsWith('\n') ? ki : ki + '\n');
   });
 
-  it('KI-Dienst: node:24-alpine als node, nur Schlüssel und Modell ohne Standard', () => {
+  it('KI-Dienst: node:24-alpine, installiert pdftotext und läuft danach als node, nur Schlüssel und Modell ohne Standard', () => {
     const k = compose.services.ki;
     expect(k.image).toBe('node:24-alpine');
-    expect(k.user).toBe('node');
+    // root nur für die Installation beim Start – der Dienst selbst muss als node laufen
+    expect(k.user).toBe('root');
+    expect(k.command.slice(0, 2)).toEqual(['sh', '-c']);
+    expect(k.command[2]).toMatch(/^apk add --no-cache --quiet poppler-utils \|\| echo .*; exec su -s \/bin\/sh node -c 'exec node \/app\/ki\.mjs'$/);
+    expect(k.healthcheck.start_period).toBe('60s');
     expect(k.environment).toContain('COUCHDB_URL=${COUCHDB_URL:-http://couchdb:5984}');
     const noDefault = k.environment.filter((e) => /=\$\{[A-Z_]+\}$/.test(e)).map((e) => e.split('=')[0]);
     expect(noDefault).toEqual(['OPENROUTER_API_KEY', 'OPENROUTER_MODEL']);

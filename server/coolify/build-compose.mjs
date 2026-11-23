@@ -53,10 +53,15 @@ ${indent(MASHI_INI, 10)}
   # KI-Rezepte: Vermittler zu OpenRouter. Domain in Coolify: https://<DB-DOMAIN>:8080/ki
   # In Coolify nur OPENROUTER_API_KEY und OPENROUTER_MODEL eintragen – der Rest hat Standardwerte.
   # Ohne Schlüssel läuft der Dienst trotzdem und meldet „nicht eingerichtet“.
+  # Einkauf planen braucht pdftotext und pdftohtml (poppler: Prospekt-PDF → Text, für Lidl-Preise mit Lage auf der
+  # Seite). node:24-alpine hat sie nicht, ein eigenes Image
+  # müsste Coolify bauen – deshalb installiert der Dienst es bei jedem Start selbst (dafür kurz als root)
+  # und läuft danach wie vorher als einfacher Benutzer node. Klappt die Installation nicht (kein Netz),
+  # startet er trotzdem; nur „Angebote holen“ meldet dann, dass pdftotext fehlt.
   ki:
     image: node:24-alpine
-    user: node
-    command: ["node", "/app/ki.mjs"]
+    user: root
+    command: ["sh", "-c", "apk add --no-cache --quiet poppler-utils || echo 'pdftotext liess sich nicht installieren'; exec su -s /bin/sh node -c 'exec node /app/ki.mjs'"]
     environment:
       - OPENROUTER_API_KEY=\${OPENROUTER_API_KEY}
       - OPENROUTER_MODEL=\${OPENROUTER_MODEL}
@@ -76,7 +81,8 @@ ${indent(code, 10)}
       interval: 10s
       timeout: 5s
       retries: 3
-      start_period: 5s
+      # Start dauert wegen der Installation etwas länger
+      start_period: 60s
     depends_on:
       - couchdb
 

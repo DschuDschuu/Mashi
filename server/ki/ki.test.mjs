@@ -1,11 +1,12 @@
 // Tests für den KI-Vermittler – ohne Netz: CouchDB und OpenRouter werden nachgestellt.
 import { afterEach, describe, expect, it } from 'vitest';
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { Agent, request } from 'node:http';
 import { createServer } from 'node:net';
 import { Readable } from 'node:stream';
 import { fileURLToPath } from 'node:url';
-import { clientIp, corsHeaders, FailLimiter, makeHandler, MAX_PROMPT, RateLimiter, readBody, SYSTEM_PROMPT } from './ki.mjs';
+import { gunzipSync } from 'node:zlib';
+import { clientIp, corsHeaders, encodeBody, FailLimiter, makeHandler, MAX_PROMPT, pdfUrlOk, RateLimiter, readBody, readPdf, SYSTEM_PROMPT, wordsWithFonts } from './ki.mjs';
 
 const APP = 'https://dschudschuu.github.io';
 const GOOD_AUTH = 'Basic ' + Buffer.from('julia-test:geheim-test').toString('base64');
@@ -279,3 +280,164 @@ describe('Sauber beenden: docker stop dauert nicht 10 s und endet mit Exit 0', (
     }
   });
 });
+
+describe('Prospekte lesen (POST /prospekttext, Einkauf planen)', () => {
+  const PDF = 'https://assets.leaflets.schwarz/leaflets/pdfs/test/a.pdf';
+  /** nachgestellt: /_session wie oben, der Prospekt-Server liefert ein Test-„PDF“ */
+  function pdfFetch({ status = 200, length } = {}) {
+    const calls = [];
+    const fetch = async (url, opts = {}) => {
+      calls.push(url);
+      if (url.endsWith('/_session')) return { ok: true, status: 200, json: async () => ({ userCtx: { name: opts.headers?.authorization === GOOD_AUTH ? 'julia-test' : null } }) };
+      if (url.startsWith('https://assets.leaflets.schwarz/')) {
+        return new Response(status === 200 ? '%PDF-test' : 'Access Denied', { status, headers: length ? { 'content-length': String(length) } : {} });
+      }
+      throw new Error('unerwartet: ' + url);
+    };
+    return { fetch, calls };
+  }
+  const read = (handle, { url = PDF, auth = GOOD_AUTH, layout } = {}) =>
+    handle({ method: 'POST', path: '/ki/prospekttext', headers: { authorization: auth, origin: APP }, body: JSON.stringify({ url, layout }) });
+  const LAYOUT = { fonts: [[10, 'TestFont']], pages: [[['Testkohl', 10, 20, 40, 12, 0]]] };
+  /** nachgestellt: liest „das PDF“ und merkt sich, wie oft und mit welchem Wunsch */
+  function reader() {
+    const calls = [];
+    const fn = async (_data, { layout }) => {
+      calls.push(layout);
+      return layout ? { pages: ['Ab Mo. 23.11. Seite eins', 'Seite zwei'], layout: LAYOUT } : { pages: ['Ab Mo. 23.11. Seite eins', 'Seite zwei'] };
+    };
+    return { fn, calls };
+  }
+  const pages = reader().fn;
+
+  it('angemeldet → Text je Seite; ohne KI-Schlüssel; zweites Mal aus dem Gedächtnis statt neu laden', async () => {
+    const { fetch, calls } = pdfFetch();
+    const handle = makeHandler({ fetch, env: { COUCHDB_URL: 'http://couch:5984' }, pdfReader: pages });
+    const out = await read(handle);
+    expect(out.status).toBe(200);
+    expect(out.body).toEqual({ pages: ['Ab Mo. 23.11. Seite eins', 'Seite zwei'] });
+    expect(out.headers['Access-Control-Allow-Origin']).toBe(APP);
+    await read(handle);
+    expect(calls.filter((u) => u === PDF)).toHaveLength(1);
+  });
+
+  it('mit layout: dazu die Wörter mit Lage (für Lidl-Preise) – eigenes Gedächtnis, nur „true“ zählt', async () => {
+    const { fetch } = pdfFetch();
+    const r = reader();
+    const handle = makeHandler({ fetch, env, pdfReader: r.fn });
+    expect((await read(handle, { layout: true })).body.layout).toEqual(LAYOUT);
+    expect((await read(handle, { layout: true })).body.layout).toEqual(LAYOUT);
+    expect((await read(handle)).body.layout).toBeUndefined();
+    expect((await read(handle, { layout: 'ja' })).body.layout).toBeUndefined();
+    // einmal mit, einmal ohne gelesen – die Wiederholungen kamen aus dem Gedächtnis
+    expect(r.calls).toEqual([true, false]);
+  });
+
+  it('nur Prospekt-PDFs: fremde Adressen, http, Täuschungs-Domains und Nicht-PDFs werden gar nicht abgerufen', async () => {
+    const { fetch, calls } = pdfFetch();
+    const handle = makeHandler({ fetch, env, pdfReader: pages });
+    for (const url of ['https://example.test/a.pdf', 'http://assets.leaflets.schwarz/a.pdf', 'https://assets.leaflets.schwarz.evil.test/a.pdf', 'https://assets.leaflets.schwarz/a.exe', 'https://x:y@assets.leaflets.schwarz/a.pdf', 42]) {
+      const out = await read(handle, { url });
+      expect(out.status).toBe(400);
+    }
+    expect(calls.some((u) => !u.endsWith('/_session'))).toBe(false);
+    expect((await read(handle, { auth: 'Basic falsch' })).status).toBe(401);
+  });
+
+  it('verständliche Meldungen: Fassung weg, zu groß, pdftotext fehlt, zu oft – Fehlschläge kosten kein Kontingent', async () => {
+    expect((await read(makeHandler({ fetch: pdfFetch({ status: 403 }).fetch, env, pdfReader: pages }))).body.message).toMatch(/noch einmal holen/);
+    expect((await read(makeHandler({ fetch: pdfFetch({ length: 999 * 1024 * 1024 }).fetch, env, pdfReader: pages }))).status).toBe(413);
+    const missing = async () => { throw Object.assign(new Error('spawn pdftotext ENOENT'), { code: 'ENOENT' }); };
+    const pdfLimiter = new RateLimiter(1, 1);
+    const handle = makeHandler({ fetch: pdfFetch().fetch, env, pdfReader: missing, pdfLimiter });
+    const out = await read(handle);
+    expect(out.status).toBe(503);
+    expect(out.body.message).toMatch(/pdftotext fehlt.*ANLEITUNG/);
+    // der Fehlschlag hat das eine erlaubte Mal nicht verbraucht
+    expect(pdfLimiter.take('julia-test')).toBe(true);
+    expect((await read(handle)).status).toBe(429);
+  });
+
+  it('pdfUrlOk: nur https://assets.leaflets.schwarz/…pdf', () => {
+    expect(pdfUrlOk(PDF)).toBe(true);
+    expect(pdfUrlOk('https://assets.leaflets.schwarz.evil.test/a.pdf')).toBe(false);
+    expect(pdfUrlOk('kaputt')).toBe(false);
+  });
+
+  it('wordsWithFonts: Wortgrenzen von pdftotext, Schrift von pdftohtml – leere Stücke davor zählen nicht', () => {
+    const bbox = '<doc><page width="400" height="600">'
+      + '<word xMin="10.000" yMin="20.000" xMax="40.000" yMax="32.000">Leber</word>'
+      + '<word xMin="40.000" yMin="20.000" xMax="60.000" yMax="32.000">käse</word>'
+      + '<word xMin="100.000" yMin="50.000" xMax="120.000" yMax="90.000">7.</word>'
+      + '<word xMin="118.000" yMin="50.000" xMax="150.000" yMax="90.000">99*</word>'
+      + '<word xMin="10.000" yMin="200.000" xMax="30.000" yMax="210.000">A&amp;B</word>'
+      + '</page><page width="400" height="600"></page></doc>';
+    const xml = '<pdf2xml><page number="1" position="absolute" top="0" left="0" height="600" width="400">'
+      + '<fontspec id="0" size="10" family="AAA+TestCond" color="#000"/><fontspec id="1" size="40" family="AAA+TestPrice" color="#000"/>'
+      + '<fontspec id="2" size="6" family="AAA+TestBook" color="#000"/>'
+      + '<text top="20.000" left="10.000" width="50.000" height="12.000" font="0"><b>Leber käse</b></text>'
+      + '<text top="50.000" left="98.300" width="1.700" height="40.000" font="2"> </text>'
+      + '<text top="50.000" left="100.000" width="50.000" height="40.000" font="1">7. 99*</text>'
+      + '</page></pdf2xml>';
+    const out = wordsWithFonts(bbox, xml);
+    expect(out.fonts).toEqual([[10, 'AAA+TestCond'], [40, 'AAA+TestPrice'], [6, 'AAA+TestBook']]);
+    expect(out.pages).toEqual([[
+      ['Leber', 10, 20, 30, 12, 0], ['käse', 40, 20, 20, 12, 0],
+      // nicht die kleine Leerzeichen-Schrift (2), die direkt davor liegt
+      ['7.', 100, 50, 20, 40, 1], ['99*', 118, 50, 32, 40, 1],
+      ['A&B', 10, 200, 20, 10, -1],
+    ], []]);
+  });
+
+  it('große Antworten gepackt, wenn der Browser es kann; kleine nie', () => {
+    const big = JSON.stringify({ pages: ['x'.repeat(40000)] });
+    const packed = encodeBody(big, 'gzip, deflate, br');
+    expect(packed.headers).toEqual({ 'Content-Encoding': 'gzip' });
+    expect(gunzipSync(packed.data).toString()).toBe(big);
+    expect(packed.data.length).toBeLessThan(big.length / 10);
+    expect(encodeBody(big, undefined)).toEqual({ data: big, headers: {} });
+    expect(encodeBody('{"ok":true}', 'gzip')).toEqual({ data: '{"ok":true}', headers: {} });
+  });
+
+  // mit dem echten poppler – nur, wo es installiert ist (im Container installiert es die Compose-Datei)
+  const hasPdftotext = (() => { try { execFileSync('pdftotext', ['-v'], { stdio: 'ignore' }); return true; } catch { return false; } })();
+  it.skipIf(!hasPdftotext)('readPdf: echtes kleines PDF mit zwei Seiten → zwei Seiten Text, mit layout auch die Wörter', async () => {
+    const pdf = Buffer.from(tinyPdf(['Ab Do. 26.11. Testkohl', 'Seite zwei']));
+    const out = await readPdf(pdf);
+    expect(out.pages).toHaveLength(2);
+    expect(out.pages[0]).toContain('Ab Do. 26.11. Testkohl');
+    expect(out.pages[1]).toContain('Seite zwei');
+    expect(out.layout).toBeUndefined();
+    const { layout } = await readPdf(pdf, { layout: true });
+    expect(layout.pages).toHaveLength(2);
+    const kohl = layout.pages[0].find((w) => w[0] === 'Testkohl');
+    // Helvetica 12 pt, links ab x = 50 (siehe tinyPdf)
+    expect(layout.fonts[kohl[5]]).toEqual([12, 'Helvetica']);
+    expect(kohl[1]).toBeGreaterThan(50);
+    expect(layout.pages[1].map((w) => w[0])).toEqual(['Seite', 'zwei']);
+  });
+});
+
+/** ein winziges gültiges PDF mit einer Textzeile je Seite (nur ASCII) – für den Test mit dem echten pdftotext */
+function tinyPdf(lines) {
+  const objs = [];
+  const pageIds = lines.map((_, i) => 4 + i * 2);
+  objs[1] = '<< /Type /Catalog /Pages 2 0 R >>';
+  objs[2] = '<< /Type /Pages /Kids [' + pageIds.map((id) => id + ' 0 R').join(' ') + '] /Count ' + lines.length + ' >>';
+  objs[3] = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>';
+  lines.forEach((line, i) => {
+    const stream = 'BT /F1 12 Tf 50 700 Td (' + line + ') Tj ET';
+    objs[4 + i * 2] = '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents ' + (5 + i * 2) + ' 0 R >>';
+    objs[5 + i * 2] = '<< /Length ' + stream.length + ' >>\nstream\n' + stream + '\nendstream';
+  });
+  let out = '%PDF-1.4\n';
+  const offsets = [];
+  for (let id = 1; id < objs.length; id++) {
+    offsets[id] = out.length;
+    out += id + ' 0 obj\n' + objs[id] + '\nendobj\n';
+  }
+  const xref = out.length;
+  out += 'xref\n0 ' + objs.length + '\n0000000000 65535 f \n' + offsets.slice(1).map((o) => String(o).padStart(10, '0') + ' 00000 n \n').join('');
+  out += 'trailer\n<< /Size ' + objs.length + ' /Root 1 0 R >>\nstartxref\n' + xref + '\n%%EOF\n';
+  return out;
+}

@@ -7,7 +7,7 @@ import type { RecipeAiProvider, RecipeDraft, RecipeRequest } from './types';
 export class KiError extends Error {}
 
 /** Basic-Anmeldung wie beim Abgleich (UTF-8, damit auch „ä“ im Passwort geht) */
-const basic = (u: string, p: string) => 'Basic ' + btoa(String.fromCharCode(...new TextEncoder().encode(`${u}:${p}`)));
+export const basic = (u: string, p: string) => 'Basic ' + btoa(String.fromCharCode(...new TextEncoder().encode(`${u}:${p}`)));
 
 type Body = { text?: string; message?: string } | null;
 

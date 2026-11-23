@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createMockRecipes } from '../data/mockRecipes';
 import { localFoodTable } from './nutrition/localFoods';
 import {
-  activeOffers, addOffers, buildOffersPrompt, ingredientKeys, matchOffer, MAX_OFFER_TEXT, offerPackLabel, offerRecipes, offerWeekEnd, parseOffersReply,
+  activeOffers, addOffers, buildOffersPrompt, ingredientKeys, matchOffer, MAX_OFFER_TEXT, offerFromLabel, offerPackLabel, offerRecipes, offerWeekEnd, parseOffersReply,
   parseOffersText, shopDayHint, OffersReplyError, type Offer,
 } from './offers';
 import { emptyPantry } from './pantry';
@@ -202,5 +202,18 @@ describe('KI als Notlösung', () => {
 
   it('nichts Lesbares → Fehler mit Meldung', () => {
     expect(() => parseOffersReply('Leider kann ich das nicht.')).toThrow(OffersReplyError);
+  });
+});
+
+describe('„ab Do.“ (Angebote aus dem Prospekt-PDF)', () => {
+  it('zählt für den Einkaufssamstag mit; Beschriftung nur, solange der Tag noch kommt', () => {
+    const thursday = offer('Testfilet', { from: '2026-11-26', until: '2026-11-28' });
+    const nextWeek = offer('Testkohl', { from: '2026-11-30', until: '2026-12-05' });
+    expect(activeOffers([thursday, nextWeek], '2026-11-23').map((o) => o.name)).toEqual(['Testfilet']);
+    expect(offerFromLabel(thursday, '2026-11-23')).toBe('ab Do.');
+    expect(offerFromLabel(thursday, '2026-11-26')).toBe('');
+    // Übernehmen behält das Datum, Aufräumen entfernt nur Abgelaufenes – nicht, was erst nächste Woche anfängt
+    const next = addOffers([nextWeek], [{ name: 'Testfilet', from: '2026-11-26' }], 'Lidl', '2026-11-28', '2026-11-23', NOW, id);
+    expect(next.map((o) => [o.name, o.from])).toEqual([['Testkohl', '2026-11-30'], ['Testfilet', '2026-11-26']]);
   });
 });

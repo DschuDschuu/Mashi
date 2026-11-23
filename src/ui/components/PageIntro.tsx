@@ -57,7 +57,9 @@ const TOURS: Record<IntroId, Step[]> = {
     { at: '[aria-label="Einkauf planen"]', title: 'Einkauf planen', text: 'Angebote einfügen – Mashi findet passende Rezepte.', added: 2 },
   ],
   angebote: [
-    { at: 'main .offer-add', title: 'Angebote einfügen', text: 'Markt wählen, Text aus dem Prospekt einfügen.' },
+    // höchstens 3 Schritte (Aufräumen Etappe 1): „Angebote holen“ ersetzt „Angebote einfügen“ – mit Stand 2, damit es
+    // wer die Seite kennt einmal als „Neu“ sieht
+    { at: 'main .offer-add', title: 'Angebote holen', text: 'Lidl holt Mashi mit Preisen, Kaufland ohne – sonst Text einfügen.', added: 2 },
     { at: 'main .offer-matches', title: 'Passt zu den Angeboten', text: 'Ein Tipp plant das Rezept ein.' },
     { at: byText('main button', 'Neue Idee'), title: 'Neue Idee', text: 'Ein neues Rezept aus den Angeboten – erst testen.' },
   ],

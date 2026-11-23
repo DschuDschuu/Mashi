@@ -48,6 +48,28 @@ Domains und Daten bleiben dabei erhalten.
   Variante: im Schnitt 50 Anfragen/s, kurzzeitig 200), trägt sie bei beiden Diensten unter
   **Custom Labels** als Traefik-Middleware ein und hängt sie an deren HTTPS-Router. Nicht zu knapp
   wählen: der Abgleich schickt kurzzeitig viele Anfragen.
+- **2026-11-23 (für „Einkauf planen → Angebote holen“):** Der KI-Dienst liest Lidl- und Kaufland-Prospekte
+  (PDF → Text, **ohne KI**, kostet kein Guthaben). Neuer Weg `POST /ki/prospekttext`:
+  - nimmt nur PDFs von `https://assets.leaflets.schwarz/` an (dort liegen die Prospekte beider Märkte),
+    keine anderen Adressen, keine Weiterleitungen, höchstens 150 MB,
+  - merkt sich gelesene Prospekte 12 Stunden (ein zweites Tippen lädt nicht noch einmal 40 MB),
+  - höchstens 20 Prospekte pro Stunde (40 am Tag) und Person, mit derselben Anmeldung wie die Rezepte,
+  - liefert für Lidl zusätzlich die Wörter mit ihrer Lage auf der Seite. Daraus liest die App die **Preise**
+    (der große Preis steht neben dem Artikel). Ausgewertet wird in der App, der Server liest nur.
+  - schickt große Antworten gepackt (gzip): Für einen Lidl-Prospekt gehen etwa 150 KB ans Handy statt 20–40 MB.
+
+  Dafür braucht der Dienst die Programme `pdftotext` und `pdftohtml`. Er installiert sie **bei jedem Start selbst**
+  (Paket `poppler-utils`, dafür kurz als root) und läuft danach wie bisher als Benutzer `node`. Der
+  erste Start dauert deshalb ein paar Sekunden länger. Also wie immer: **Edit Compose File → Inhalt
+  ersetzen → Save → Redeploy.**
+
+  - Eine **von Hand ergänzte** `ki.mjs` (z. B. mit `/ki/prospekt` und Domain-Liste) wird dabei ersetzt.
+    Das ist gewollt: Die App nutzt nur den neuen Weg.
+  - Steht im Log des Service `ki` „pdftotext liess sich nicht installieren“, kam der Container nicht an
+    die Alpine-Paketquelle (`dl-cdn.alpinelinux.org`). Rezepte gehen trotzdem, nur „Angebote holen“
+    meldet dann „Dein Server kann Prospekte noch nicht lesen“. Nochmal **Redeploy** versuchen.
+  - Ohne Update zeigt die App beim Holen „Dein Server kann Prospekte noch nicht lesen“, sonst läuft
+    alles normal.
 
 ## Dateien
 
@@ -132,6 +154,8 @@ protokolliert. Beide Services sollten nach kurzer Zeit **healthy** sein.
    (`configured:false` = Schlüssel oder Modell fehlt).
 2. `https://<DB-DOMAIN>/_utils` → Fauxton muss nach Benutzer und Passwort fragen.
 3. In der App (mit Server verbunden): **＋ → Rezept mit KI erstellen** → ein Rezept anfordern.
+4. **Einkauf planen** → Markt Lidl → **Angebote holen** → nach einer Weile erscheinen deine Zutaten
+   aus dem Prospekt (mit „ab Do.“, wo der Prospekt das sagt).
 
 ## 7. Weitere Person hinzufügen (in Fauxton)
 
@@ -170,3 +194,10 @@ Compose-Datei gelesen**, OpenRouter nachgestellt:
 
 Nicht lokal testbar: Coolify selbst (Domains, Strip Prefixes, Convert to Application) und das
 echte OpenRouter.
+
+**2026-11-23 (Prospekte):** Container mit der neuen Startzeile: `node` läuft als Benutzer `node` mit
+Prozess-Nr. 1, Umgebungsvariablen kommen an. Ohne Paketquelle startet der Dienst trotzdem und meldet
+das im Log. `pdftotext` und `pdftohtml` (poppler) lesen ein Test-PDF Seite für Seite. Mit dem
+echten Lidl-Prospekt der Woche: 43 Seiten in gut 1 s, gepackt 147 KB, daraus 228 Angebote mit Preis.
+Das Ergebnis ist gleich der Tabelle aus „Lidl-Prospekt auslesen“. Nicht testbar war hier die
+Installation selbst: Die Testumgebung sperrt `dl-cdn.alpinelinux.org`.

@@ -1124,7 +1124,10 @@ p { margin: 0; }
 .shopping__undo { display: block; margin: -6px 0 8px 34px; font-size: var(--fs-sm); }
 
 /* Einkauf planen (Angebote) – Zeilen wie die Einkaufsliste, lange Prospektnamen umbrechen statt herausragen */
+.offer-fetch { display: flex; flex-direction: column; gap: 8px; }
+.offer-fetch > p { margin: 0; }
 .offer-preview { display: flex; flex-direction: column; gap: 12px; }
+.offer-add .offer-preview > p { margin: 0; }
 /* Rezept-Datei unter Plus → Importieren (RecipeFileImport) – Vorschau wie bei den Angeboten */
 .recipe-file__title { font-size: var(--fs-lg); }
 .offer-preview .shopping { padding: 0; }

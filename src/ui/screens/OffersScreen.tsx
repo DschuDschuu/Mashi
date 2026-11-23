@@ -2,12 +2,14 @@ import { useMemo, useState } from 'react';
 import { addToPlan, removeFromPlan, removeOffer, saveOffers, setOfferFood, useFoodTable, usePantry, usePlan, useRecipes } from '../../data/store';
 import { localDay } from '../../domain/dates';
 import {
-  activeOffers, ingredientKeys, matchOffer, MAX_OFFER_TEXT, offerFoods, offerPackLabel, offerRecipes, offerWeekEnd, parseOffersText, shopDayHint,
+  activeOffers, ingredientKeys, matchOffer, MAX_OFFER_TEXT, offerFoods, offerFromLabel, offerPackLabel, offerRecipes, offerWeekEnd, parseOffersText, shopDayHint,
   STORES, type Offer, type OfferDraft, type OfferMatch,
 } from '../../domain/offers';
 import { currentContent } from '../../domain/recipe';
+import { ingredientsInLeaflet, ingredientsWithPrices, wantedIngredients, type LeafletClient } from '../../domain/leaflets';
+import { priceRows } from '../../domain/leafletPrices';
 import { navigate } from '../../router';
-import { offersAi } from '../../services';
+import { LeafletError, loadWeekFlyers, offersAi, readLeaflet } from '../../services';
 import { KiError } from '../../services/ai/serverAi';
 import { ChipSelect, Section } from '../components/Controls';
 import { Icon } from '../components/Icon';
@@ -40,9 +42,9 @@ function rememberStore(store: string) {
 /** „Sa., 28.11.“ */
 const dayLabel = (day: string) => new Date(`${day}T12:00:00`).toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric', month: 'numeric' });
 
-/** „400 g · statt 5,39 €“ – was unter dem Namen steht */
-const details = (o: Pick<Offer, 'amount' | 'unit' | 'regular'>) =>
-  [offerPackLabel(o), o.regular !== undefined ? `statt ${euro(o.regular)}` : ''].filter(Boolean);
+/** „ab Do. · 400 g · statt 5,39 €“ – was unter dem Namen steht */
+const details = (o: Pick<Offer, 'amount' | 'unit' | 'regular' | 'from'>) =>
+  [offerFromLabel(o, localDay()), offerPackLabel(o), o.regular !== undefined ? `statt ${euro(o.regular)}` : ''].filter(Boolean);
 
 /**
  * Einkauf planen (Julia: „samstags einkaufen, freitags oder morgens mit den Prospekten planen“):
@@ -66,7 +68,27 @@ export function OffersScreen() {
 }
 
 type Row = OfferDraft & { on: boolean };
-interface Preview { rows: Row[]; unread: string[]; until: string; source: 'text' | 'ki' }
+interface Preview { rows: Row[]; unread: string[]; until: string; source: 'text' | 'ki' | 'prospekt'; note?: string }
+
+/** Märkte, deren Prospekt Mashi selbst holen kann (domain/leaflets.ts) */
+const LEAFLET_CLIENT: Partial<Record<string, LeafletClient>> = { Lidl: 'lidl', Kaufland: 'kaufland' };
+/** deine Kaufland-Filiale – nur auf diesem Gerät, nie im Code (das Repo ist öffentlich) */
+const FILIALE_KEY = 'mashi-kaufland-filiale';
+
+function readFiliale(): string {
+  try {
+    return localStorage.getItem(FILIALE_KEY) ?? '';
+  } catch {
+    return '';
+  }
+}
+function saveFiliale(id: string) {
+  try {
+    localStorage.setItem(FILIALE_KEY, id);
+  } catch {
+    /* gilt dann nur bis zum Neuladen */
+  }
+}
 
 /** Markt wählen, Text einfügen, lesen – erst Mashi selbst, nur auf Tipp die KI (Julia) */
 function AddOffers({ startOpen }: { startOpen: boolean }) {
@@ -81,16 +103,60 @@ function AddOffers({ startOpen }: { startOpen: boolean }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const custom = !STORES.includes(store);
-  // vorausgewählt nur, was Mashi einem Lebensmittel zuordnen kann – Werkzeug und Deko aus dem Prospekt nicht
-  const rowsOf = (drafts: OfferDraft[]): Row[] => drafts.map((d) => ({ ...d, on: !!matchOffer(d.food ?? d.name, table, keys) }));
+  const client = LEAFLET_CLIENT[store];
+  const [filiale, setFiliale] = useState(readFiliale);
+  const [progress, setProgress] = useState<string | null>(null);
+  // vorausgewählt, was Mashi einem Lebensmittel zuordnen kann – oder was die KI als Kochzutat erkannt hat (food), auch
+  // wenn es in keinem Rezept steht (Schweinefilet). Werkzeug und Deko aus dem Prospekt nicht.
+  const rowsOf = (drafts: OfferDraft[]): Row[] => drafts.map((d) => ({ ...d, on: !!d.food || !!matchOffer(d.name, table, keys) }));
 
   if (!open) {
     return (
       <button className="btn btn--soft btn--block offer-add" onClick={() => setOpen(true)}>
-        <Icon name="plus" size={18} /> Angebote einfügen
+        <Icon name="plus" size={18} /> Angebote holen oder einfügen
       </button>
     );
   }
+
+  /**
+   * Wochenprospekt holen (Lidl, Kaufland) – ohne KI (Julia: „was braucht weniger KI“): die Prospekte der Woche, ihr
+   * Text per pdf.js, darin deine Zutaten (domain/leaflets.ts). Geht ohne Server, auch in der Demo.
+   */
+  const fetchLeaflets = async () => {
+    if (!client) return;
+    setError(null);
+    setPreview(null);
+    const storeId = client === 'kaufland' ? filiale.trim() : undefined;
+    if (client === 'kaufland' && !storeId) {
+      setError('Bitte zuerst deine Kaufland-Filialnummer eintragen.');
+      return;
+    }
+    if (storeId) saveFiliale(storeId);
+    setProgress(`Hole den ${store}-Prospekt …`);
+    try {
+      const flyers = await loadWeekFlyers(client, offerWeekEnd(new Date()), { storeId });
+      const wanted = wantedIngredients(recipes, table);
+      if (!wanted.length) throw new LeafletError('In deinen Rezepten stehen noch keine Zutaten, nach denen Mashi suchen kann.');
+      const drafts: OfferDraft[] = [];
+      for (const [n, flyer] of flyers.entries()) {
+        // das PDF liest dein Server – je Prospekt ein paar Sekunden bis eine halbe Minute
+        setProgress(`Lese ${flyers.length > 1 ? `Prospekt ${n + 1} von ${flyers.length}` : 'den Prospekt'} …`);
+        // Lidl: mit Lage auf der Seite – daraus kommen die Preise (Kaufland ist anders aufgebaut)
+        const { pages, layout } = await readLeaflet(flyer.pdfUrl, { layout: client === 'lidl' });
+        const priced = layout ? ingredientsWithPrices(priceRows(layout), flyer, wanted) : [];
+        // jede Zutat nur einmal – Angebote mit Preis vor reinen Textfunden, sonst die erste Fundstelle
+        for (const d of [...priced, ...ingredientsInLeaflet(pages, flyer, wanted)]) if (!drafts.some((x) => x.food === d.food)) drafts.push(d);
+      }
+      if (!drafts.length) throw new LeafletError(`Im ${store}-Prospekt steht diese Woche keine deiner Zutaten.`);
+      const end = flyers.map((f) => f.end).sort().pop()!;
+      const withPrice = drafts.filter((d) => d.price != null).length;
+      const prices = withPrice === drafts.length ? '' : withPrice ? ', nicht überall mit Preis' : ', ohne Preise';
+      setPreview({ rows: rowsOf(drafts), unread: [], until: end, source: 'prospekt', note: `Deine Zutaten im ${store}-Prospekt bis ${dayLabel(end)}${prices}.` });
+    } catch (e) {
+      setError(e instanceof LeafletError ? e.message : 'Das hat gerade nicht geklappt. Versuch es bitte noch einmal.');
+    }
+    setProgress(null);
+  };
 
   const read = () => {
     const r = parseOffersText(text, localDay());
@@ -129,12 +195,28 @@ function AddOffers({ startOpen }: { startOpen: boolean }) {
         single
         options={[...STORES.map((s) => ({ value: s, label: s })), { value: OTHER, label: 'Anderer' }]}
         selected={[custom ? OTHER : store]}
-        onChange={(next) => setStore(next[0] === OTHER ? '' : next[0] ?? store)}
+        onChange={(next) => { setStore(next[0] === OTHER ? '' : next[0] ?? store); setError(null); }}
       />
       {custom && (
         <label className="field">
           <input value={store} onChange={(e) => setStore(e.target.value)} placeholder="Name des Markts" aria-label="Anderer Markt" />
         </label>
+      )}
+      {client && (
+        <div className="offer-fetch">
+          {client === 'kaufland' && (
+            <label className="field">
+              <span className="small muted">Deine Kaufland-Filialnummer</span>
+              <input inputMode="numeric" value={filiale} onChange={(e) => setFiliale(e.target.value.replace(/[^\dA-Za-z]/g, ''))} placeholder="z. B. 1234" />
+            </label>
+          )}
+          <button className="btn btn--soft btn--block" disabled={!!progress || busy} onClick={() => void fetchLeaflets()}>
+            <Icon name="refresh" size={18} /> {progress ?? `${store}-Angebote holen`}
+          </button>
+          {/* ohne Vorschau gehört die Meldung hierher (Holen schlug fehl) – mit Vorschau steht sie dort beim KI-Knopf */}
+          {error && !preview && <p className="error">{error}</p>}
+          <p className="small muted center">oder Text einfügen:</p>
+        </div>
       )}
       <label className="field">
         <span className="small muted">Text aus dem Prospekt oder von der Markt-Seite</span>
@@ -149,10 +231,12 @@ function AddOffers({ startOpen }: { startOpen: boolean }) {
 
       {preview && (
         <div className="offer-preview">
+          {preview.note && <p className="small muted">{preview.note}</p>}
           {preview.rows.length > 0 && (
             <ul className="shopping">
               {preview.rows.map((r, i) => {
-                const food = matchOffer(r.food ?? r.name, table, keys)?.name;
+                // was die KI als Zutat erkannt hat, zeigt sie auch, wenn es in keinem Rezept steht
+                const food = matchOffer(r.food ?? r.name, table, keys)?.name ?? r.food;
                 return (
                   <li key={`${r.name}${i}`} className="shopping__item">
                     <label>
@@ -302,7 +386,7 @@ function OfferRow({ offer, food }: { offer: Offer; food?: string }) {
               <button type="submit" className="btn btn--soft btn--sm">OK</button>
             </form>
           ) : (
-            <button className="link small offer-food__link" onClick={() => setEditing(true)}>{food ? `→ ${food}` : 'Lebensmittel zuordnen'}</button>
+            <button className="link small offer-food__link" onClick={() => setEditing(true)}>{food || offer.food ? `→ ${food ?? offer.food}` : 'Lebensmittel zuordnen'}</button>
           )}
         </span>
         {offer.price !== undefined && <span className="shopping__qty">{euro(offer.price)}</span>}

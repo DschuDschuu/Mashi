@@ -35,6 +35,8 @@ export interface Offer {
   unit?: OfferUnit;
   /** letzter Tag, an dem es gilt (JJJJ-MM-TT) */
   until: string;
+  /** erster Tag, an dem es gilt – fehlt: sofort (Julia: Lidl hat Angebote „ab Montag“ und „ab Donnerstag“) */
+  from?: string;
   /** welches Lebensmittel es ist, wenn der Name es nicht verrät (von der KI oder von dir korrigiert) */
   food?: string;
   /** woher: selbst gelesen, von der KI gelesen, vom Server aus dem Prospekt */
@@ -43,7 +45,7 @@ export interface Offer {
 }
 
 /** Ein gelesenes Angebot vor dem Übernehmen – Markt und Gültigkeit kommen beim Übernehmen dazu */
-export type OfferDraft = Pick<Offer, 'name' | 'price' | 'regular' | 'amount' | 'unit' | 'food'> & { until?: string };
+export type OfferDraft = Pick<Offer, 'name' | 'price' | 'regular' | 'amount' | 'unit' | 'food' | 'from'> & { until?: string };
 
 /** Märkte zur Auswahl (Julia kauft dort ein) – ein anderer lässt sich eintippen */
 export const STORES = ['Lidl', 'Rewe', 'Edeka', 'Kaufland'];
@@ -128,6 +130,16 @@ function packOf(amount: number, unit: string): { amount: number; unit: OfferUnit
   if (u === 'l') return { amount: amount * 1000, unit: 'ml' };
   if (u === 'g' || u === 'ml') return { amount, unit: u };
   return { amount, unit: 'Stück' };
+}
+
+/** Packungsgröße aus einer Mengenangabe („Je 5x 120 g“, „1,5 l“, „10er“) – für die Lidl-Preise aus dem Prospekt (leaflets.ts) */
+export function packFromText(s: string): { amount: number; unit: OfferUnit } | undefined {
+  const multi = s.match(MULTI);
+  if (multi) return packOf(Number(multi[1]) * num(multi[2]), multi[3]);
+  const pack = s.match(PACK);
+  if (pack) return packOf(num(pack[1]), pack[2]);
+  const pieces = s.match(PIECES);
+  return pieces ? { amount: Number(pieces[1]), unit: 'Stück' } : undefined;
 }
 
 interface Row {
@@ -326,8 +338,23 @@ export function offerPackLabel(o: Pick<Offer, 'amount' | 'unit'>): string {
   return `${de(o.amount)} ${o.unit}`;
 }
 
-/** was heute noch gilt */
-export const activeOffers = (offers: readonly Offer[] | undefined, today: string): Offer[] => (offers ?? []).filter((o) => o.until >= today);
+/** feste Kurzformen – toLocaleDateString schreibt je nach Umgebung „Do“ oder „Do.“ */
+const WEEKDAYS = ['So.', 'Mo.', 'Di.', 'Mi.', 'Do.', 'Fr.', 'Sa.'];
+
+/** „ab Do.“ – nur, solange der Tag noch nicht da ist (danach gilt es einfach) */
+export function offerFromLabel(o: Pick<Offer, 'from'>, today: string): string {
+  if (!o.from || o.from <= today) return '';
+  return `ab ${WEEKDAYS[new Date(`${o.from}T12:00:00`).getDay()]}`;
+}
+
+/**
+ * Was für den nächsten Einkauf zählt: gilt heute noch und hat bis zum Einkaufstag (Samstag) angefangen – „ab Do.“ zählt
+ * für Samstag mit, ein Angebot erst ab nächster Woche noch nicht.
+ */
+export const activeOffers = (offers: readonly Offer[] | undefined, today: string): Offer[] => {
+  const shopDay = offerWeekEnd(new Date(`${today}T12:00:00`));
+  return (offers ?? []).filter((o) => o.until >= today && (!o.from || o.from <= shopDay));
+};
 
 /** Preis je g/ml/Stück – nur vergleichbar bei gleicher Einheit */
 const perUnit = (o: Offer) => (o.price !== undefined && o.amount ? o.price / o.amount : undefined);
@@ -365,9 +392,11 @@ export function addOffers(
     ...(d.regular !== undefined ? { regular: d.regular } : {}),
     ...(d.amount !== undefined && d.unit ? { amount: d.amount, unit: d.unit } : {}),
     ...(d.food?.trim() ? { food: d.food.trim() } : {}),
+    ...(d.from && d.from <= (d.until ?? until) ? { from: d.from } : {}),
   }));
   const replaced = new Set(fresh.map(same));
-  return [...activeOffers(existing, today).filter((o) => !replaced.has(same(o))), ...fresh];
+  // nur Abgelaufenes weg – was erst später anfängt (nächste Woche), bleibt
+  return [...(existing ?? []).filter((o) => o.until >= today && !replaced.has(same(o))), ...fresh];
 }
 
 // ── Passende Rezepte ───────────────────────────────────────────────

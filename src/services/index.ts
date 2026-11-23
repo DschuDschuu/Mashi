@@ -10,6 +10,7 @@ import { KiError, serverOffersAi, serverRecipeAi, type OffersAi } from './ai/ser
 import { openFoodFacts, type BarcodeLookup } from './barcode/openFoodFacts';
 import type { RecipeAiProvider } from './ai/types';
 import { placeholderImages, type ImageProvider } from './images/imageProvider';
+import { serverPdfText, type LeafletReader } from './leaflets/serverPdfText';
 
 // Echte Daten → die KI des verbundenen Servers (server/ki, OpenRouter); Demo → Beispielrezepte ohne Netz
 const serverAi = serverRecipeAi(savedSyncConfig);
@@ -24,6 +25,11 @@ export const offersAi: OffersAi = {
     ? serverOffers.readOffers(...a)
     : Promise.reject(new KiError('Mit KI lesen geht, sobald Mashi mit deinem Server verbunden ist – in der Demo liest Mashi selbst.'))),
 };
+// Prospekte von Lidl und Kaufland, ohne KI (domain/leaflets.ts): welche es gibt, fragt der Browser selbst beim
+// Prospekt-Dienst; das PDF liest dein Server (zu groß fürs Handy), bei Lidl mit Lage für die Preise
+// (domain/leafletPrices.ts). Demo → Meldung „bitte mit dem Server verbinden“.
+export { loadWeekFlyers, LeafletError } from './leaflets/schwarz';
+export const readLeaflet: LeafletReader = serverPdfText(() => (currentMode() === 'sync' ? savedSyncConfig() : null));
 export const imageProvider: ImageProvider = placeholderImages;
 export const foodTable: FoodTable = localFoodTable;
 export const barcodeLookup: BarcodeLookup = openFoodFacts;
