@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { createMockRecipes } from '../data/mockRecipes';
 import { localFoodTable } from './nutrition/localFoods';
 import {
-  activeOffers, addOffers, buildOffersPrompt, ingredientKeys, matchOffer, MAX_OFFER_TEXT, offerFromLabel, offerPackLabel, offerRecipes, offerWeekEnd, parseOffersReply,
+  activeOffers, addOffers, buildOffersPrompt, ingredientKeys, lastPaid, latestPrices, matchOffer, MAX_OFFER_TEXT, offerFromLabel, offerPackLabel, offerPeriodLabel,
+  offerRecipes, offerUnitPrice, offerWeekEnd, parseOffersReply,
   parseOffersText, shopDayHint, OffersReplyError, type Offer,
 } from './offers';
 import { emptyPantry } from './pantry';
@@ -215,5 +216,44 @@ describe('„ab Do.“ (Angebote aus dem Prospekt-PDF)', () => {
     // Übernehmen behält das Datum, Aufräumen entfernt nur Abgelaufenes – nicht, was erst nächste Woche anfängt
     const next = addOffers([nextWeek], [{ name: 'Testfilet', from: '2026-11-26' }], 'Lidl', '2026-11-28', '2026-11-23', NOW, id);
     expect(next.map((o) => [o.name, o.from])).toEqual([['Testkohl', '2026-11-30'], ['Testfilet', '2026-11-26']]);
+  });
+});
+
+describe('Was beim Angebot steht: Zeitraum, Kilopreis, Rabatt, zuletzt gezahlt', () => {
+  it('Zeitraum immer sichtbar – mit Anfang „Mo. 23.11. – Sa. 28.11.“, sonst „bis …“', () => {
+    expect(offerPeriodLabel({ from: '2026-11-23', until: '2026-11-28' })).toBe('Mo. 23.11. – Sa. 28.11.');
+    expect(offerPeriodLabel({ until: '2026-11-28' })).toBe('bis Sa. 28.11.');
+    expect(offerPeriodLabel({ from: '2026-11-28', until: '2026-11-28' })).toBe('bis Sa. 28.11.');
+    expect(offerPeriodLabel({ from: '2026-11-26' })).toBe('ab Do. 26.11.');
+    expect(offerPeriodLabel({})).toBe('');
+  });
+
+  it('Kilopreis, Literpreis, Stückpreis – nur mit Preis und Packung', () => {
+    expect(offerUnitPrice({ price: 1.19, amount: 500, unit: 'g' })).toEqual({ value: 2.38, per: 'kg' });
+    expect(offerUnitPrice({ price: 8.35, amount: 1500, unit: 'ml' })).toEqual({ value: 5.57, per: 'l' });
+    expect(offerUnitPrice({ price: 2.99, amount: 10, unit: 'Stück' })).toEqual({ value: 0.3, per: 'Stück' });
+    expect(offerUnitPrice({ price: 1.19 })).toBeUndefined();
+  });
+
+  it('Rabatt wie gedruckt wird übernommen – nur sinnvolle Prozente', () => {
+    const next = addOffers([], [{ name: 'Testlachs', price: 8.99, discount: 24 }, { name: 'Testkäse', price: 1, discount: 120 }], 'Lidl', '2026-11-28', TODAY, NOW, id);
+    expect(next.map((o) => o.discount)).toEqual([24, undefined]);
+  });
+
+  it('zuletzt gezahlt: neuester Preis desselben Lebensmittels, auf die Packung umgerechnet, wenn die Einheit passt', () => {
+    const table = localFoodTable;
+    const byKey = latestPrices([
+      { name: 'Hähnchenbrust', perUnit: 0.0079, unit: 'g', date: '2026-10-02' },
+      { name: 'Hähnchenbrustfilet', perUnit: 0.0089, unit: 'g', date: '2026-11-12' },
+      { name: 'Ei', perUnit: 0.3, unit: 'Stück', date: '2026-11-01' },
+    ], table);
+    const chicken = matchOffer('Hähnchenbrust', table)?.key;
+    // gleiches Lebensmittel, zwei Bons → der neuere (12.11.)
+    expect(lastPaid(chicken, { amount: 600, unit: 'g' }, byKey)).toEqual({ date: '2026-11-12', unitPrice: { value: 8.9, per: 'kg' }, pack: 5.34 });
+    // Stückpreis passt nicht zu Gramm: nur der Stückpreis, keine Packung
+    expect(lastPaid(matchOffer('Ei', table)?.key, { amount: 500, unit: 'g' }, byKey)).toEqual({ date: '2026-11-01', unitPrice: { value: 0.3, per: 'Stück' } });
+    expect(lastPaid(matchOffer('Ei', table)?.key, { amount: 10, unit: 'Stück' }, byKey)?.pack).toBe(3);
+    expect(lastPaid(undefined, {}, byKey)).toBeUndefined();
+    expect(lastPaid(matchOffer('Paprika', table)?.key, {}, byKey)).toBeUndefined();
   });
 });

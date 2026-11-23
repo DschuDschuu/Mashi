@@ -2,9 +2,10 @@ import { useMemo, useState } from 'react';
 import { addToPlan, removeFromPlan, removeOffer, saveOffers, setOfferFood, useFoodTable, usePantry, usePlan, useRecipes } from '../../data/store';
 import { localDay } from '../../domain/dates';
 import {
-  activeOffers, ingredientKeys, matchOffer, MAX_OFFER_TEXT, offerFoods, offerFromLabel, offerPackLabel, offerRecipes, offerWeekEnd, parseOffersText, shopDayHint,
-  STORES, type Offer, type OfferDraft, type OfferMatch,
+  activeOffers, ingredientKeys, lastPaid, latestPrices, matchOffer, MAX_OFFER_TEXT, offerFoods, offerPackLabel, offerPeriodLabel, offerRecipes,
+  offerUnitPrice, offerWeekEnd, parseOffersText, shopDayHint, STORES, type LastPaid, type Offer, type OfferDraft, type OfferMatch,
 } from '../../domain/offers';
+import { usePricing } from '../useCosts';
 import { currentContent } from '../../domain/recipe';
 import { ingredientsInLeaflet, ingredientsWithPrices, wantedIngredients, type LeafletClient } from '../../domain/leaflets';
 import { priceRows } from '../../domain/leafletPrices';
@@ -42,9 +43,27 @@ function rememberStore(store: string) {
 /** „Sa., 28.11.“ */
 const dayLabel = (day: string) => new Date(`${day}T12:00:00`).toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric', month: 'numeric' });
 
-/** „ab Do. · 400 g · statt 5,39 €“ – was unter dem Namen steht */
-const details = (o: Pick<Offer, 'amount' | 'unit' | 'regular' | 'from'>) =>
-  [offerFromLabel(o, localDay()), offerPackLabel(o), o.regular !== undefined ? `statt ${euro(o.regular)}` : ''].filter(Boolean);
+/**
+ * „Mo. 23.11. – Sa. 28.11. · 500 g · 2,38 €/kg · statt 1,49 €“ – was unter dem Namen steht (Julia: „ab wann ein
+ * Angebot gilt“ und „den Originalpreis“). Ohne gedruckten Statt-Preis der gedruckte Rabatt – ausgerechnet wird nichts.
+ */
+const details = (o: Pick<Offer, 'price' | 'amount' | 'unit' | 'regular' | 'discount' | 'from'> & { until?: string }) => {
+  const unit = offerUnitPrice(o);
+  return [
+    offerPeriodLabel(o), offerPackLabel(o), unit ? `${euro(unit.value)}/${unit.per}` : '',
+    o.regular !== undefined ? `statt ${euro(o.regular)}` : o.discount ? `−${o.discount} %` : '',
+  ].filter(Boolean);
+};
+
+/** „12.11.“ – mit Jahr, wenn es nicht dieses ist */
+const paidDay = (day: string) => {
+  const [y, m, d] = day.split('-');
+  return `${Number(d)}.${Number(m)}.${y === String(new Date().getFullYear()) ? '' : y.slice(2)}`;
+};
+
+/** „zuletzt 1,39 € · 2,78 €/kg (12.11.)“ – aus deinen Bons, zum Vergleichen (Julia: „den zuletzt gezahlten“) */
+const paidLabel = (p: LastPaid | undefined) =>
+  p ? `zuletzt ${[p.pack !== undefined ? euro(p.pack) : '', `${euro(p.unitPrice.value)}/${p.unitPrice.per}`].filter(Boolean).join(' · ')} (${paidDay(p.date)})` : '';
 
 /**
  * Einkauf planen (Julia: „samstags einkaufen, freitags oder morgens mit den Prospekten planen“):
@@ -106,6 +125,11 @@ function AddOffers({ startOpen }: { startOpen: boolean }) {
   const client = LEAFLET_CLIENT[store];
   const [filiale, setFiliale] = useState(readFiliale);
   const [progress, setProgress] = useState<string | null>(null);
+  // Text einfügen: bei Lidl/Kaufland unten eingeklappt (Julia: „wichtig ist der Import“), sonst der einzige Weg – offen
+  const [textWanted, setTextWanted] = useState(false);
+  const textOpen = !client || textWanted || !!text;
+  const { prices } = usePricing();
+  const paidByKey = useMemo(() => latestPrices(prices, table), [prices, table]);
   // vorausgewählt, was Mashi einem Lebensmittel zuordnen kann – oder was die KI als Kochzutat erkannt hat (food), auch
   // wenn es in keinem Rezept steht (Schweinefilet). Werkzeug und Deko aus dem Prospekt nicht.
   const rowsOf = (drafts: OfferDraft[]): Row[] => drafts.map((d) => ({ ...d, on: !!d.food || !!matchOffer(d.name, table, keys) }));
@@ -119,8 +143,9 @@ function AddOffers({ startOpen }: { startOpen: boolean }) {
   }
 
   /**
-   * Wochenprospekt holen (Lidl, Kaufland) – ohne KI (Julia: „was braucht weniger KI“): die Prospekte der Woche, ihr
-   * Text per pdf.js, darin deine Zutaten (domain/leaflets.ts). Geht ohne Server, auch in der Demo.
+   * Wochenprospekt holen (Lidl, Kaufland) – ohne KI (Julia: „was braucht weniger KI“): die Prospekte der Woche, ihren
+   * Text liest dein Server (bei Lidl mit Lage auf der Seite → Preise), darin deine Zutaten (domain/leaflets.ts).
+   * Braucht die Verbindung zum Server – die Demo sagt das.
    */
   const fetchLeaflets = async () => {
     if (!client) return;
@@ -215,35 +240,51 @@ function AddOffers({ startOpen }: { startOpen: boolean }) {
           </button>
           {/* ohne Vorschau gehört die Meldung hierher (Holen schlug fehl) – mit Vorschau steht sie dort beim KI-Knopf */}
           {error && !preview && <p className="error">{error}</p>}
-          <p className="small muted center">oder Text einfügen:</p>
         </div>
       )}
-      <label className="field">
-        <span className="small muted">Text aus dem Prospekt oder von der Markt-Seite</span>
-        <textarea
-          rows={5}
-          value={text}
-          onChange={(e) => { setText(e.target.value); setPreview(null); }}
-          placeholder={'einfügen – oder kurz tippen:\nHähnchenbrust 1 kg 6,99\nBrokkoli 500 g 1,19'}
-        />
-      </label>
-      <button className="btn btn--primary btn--block" disabled={!text.trim() || !store.trim()} onClick={read}>Lesen</button>
+      {/* geholte Angebote direkt unter dem Knopf, gelesener Text unter dem Textfeld – das Ergebnis steht da, wo du tippst */}
+      {preview?.source === 'prospekt' && previewBlock(preview)}
 
-      {preview && (
+      {textOpen ? (
+        <>
+          <label className="field">
+            <span className="small muted">Text aus dem Prospekt oder von der Markt-Seite</span>
+            <textarea
+              rows={5}
+              value={text}
+              onChange={(e) => { setText(e.target.value); setPreview(null); }}
+              placeholder={'einfügen – oder kurz tippen:\nHähnchenbrust 1 kg 6,99\nBrokkoli 500 g 1,19'}
+            />
+          </label>
+          <button className="btn btn--primary btn--block" disabled={!text.trim() || !store.trim()} onClick={read}>Lesen</button>
+        </>
+      ) : (
+        <p className="center"><button className="link small" onClick={() => setTextWanted(true)}>Oder Text einfügen</button></p>
+      )}
+      {preview && preview.source !== 'prospekt' && previewBlock(preview)}
+    </div>
+  );
+
+  /** Vorschau: ankreuzen, was übernommen wird */
+  function previewBlock(preview: Preview) {
+    return (
         <div className="offer-preview">
           {preview.note && <p className="small muted">{preview.note}</p>}
           {preview.rows.length > 0 && (
             <ul className="shopping">
               {preview.rows.map((r, i) => {
                 // was die KI als Zutat erkannt hat, zeigt sie auch, wenn es in keinem Rezept steht
-                const food = matchOffer(r.food ?? r.name, table, keys)?.name ?? r.food;
+                const match = matchOffer(r.food ?? r.name, table, keys);
+                const food = match?.name ?? r.food;
+                const paid = paidLabel(lastPaid(match?.key, r, paidByKey));
                 return (
                   <li key={`${r.name}${i}`} className="shopping__item">
                     <label>
                       <input type="checkbox" checked={r.on} onChange={() => setPreview({ ...preview, rows: preview.rows.map((x, j) => (j === i ? { ...x, on: !x.on } : x)) })} />
                       <span className="shopping__text">
                         <span className="shopping__name">{r.name}</span>
-                        <span className="shopping__from">{[...details(r), food ? `→ ${food}` : 'nicht zugeordnet'].join(' · ')}</span>
+                        <span className="shopping__from">{[...details({ ...r, until: r.until ?? preview.until }), food ? `→ ${food}` : 'nicht zugeordnet'].join(' · ')}</span>
+                        {paid && <span className="shopping__from">{paid}</span>}
                       </span>
                       {r.price !== undefined && <span className="shopping__qty">{euro(r.price)}</span>}
                     </label>
@@ -279,9 +320,8 @@ function AddOffers({ startOpen }: { startOpen: boolean }) {
             </>
           )}
         </div>
-      )}
-    </div>
-  );
+    );
+  }
 }
 
 /** Rezepte aus dem Kochbuch, deren Zutaten gerade im Angebot sind – mit „In den Plan“ */
@@ -345,6 +385,8 @@ function OfferList({ offers }: { offers: Offer[] }) {
   const table = useFoodTable();
   const recipes = useRecipes();
   const foods = useMemo(() => offerFoods(offers, table, ingredientKeys(recipes, table)), [offers, table, recipes]);
+  const { prices } = usePricing();
+  const paidByKey = useMemo(() => latestPrices(prices, table), [prices, table]);
   // deine Märkte in deiner Reihenfolge, andere dahinter; darin nach Name
   const rank = (s: string) => (STORES.includes(s) ? STORES.indexOf(s) : STORES.length);
   const stores = [...new Set(offers.map((o) => o.store))].sort((a, b) => rank(a) - rank(b) || a.localeCompare(b, 'de'));
@@ -356,7 +398,7 @@ function OfferList({ offers }: { offers: Offer[] }) {
           <h3 className="small muted">{s}</h3>
           <ul className="shopping panel">
             {offers.filter((o) => o.store === s).sort((a, b) => a.name.localeCompare(b.name, 'de')).map((o) => (
-              <OfferRow key={o.id} offer={o} food={foods.get(o.id)?.name} />
+              <OfferRow key={o.id} offer={o} food={foods.get(o.id)?.name} paid={lastPaid(foods.get(o.id)?.key, o, paidByKey)} />
             ))}
           </ul>
         </div>
@@ -365,7 +407,7 @@ function OfferList({ offers }: { offers: Offer[] }) {
   );
 }
 
-function OfferRow({ offer, food }: { offer: Offer; food?: string }) {
+function OfferRow({ offer, food, paid }: { offer: Offer; food?: string; paid?: LastPaid }) {
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(offer.food ?? food ?? '');
   const save = () => {
@@ -379,7 +421,8 @@ function OfferRow({ offer, food }: { offer: Offer; food?: string }) {
       <div className="shopping__row">
         <span className="shopping__text">
           <span className="shopping__name">{offer.name}</span>
-          <span className="shopping__from">{[...details(offer), `bis ${dayLabel(offer.until)}`].join(' · ')}</span>
+          <span className="shopping__from">{details(offer).join(' · ')}</span>
+          {paid && <span className="shopping__from">{paidLabel(paid)}</span>}
           {editing ? (
             <form className="offer-food" onSubmit={(e) => { e.preventDefault(); save(); }}>
               <input value={value} onChange={(e) => setValue(e.target.value)} list="ingredient-names" placeholder="z. B. Hähnchenbrust" aria-label={`Lebensmittel für ${offer.name}`} autoFocus />

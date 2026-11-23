@@ -11,8 +11,9 @@
  * (parseOffersText – kostet nichts, geht offline), und nur auf Tipp die KI (buildOffersPrompt/parseOffersReply).
  * Preise erfindet Mashi nie: was weder Mashi noch die KI lesen kann, fehlt lieber.
  */
+import type { PriceEntry } from './cost';
 import { cookingContent } from './homemade';
-import { resolveIngredient, resolveName, type Resolved } from './mealplan';
+import { keyOfName, resolveIngredient, resolveName, type Resolved } from './mealplan';
 import type { FoodTable } from './nutrition/types';
 import { normalizeName } from './nutrition/localFoods';
 import { isPrepared, itemAsIngredient, type Pantry } from './pantry';
@@ -30,6 +31,8 @@ export interface Offer {
   price?: number;
   /** Preis vorher („statt 5,39“) – nur, wenn er dastand */
   regular?: number;
+  /** Rabatt in Prozent, wie gedruckt („−24 %“) – Lidl druckt oft nur das statt eines Statt-Preises; nie ausgerechnet */
+  discount?: number;
   /** Packungsgröße – kg und l schon in g bzw. ml umgerechnet */
   amount?: number;
   unit?: OfferUnit;
@@ -45,7 +48,7 @@ export interface Offer {
 }
 
 /** Ein gelesenes Angebot vor dem Übernehmen – Markt und Gültigkeit kommen beim Übernehmen dazu */
-export type OfferDraft = Pick<Offer, 'name' | 'price' | 'regular' | 'amount' | 'unit' | 'food' | 'from'> & { until?: string };
+export type OfferDraft = Pick<Offer, 'name' | 'price' | 'regular' | 'discount' | 'amount' | 'unit' | 'food' | 'from'> & { until?: string };
 
 /** Märkte zur Auswahl (Julia kauft dort ein) – ein anderer lässt sich eintippen */
 export const STORES = ['Lidl', 'Rewe', 'Edeka', 'Kaufland'];
@@ -347,6 +350,61 @@ export function offerFromLabel(o: Pick<Offer, 'from'>, today: string): string {
   return `ab ${WEEKDAYS[new Date(`${o.from}T12:00:00`).getDay()]}`;
 }
 
+const shortDay = (d: string) => {
+  const t = new Date(`${d}T12:00:00`);
+  return `${WEEKDAYS[t.getDay()]} ${t.getDate()}.${t.getMonth() + 1}.`;
+};
+
+/**
+ * Wann ein Angebot gilt: „Mo. 23.11. – Sa. 28.11.“ (Julia: „ab wann ein Angebot gilt, steht nicht drin“) –
+ * ohne bekannten Anfang „bis Sa. 28.11.“
+ */
+export function offerPeriodLabel(o: { from?: string; until?: string }): string {
+  if (!o.until) return o.from ? `ab ${shortDay(o.from)}` : '';
+  return o.from && o.from < o.until ? `${shortDay(o.from)} – ${shortDay(o.until)}` : `bis ${shortDay(o.until)}`;
+}
+
+export interface UnitPrice { value: number; per: 'kg' | 'l' | 'Stück' }
+
+/** Preis je kg, l oder Stück – damit verschieden große Packungen vergleichbar sind */
+export function offerUnitPrice(o: Pick<Offer, 'price' | 'amount' | 'unit'>): UnitPrice | undefined {
+  if (o.price === undefined || !o.amount || !o.unit) return undefined;
+  if (o.unit === 'Stück') return { value: round2(o.price / o.amount), per: 'Stück' };
+  return { value: round2((o.price / o.amount) * 1000), per: o.unit === 'ml' ? 'l' : 'kg' };
+}
+
+/** Neuester bezahlter Preis je Lebensmittel (Bons und Preise von Hand) – einmal bauen, dann je Angebot nachschlagen */
+export function latestPrices(prices: readonly PriceEntry[], table: FoodTable): Map<string, PriceEntry> {
+  const byKey = new Map<string, PriceEntry>();
+  for (const p of prices) {
+    const key = keyOfName(p.name, table);
+    const prev = key ? byKey.get(key) : undefined;
+    if (key && (!prev || p.date > prev.date)) byKey.set(key, p);
+  }
+  return byKey;
+}
+
+export interface LastPaid {
+  date: string;
+  unitPrice: UnitPrice;
+  /** auf die Packung des Angebots umgerechnet – nur, wenn die Einheit passt (Gewicht zu Gewicht, Stück zu Stück) */
+  pack?: number;
+}
+
+/**
+ * Was du zuletzt für dieses Lebensmittel bezahlt hast (Julia: „vielleicht sogar den zuletzt gezahlten“) – als
+ * Kilopreis und, wenn möglich, für dieselbe Packung wie im Angebot.
+ * @param key Lebensmittel des Angebots (matchOffer/offerFoods)
+ */
+export function lastPaid(key: string | undefined, o: Pick<Offer, 'amount' | 'unit'>, byKey: ReadonlyMap<string, PriceEntry>): LastPaid | undefined {
+  const p = key ? byKey.get(key) : undefined;
+  if (!p || !(p.perUnit > 0)) return undefined;
+  const weight = p.unit === 'g';
+  const unitPrice: UnitPrice = weight ? { value: round2(p.perUnit * 1000), per: o.unit === 'ml' ? 'l' : 'kg' } : { value: round2(p.perUnit), per: 'Stück' };
+  const fits = o.amount !== undefined && (weight ? o.unit === 'g' || o.unit === 'ml' : o.unit === 'Stück');
+  return { date: p.date.slice(0, 10), unitPrice, ...(fits ? { pack: round2(p.perUnit * o.amount!) } : {}) };
+}
+
 /**
  * Was für den nächsten Einkauf zählt: gilt heute noch und hat bis zum Einkaufstag (Samstag) angefangen – „ab Do.“ zählt
  * für Samstag mit, ein Angebot erst ab nächster Woche noch nicht.
@@ -390,6 +448,7 @@ export function addOffers(
     id: newId(), store, name: d.name.trim(), until: d.until && d.until >= today ? d.until : until, source, addedAt: now,
     ...(d.price !== undefined ? { price: d.price } : {}),
     ...(d.regular !== undefined ? { regular: d.regular } : {}),
+    ...(d.discount !== undefined && d.discount > 0 && d.discount < 100 ? { discount: Math.round(d.discount) } : {}),
     ...(d.amount !== undefined && d.unit ? { amount: d.amount, unit: d.unit } : {}),
     ...(d.food?.trim() ? { food: d.food.trim() } : {}),
     ...(d.from && d.from <= (d.until ?? until) ? { from: d.from } : {}),

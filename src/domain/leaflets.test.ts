@@ -176,3 +176,18 @@ describe('Zuschnitte sind dieselbe Zutat', () => {
     expect(found('Filetstreifen', 'Lachs')).toEqual([]);
   });
 });
+
+describe('Rabatt aus dem Prospekt', () => {
+  it('„−24%“ kommt als Zahl mit, „−1€“ nicht – nie ausgerechnet', () => {
+    const row = (p: Partial<PriceRow>): PriceRow => ({
+      page: 1, brand: '', name: '', variant: '', description: '', quantity: '', price: 1, priceFrom: false, plus: false,
+      regular: null, uvp: false, discount: '', promo: '', basePrice: '', validFrom: '', check: '', x: 0, y: 0, ...p,
+    });
+    const want = (name: string): WantedIngredient => ({ key: `name:${name.toLowerCase()}`, name, words: [name.toLowerCase()] });
+    const drafts = ingredientsWithPrices([
+      row({ name: 'Testlachs', price: 8.99, discount: '-24%' }),
+      row({ name: 'Testkäse', price: 1.99, discount: '-1€' }),
+    ], { start: '2026-11-23', end: '2026-11-28' }, [want('Testlachs'), want('Testkäse')]);
+    expect(drafts.map((d) => [d.name, d.discount, d.regular])).toEqual([['Testlachs', 24, undefined], ['Testkäse', undefined, undefined]]);
+  });
+});

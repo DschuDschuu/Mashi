@@ -266,6 +266,8 @@ export function ingredientsWithPrices(
     const flat = ` ${normalizeName(r.name)} `;
     const from = rowFrom(r.validFrom, flyer);
     const pack = packFromText(r.quantity);
+    // „−24%“ wie gedruckt; „−1€“ (Euro statt Prozent) bleibt weg
+    const pct = r.discount.match(/^[-–](\d{1,2})%$/);
     for (const w of wanted) {
       const word = words.some((t) => hits(t, w.words));
       if (!word && !w.words.some((p) => p.includes(' ') && flat.includes(` ${p} `))) continue;
@@ -276,6 +278,7 @@ export function ingredientsWithPrices(
         food: w.name,
         price: r.price,
         ...(r.regular != null && r.regular > r.price ? { regular: r.regular } : {}),
+        ...(pct ? { discount: Number(pct[1]) } : {}),
         ...pack,
         from,
         until: flyer.end,
