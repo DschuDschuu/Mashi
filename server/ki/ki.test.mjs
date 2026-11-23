@@ -1,6 +1,10 @@
 // Tests für den KI-Vermittler – ohne Netz: CouchDB und OpenRouter werden nachgestellt.
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
+import { spawn } from 'node:child_process';
+import { Agent, request } from 'node:http';
+import { createServer } from 'node:net';
 import { Readable } from 'node:stream';
+import { fileURLToPath } from 'node:url';
 import { clientIp, corsHeaders, FailLimiter, makeHandler, MAX_PROMPT, RateLimiter, readBody, SYSTEM_PROMPT } from './ki.mjs';
 
 const APP = 'https://dschudschuu.github.io';
@@ -190,5 +194,88 @@ describe('Code-Review #8: Passwort-Raten wird gebremst', () => {
   it('echte Adresse aus X-Forwarded-For (Traefik), sonst der direkte Absender', () => {
     expect(clientIp({ 'x-forwarded-for': '203.0.113.7, 10.0.0.2' }, '10.0.0.2')).toBe('203.0.113.7');
     expect(clientIp({}, '10.0.0.5')).toBe('10.0.0.5');
+  });
+});
+
+describe('Sauber beenden: docker stop dauert nicht 10 s und endet mit Exit 0', () => {
+  // Hier läuft ki.mjs als echter Prozess (nicht PID 1 wie im Container): Ohne eigenen Handler stirbt er am Signal
+  // (signal 'SIGTERM', kein Exit-Code) – im Container würde dasselbe Signal ignoriert und Docker nach 10 s abschießen.
+  const KI = fileURLToPath(new URL('./ki.mjs', import.meta.url));
+  const running = [];
+  afterEach(() => { for (const c of running.splice(0)) c.kill('SIGKILL'); });
+
+  const freePort = () => new Promise((resolve) => {
+    const s = createServer().listen(0, '127.0.0.1', () => { const { port } = s.address(); s.close(() => resolve(port)); });
+  });
+
+  /** ki.mjs starten (ohne KI-Schlüssel: /rezept antwortet dann ohne Netz mit 503) und warten, bis er zuhört */
+  async function startKi() {
+    const port = await freePort();
+    const child = spawn(process.execPath, [KI], { env: { PATH: process.env.PATH, PORT: String(port) }, stdio: ['ignore', 'pipe', 'pipe'] });
+    running.push(child);
+    const exited = new Promise((resolve) => child.once('exit', (code, signal) => resolve({ code, signal, at: Date.now() })));
+    let log = '';
+    await new Promise((resolve, reject) => {
+      child.stdout.on('data', (d) => { log += d; if (log.includes('hört auf')) resolve(); });
+      exited.then(() => reject(new Error('ki.mjs ist nicht gestartet: ' + log)));
+    });
+    return { child, port, exited, log: () => log };
+  }
+
+  /** eine Anfrage; resolve mit Status und Text der Antwort */
+  const send = (req, body) => new Promise((resolve, reject) => {
+    req.on('response', (res) => { let text = ''; res.on('data', (d) => { text += d; }); res.on('end', () => resolve({ status: res.statusCode, text })); });
+    req.on('error', reject);
+    if (body !== undefined) req.end(body);
+  });
+
+  it.each(['SIGTERM', 'SIGINT'])('%s: endet sofort mit Exit 0, statt am Signal zu sterben', async (signal) => {
+    const ki = await startKi();
+    const t0 = Date.now();
+    ki.child.kill(signal);
+    const { code, signal: diedOf, at } = await ki.exited;
+    expect({ code, diedOf }).toEqual({ code: 0, diedOf: null });
+    expect(at - t0).toBeLessThan(1000);
+    expect(ki.log()).toContain(signal + ' – nehme nichts Neues mehr an');
+  });
+
+  it('eine ruhende Keep-alive-Verbindung (wie von Traefik) hält das Beenden nicht auf', async () => {
+    const ki = await startKi();
+    const agent = new Agent({ keepAlive: true });
+    try {
+      const out = await send(request({ port: ki.port, path: '/status', agent }), '');
+      expect(out.status).toBe(200);
+      const t0 = Date.now();
+      ki.child.kill('SIGTERM');
+      const { code, at } = await ki.exited;
+      expect(code).toBe(0);
+      expect(at - t0).toBeLessThan(1000);
+    } finally {
+      agent.destroy();
+    }
+  });
+
+  it('eine laufende Anfrage wird noch beantwortet, danach endet der Dienst', async () => {
+    const ki = await startKi();
+    const agent = new Agent({ keepAlive: true });
+    try {
+      const body = JSON.stringify({ prompt: 'Linsensuppe' });
+      const req = request({ port: ki.port, path: '/rezept', method: 'POST', agent, headers: { 'content-length': Buffer.byteLength(body) } });
+      const answer = send(req);
+      req.write(body.slice(0, 5)); // Anfrage läuft: erst ein Teil ist da
+      await new Promise((r) => setTimeout(r, 100));
+      ki.child.kill('SIGTERM');
+      await new Promise((r) => setTimeout(r, 300));
+      expect(ki.child.exitCode).toBe(null); // wartet noch auf den Rest der Anfrage
+      req.end(body.slice(5));
+      const out = await answer;
+      const done = Date.now();
+      expect(out.status).toBe(503); // ohne KI-Schlüssel: „nicht eingerichtet“ – aber eine echte Antwort
+      const { code, at } = await ki.exited;
+      expect(code).toBe(0);
+      expect(at - done).toBeLessThan(1000); // nicht erst nach der Frist
+    } finally {
+      agent.destroy();
+    }
   });
 });

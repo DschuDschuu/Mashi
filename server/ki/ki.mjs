@@ -34,6 +34,11 @@ export const SYSTEM_PROMPT =
 export const MAX_PROMPT = 16000;
 /** Bytes – Umlaute brauchen in UTF-8 und JSON mehr Platz als ein Zeichen */
 const MAX_BODY = 64 * 1024;
+/**
+ * Beim Beenden (docker stop, Redeploy) so lange dürfen laufende Anfragen noch fertig werden. Deutlich unter den
+ * 10 s, nach denen Docker selbst mit SIGKILL nachhilft – sonst endete der Dienst doch wieder mit Exit 137.
+ */
+const STOP_GRACE_MS = 5000;
 
 /** Anfragen je Person: gleitende Fenster für Stunde und Tag, nur im Speicher (ein Neustart setzt zurück) */
 export class RateLimiter {
@@ -229,9 +234,14 @@ export function makeHandler({ fetch, env, limiter = new RateLimiter(Number(env.K
 /** Start als echter Server (nur, wenn die Datei direkt läuft – nicht in den Tests) */
 function start() {
   const handle = makeHandler({ fetch: globalThis.fetch, env: process.env });
+  let stopping = false; // true, sobald SIGTERM/SIGINT da ist (siehe unten)
   const server = createServer(async (req, res) => {
     const json = { ...handle.cors(req.headers.origin), 'content-type': 'application/json; charset=utf-8' };
     const send = (out) => {
+      // Beim Beenden die Verbindung nach dieser Antwort schließen: server.close() kappt nur Verbindungen, die beim
+      // Aufruf schon ruhten – die einer laufenden Anfrage bliebe danach offen (Keep-alive), und der Dienst wartete
+      // bis zur Frist. „Connection: close“ sagt zugleich Traefik, dass es sie nicht wiederverwenden soll.
+      if (stopping) res.setHeader('connection', 'close');
       res.writeHead(out.status, out.headers);
       res.end(out.body === undefined ? undefined : JSON.stringify(out.body));
     };
@@ -246,6 +256,31 @@ function start() {
   const port = Number(process.env.PORT) || 8080;
   // 0.0.0.0: sonst erreicht der Proxy den Container nicht (Coolify: „No Available Server“)
   server.listen(port, '0.0.0.0', () => console.log('Mashi-KI hört auf 0.0.0.0:' + port + ' (Modell: ' + (process.env.OPENROUTER_MODEL || 'fehlt') + ')'));
+
+  // Sauber beenden bei SIGTERM (docker stop, Coolify-Redeploy) und SIGINT (Strg+C beim Ausprobieren).
+  // Warum nötig: Im Container ist node Prozess Nr. 1, und Signale ohne eigenen Handler ignoriert der Kernel für
+  // Prozess Nr. 1 – Node installiert für SIGTERM keinen. Ohne diesen Block wartete docker stop 10 s und schoss den
+  // Dienst dann mit SIGKILL ab (Exit 137, laufende Anfragen mitten drin gekappt).
+  // Bewusst nicht per „init: true“ in der Compose-Datei gelöst: Dann stirbt node zwar sofort, aber am Signal
+  // (Exit 143), ohne laufende Anfragen fertig zu machen – und die manuelle Variante (Dockerfile) hätte es nicht.
+  const stop = (signal) => {
+    if (stopping) return; // ein zweites Signal ändert nichts, das Beenden läuft schon
+    stopping = true;
+    console.log('Mashi-KI: ' + signal + ' – nehme nichts Neues mehr an und höre auf');
+    // close(): keine neuen Verbindungen mehr. Ruhende Keep-alive-Verbindungen (Traefik hält welche offen) schließt
+    // Node dabei selbst; laufende Anfragen werden noch beantwortet (send schließt danach). Sind alle zu, endet der
+    // Dienst regulär.
+    server.close(() => process.exit(0));
+    // Eine KI-Antwort kann bis 90 s dauern – so lange wartet niemand. Nach der Frist die restlichen Verbindungen
+    // kappen und trotzdem regulär enden: Beenden war ja gewollt, nur eben nicht ganz geräuschlos.
+    setTimeout(() => {
+      console.log('Mashi-KI: nach ' + STOP_GRACE_MS / 1000 + ' s noch offene Anfragen abgebrochen');
+      server.closeAllConnections();
+      process.exit(0);
+    }, STOP_GRACE_MS);
+  };
+  process.on('SIGTERM', () => stop('SIGTERM'));
+  process.on('SIGINT', () => stop('SIGINT'));
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) start();
