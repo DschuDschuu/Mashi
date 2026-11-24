@@ -5,16 +5,15 @@
 // Mashi-CouchDB anmelden kann (dieselbe Anmeldung wie der Abgleich) – geprüft über /_session.
 //
 // Bewusst ohne Pakete (nur Node): nichts zu installieren, wenig Angriffsfläche.
-// Diese Datei steht wörtlich in ../coolify/docker-compose.yml (per content:) – darum KEIN Dollar-Zeichen
-// vor Klammer oder Buchstabe (keine Template-Strings mit Platzhaltern): Compose/Coolify würden das als
-// eigene Variable ersetzen, und der Code wäre still kaputt. Ein Test prüft das.
+// Läuft als fertiges Image (Dockerfile daneben, gebaut von .github/workflows/ki-image.yml) – Coolify zieht es, der
+// Code steht nicht mehr in der Compose-Datei.
 // Nur Rezepte: feste Anweisung, Grenzen für Länge und Antwort, Anfragen je Person begrenzt.
 //
 // Wege: POST /rezept, POST /prospekttext, GET /status – jeweils auch mit /ki davor (Coolify schneidet das Präfix
 // standardmäßig ab, ohne „Strip Prefixes“ kommt es mit). Folge: eine CouchDB-Datenbank namens „ki“ ist nicht möglich.
 //
 // /prospekttext (Einkauf planen): holt ein Prospekt-PDF von Lidl/Kaufland (nur assets.leaflets.schwarz) und gibt den
-// Text je Seite zurück – ohne KI, mit poppler (pdftotext/pdftohtml, installiert die Compose-Datei beim Start). Auf
+// Text je Seite zurück – ohne KI, mit poppler (pdftotext/pdftohtml, stecken im Image). Auf
 // Wunsch (layout) dazu die Wörter mit Lage und Schrift: daraus liest die App die Lidl-Preise. So lädt das Handy
 // nur ~100 KB statt 20–60 MB PDF. Ausgewertet wird alles in der App.
 //
@@ -25,6 +24,7 @@
 //   KI_ALLOWED_ORIGINS   erlaubte Herkunft der App, Komma-getrennt (früher MASHI_APP_ORIGINS)
 //   KI_PER_HOUR / KI_PER_DAY   Anfragen je Person (Standard 20 / 60)
 //   PORT                 Standard 8080
+//   MASHI_KI_VERSION     setzt das Image (Commit), steht unter /status – zeigt, welche Fassung läuft
 
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -306,7 +306,7 @@ export function wordsWithFonts(bboxHtml, pdftohtmlXml) {
 
 /**
  * Prospekt lesen: Text je Seite (pdftotext trennt Seiten mit einem Seitenvorschub), auf Wunsch dazu die Wörter mit
- * Lage und Schrift (für Preise, nur Lidl). Alles poppler – installiert die Compose-Datei beim Start.
+ * Lage und Schrift (für Preise, nur Lidl). Alles poppler – steckt im Image (Dockerfile).
  */
 export async function readPdf(data, { layout = false, timeoutMs = 60_000 } = {}) {
   const dir = await mkdtemp(join(tmpdir(), 'mashi-pdf-'));
@@ -353,6 +353,8 @@ export function makeHandler({
   const allowed = (env.KI_ALLOWED_ORIGINS || env.MASHI_APP_ORIGINS || 'https://dschudschuu.github.io,http://localhost:5173').split(',').map((s) => s.trim()).filter(Boolean);
   const userOf = makeAuth({ fetch, couchUrl: (env.COUCHDB_URL || 'http://couchdb:5984').replace(/\/+$/, '') });
   const configured = !!(env.OPENROUTER_API_KEY && env.OPENROUTER_MODEL);
+  /** welche Fassung läuft (Commit, setzt das Image) – Julia: sehen, ob ein Update angekommen ist */
+  const version = env.MASHI_KI_VERSION || undefined;
   /** gelesene Prospekte (Adresse → Seiten) – zweimal tippen lädt nicht zweimal 40 MB; wenige, nur einen halben Tag */
   const pdfCache = new Map();
   const PDF_CACHE_MS = 12 * 3600 * 1000;
@@ -380,7 +382,7 @@ export function makeHandler({
       out = await pdfReader(pdf.data, { layout });
     } catch (e) {
       pdfLimiter.giveBack(user);
-      // poppler fehlt: alte Compose-Datei (installiert es nicht beim Start) oder die Installation ist gescheitert
+      // poppler fehlt: der Dienst läuft noch nicht als Mashi-Image (alte Compose-Datei mit node:24-alpine)
       if (e && e.code === 'ENOENT') return reply(503, { error: 'pdftotext', message: 'Dein Server kann Prospekte noch nicht lesen (pdftotext fehlt) – siehe server/coolify/ANLEITUNG.md.' });
       return reply(502, { error: 'lesen', message: 'Der Prospekt ließ sich nicht lesen.' });
     }
@@ -395,7 +397,7 @@ export function makeHandler({
     const reply = (status, payload) => ({ status, headers: { ...cors, 'content-type': 'application/json; charset=utf-8' }, body: payload });
     const route = routeOf(path);
     if (method === 'OPTIONS') return { status: 204, headers: cors };
-    if (method === 'GET' && route === '/status') return reply(200, { ok: true, configured });
+    if (method === 'GET' && route === '/status') return reply(200, { ok: true, configured, ...(version ? { version } : {}) });
     if (method !== 'POST' || (route !== '/rezept' && route !== '/prospekttext')) return reply(404, { error: 'unbekannt' });
     // Prospekte lesen braucht keinen KI-Schlüssel
     if (route === '/rezept' && !configured) return reply(503, { error: 'nicht eingerichtet', message: 'Auf dem Server fehlt noch der KI-Schlüssel.' });

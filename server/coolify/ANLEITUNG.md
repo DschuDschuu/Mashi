@@ -24,7 +24,12 @@ Rezepte, Abgleich und alles andere laufen in beiden Fällen normal weiter.
 
 ## Später aktualisieren
 
-Ändert sich der KI-Dienst (neue Fassung von `docker-compose.yml` im Repo), genauso wie oben:
+Seit 2026-11-24 kommt der KI-Dienst als **fertiges Image** (`ghcr.io/dschudschuu/mashi-ki`), gebaut von GitHub
+nach jedem Push mit grünen Tests. Ein neuer KI-Dienst braucht darum **nur noch Redeploy** – die Compose-Datei bleibt.
+Welche Fassung läuft, zeigt `https://<DB-DOMAIN>/ki/status` (`"version"`: die ersten 7 Zeichen des Commits).
+Holt Redeploy wider Erwarten nicht die neue Fassung: **Pull Latest Images & Restart**.
+
+Nur wenn sich die Compose-Datei selbst ändert (selten), wie oben:
 **bestehende Ressource → Edit Compose File → Inhalt ersetzen → Save → Redeploy.** Umgebungsvariablen,
 Domains und Daten bleiben dabei erhalten.
 
@@ -71,13 +76,30 @@ Domains und Daten bleiben dabei erhalten.
   - Ohne Update zeigt die App beim Holen „Dein Server kann Prospekte noch nicht lesen“, sonst läuft
     alles normal.
 
+  (Abgelöst am 2026-11-24: poppler steckt jetzt im Image, nichts wird mehr beim Start installiert.)
+- **2026-11-24 (KI-Dienst als fertiges Image – kein Code mehr in der Compose-Datei):** Vorher stand `ki.mjs` mit
+  ~500 Zeilen in der Compose-Datei, und poppler kam bei jedem Start als root aus dem Netz. Jetzt baut GitHub das Image
+  (`server/ki/Dockerfile`, Workflow „KI-Dienst (Image)“) für amd64 und arm64, prüft es selbst (poppler da, läuft
+  als `node`, `/status` antwortet, beendet sich sauber) und veröffentlicht es erst dann. Einmalig umstellen:
+  1. Unter **Actions** muss „KI-Dienst (Image)“ grün sein.
+  2. Das Paket muss öffentlich sein, sonst kann Coolify es nicht holen: github.com/DschuDschuu → **Packages** →
+     `mashi-ki` → **Package settings** → **Change visibility** → **Public** (falls dort „Private“ steht).
+  3. Coolify: bestehende Ressource → **Edit Compose File** → den Block `ki:` durch den aus der neuen
+     `docker-compose.yml` ersetzen (CouchDB-Block und Volume nicht anfassen) → **Save** → **Redeploy**.
+  4. `https://<DB-DOMAIN>/ki/status` zeigt jetzt `"version":"…"`, und „Angebote holen“ funktioniert.
+
+  Zurück auf eine ältere Fassung: in der Compose-Datei `image: ghcr.io/dschudschuu/mashi-ki:sha-<7 Zeichen>` statt
+  `:latest` → Save → Redeploy. Die Fassungen stehen beim Paket auf GitHub.
+
 ## Dateien
 
 | Datei | Zweck |
 |---|---|
-| `docker-compose.yml` | CouchDB (unverändert) + KI-Dienst `ki` – komplett in Coolify einfügbar |
-| `build-compose.mjs` | erzeugt `docker-compose.yml` aus `../ki/ki.mjs` (nur für Entwicklung) |
-| `compose.test.mjs` | prüft bei jedem Testlauf: gültiges YAML, CouchDB unverändert, Code = `ki.mjs` |
+| `docker-compose.yml` | CouchDB (unverändert) + KI-Dienst `ki` als Image – komplett in Coolify einfügbar |
+| `build-compose.mjs` | erzeugt `docker-compose.yml` (mit `../couchdb/mashi.ini`; nur für Entwicklung) |
+| `compose.test.mjs` | prüft bei jedem Testlauf: gültiges YAML, CouchDB unverändert, Image = Workflow, Dockerfile mit poppler |
+| `../ki/Dockerfile` | das Image des KI-Dienstes (node:24-alpine + poppler, läuft als `node`) |
+| `../../.github/workflows/ki-image.yml` | baut und veröffentlicht das Image nach grünen Tests |
 
 Die manuelle Variante ohne Coolify liegt in `../couchdb/` (mit SSH, `.env`, `setup.sh`).
 
@@ -150,8 +172,8 @@ protokolliert. Beide Services sollten nach kurzer Zeit **healthy** sein.
 
 ## 6. Prüfen im Browser
 
-1. `https://<DB-DOMAIN>/ki/status` öffnen → muss `{"ok":true,"configured":true}` zeigen
-   (`configured:false` = Schlüssel oder Modell fehlt).
+1. `https://<DB-DOMAIN>/ki/status` öffnen → muss `{"ok":true,"configured":true,"version":"…"}` zeigen
+   (`configured:false` = Schlüssel oder Modell fehlt; ohne `version` läuft noch nicht das Image).
 2. `https://<DB-DOMAIN>/_utils` → Fauxton muss nach Benutzer und Passwort fragen.
 3. In der App (mit Server verbunden): **＋ → Rezept mit KI erstellen** → ein Rezept anfordern.
 4. **Einkauf planen** → Markt Lidl → **Angebote holen** → nach einer Weile erscheinen deine Zutaten
@@ -201,3 +223,8 @@ das im Log. `pdftotext` und `pdftohtml` (poppler) lesen ein Test-PDF Seite für 
 echten Lidl-Prospekt der Woche: 43 Seiten in gut 1 s, gepackt 147 KB, daraus 228 Angebote mit Preis.
 Das Ergebnis ist gleich der Tabelle aus „Lidl-Prospekt auslesen“. Nicht testbar war hier die
 Installation selbst: Die Testumgebung sperrt `dl-cdn.alpinelinux.org`.
+
+**2026-11-24 (Image):** Das Image prüft der Workflow bei jedem Bau selbst, auf amd64 und arm64: `pdftotext` und
+`pdftohtml` vorhanden, läuft als `node`, `/ki/status` antwortet mit der richtigen Fassung, `docker stop` endet mit
+Exit 0. Erst danach wird es veröffentlicht. Nicht testbar: ob Coolify bei Redeploy `pull_policy: always` beachtet –
+falls nicht, holt **Pull Latest Images & Restart** die neue Fassung.

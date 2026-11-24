@@ -1,0 +1,105 @@
+# Baut das Image des KI-Dienstes (server/ki/Dockerfile) und veröffentlicht es als ghcr.io/dschudschuu/mashi-ki.
+# Coolify zieht es beim Redeploy (server/coolify/docker-compose.yml: image + pull_policy: always) – so steht kein Code
+# mehr in der Compose-Datei. Veröffentlicht wird NUR, wenn die Tests grün sind und das Image seinen Selbsttest besteht.
+#
+# Für amd64 und arm64 (je auf eigenem Rechner gebaut, ohne Emulation) – passt also zu jedem Server.
+# Tags: latest (das zieht Coolify) und sha-<7 Zeichen> (zum Zurückgehen auf eine ältere Fassung).
+#
+# Einmalig nach dem ersten Lauf: Paket öffentlich machen, falls GitHub es privat angelegt hat
+# (github.com/DschuDschuu → Packages → mashi-ki → Package settings → Change visibility → Public).
+name: KI-Dienst (Image)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - server/ki/Dockerfile
+      - server/ki/ki.mjs
+      - .github/workflows/ki-image.yml
+  workflow_dispatch: # manuell unter „Actions“ – z. B. für ein frisches node:24-alpine mit Sicherheits-Updates
+
+# Grundsätzlich nur lesen; Pakete schreiben dürfen nur die Schritte, die das Image hochladen.
+permissions:
+  contents: read
+
+# nie zwei Veröffentlichungen gleichzeitig (sonst könnte latest auf die ältere zeigen)
+concurrency:
+  group: ki-image
+  cancel-in-progress: false
+
+env:
+  # GHCR verlangt Kleinbuchstaben
+  IMAGE: ghcr.io/dschudschuu/mashi-ki
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      # KI-Dienst und Compose-Datei
+      - run: npx vitest run server
+
+  build:
+    needs: test
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Bauen
+        run: docker build --pull --build-arg VERSION="${GITHUB_SHA::7}" -t "$IMAGE:sha-${GITHUB_SHA::7}-${{ matrix.arch }}" server/ki
+      - name: Selbsttest – poppler da, läuft als node, /status antwortet, beendet sich sauber
+        run: |
+          set -eu
+          tag="$IMAGE:sha-${GITHUB_SHA::7}-${{ matrix.arch }}"
+          docker run --rm "$tag" sh -c 'command -v pdftotext && command -v pdftohtml'
+          test "$(docker run --rm "$tag" id -un)" = node
+          cid=$(docker run -d -p 18080:8080 "$tag")
+          ok=
+          for i in $(seq 1 20); do
+            if curl -fsS http://127.0.0.1:18080/ki/status; then ok=1; break; fi
+            sleep 1
+          done
+          echo
+          docker logs "$cid"
+          test -n "$ok"
+          curl -fsS http://127.0.0.1:18080/ki/status | grep -q "\"version\":\"${GITHUB_SHA::7}\""
+          docker stop -t 10 "$cid"
+          test "$(docker inspect -f '{{.State.ExitCode}}' "$cid")" = 0
+          docker rm "$cid"
+      - name: Hochladen
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "$TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          docker push "$IMAGE:sha-${GITHUB_SHA::7}-${{ matrix.arch }}"
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: latest und sha-… für beide Architekturen
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -eu
+          echo "$TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          sha="${GITHUB_SHA::7}"
+          docker buildx imagetools create -t "$IMAGE:latest" -t "$IMAGE:sha-$sha" "$IMAGE:sha-$sha-amd64" "$IMAGE:sha-$sha-arm64"
+          docker buildx imagetools inspect "$IMAGE:latest"

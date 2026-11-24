@@ -1,15 +1,14 @@
-// Erzeugt server/coolify/docker-compose.yml – mit dem Code von server/ki/ki.mjs wörtlich per `content:`.
-// Aufruf nach jeder Änderung an ki.mjs:   node server/coolify/build-compose.mjs
-// Ein Test (compose.test.mjs) schlägt fehl, wenn die Compose-Datei und ki.mjs auseinanderlaufen.
+// Erzeugt server/coolify/docker-compose.yml – mit server/couchdb/mashi.ini wörtlich per `content:`.
+// Der KI-Dienst kommt als fertiges Image (server/ki/Dockerfile, gebaut von .github/workflows/ki-image.yml) – sein Code
+// steht nicht mehr hier drin (Julia: „ist es sinnvoll, den ganzen Code ins Compose zu schreiben?“ – nein: jedes
+// Update hieß ~600 Zeilen kopieren, kein $ im Code, poppler bei jedem Start aus dem Netz).
+// Aufruf nach jeder Änderung an mashi.ini oder hier:   node server/coolify/build-compose.mjs
+// Ein Test (compose.test.mjs) schlägt fehl, wenn die Compose-Datei und mashi.ini auseinanderlaufen.
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const code = readFileSync(join(here, '..', 'ki', 'ki.mjs'), 'utf8').replace(/\r\n/g, '\n');
-
-// Compose/Coolify ersetzen $-Platzhalter überall – auch im eingefügten Code. Dort darf keiner stehen.
-if (/\$[{A-Za-z_]/.test(code)) throw new Error('ki.mjs enthält ein $ vor { oder Buchstabe – Compose würde es ersetzen');
 
 /**
  * Mashi-Einstellungen der CouchDB – direkt aus server/couchdb/mashi.ini (Code-Review #26). Vorher stand hier eine
@@ -26,7 +25,7 @@ const compose = `# Mashi auf Coolify: CouchDB + KI-Dienst (siehe ANLEITUNG.md im
 # !! NICHT als neue Ressource anlegen – sonst entsteht ein neues, LEERES Volume.
 # !! Service-Name „couchdb“ und Volume „mashi-couchdb-data“ nie umbenennen.
 #
-# Diese Datei wird erzeugt: node server/coolify/build-compose.mjs (Code aus server/ki/ki.mjs).
+# Diese Datei wird erzeugt: node server/coolify/build-compose.mjs (mashi.ini aus server/couchdb/).
 # Nicht von Hand ändern. Labels, Netzwerke, Ports, restart und container_name setzt Coolify selbst.
 services:
   couchdb:
@@ -50,18 +49,14 @@ ${indent(MASHI_INI, 10)}
       retries: 5
       start_period: 20s
 
-  # KI-Rezepte: Vermittler zu OpenRouter. Domain in Coolify: https://<DB-DOMAIN>:8080/ki
+  # KI-Dienst: Rezepte über OpenRouter, Prospekte lesen (Einkauf planen). Domain in Coolify: https://<DB-DOMAIN>:8080/ki
   # In Coolify nur OPENROUTER_API_KEY und OPENROUTER_MODEL eintragen – der Rest hat Standardwerte.
   # Ohne Schlüssel läuft der Dienst trotzdem und meldet „nicht eingerichtet“.
-  # Einkauf planen braucht pdftotext und pdftohtml (poppler: Prospekt-PDF → Text, für Lidl-Preise mit Lage auf der
-  # Seite). node:24-alpine hat sie nicht, ein eigenes Image
-  # müsste Coolify bauen – deshalb installiert der Dienst es bei jedem Start selbst (dafür kurz als root)
-  # und läuft danach wie vorher als einfacher Benutzer node. Klappt die Installation nicht (kein Netz),
-  # startet er trotzdem; nur „Angebote holen“ meldet dann, dass pdftotext fehlt.
+  # Fertiges Image aus dem Repo (server/ki/Dockerfile, gebaut nach grünen Tests): mit pdftotext/pdftohtml, läuft als
+  # Benutzer node. pull_policy: always – jedes Redeploy holt die neueste Fassung; welche läuft, steht unter /ki/status.
   ki:
-    image: node:24-alpine
-    user: root
-    command: ["sh", "-c", "apk add --no-cache --quiet poppler-utils || echo 'pdftotext liess sich nicht installieren'; exec su -s /bin/sh node -c 'exec node /app/ki.mjs'"]
+    image: ghcr.io/dschudschuu/mashi-ki:latest
+    pull_policy: always
     environment:
       - OPENROUTER_API_KEY=\${OPENROUTER_API_KEY}
       - OPENROUTER_MODEL=\${OPENROUTER_MODEL}
@@ -69,20 +64,13 @@ ${indent(MASHI_INI, 10)}
       - KI_ALLOWED_ORIGINS=\${KI_ALLOWED_ORIGINS:-https://dschudschuu.github.io}
       - KI_PER_HOUR=\${KI_PER_HOUR:-20}
       - KI_PER_DAY=\${KI_PER_DAY:-60}
-    volumes:
-      - type: bind
-        source: ./ki.mjs
-        target: /app/ki.mjs
-        content: |
-${indent(code, 10)}
     # Alpine hat kein curl – wget (BusyBox) ist dabei
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/status"]
       interval: 10s
       timeout: 5s
       retries: 3
-      # Start dauert wegen der Installation etwas länger
-      start_period: 60s
+      start_period: 10s
     depends_on:
       - couchdb
 

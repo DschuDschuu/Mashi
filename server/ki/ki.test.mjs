@@ -119,6 +119,9 @@ describe('Coolify: Wege und Einstellungen', () => {
     const handle = makeHandler({ fetch, env });
     for (const path of ['/ki/rezept', '/rezept', '/rezept/']) expect((await ask(handle, { path })).status).toBe(200);
     for (const path of ['/ki/status', '/status', '/ki/status/']) expect((await ask(handle, { method: 'GET', path })).body).toEqual({ ok: true, configured: true });
+    // die Fassung aus dem Image (Julia: sehen, ob das Update angekommen ist) – ohne Image keine Angabe
+    const versioned = makeHandler({ fetch, env: { ...env, MASHI_KI_VERSION: 'abc1234' } });
+    expect((await ask(versioned, { method: 'GET', path: '/ki/status' })).body).toEqual({ ok: true, configured: true, version: 'abc1234' });
     // kein falscher Treffer auf ähnliche Namen
     expect((await ask(handle, { path: '/kiosk/rezept' })).status).toBe(404);
   });
@@ -399,7 +402,7 @@ describe('Prospekte lesen (POST /prospekttext, Einkauf planen)', () => {
     expect(encodeBody('{"ok":true}', 'gzip')).toEqual({ data: '{"ok":true}', headers: {} });
   });
 
-  // mit dem echten poppler – nur, wo es installiert ist (im Container installiert es die Compose-Datei)
+  // mit dem echten poppler – nur, wo es installiert ist (im Image steckt es, siehe Dockerfile)
   const hasPdftotext = (() => { try { execFileSync('pdftotext', ['-v'], { stdio: 'ignore' }); return true; } catch { return false; } })();
   it.skipIf(!hasPdftotext)('readPdf: echtes kleines PDF mit zwei Seiten → zwei Seiten Text, mit layout auch die Wörter', async () => {
     const pdf = Buffer.from(tinyPdf(['Ab Do. 26.11. Testkohl', 'Seite zwei']));
