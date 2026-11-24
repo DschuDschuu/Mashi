@@ -92,6 +92,17 @@ describe('Wochenplan: merge3', () => {
     expect(merge3Plan(week, week, { ...week, household: { portions: 2, lunchDays: [] } }).household).toEqual({ portions: 2, lunchDays: [] });
   });
 
+  it('Abende pro Woche und kcal-Bereich: Handy ändert die Abende, Tablet die kcal – beides bleibt; „1,5 je Essen“ an der Grundlage auch', () => {
+    const b2: MealPlan = { ...week, household: { portions: 1, lunchDays: [] } };
+    const handy: MealPlan = { ...b2, household: { ...b2.household!, evenings: 5 }, week: { ...week.week!, bases: week.week!.bases.map((b, i) => (i ? b : { ...b, per: 1.5 })) } };
+    const tablet: MealPlan = { ...b2, household: { ...b2.household!, kcal: { min: 1000, max: 1200 } } };
+    const m = merge3Plan(b2, handy, tablet);
+    expect(m.household).toEqual({ portions: 1, lunchDays: [], evenings: 5, kcal: { min: 1000, max: 1200 } });
+    expect(m.week!.bases[0].per).toBe(1.5);
+    // am Tablet wieder ohne Ziel → weg
+    expect(merge3Plan(tablet, tablet, b2).household!.kcal).toBeUndefined();
+  });
+
   it('„Kaufst du als“ je Baustein: Handy ändert Guacamole, Tablet das Patty – beides bleibt, nichts geht beim Abgleich verloren', () => {
     const b2: MealPlan = { ...week, household: { portions: 1, lunchDays: [] } };
     const handy: MealPlan = { ...b2, household: { ...b2.household!, sideFood: { guacamole: 'Guacamole fertig' } } };

@@ -334,8 +334,20 @@ export function scheduleMeal(
   }, baseId, recipes, household, newId, keepsFallback);
 }
 
-/** Portionen eines Abends – eigene (Gäste) oder die des Haushalts */
+/** Portionen eines Abends – eigene (Gäste, oder ein Essen aus mehr als einer Rezept-Portion) oder die des Haushalts */
 export const servingsOf = (meal: Pick<WeekMeal, 'portions'>, household: Household): number => meal.portions ?? household.portions;
+
+/** auf halbe Portionen – feiner braucht kein Essen (Julia: „auch 1,5“) */
+export const halves = (n: number): number => Math.round(n * 2) / 2;
+
+/**
+ * So viele Rezept-Portionen isst ein Essen aus dieser Grundlage (Julia: kcal-Bereich – „2 Portionen sind dann 1“):
+ * WeekBase.per mal Haushalt. Fehlt per, wie bisher die Portionen des Haushalts.
+ */
+export const mealSize = (base: Pick<WeekBase, 'per'> | undefined, household: Household): number => halves((base?.per ?? 1) * household.portions);
+
+/** Portionen-Feld eines neuen Essens – nur, wenn es vom Haushalt abweicht (sonst greifen Haushalt-Änderungen weiter) */
+const sizeField = (size: number, household: Household): Pick<WeekMeal, 'portions'> => (size === household.portions ? {} : { portions: size });
 
 /** Der nächste freie Abend ab dem Kochtag einer Grundlage, an dem sie noch hält (oder sich einfrieren lässt) */
 export function nextFreeEvening(week: Week, baseId: string, recipes: readonly Recipe[], keepsFallback?: number): Weekday | undefined {
@@ -357,13 +369,14 @@ export function fillEvenings(week: Week, baseId: string, recipes: readonly Recip
   for (;;) {
     const base = w.bases.find((b) => b.recipeId === baseId);
     const extra = base?.extra ?? 0;
+    const size = mealSize(base, household);
     // schon gekocht: der Vorrat liegt dann in der Speisekammer, nicht mehr in der Woche
-    if (!base || base.cooked || extra < household.portions) return w;
+    if (!base || base.cooked || extra < size) return w;
     const day = nextFreeEvening(w, baseId, recipes, keepsFallback);
     if (day === undefined) return w;
     const used = new Set(w.meals.map((m) => m.recipeId));
     const dish = byEffort(transformsOf(baseId, recipes)).find((r) => !used.has(r.id))?.id ?? baseId;
-    w = { ...setExtra(w, baseId, extra - household.portions), meals: [...w.meals, { id: newId(), day, recipeId: dish, baseId }] };
+    w = { ...setExtra(w, baseId, extra - size), meals: [...w.meals, { id: newId(), day, recipeId: dish, baseId, ...sizeField(size, household) }] };
   }
 }
 
@@ -399,7 +412,10 @@ export function putMeal(week: Week, slot: Slot, recipeId: string, baseId: string
   const old = mealAt(week, slot);
   const order = weekOrder(week);
   if (!base || old?.done || !fits(order, base, slot)) return week;
-  const meal: WeekMeal = moveTo({ id: old?.id ?? newId(), day: slot.day, recipeId, baseId, ...(side && recipeId === baseId ? { side } : {}), ...(old?.portions ? { portions: old.portions } : {}) }, slot);
+  // getauscht: eigene Portionen (Gäste) bleiben – sonst isst der Abend so viel, wie ein Essen der neuen Grundlage ist
+  const oldBase = old && week.bases.find((b) => b.recipeId === old.baseId);
+  const guests = old && servingsOf(old, household) !== mealSize(oldBase, household) ? servingsOf(old, household) : undefined;
+  const meal: WeekMeal = moveTo({ id: old?.id ?? newId(), day: slot.day, recipeId, baseId, ...(side && recipeId === baseId ? { side } : {}), ...sizeField(guests ?? mealSize(base, household), household) }, slot);
   const meals = old ? week.meals.map((m) => (m.id === old.id ? meal : m)) : [...week.meals, meal];
   let bases = !old && base.extra && !base.cooked ? setExtra(week, baseId, base.extra - servingsOf(meal, household)).bases : week.bases;
   // die bisherige Grundlage ohne Abend fällt weg – wie beim Löschen (removeMeal)
@@ -424,7 +440,7 @@ export function putPrepared(week: Week, slot: Slot, recipeId: string, household:
  * wird gleich viel). Schon gekocht: der Kühlschrank rechnet sich aus der Speisekammer (fridgeOf), da ändert sich nichts.
  */
 export function setMealPortions(week: Week, mealId: string, portions: number, household: Household): Week {
-  const n = Math.max(1, Math.round(portions));
+  const n = Math.max(0.5, halves(portions));
   const meal = week.meals.find((m) => m.id === mealId);
   if (!meal) return week;
   const base = week.bases.find((b) => b.recipeId === meal.baseId);
@@ -534,9 +550,9 @@ export function groupMeals(week: Week, baseId: string): Week {
 /** Grundlagen, deren Gerichte im Wechsel liegen – für den Hinweis im Wochenplan */
 export const mixedBases = (week: Week): string[] => week.bases.map((b) => b.recipeId).filter((id) => groupMeals(week, id) !== week);
 
-/** Extra-Portionen (Vorrat) – nie unter 0 */
+/** Extra-Portionen (Vorrat) – nie unter 0, in halben Portionen (ein Essen kann 1,5 sein: mealSize) */
 export function setExtra(week: Week, baseId: string, extra: number): Week {
-  return { ...week, bases: week.bases.map((b) => (b.recipeId === baseId ? { ...b, extra: Math.max(0, Math.round(extra)) || undefined } : b)) };
+  return { ...week, bases: week.bases.map((b) => (b.recipeId === baseId ? { ...b, extra: Math.max(0, halves(extra)) || undefined } : b)) };
 }
 
 /** Mittag an einem Tag diese Woche raus- oder wieder reinnehmen – ein belegter Mittag geht zurück in den Kühlschrank */
@@ -757,6 +773,8 @@ export function addToBase(week: Week, baseId: string, name: string): Week {
 export interface PotItem {
   recipeId: string;
   portions: number;
+  /** Rezept-Portionen je Essen, wenn nicht 1 (kcal-Bereich, weekSuggest.ts: mealFactor) – wird WeekBase.per */
+  per?: number;
 }
 
 /** Standard-Kochtag einer neuen Woche: der bisherige erste – sonst Sonntag */
@@ -767,6 +785,7 @@ export function potOf(week: Week, household: Household): PotItem[] {
   return week.bases.map((b) => ({
     recipeId: b.recipeId,
     portions: week.meals.filter((m) => m.baseId === b.recipeId).reduce((n, m) => n + servingsOf(m, household), 0) + (b.extra ?? 0) + (b.freeze ?? 0),
+    ...(b.per ? { per: b.per } : {}),
   }));
 }
 
@@ -795,8 +814,8 @@ export function potWeek(pot: readonly PotItem[], household: Household, old?: Wee
     // bewusst Eingefrorenes bleibt eingefroren, solange die Portionen reichen
     const freeze = Math.min(was?.freeze ?? 0, room);
     room -= freeze;
-    const { extra: _old, freeze: _f, ...rest } = was ?? { recipeId: item.recipeId, day };
-    bases.push({ ...rest, ...(room ? { extra: room } : {}), ...(freeze ? { freeze } : {}) });
+    const { extra: _old, freeze: _f, per: _p, ...rest } = was ?? { recipeId: item.recipeId, day };
+    bases.push({ ...rest, ...(room ? { extra: room } : {}), ...(freeze ? { freeze } : {}), ...(item.per && item.per !== 1 ? { per: item.per } : {}) });
   }
   const cookDays = sortCookDays(bases.map((b) => b.day));
   return {
@@ -825,18 +844,31 @@ export interface FridgeView {
  */
 export function fridgeOf(week: Week, recipes: readonly Recipe[], household: Household = DEFAULT_HOUSEHOLD, keepsFallback?: number, stock?: ReadonlyMap<string, number>): FridgeView[] {
   const order = weekOrder(week);
-  const taken = new Set(week.meals.filter((m) => !m.lunch).map((m) => m.day));
-  return week.bases.map((base) => {
+  const taken = new Set(week.meals.map((m) => slotKey(slotOf(m))));
+  // freie Plätze der Woche, Mittag vor Abend – Mittage zählen mit, Kärtchen gehen auch dorthin
+  const lunches = new Set(lunchDaysOf(week, household));
+  const free: Slot[] = order.flatMap((day): Slot[] => [...(lunches.has(day) ? [{ day, lunch: true as const }] : []), { day }])
+    .filter((s) => !taken.has(slotKey(s)));
+  const views = week.bases.map((base) => {
     const recipe = recipes.find((r) => r.id === base.recipeId);
     const open = week.meals.filter((m) => m.baseId === base.recipeId && !m.done).reduce((n, m) => n + servingsOf(m, household), 0);
     // bewusst Eingefrorenes (freeze) liegt nicht mehr im Kühlschrank
     const left = base.cooked ? Math.max(0, (stock?.get(base.recipeId) ?? 0) - open - (base.freeze ?? 0)) : base.extra ?? 0;
-    const cards = Math.ceil(left / Math.max(1, household.portions));
+    const cards = Math.ceil(left / Math.max(0.5, mealSize(base, household)));
     const from = order.indexOf(base.day);
     const until = Math.min(6, from + keepsOf(recipe, keepsFallback) - 1);
-    const freeFresh = order.slice(from, until + 1).filter((d) => !taken.has(d)).length;
-    return { base, recipe, left, cards, freshUntil: order[until], short: left > 0 && !recipe?.freezable && until < 6 && freeFresh < cards };
+    return { base, recipe, left, cards, freshUntil: order[until], short: false, from, until };
   });
+  // Reicht es frisch? Die Grundlagen teilen sich die freien Plätze (Julia: zwei Rezepte am Sonntag, je 3 Essen, bis
+  // Dienstag aber nur 4 Plätze – einzeln passt jedes, zusammen nicht). Was zuerst verdirbt, sucht sich zuerst Plätze;
+  // Einfrierbares wartet nicht und braucht keinen.
+  const urgent = views.filter((v) => v.left > 0 && !v.recipe?.freezable && v.until < 6).sort((a, b) => a.until - b.until);
+  for (const v of urgent) {
+    const fresh = free.filter((s) => { const i = order.indexOf(s.day); return i >= v.from && i <= v.until; }).slice(0, v.cards);
+    for (const s of fresh) free.splice(free.indexOf(s), 1);
+    v.short = fresh.length < v.cards;
+  }
+  return views.map(({ from: _f, until: _u, ...v }) => v);
 }
 
 /** „Zurück in den Kühlschrank“: der Abend wird frei, seine Portionen liegen wieder bei der Grundlage. Gegessenes bleibt. */

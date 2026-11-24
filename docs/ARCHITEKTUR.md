@@ -17,6 +17,7 @@ mashi/
 │  │  ├─ filter.ts            Suche und Filter
 │  │  ├─ mealplan.ts          Wochenplan, Einkaufsliste; Zutaten/Namen einordnen (resolveIngredient, keyOfName)
 │  │  ├─ week.ts              Vorkoch-Woche: Verteilung, Alter/Einfrieren, Mittage, Portionen, Tauschen, MHD-Funde
+│  │  ├─ weekSuggest.ts       Woche planen aus den Angeboten: Essen im kcal-Bereich (1,5/2 Portionen), Essen pro Woche
 │  │  ├─ sides.ts             Baukasten-Bausteine (Kohlenhydrat, Protein, Sauce, Gemüse, Topping) mit Menge und Zubereitung
 │  │  ├─ craving.ts           „Worauf hast du Lust?“: Richtungen (Tortilla, Bowl …), was zusammenpasst, Textfeld verstehen,
 │  │  │                       Rezepte/Teile als Bausteine (auch für mehrere Stufen), aus dem Gericht ein Rezept

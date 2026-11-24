@@ -61,6 +61,12 @@ export interface WeekBase {
   cooked?: boolean;
   /** MHD-Fund aus dem Einkauf, der hier hineinkommt (Julia: Zucchini in die Bolo) – Name, nur zur Anzeige */
   adds?: string[];
+  /**
+   * Rezept-Portionen je Essen, wenn nicht 1 (Julia: kcal-Bereich – „2 Portionen sind dann 1“, auch 1,5) – halbe Schritte.
+   * Ein Essen daraus isst so viele Portionen (week.ts: mealSize); gezählt wird weiter in Rezept-Portionen, so rechnen
+   * Kochen, Einkauf und Speisekammer ohne Umbau mit.
+   */
+  per?: number;
 }
 
 /**
@@ -125,6 +131,16 @@ export interface Household {
    * und Baustein, „pasta:brokkoli“ → „nudeln“ (ohne Richtung „ohne:…“) – cookStyle.ts: learnWays, beim Abgleich je Eintrag
    */
   lastWays?: Record<string, string>;
+  /** Abende pro Woche, die „Woche planen“ füllt (Julia: „5 Abende und 3 Mittage“; die Mittage sind lunchDays) – fehlt = 7 */
+  evenings?: number;
+  /** kcal pro Essen, von–bis (Julia: „1000 bis 1200“) – fehlt = kein Ziel; Rezepte passen auch zusammengelegt (weekSuggest.ts) */
+  kcal?: KcalRange;
+}
+
+/** kcal-Bereich pro Essen */
+export interface KcalRange {
+  min: number;
+  max: number;
 }
 
 export const DEFAULT_HOUSEHOLD: Household = { portions: 1, lunchDays: [] };

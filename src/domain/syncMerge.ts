@@ -247,6 +247,9 @@ function merge3Household(base: Household | undefined, ours: Household | undefine
     const v = merge3Value(b.lastWays?.[id], o.lastWays?.[id], t.lastWays?.[id]);
     return v === undefined ? [] : [[id, v]];
   }));
+  // Abende pro Woche und kcal-Bereich (Woche planen) – je Feld, wer es geändert hat, gewinnt
+  const evenings = merge3Value(b.evenings, o.evenings, t.evenings);
+  const kcal = merge3Value(b.kcal, o.kcal, t.kcal);
   return {
     portions: merge3Value(b.portions, o.portions, t.portions), lunchDays: merge3Value(b.lunchDays, o.lunchDays, t.lunchDays),
     ...(ids.length && Object.keys(sides).length ? { sides } : {}),
@@ -255,6 +258,8 @@ function merge3Household(base: Household | undefined, ours: Household | undefine
     ...(Object.keys(sideFood).length ? { sideFood } : {}),
     ...(Object.keys(sideFamily).length ? { sideFamily } : {}),
     ...(Object.keys(lastWays).length ? { lastWays } : {}),
+    ...(evenings !== undefined ? { evenings } : {}),
+    ...(kcal ? { kcal } : {}),
   };
 }
 

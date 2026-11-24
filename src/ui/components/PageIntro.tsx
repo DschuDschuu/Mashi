@@ -47,8 +47,9 @@ const TOURS: Record<IntroId, Step[]> = {
     { at: () => [...document.querySelectorAll('main button')].find((e) => /^Woche (planen|ändern)/.test(e.textContent?.trim() ?? '')), title: 'Woche planen', text: 'Rezepte in den Topf legen, danach hier verteilen.' },
   ],
   woche: [
+    // „Rezepte dazulegen“ (Antippen legt in den Topf) ist raus – höchstens drei Schritte, und die Kacheln sagen es selbst
+    { at: 'main .week-goal', title: 'Deine Woche', text: 'Abende, Mittage und kcal pro Essen. Dann füllt Mashi den Topf aus den Angeboten.', added: 2 },
     { at: 'main .pot', title: 'Der Topf', text: 'Was hier liegt, kochst du am Kochtag.' },
-    { at: () => document.querySelector('main [role="tab"]')?.parentElement, title: 'Rezepte dazulegen', text: 'Antippen legt ein Rezept in den Topf.' },
     { at: 'main .bottom-cta button', title: 'In den Kühlschrank', text: 'Danach verteilst du die Portionen im Wochenplan.' },
   ],
   einkauf: [

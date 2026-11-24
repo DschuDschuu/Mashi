@@ -592,6 +592,79 @@ describe('Topf + Kühlschrank (Julia: „ich koche X Portionen und verteile sie�
   });
 });
 
+describe('Ein Essen aus 1,5 Portionen (Julia: kcal-Bereich – „2 Portionen sind dann 1“)', () => {
+  const hh = { portions: 1, lunchDays: [] };
+
+  it('Topf → Woche: per wandert an die Grundlage, zurückgelesen bleibt es; 1 = kein Feld', () => {
+    const w = potWeek([{ recipeId: 'chili', portions: 3, per: 1.5 }, { recipeId: 'bolo', portions: 2, per: 1 }], hh);
+    expect(w.bases).toEqual([{ recipeId: 'chili', day: SO, extra: 3, per: 1.5 }, { recipeId: 'bolo', day: SO, extra: 2 }]);
+    expect(potOf(w, hh)).toEqual([{ recipeId: 'chili', portions: 3, per: 1.5 }, { recipeId: 'bolo', portions: 2 }]);
+    // neu geplant ohne per: weg
+    expect(potWeek([{ recipeId: 'chili', portions: 3 }], hh, w).bases[0].per).toBeUndefined();
+  });
+
+  it('Kühlschrank: 3 Portionen = 2 Essen; ein Kärtchen auf einem Abend isst 1,5, die Einkaufsliste rechnet weiter 3', () => {
+    const w = potWeek([{ recipeId: 'chili', portions: 3, per: 1.5 }], hh);
+    expect(fridgeOf(w, all, hh)[0]).toMatchObject({ left: 3, cards: 2 });
+    const mo = putMeal(w, { day: MO }, 'chili', 'chili', hh, newId);
+    expect(mo.meals[0].portions).toBe(1.5);
+    expect(mo.bases[0].extra).toBe(1.5);
+    expect(fridgeOf(mo, all, hh)[0]).toMatchObject({ left: 1.5, cards: 1 });
+    const di = putMeal(mo, { day: DI }, 'chilireis', 'chili', hh, newId);
+    expect(di.bases[0].extra).toBeUndefined();
+    expect(weekItems(di, all, hh)).toEqual(expect.arrayContaining([{ recipeId: 'chili', servings: 3, fromWeek: true }]));
+    // zurück in den Kühlschrank: die 1,5 kommen zurück
+    expect(backToFridge(di, di.meals[1].id, hh).bases[0].extra).toBe(1.5);
+  });
+
+  it('Portionen füllen Abende in Essen-Größe – bei zwei Personen 3 je Essen', () => {
+    const w: Week = { cookDays: [SO], bases: [{ recipeId: 'salat', day: SO, extra: 3, per: 1.5 }], meals: [] };
+    const f = fillEvenings(w, 'salat', all, hh, newId);
+    expect(f.meals.map((m) => m.portions)).toEqual([1.5, 1.5]);
+    expect(f.bases[0].extra).toBeUndefined();
+    const zwei = fillEvenings({ ...w, bases: [{ ...w.bases[0], extra: 6 }] }, 'salat', all, { portions: 2, lunchDays: [] }, newId);
+    expect(zwei.meals.map((m) => m.portions)).toEqual([3, 3]);
+  });
+
+  it('Tauschen: der Abend isst so viel, wie ein Essen der neuen Grundlage ist – Gäste bleiben', () => {
+    const w: Week = {
+      cookDays: [SO], bases: [{ recipeId: 'bolo', day: SO }, { recipeId: 'chili', day: SO, extra: 3, per: 1.5 }],
+      meals: [{ id: 'a', day: MO, recipeId: 'spag', baseId: 'bolo' }, { id: 'b', day: DI, recipeId: 'wraps', baseId: 'bolo', portions: 3 }],
+    };
+    expect(putMeal(w, { day: MO }, 'chili', 'chili', hh, newId).meals[0]).toMatchObject({ id: 'a', recipeId: 'chili', portions: 1.5 });
+    expect(putMeal(w, { day: DI }, 'chili', 'chili', hh, newId).meals[1]).toMatchObject({ id: 'b', portions: 3 });
+    // und zurück auf eine Grundlage ohne per: wieder der Haushalt (kein Feld)
+    const hin = putMeal(w, { day: MO }, 'chili', 'chili', hh, newId);
+    expect(putMeal(hin, { day: MO }, 'bolo', 'bolo', hh, newId).meals[0].portions).toBeUndefined();
+  });
+
+  it('Kühlschrank warnt, wenn zwei Grundlagen zusammen nicht frisch in die Plätze passen – Mittage zählen mit', () => {
+    const curry = recipe('curryt', 'Testcurry', [], { keepsDays: 3 });
+    const suppe = recipe('suppet', 'Testsuppe', [], { keepsDays: 3 });
+    const rs = [...all, curry, suppe];
+    // So, Mo, Di = 3 Abende; zwei Rezepte mit je 3 Essen (à 2 Portionen): das zweite hält nicht bis zum Essen
+    const w = potWeek([{ recipeId: 'curryt', portions: 6, per: 2 }, { recipeId: 'suppet', portions: 6, per: 2 }], hh);
+    expect(fridgeOf(w, rs, hh).map((f) => [f.cards, f.short])).toEqual([[3, false], [3, true]]);
+    // mit Mittag am Mo und Di sind es 5 Plätze – immer noch einer zu wenig
+    expect(fridgeOf(w, rs, { ...hh, lunchDays: [MO, DI] }).map((f) => f.short)).toEqual([false, true]);
+    // und mit Mittag auch am So reicht es
+    expect(fridgeOf(w, rs, { ...hh, lunchDays: [SO, MO, DI] }).map((f) => f.short)).toEqual([false, false]);
+    // belegte Plätze zählen nicht: Curry schon auf So und Mo verteilt → für die Suppe bleibt nur Di
+    const verteilt = putMeal(putMeal(w, { day: SO }, 'curryt', 'curryt', hh, newId), { day: MO }, 'curryt', 'curryt', hh, newId);
+    expect(fridgeOf(verteilt, rs, hh).map((f) => [f.cards, f.short])).toEqual([[1, false], [3, true]]);
+  });
+
+  it('halbe Portionen bleiben halb (Vorrat, Portionen am Abend); ganze Zahlen wie bisher', () => {
+    const w: Week = { cookDays: [SO], bases: [{ recipeId: 'chili', day: SO, extra: 1, per: 1.5 }], meals: [{ id: 'a', day: MO, recipeId: 'chili', baseId: 'chili', portions: 1.5 }] };
+    expect(setExtra(w, 'chili', 0.5).bases[0].extra).toBe(0.5);
+    expect(setExtra(w, 'chili', 2).bases[0].extra).toBe(2);
+    const mehr = setMealPortions(w, 'a', 2.5, hh);
+    expect(mehr.meals[0].portions).toBe(2.5);
+    expect(mehr.bases[0].extra).toBeUndefined(); // eine Portion aus dem Kühlschrank
+    expect(setMealPortions(w, 'a', 1, hh).meals[0].portions).toBeUndefined(); // = Haushalt
+  });
+});
+
 describe('Mittage beim Neu-Verteilen (Julia: „der Mittag wie der Abend“)', () => {
   it('anderer Kochtag: Mittage rücken auf Mittage, was nicht passt, geht in den Kühlschrank', () => {
     const hh = { portions: 1, lunchDays: [MO, DI] };

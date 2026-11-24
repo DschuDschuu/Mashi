@@ -28,6 +28,7 @@ import { DishNutrition } from '../components/DishNutrition';
 import { pickFor } from '../../domain/nutrition/variants';
 import { choicesFor } from '../useNutrition';
 import { useSheet } from '../useSheet';
+import { deNum, portionCount } from '../format';
 import { amountsText, UseMoreSheet } from '../components/UseMoreSheet';
 import { newId } from '../../domain/recipe';
 import { byUrgency, isDone, isRunning, newlyDone, pauseTimer, remainingOf, removeTimer, resumeTimer, startTimer, type CookTimer } from '../../domain/timers';
@@ -179,7 +180,7 @@ export function CookModeScreen({ id, servings: asked, variants, prep, mealId }: 
     setStep(0);
   };
   // nur, was angehakt ist – sonst, was angeboten wird
-  const alongText = along.length === 1 ? `+ ${slotLabel(along[0])} · ${alongN || servingsOf(along[0], hh)}` : `+ ${alongOn.length || along.length} weitere${alongN ? ` · ${alongN}` : ''}`;
+  const alongText = along.length === 1 ? `+ ${slotLabel(along[0])} · ${deNum(alongN || servingsOf(along[0], hh))}` : `+ ${alongOn.length || along.length} weitere${alongN ? ` · ${deNum(alongN)}` : ''}`;
   const toggleAlong = () => setSkipAlong(alongOn.length ? along.map((m) => m.id) : []);
   const open = parts.filter((p) => !done.includes(p));
   const togglePart = (p: string) => {
@@ -356,7 +357,7 @@ export function CookModeScreen({ id, servings: asked, variants, prep, mealId }: 
               const changed = i.id in amounts;
               // Kochtag: wofür welche Menge – die Grundlage für alle Portionen, das Frische nur für heute
               const head = fresh && freshN && i.id.startsWith(TODAY) && !ingredients[n - 1]?.id.startsWith(TODAY)
-                ? `Heute frisch dazu · ${freshN + alongN} ${freshN + alongN === 1 ? 'Portion' : 'Portionen'}${alongN ? ` (${alongN} für ${alongOn.map(slotLabel).join(', ')})` : ''}` : undefined;
+                ? `Heute frisch dazu · ${portionCount(freshN + alongN)}${alongN ? ` (${deNum(alongN)} für ${alongOn.map(slotLabel).join(', ')})` : ''}` : undefined;
               return (
                 <Fragment key={i.id}>
                 {n === 0 && fresh && freshN && !i.id.startsWith(TODAY) && <li className="cook__ing-head small muted">Vorkochen · {servings} Portionen</li>}
@@ -589,7 +590,7 @@ function PartsAskSheet({ parts, done, initial, hint, today, prep, along, freshUn
         <div className="sheet__grip" />
         <h2 className="sheet__title">Was kochst du heute?</h2>
         {prep && prepN !== undefined && today && (
-          <p className="small muted">{prep.title} vorkochen: {prepN} {prepN === 1 ? 'Portion' : 'Portionen'}{eat ? `, ${eat} davon heute` : ''}</p>
+          <p className="small muted">{prep.title} vorkochen: {portionCount(prepN)}{eat ? `, ${deNum(eat)} davon heute` : ''}</p>
         )}
         {done.length > 0 && <p className="small muted">Schon gekocht und in der Speisekammer: {done.map(partLabel).join(' · ')}</p>}
         {hint && many && <p className="small muted parts-ask__hint"><Icon name="refresh" size={14} /> {hint}</p>}
@@ -633,7 +634,7 @@ function PartsAskSheet({ parts, done, initial, hint, today, prep, along, freshUn
                   onClick={() => setSkip(on ? [...skip, a.id] : skip.filter((x) => x !== a.id))}>
                   <span className="parts-ask__box" aria-hidden="true">{on && <Icon name="check" size={16} />}</span>
                   <span className="parts-ask__label"><strong>{a.label}</strong>{a.note && <span className="parts-ask__note">{a.note}</span>}</span>
-                  <small>+{a.portions} {a.portions === 1 ? 'Portion' : 'Portionen'}</small>
+                  <small>+{portionCount(a.portions)}</small>
                 </button>
               );
             })}

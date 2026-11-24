@@ -361,6 +361,10 @@ function OfferMatches({ offers }: { offers: Offer[] }) {
         {matches.length === 0
           ? <p className="muted small">Noch nutzt kein Rezept aus deinem Kochbuch diese Angebote.</p>
           : <ul className="list">{matches.map((m) => <MatchRow key={m.recipe.id} match={m} inPlan={plan.items.some((i) => i.recipeId === m.recipe.id)} />)}</ul>}
+        {/* Julia: „wie machen wir daraus meinen Wochenplan“ – Woche planen schlägt aus den Angeboten vor (weekSuggest.ts) */}
+        <button className="btn btn--soft btn--block" onClick={() => navigate('/plan/woche')}>
+          <Icon name="pot" size={18} /> Woche damit planen
+        </button>
         <button className="btn btn--soft btn--block" onClick={() => navigate('/neu/ki?angebote=1')}>
           <Icon name="sparkles" size={18} /> Neue Idee mit den Angeboten
         </button>

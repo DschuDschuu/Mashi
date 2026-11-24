@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState, type MouseEvent, type PointerEvent, type ReactNode } from 'react';
 import { currentContent, newId } from '../../domain/recipe';
 import {
-  DAY_LONG, DAY_SHORT, addBase, mealKey, setExtra, addToBase, byEffort, canLessPortions, canSwap, earlierCookDay, keepsOf, mealTitle, mhdFinds, fillEvenings, groupMeals, mixedBases, moveBase, putMeal, swapCookDays, putPrepared, removeMeal, backToFridge, fridgeOf, setCookDay,
+  DAY_LONG, DAY_SHORT, addBase, mealKey, setExtra, addToBase, byEffort, canLessPortions, canSwap, earlierCookDay, keepsOf, mealSize, mealTitle, mhdFinds, fillEvenings, groupMeals, mixedBases, moveBase, putMeal, swapCookDays, putPrepared, removeMeal, backToFridge, fridgeOf, setCookDay,
   servingsOf, setMealPortions, sortCookDays, stepPortions, swapSlots, sameSlot, slotOf, toggleLunch, transformsOf, weekdayOf, weekStarted, weekView,
   type BaseView, type DayView, type FridgeView, type MealView, type MhdFind, type Slot, type WeekView,
 } from '../../domain/week';
@@ -15,6 +15,7 @@ import { preparedPortions } from '../../domain/baseStock';
 import { specialDays } from '../../domain/shelfLife';
 import { freezeFromFridge, freezePantryItem, householdOf, setMealStyle, setPrepInfo, setWeek, unfreezeToFridge, useFoodTable, usePantry, usePlan, useRecipes } from '../../data/store';
 import { navigate } from '../../router';
+import { portionCount } from '../format';
 import { toast } from '../toast';
 import { useSheet } from '../useSheet';
 import { Stepper } from './Controls';
@@ -24,7 +25,8 @@ import { RecipeImage } from './RecipeImage';
 const title = (r?: Recipe) => (r ? currentContent(r).title : 'Gelöschtes Rezept');
 /** ein Abend mit seiner Beilage („Bolognese mit Spätzle“) */
 const mealText = (m?: MealView) => (m ? mealTitle(m.meal, m.recipe) : title(undefined));
-const portionText = (n: number) => `${n} ${n === 1 ? 'Portion' : 'Portionen'}`;
+// mit Komma – ein Essen kann 1,5 Portionen sein (Julia: kcal-Bereich, week.ts: mealSize)
+const portionText = portionCount;
 /** „Dienstag mittags“ / „Dienstag“ */
 const slotText = (s: Slot) => `${DAY_LONG[s.day]}${s.lunch ? ' mittags' : ''}`;
 const slotShort = (s: Slot) => `${DAY_SHORT[s.day]}${s.lunch ? ' mittags' : ''}`;
@@ -142,7 +144,7 @@ export function WeekPlan({ week, onPickDish }: { week: Week; onPickDish?: (slot:
     const undo = freezeFromFridge(f.base.recipeId);
     if (!undo) return;
     if (f.cards <= 1) setPick(null);
-    toast(`${portionText(Math.min(hh.portions, f.left))} ${title(f.recipe)} ${f.base.cooked ? 'eingefroren' : 'kommt ins Gefrierfach'}`, { label: 'Rückgängig', run: undo });
+    toast(`${portionText(Math.min(mealSize(f.base, hh), f.left))} ${title(f.recipe)} ${f.base.cooked ? 'eingefroren' : 'kommt ins Gefrierfach'}`, { label: 'Rückgängig', run: undo });
   };
   const unfreeze = (f: FridgeView) => {
     const undo = unfreezeToFridge(f.base.recipeId);
@@ -543,7 +545,8 @@ function Fridge({ items, order, pick, household, tone, onPick, onCookDay, onFree
             <div className="fridge__cards">
               {Array.from({ length: f.cards }, (_, i) => {
                 const on = pick === id && i === 0;
-                const n = Math.min(household.portions, f.left - i * household.portions);
+                const size = mealSize(f.base, household);
+                const n = Math.min(size, f.left - i * size);
                 return (
                   <button key={i} type="button" className={`fridge__card${on ? ' is-on' : ''}`} aria-pressed={on} aria-label={`${name}, ${portionText(n)}${on ? ', gewählt' : ''}`} onClick={() => onPick(id)}>
                     {portionText(n)}

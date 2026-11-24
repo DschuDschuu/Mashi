@@ -39,7 +39,11 @@ Live: <https://dschudschuu.github.io/Mashi/> · installierbar als App (PWA), fun
   daraus verschiedene Abendessen (Verwandlungen wie Wraps oder Pasta, die nur unter ihrer Grundlage stehen). Mashi
   verteilt die Abende (nie vor den Kochtag, zu Altes einfrieren), plant auf Wunsch Mittagessen mit (Rest vom Vorabend,
   sonst eine Box), rechnet Portionen und Einkauf, schlägt MHD-Funde vor; Startseite: Heute Mittag/Abend, „Heute auswärts“;
-  einen Teil eines Rezepts (die Sauce der Lasagne) per Menü als Grundlage herauslösen
+  einen Teil eines Rezepts (die Sauce der Lasagne) per Menü als Grundlage herauslösen. **Woche planen** mit „Deine
+  Woche“ (Abende pro Woche, Mittage, kcal pro Essen von–bis): ein Essen darf 1,5 oder 2 Rezept-Portionen sein
+  („2 Portionen sind dann 1“, gekocht werden immer ganze), „Aus den Angeboten vorschlagen“ füllt den Topf mit Rezepten,
+  die die Angebote nutzen – jedes so viele Essen, wie es frisch hält; der Kühlschrank warnt, wenn zwei Grundlagen
+  zusammen nicht frisch in die Woche passen
 - **Wochenplan** (laufend, ohne Wochenwechsel) mit Vorschlägen (gemeinsame Zutaten), Nährwerten pro Portion,
   „Gekocht“-Haken und **Vorgekocht**: übrige Portionen in der Speisekammer mit Erinnerung, einfrierbar, „1 gegessen“
 - **Einkaufsliste** aus dem Plan, zieht den Vorrat ab, Basics, „Doch kaufen“, eigene Einträge, Kassenbon hakt ab,
@@ -55,7 +59,7 @@ Live: <https://dschudschuu.github.io/Mashi/> · installierbar als App (PWA), fun
   die KI; ordnet sie deinen Lebensmitteln zu (auch „Hähnchen-Innenbrustfilets“ → Hähnchenbrust, „Rispentomaten“ →
   Tomaten; korrigierbar), zeigt Rezepte aus deinem Kochbuch, deren Zutaten gerade im Angebot sind (Hähnchen zählt mehr
   als eine Zwiebel, Vorrat und Favoriten zählen mit, diese Woche Gekochtes hinten), „Neue Idee mit den Angeboten“ über
-  die KI, und auf der Einkaufsliste Markt und Angebotspreis am Eintrag
+  die KI, „Woche damit planen“ (siehe Vorkoch-Woche), und auf der Einkaufsliste Markt und Angebotspreis am Eintrag
 - **Speisekammer**: Vorrat per Kassenbon oder von Hand (mit Marke/Sorte), Packungen („4 × 500 g“,
   „750 ml offen“ – Angebrochenes hält kürzer), „Ganze Packung verwenden?“ beim Kochen, **Inventur** (Speisekammer, Keller, Tiefkühler, Gewürze), Haltbarkeit (bis 10 Jahre oder „hält unbegrenzt“),
   „Bald verbrauchen“, Einfrieren, Reste verwerten

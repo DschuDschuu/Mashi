@@ -34,9 +34,12 @@ export function relativeDay(iso: string): string {
   return new Date(iso).toLocaleDateString('de-DE', { day: 'numeric', month: 'short' });
 }
 
-/** „1 Portion“, „2 Portionen“ */
+/** Zahl mit Komma, höchstens eine Nachkommastelle – „1,5“ */
+export const deNum = (n: number) => n.toLocaleString('de-DE', { maximumFractionDigits: 1 });
+
+/** „1 Portion“, „2 Portionen“, „1,5 Portionen“ (ein Essen aus 1,5 Rezept-Portionen – Wochenplan mit kcal-Bereich) */
 export function portionCount(n: number): string {
-  return `${n} ${n === 1 ? 'Portion' : 'Portionen'}`;
+  return `${deNum(n)} ${n === 1 ? 'Portion' : 'Portionen'}`;
 }
 
 /** „1 Rezept“, „0 Rezepte“, „5 Rezepte“ */

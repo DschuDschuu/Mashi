@@ -6,7 +6,7 @@ import { reverseKeyed, reverseList, reverseRecord } from '../domain/undo';
 import { EXTRA_PREFIX, RESTOCK_PREFIX, shoppingList, type RestockRule } from '../domain/restock';
 import { exclusiveStages, stageOf, withStage, type FoodStage } from '../domain/stage';
 import { DEFAULT_HOUSEHOLD, emptyPlan, keyOfName, normalizePlan, toggleCooked, type Household, type MealPlan, type Week, type WeekMeal, type Weekday } from '../domain/mealplan';
-import { followOwnRename, freezePortions, removeMeal, scheduleMeal, servingsOf, setMealPortions, shiftFrom, unfreezePortions, weekBaseIds, weekdayOf, weekItems, weekView, withoutRecipe } from '../domain/week';
+import { followOwnRename, freezePortions, mealSize, removeMeal, scheduleMeal, servingsOf, setMealPortions, shiftFrom, unfreezePortions, weekBaseIds, weekdayOf, weekItems, weekView, withoutRecipe } from '../domain/week';
 import { baseSupply, coveredShare, type BaseSupply } from '../domain/baseStock';
 import { mergeRecipes } from '../domain/merge';
 import { pantryFromBackup, unionProducts } from '../domain/syncMerge';
@@ -1394,7 +1394,7 @@ export function freezeFromFridge(baseId: string): (() => void) | null {
   const week = plan.week;
   const base = week?.bases.find((b) => b.recipeId === baseId);
   if (!week || !base) return null;
-  const n = householdOf().portions;
+  const n = mealSize(base, householdOf());
   const next = freezePortions(week, baseId, n);
   if (next === week) return null;
   const before = { pantry, week };
